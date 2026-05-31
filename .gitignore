@@ -1,22 +1,15 @@
-# Environment and secrets
-.env
-.env.*
-!.env.example
-
-# Python
+# Python cache / virtualenv
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-.coverage
-htmlcov/
 .venv/
 venv/
 env/
 
-# Node / Vite frontend
+# Node / Vite dependency and build cache
 node_modules/
 dist/
 .vite/
@@ -25,27 +18,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Runtime logs
-*.log
-*.out.log
-*.err.log
-
-# Local databases and generated runtime state
-*.db
-*.sqlite
-*.sqlite3
-
-# Generated model artifacts
-*.joblib
-*.pkl
-*.pickle
-
-# Local UI screenshots / QA artifacts
-jwis/frontend-ui-check/
-
-# OS and editor files
+# OS files
 .DS_Store
 Thumbs.db
 desktop.ini
-.idea/
-.vscode/
