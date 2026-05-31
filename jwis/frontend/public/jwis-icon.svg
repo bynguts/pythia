@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" role="img" aria-label="JWIS">
+  <rect width="192" height="192" rx="36" fill="#176b54"/>
+  <path d="M44 116h104v28H44z" fill="#fff" opacity=".92"/>
+  <path d="M58 76h76l14 40H44z" fill="#dff3ea"/>
+  <circle cx="68" cy="146" r="12" fill="#10202b"/>
+  <circle cx="124" cy="146" r="12" fill="#10202b"/>
+  <path d="M58 58h76v18H58z" fill="#fff"/>
+</svg>
+

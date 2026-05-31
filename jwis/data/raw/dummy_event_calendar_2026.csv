@@ -1,0 +1,6 @@
+event_date,event_name,district,expected_attendance,waste_impact_percent,source
+2026-06-01,CFD and public holiday spillover,Jakarta Pusat,55000,18,dummy_case_calendar
+2026-06-02,Concert at GBK,Jakarta Pusat,85000,22,dummy_case_calendar
+2026-06-03,Lebaran return traffic,Jakarta Barat,120000,28,dummy_case_calendar
+2026-06-04,Jakarta Fair crowd,Jakarta Utara,70000,20,dummy_case_calendar
+2026-06-05,Local market festival,Jakarta Timur,18000,9,dummy_case_calendar

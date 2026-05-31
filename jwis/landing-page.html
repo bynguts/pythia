@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JWIS — Jakarta Waste Intelligence System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --green: #176b54; --green-light: #dff3ea; --green-dark: #0f4d3b;
+            --red: #b42318; --red-light: #fee4df;
+            --purple: #53389e; --purple-light: #f4f3ff;
+            --bg: #f8fafc; --text: #14202b; --text-muted: #526170;
+            --border: #d7e0e8; --radius: 12px;
+        }
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg); color: var(--text); line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+        
+        /* Hero */
+        .hero {
+            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            text-align: center; padding: 80px 24px;
+            background: linear-gradient(135deg, #0f4d3b 0%, #176b54 40%, #1a8a6a 100%);
+            color: #ffffff; position: relative; overflow: hidden;
+        }
+        .hero::before {
+            content: ''; position: absolute; inset: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+        .hero-content { position: relative; z-index: 1; max-width: 800px; }
+        .hero-badge {
+            display: inline-block; background: rgba(255,255,255,0.15);
+            padding: 8px 20px; border-radius: 999px; font-size: 13px;
+            font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+            margin-bottom: 24px; backdrop-filter: blur(10px);
+        }
+        .hero h1 {
+            font-size: clamp(36px, 6vw, 64px); font-weight: 800;
+            line-height: 1.08; margin-bottom: 20px; letter-spacing: -1px;
+        }
+        .hero p {
+            font-size: 18px; line-height: 1.6; opacity: 0.9; max-width: 600px; margin: 0 auto 36px;
+        }
+        .hero-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 14px 28px; border-radius: 10px; font-weight: 700;
+            font-size: 15px; text-decoration: none; transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .btn-white { background: #fff; color: var(--green-dark); }
+        .btn-white:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+        .btn-outline { border-color: rgba(255,255,255,0.4); color: #fff; background: transparent; }
+        .btn-outline:hover { background: rgba(255,255,255,0.1); }
+
+        /* Impact Stats */
+        .impact { padding: 80px 0; background: #fff; }
+        .impact-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;
+        }
+        .stat-card {
+            text-align: center; padding: 32px 16px; border-radius: var(--radius);
+            border: 1px solid var(--border); background: #fff;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .stat-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(20,32,43,0.08); }
+        .stat-number {
+            font-size: clamp(32px, 4vw, 48px); font-weight: 800;
+            line-height: 1; margin-bottom: 8px;
+        }
+        .stat-number.green { color: var(--green); }
+        .stat-number.red { color: var(--red); }
+        .stat-number.purple { color: var(--purple); }
+        .stat-label { font-size: 14px; color: var(--text-muted); font-weight: 600; }
+
+        /* Features */
+        .features { padding: 80px 0; }
+        .section-title {
+            text-align: center; margin-bottom: 60px;
+        }
+        .section-title h2 {
+            font-size: clamp(28px, 4vw, 42px); font-weight: 800;
+            margin-bottom: 12px;
+        }
+        .section-title p {
+            font-size: 16px; color: var(--text-muted); max-width: 600px; margin: 0 auto;
+        }
+        .features-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;
+        }
+        .feature-card {
+            padding: 32px; border-radius: var(--radius); border: 1px solid var(--border);
+            background: #fff; transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .feature-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(20,32,43,0.08); }
+        .feature-icon {
+            width: 52px; height: 52px; border-radius: 10px; display: grid; place-items: center;
+            margin-bottom: 20px; font-size: 24px;
+        }
+        .fi-green { background: var(--green-light); color: var(--green); }
+        .fi-red { background: var(--red-light); color: var(--red); }
+        .fi-purple { background: var(--purple-light); color: var(--purple); }
+        .feature-card h3 { font-size: 18px; font-weight: 800; margin-bottom: 8px; }
+        .feature-card p { font-size: 14px; color: var(--text-muted); line-height: 1.6; }
+
+        /* ML Architecture */
+        .arch { padding: 80px 0; background: #fff; }
+        .arch-flow {
+            display: flex; align-items: center; justify-content: center;
+            gap: 16px; flex-wrap: wrap; margin-top: 40px;
+        }
+        .arch-box {
+            padding: 20px 24px; border-radius: 10px; border: 2px solid var(--border);
+            background: #fff; text-align: center; min-width: 140px;
+        }
+        .arch-box.highlight { border-color: var(--green); background: var(--green-light); }
+        .arch-box strong { display: block; font-size: 15px; margin-bottom: 4px; }
+        .arch-box span { font-size: 12px; color: var(--text-muted); }
+        .arch-arrow { font-size: 24px; color: var(--green); }
+
+        /* Impact Detail */
+        .detail { padding: 80px 0; }
+        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+        .detail-text h2 { font-size: 36px; font-weight: 800; margin-bottom: 16px; }
+        .detail-text p { color: var(--text-muted); margin-bottom: 24px; line-height: 1.7; }
+        .metric-list { list-style: none; }
+        .metric-list li {
+            padding: 12px 0; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .metric-list li:last-child { border: 0; }
+        .metric-list .value { font-weight: 800; font-size: 18px; color: var(--green); }
+        .detail-visual {
+            background: linear-gradient(135deg, var(--green-light), #f0fdf4);
+            border-radius: 16px; padding: 48px; text-align: center;
+            border: 1px solid var(--green);
+        }
+        .big-emoji { font-size: 80px; display: block; margin-bottom: 16px; }
+
+        /* CTA */
+        .cta {
+            padding: 100px 0; text-align: center;
+            background: linear-gradient(135deg, #0f4d3b, #176b54);
+            color: #fff;
+        }
+        .cta h2 { font-size: clamp(28px, 4vw, 48px); font-weight: 800; margin-bottom: 16px; }
+        .cta p { font-size: 18px; opacity: 0.9; margin-bottom: 32px; }
+
+        /* Footer */
+        .footer {
+            padding: 40px 0; text-align: center; color: var(--text-muted);
+            font-size: 13px; border-top: 1px solid var(--border);
+        }
+
+        @media (max-width: 768px) {
+            .impact-grid { grid-template-columns: repeat(2, 1fr); }
+            .features-grid { grid-template-columns: 1fr; }
+            .detail-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-badge">AI Open Innovation Challenge 2026</div>
+            <h1>Jakarta Waste Intelligence System</h1>
+            <p>Sistem pemantauan armada sampah real-time berbasis AI yang mengoptimalkan rute, memprediksi volume, dan mengurangi jejak karbon — untuk Jakarta yang lebih bersih dan efisien.</p>
+            <div class="hero-actions">
+                <a class="btn btn-white" href="#features">Lihat Fitur</a>
+                <a class="btn btn-outline" href="https://github.com" target="_blank">GitHub Repository</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Impact Stats -->
+    <section class="impact">
+        <div class="container">
+            <div class="impact-grid">
+                <div class="stat-card">
+                    <div class="stat-number green">58.6%</div>
+                    <div class="stat-label">Pengurangan Waktu Antri TPA</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number red">527 kg</div>
+                    <div class="stat-label">CO2 Dihemat per Bulan</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number purple">29 Truk</div>
+                    <div class="stat-label">Distribusi Armada Lebih Akurat</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number green">&lt;12 jam</div>
+                    <div class="stat-label">Respon Genangan Sampah</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features" id="features">
+        <div class="container">
+            <div class="section-title">
+                <h2>Fitur Utama</h2>
+                <p>Enam komponen AI yang bekerja bersama untuk armada sampah yang lebih cerdas</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon fi-green">🗺️</div>
+                    <h3>Live Fleet Monitoring</h3>
+                    <p>Pelacakan posisi truk real-time di MapLibre dengan animasi digital twin dan popup status interaktif.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon fi-red">🚨</div>
+                    <h3>Route Deviation Detection</h3>
+                    <p>Isolation Forest ML mendeteksi truk yang keluar dari koridor yang ditugaskan dengan akurasi 96.5% precision.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon fi-purple">📊</div>
+                    <h3>Waste Volume Forecast</h3>
+                    <p>Hybrid Prophet + XGBoost memprediksi volume sampah per kelurahan dengan koreksi cuaca, libur, dan event.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon fi-green">🎤</div>
+                    <h3>Voice Command</h3>
+                    <p>Kontrol dashboard dengan suara dalam Bahasa Indonesia menggunakan Web Speech API — hands-free untuk operator.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon fi-red">🌿</div>
+                    <h3>Carbon Footprint Tracker</h3>
+                    <p>Monitor emisi CO2 armada dan hitung penghematan dari optimasi rute — setara menanam 25 pohon/bulan.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon fi-purple">📋</div>
+                    <h3>Fleet Trip History</h3>
+                    <p>Histori rute per truk dengan filter tanggal — audit jarak tempuh, konsumsi BBM, dan insiden deviasi.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ML Architecture -->
+    <section class="arch">
+        <div class="container">
+            <div class="section-title">
+                <h2>Arsitektur Hybrid ML</h2>
+                <p>Dua model yang saling melengkapi untuk prediksi yang akurat</p>
+            </div>
+            <div class="arch-flow">
+                <div class="arch-box">
+                    <strong>Cuaca Real</strong>
+                    <span>Open-Meteo 2yr</span>
+                </div>
+                <div class="arch-arrow">+</div>
+                <div class="arch-box">
+                    <strong>Libur Nasional</strong>
+                    <span>24 hari 2026</span>
+                </div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-box highlight">
+                    <strong>Prophet</strong>
+                    <span>Trend + Seasonal</span>
+                </div>
+                <div class="arch-arrow">+</div>
+                <div class="arch-box highlight">
+                    <strong>XGBoost</strong>
+                    <span>Residual Correction</span>
+                </div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-box">
+                    <strong>Output</strong>
+                    <span>10 kelurahan</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Impact Detail -->
+    <section class="detail">
+        <div class="container">
+            <div class="detail-grid">
+                <div class="detail-text">
+                    <h2>Dampak Nyata untuk Jakarta</h2>
+                    <p>JWIS bukan sekadar prototype — ini adalah sistem yang dirancang untuk mengatasi tiga masalah kritis pengelolaan sampah Jakarta: antrian TPA yang membludak, rute truk yang tidak optimal, dan ketidakmampuan memprediksi lonjakan volume.</p>
+                    <ul class="metric-list">
+                        <li><span>Waktu antri TPA Bantargebang</span> <span class="value">116 → 48 menit</span></li>
+                        <li><span>Distribusi armada ke kelurahan rawan</span> <span class="value">+29 truk akurat</span></li>
+                        <li><span>Respon genangan sampah</span> <span class="value">48 jam → &lt;12 jam</span></li>
+                        <li><span>Penghematan CO2 bulanan</span> <span class="value">527 kg / 25 pohon</span></li>
+                        <li><span>Akurasi prediksi (MAE)</span> <span class="value">79.3 tons</span></li>
+                    </ul>
+                </div>
+                <div class="detail-visual">
+                    <span class="big-emoji">🏙️</span>
+                    <h3>Jakarta Lebih Bersih</h3>
+                    <p>Dengan AI yang memprediksi dan mengoptimalkan, setiap kilogram sampah diproses lebih cepat dan lebih efisien.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta">
+        <div class="container">
+            <h2>Siap untuk Demo?</h2>
+            <p>Jalankan backend dan frontend secara lokal untuk melihat JWIS beraksi.</p>
+            <div class="hero-actions">
+                <a class="btn btn-white" href="https://github.com" target="_blank">⭐ GitHub</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>AI Open Innovation Challenge 2026 — DLH Case · Jakarta Waste Intelligence System</p>
+        </div>
+    </footer>
+</body>
+</html>

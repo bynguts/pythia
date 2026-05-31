@@ -1,0 +1,43 @@
+{
+  "generated_at": "2026-05-31",
+  "results": [
+    {
+      "name": "open_meteo_history",
+      "url": "https://archive-api.open-meteo.com/v1/archive?latitude=-6.2088&longitude=106.8456&start_date=2024-05-29&end_date=2026-05-29&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Cwind_speed_10m_max&timezone=Asia%2FJakarta",
+      "status": "downloaded"
+    },
+    {
+      "name": "indonesia_holidays_2026",
+      "url": "https://api-hari-libur.vercel.app/api?year=2026",
+      "status": "downloaded"
+    },
+    {
+      "name": "gadm_jakarta_admin2",
+      "url": "https://geodata.ucdavis.edu/gadm/gadm4.1/json/gadm41_IDN_2.json",
+      "status": "downloaded",
+      "features": 6
+    },
+    {
+      "name": "jakarta_kelurahan_heatmap",
+      "url": "https://github.com/navigo-id/indonesia-geojson",
+      "status": "fallback-generated",
+      "features": 10
+    },
+    {
+      "name": "jakarta_waste_dataset_metadata",
+      "url": "https://data.go.id/api/3/action/package_show?id=9ca7c1f3-c982-44cb-8fdc-f2ef3e27c1a5",
+      "status": "metadata-fallback"
+    },
+    {
+      "name": "jakarta_waste_forecast_seed_csv",
+      "url": "https://satudata.jakarta.go.id/open-data",
+      "status": "fallback-generated",
+      "rows": 5
+    },
+    {
+      "name": "dummy_event_calendar_2026",
+      "status": "generated",
+      "rows": 5
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "generated_at": "2026-05-31",
+  "event_calendar": {
+    "file": "data\\raw\\dummy_event_calendar_2026.csv",
+    "rows": 5
+  },
+  "eda_report": "data\\processed\\eda_report.md"
+}

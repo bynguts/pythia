@@ -1,0 +1,6 @@
+date,kelurahan,city,baseline_tons,predicted_tons,source
+2026-06-01,Kebon Jeruk,Jakarta Barat,1240,1748.4,synthetic_from_case_assumptions
+2026-06-01,Cengkareng,Jakarta Barat,1280,1676.8,synthetic_from_case_assumptions
+2026-06-01,Gambir,Jakarta Pusat,990,1237.5,synthetic_from_case_assumptions
+2026-06-01,Pulogadung,Jakarta Timur,1510,1736.5,synthetic_from_case_assumptions
+2026-06-01,Tebet,Jakarta Selatan,1365,1624.4,synthetic_from_case_assumptions

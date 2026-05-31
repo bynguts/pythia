@@ -1,0 +1,39 @@
+import unittest
+
+from app.osrm import build_osrm_url, fallback_route, parse_osrm_route
+
+
+class OsrmTests(unittest.TestCase):
+    def test_build_osrm_url_uses_lon_lat_order(self):
+        url = build_osrm_url(origin=(-6.221, 106.785), destination=(-6.195, 106.802))
+
+        self.assertIn("106.785,-6.221;106.802,-6.195", url)
+        self.assertIn("geometries=geojson", url)
+
+    def test_parse_osrm_route_returns_eta_distance_and_geometry(self):
+        payload = {
+            "routes": [
+                {
+                    "duration": 2880,
+                    "distance": 18200,
+                    "geometry": {"type": "LineString", "coordinates": [[106.785, -6.221], [106.802, -6.195]]},
+                }
+            ]
+        }
+
+        route = parse_osrm_route("Route B", payload)
+
+        self.assertEqual(route["eta_minutes"], 48)
+        self.assertEqual(route["distance_km"], 18.2)
+        self.assertEqual(route["path"][0], {"lng": 106.785, "lat": -6.221})
+
+    def test_fallback_route_is_demo_safe(self):
+        route = fallback_route("Route B", (-6.221, 106.785), (-6.195, 106.802))
+
+        self.assertEqual(route["source"], "fallback")
+        self.assertGreater(route["eta_minutes"], 0)
+        self.assertEqual(len(route["path"]), 3)
+
+
+if __name__ == "__main__":
+    unittest.main()
