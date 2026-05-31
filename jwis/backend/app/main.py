@@ -78,7 +78,7 @@ class HybridPredictRequest(BaseModel):
     is_weekend: bool = False
     is_holiday: bool = False
     event_attendance: int = 0
-    target_date: str | None = None
+    target_date: date | None = None
 
 # ── Existing Endpoints ───────────────────────────────────────────────
 
@@ -98,7 +98,7 @@ def fleet() -> list[dict]:
 @app.get("/api/predictions")
 def predictions(
     date: str | None = Query(None, description="Filter predictions by date (YYYY-MM-DD)"),
-    event_scale: float | None = Query(None, description="Simulate an event multiplier (0.5x - 3.0x)")
+    event_scale: float | None = Query(None, ge=0.5, le=3.0, description="Simulate an event multiplier (0.5x - 3.0x)")
 ) -> list[dict]:
     """
     Enhanced waste prediction endpoint supporting dynamic simulation and filtering.
@@ -222,7 +222,10 @@ def pending_dispatches(truck_code: str) -> list[dict]:
 
 @app.post("/api/dispatch/{dispatch_id}/confirm")
 def confirm_dispatch(dispatch_id: str, payload: DispatchConfirmRequest) -> dict:
-    d = dispatch_center.confirm(dispatch_id, payload.status, payload.note)
+    try:
+        d = dispatch_center.confirm(dispatch_id, payload.status, payload.note)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
     history_store.record_event("dispatch_confirmed", {"dispatch_id": dispatch_id, "status": payload.status})
     return d
 
@@ -242,7 +245,7 @@ def ml_predict_district(payload: HybridPredictRequest) -> dict[str, Any]:
         is_weekend=payload.is_weekend,
         is_holiday=payload.is_holiday,
         event_attendance=payload.event_attendance,
-        target_date=payload.target_date,
+        target_date=payload.target_date.isoformat() if payload.target_date else None,
     )
     return res
 
@@ -254,7 +257,7 @@ def ml_predict_all(
     is_weekend: bool = False,
     is_holiday: bool = False,
     event_attendance: int = 0,
-    target_date: str | None = None,
+    target_date: date | None = None,
 ) -> list[dict[str, Any]]:
     models = list_hybrid_models()
     results = []
@@ -267,7 +270,7 @@ def ml_predict_all(
             is_weekend=is_weekend,
             is_holiday=is_holiday,
             event_attendance=event_attendance,
-            target_date=target_date,
+            target_date=target_date.isoformat() if target_date else None,
         )
         results.append(res)
     return results

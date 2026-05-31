@@ -22,21 +22,22 @@ Backend:
 
 ```powershell
 cd ".\backend"
-C:\Users\HP\AppData\Local\Programs\Python\Python312\python.exe -m uvicorn app.main:app --reload --port 8000
+C:\Users\HP\AppData\Local\Programs\Python\Python312\python.exe -m uvicorn app.main:app --reload --port 8001
 ```
 
 Frontend:
 
 ```powershell
 cd ".\frontend"
-npm run dev -- --port 5173
+$env:VITE_API_URL="http://127.0.0.1:8001/api"
+npm run dev -- --port 5175
 ```
 
 URLs:
 
-- Command Center: http://localhost:5173
-- Field App: http://localhost:5173/field
-- API Docs: http://localhost:8000/docs
+- Command Center: http://localhost:5175
+- Field App: http://localhost:5175/field
+- API Docs: http://localhost:8001/docs
 
 Offline demo resilience:
 
