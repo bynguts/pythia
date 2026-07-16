@@ -448,8 +448,7 @@ DEFAULT_CONTACTS = {
         "Budi Santoso": "6281234567890@c.us",
         "Agus Pratama": "6281234567890@c.us",
         "Joko Wijaya": "6281234567890@c.us",
-        "Rizky Maulana": "6281234567890@c.us",
-        "Sari Nurlaila": "6281234567890@c.us"
+        "Rizky Maulana": "6281234567890@c.us"
     },
     "group_jid": "6281234567890-1620000000@g.us",
     "send_to_group": True,
