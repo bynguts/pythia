@@ -9,10 +9,12 @@ ALL_OK = {"rem": True, "mesin": True, "ban": True, "bbm": True,
           "oli": True, "bak_compactor": True, "lampu": True}
 
 EVIDENCE = {
-    "arrival": {"photo_name": "a.jpg", "lat": -6.2, "lng": 106.8,
-                "at": "2026-09-14T08:00:00"},
-    "weighing": [{"fraction": "Residu", "weight_kg": 40.0, "photo_name": "t.jpg"}],
-    "officer": {"photo_name": "p.jpg", "name": "Dicky"},
+    "arrival": {"photo_name": "a.jpg", "photo_b64": "data:image/jpeg;base64,AAA",
+                "lat": -6.2, "lng": 106.8, "at": "2026-09-14T08:00:00"},
+    "weighing": [{"fraction": "Residu", "weight_kg": 40.0,
+                  "photo_name": "t.jpg", "photo_b64": "data:image/jpeg;base64,BBB"}],
+    "officer": {"photo_name": "p.jpg", "photo_b64": "data:image/jpeg;base64,CCC",
+                "name": "Dicky"},
 }
 
 
@@ -132,8 +134,12 @@ class DamageEndpointTests(unittest.TestCase):
         self.client.post(f"/api/spj/{spj_id}/activate")
         self.client.post(f"/api/spj/{spj_id}/stops/0/complete", json={"evidence": {
             "arrival": {"photo_name": "a.jpg",
-                        "photo_b64": "data:image/jpeg;base64,AAA"},
-            "weighing": [], "officer": {"photo_name": "p.jpg"}}})
+                        "photo_b64": "data:image/jpeg;base64,AAA",
+                        "lat": -6.2, "lng": 106.8},
+            "weighing": [],
+            "officer": {"photo_name": "p.jpg",
+                        "photo_b64": "data:image/jpeg;base64,CCC",
+                        "name": "X"}}})
         ok = self.client.post(f"/api/spj/{spj_id}/receipt", json={
             "photo_name": "struk.jpg", "photo_b64": "data:image/jpeg;base64,AA",
             "total_weight_kg": 120.5, "weight_source": "manual"})
@@ -207,11 +213,15 @@ class DamageEndpointTests(unittest.TestCase):
             "lat": -6.2, "lng": 106.8})
         self.client.post(f"/api/spj/{spj_id}/activate")
         evidence = {
-            "arrival": {"photo_name": "a.jpg", "lat": -6.2, "lng": 106.8,
-                        "at": "2026-09-14T08:00:00"},
+            "arrival": {"photo_name": "a.jpg",
+                        "photo_b64": "data:image/jpeg;base64,AAA",
+                        "lat": -6.2, "lng": 106.8, "at": "2026-09-14T08:00:00"},
             "weighing": [{"fraction": "Residu", "weight_kg": 40.0,
-                          "photo_name": "t.jpg"}],
-            "officer": {"photo_name": "p.jpg", "name": "Dicky"},
+                          "photo_name": "t.jpg",
+                          "photo_b64": "data:image/jpeg;base64,BBB"}],
+            "officer": {"photo_name": "p.jpg",
+                        "photo_b64": "data:image/jpeg;base64,CCC",
+                        "name": "Dicky"},
         }
         done = self.client.post(f"/api/spj/{spj_id}/stops/0/complete",
                                 json={"evidence": evidence})
@@ -235,10 +245,12 @@ class DamageEndpointTests(unittest.TestCase):
             "name": "S", "kecamatan": "K", "address": "A", "lat": -6.2, "lng": 106.8})
         self.client.post(f"/api/spj/{spj_id}/activate")
         self.client.post(f"/api/spj/{spj_id}/stops/0/complete", json={"evidence": {
-            "arrival": {"photo_name": "a.jpg", "photo_b64": "data:image/jpeg;base64,AAA"},
+            "arrival": {"photo_name": "a.jpg", "photo_b64": "data:image/jpeg;base64,AAA",
+                        "lat": -6.2, "lng": 106.8},
             "weighing": [{"fraction": "Residu", "weight_kg": 40.0,
                           "photo_name": "t.jpg", "photo_b64": "data:image/jpeg;base64,BBB"}],
-            "officer": {"photo_name": "p.jpg", "name": "Dicky"}}})
+            "officer": {"photo_name": "p.jpg", "photo_b64": "data:image/jpeg;base64,CCC",
+                        "name": "Dicky"}}})
         listing = self.client.get("/api/spj")
         self.assertNotIn("base64", listing.text)
         detail = self.client.get(f"/api/spj/{spj_id}")
@@ -255,8 +267,12 @@ class DamageEndpointTests(unittest.TestCase):
         self.client.post(f"/api/spj/{spj_id}/activate")
         self.client.post(f"/api/spj/{spj_id}/stops/0/complete", json={"evidence": {
             "arrival": {"photo_name": "a.jpg",
-                        "photo_b64": "data:image/jpeg;base64,AAA"},
-            "weighing": [], "officer": {"photo_name": "p.jpg"}}})
+                        "photo_b64": "data:image/jpeg;base64,AAA",
+                        "lat": -6.2, "lng": 106.8},
+            "weighing": [],
+            "officer": {"photo_name": "p.jpg",
+                        "photo_b64": "data:image/jpeg;base64,CCC",
+                        "name": "X"}}})
         r = self.client.post(f"/api/spj/{spj_id}/receipt", json={
             "photo_name": "", "photo_b64": "", "total_weight_kg": 10.0,
             "weight_source": "manual"})

@@ -23,17 +23,85 @@ logger = logging.getLogger(__name__)
 DESTINATIONS = ("TPST Bantargebang", "JRC Pesanggrahan", "RDF Plant Jakarta")
 
 MAX_EVIDENCE_PHOTO_CHARS = 7_000_000
+MAX_STOP_WEIGHT_KG = 60_000  # matches the receipt operational bound (#57)
+SUPPORTED_FRACTIONS = ("Residu", "Organik", "Anorganik")
+# Greater Jakarta operational region; loose enough for reroutes.
+JAKARTA_LAT_RANGE = (-7.5, -5.5)
+JAKARTA_LNG_RANGE = (105.5, 107.5)
+
+
+def _require_text(value, field: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"evidence.{field} is required")
+
+
+def _require_photo(value, field: str) -> None:
+    _require_text(value, field)
+    if len(value) > MAX_EVIDENCE_PHOTO_CHARS:
+        raise ValueError(f"evidence.{field} exceeds 7,000,000 chars")
+
+
+def _require_coord(value, field: str, rng: tuple[float, float]) -> None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"evidence.{field} is required") from None
+    if not (rng[0] <= number <= rng[1]):
+        raise ValueError(
+            f"evidence.{field}={number} is outside the Jakarta operational "
+            f"region [{rng[0]}, {rng[1]}]")
 
 
 def _validate_evidence(evidence: dict) -> None:
+    """Server-side evidence contract for stop completion (#54).
+
+    A filename alone is NOT evidence: the arrival record needs image data
+    and valid Jakarta-region coordinates, every weighing entry needs a
+    supported fraction, a positive bounded weight, and photo proof, and
+    the officer record needs both identity and photo proof. Every error
+    names the offending field.
+    """
+    if not isinstance(evidence, dict):
+        raise ValueError("evidence must be an object")
+
     arrival = evidence.get("arrival") or {}
-    if not arrival.get("photo_name"):
-        raise ValueError("evidence.arrival.photo_name is required")
-    photos = [arrival.get("photo_b64"), (evidence.get("officer") or {}).get("photo_b64")]
-    photos += [w.get("photo_b64") for w in (evidence.get("weighing") or [])]
-    for photo in photos:
-        if photo and len(photo) > MAX_EVIDENCE_PHOTO_CHARS:
-            raise ValueError("evidence photo_b64 exceeds 7,000,000 chars")
+    if not isinstance(arrival, dict):
+        raise ValueError("evidence.arrival is required")
+    _require_photo(arrival.get("photo_name"), "arrival.photo_name")
+    _require_photo(arrival.get("photo_b64"), "arrival.photo_b64")
+    _require_coord(arrival.get("lat"), "arrival.lat", JAKARTA_LAT_RANGE)
+    _require_coord(arrival.get("lng"), "arrival.lng", JAKARTA_LNG_RANGE)
+
+    weighing = evidence.get("weighing")
+    if weighing is None:
+        weighing = []
+    if not isinstance(weighing, list):
+        raise ValueError("evidence.weighing must be a list")
+    for i, entry in enumerate(weighing):
+        if not isinstance(entry, dict):
+            raise ValueError(f"evidence.weighing[{i}] must be an object")
+        if entry.get("fraction") not in SUPPORTED_FRACTIONS:
+            raise ValueError(
+                f"evidence.weighing[{i}].fraction must be one of "
+                f"{SUPPORTED_FRACTIONS}")
+        try:
+            weight = float(entry.get("weight_kg"))
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"evidence.weighing[{i}].weight_kg is required") from None
+        if not (0 < weight <= MAX_STOP_WEIGHT_KG):
+            raise ValueError(
+                f"evidence.weighing[{i}].weight_kg={weight} must be "
+                f"0 < w <= {MAX_STOP_WEIGHT_KG}")
+        _require_photo(entry.get("photo_name"), f"weighing[{i}].photo_name")
+        _require_photo(entry.get("photo_b64"), f"weighing[{i}].photo_b64")
+
+    officer = evidence.get("officer") or {}
+    if not isinstance(officer, dict):
+        raise ValueError("evidence.officer is required")
+    _require_text(officer.get("name"), "officer.name")
+    _require_photo(officer.get("photo_name"), "officer.photo_name")
+    _require_photo(officer.get("photo_b64"), "officer.photo_b64")
 
 
 def spj_summary_payload(spj: Spj) -> dict:
@@ -209,7 +277,7 @@ class SpjStore:
                         spj_id TEXT PRIMARY KEY REFERENCES spj(spj_id) ON DELETE CASCADE,
                         photo_name TEXT NOT NULL,
                         photo_b64 TEXT NOT NULL,
-                        total_weight_kg REAL NOT NULL,
+                        total_weight_kg REAL,
                         weight_source TEXT NOT NULL,
                         submitted_by TEXT NOT NULL,
                         operation_id TEXT,
@@ -276,7 +344,8 @@ class SpjStore:
                 row = connection.execute("SELECT COUNT(*) AS n FROM spj").fetchone()
                 if row["n"] > 0:
                     return  # DB already populated; JSON is stale
-                raw = json.loads(open(legacy, encoding="utf-8").read())
+                with open(legacy, encoding="utf-8") as fh:
+                    raw = json.loads(fh.read())
                 with connection:
                     for item in raw:
                         stops = item.pop("stops", [])
@@ -525,13 +594,17 @@ class SpjStore:
         return self._mutate(spj_id, mutate)
 
     def record_receipt(self, spj_id: str, photo_name: str, photo_b64: str,
-                       total_weight_kg: float, weight_source: str,
+                       total_weight_kg: float | None, weight_source: str,
                        submitted_by: str = "driver",
                        operation_id: str | None = None) -> Spj:
         """Attach the weighbridge receipt exactly once.
 
         The photo lives in its own table: the SPJ cache reloads every record
         on mutation, and a multi-megabyte image must not ride along.
+
+        `total_weight_kg` is optional — not every handover is weighed — but a
+        supplied value must be a finite 0 < w <= MAX_STOP_WEIGHT_KG, the same
+        bound the API and the stop evidence schema enforce.
 
         Retrying with the same operation_id returns the original receipt
         unchanged; a different submission for an SPJ that already has one is
@@ -543,6 +616,10 @@ class SpjStore:
                 raise ValueError("receipt can only be submitted after the SPJ is selesai")
             if not photo_name.strip() or not photo_b64.strip():
                 raise ValueError("receipt photo_name and photo_b64 are required")
+            if total_weight_kg is not None and not (
+                    0 < total_weight_kg <= MAX_STOP_WEIGHT_KG):
+                raise ValueError(
+                    f"total_weight_kg must be 0 < w <= {MAX_STOP_WEIGHT_KG}")
             existing = connection.execute(
                 "SELECT * FROM spj_receipts WHERE spj_id=?", (spj_id,)).fetchone()
             if existing is not None:

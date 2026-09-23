@@ -43,9 +43,13 @@ def _make_spj(spj_store, driver, truck, complete_with_evidence=True):
                        lat=-6.2, lng=106.8)
     spj_store.activate(spj.spj_id)
     if complete_with_evidence:
-        evidence = {"arrival": {"photo_name": "a.jpg"},
-                    "weighing": [], "officer": {"photo_name": "p.jpg", "name": "X"}}
-        spj_store.complete_stop(spj.spj_id, 0, evidence=evidence)
+        evidence = {"arrival": {"photo_name": "a.jpg",
+                                "photo_b64": "data:image/jpeg;base64,AAA",
+                                "lat": -6.2, "lng": 106.8},
+                    "weighing": [],
+                    "officer": {"photo_name": "p.jpg",
+                                "photo_b64": "data:image/jpeg;base64,CCC",
+                                "name": "X"}}
     else:
         # Unevidenced closure only happens through an audited supervisor
         # override now (issue #63 contract).

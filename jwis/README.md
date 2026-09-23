@@ -76,10 +76,13 @@ Receipt contract:
   same `operation_id` returns the original receipt, and any other second
   submission is rejected with `409` rather than silently replacing handover
   evidence. Replacement would need an explicit, audited workflow.
-- Weight must be greater than 0; a non-positive or non-finite value fails field
-  validation and records nothing.
-- Metadata (photo name, weight, OCR/manual source, submitter, timestamp) lives in
-  the `spj_receipts` table alongside the SPJ. `GET /api/spj/{id}` and the SPJ list
+- Weight is optional — not every handover is weighed — but a supplied value must
+  be a finite `0 < w <= 60,000` kg, the same operational bound the stop evidence
+  schema enforces. Out-of-range values fail field validation and record nothing.
+- Metadata (photo name, weight, source, submitter, timestamp) lives in
+  the `spj_receipts` table alongside the SPJ. Source is `ocr`, `manual`, or
+  `unspecified` when the caller states none — an unlabelled number is never
+  recorded as if a human had typed it. `GET /api/spj/{id}` and the SPJ list
   return that metadata and a `has_photo` flag, never the image bytes;
   `GET /api/spj/{id}/receipt/photo` serves the image to authorized roles.
 - Every receipt writes an audit entry, readable at `GET /api/spj/{id}/audit`.
