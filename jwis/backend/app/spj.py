@@ -390,6 +390,91 @@ class SpjStore:
 
     # -- public API (transactional, multi-process safe) -----------------------
 
+    @staticmethod
+    def _validate_stop(stop: dict, position: int) -> None:
+        """Field-level stop validation for composed creates (#60)."""
+        for field in ("name", "kecamatan", "address"):
+            value = stop.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"stops[{position}].{field} is required")
+        for field in ("lat", "lng"):
+            try:
+                number = float(stop.get(field))
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"stops[{position}].{field} must be a number") from None
+            if not (-90.0 <= number <= 90.0 if field == "lat"
+                    else -180.0 <= number <= 180.0):
+                raise ValueError(
+                    f"stops[{position}].{field}={number} out of range")
+
+    def create_with_stops(self, driver_name: str, truck_code: str,
+                          destination: str, weigh_on_site: bool, priority: str,
+                          note: str, stops: list[dict],
+                          created_by: str = "admin") -> Spj:
+        """Create a draft SPJ and ALL of its stops in ONE transaction (#60).
+
+        Either the SPJ exists with every stop in exact order, or nothing
+        is persisted — a failing stop rolls the whole draft back.
+        """
+        if destination not in DESTINATIONS:
+            raise ValueError(f"destination must be one of {DESTINATIONS}")
+        if priority not in ("normal", "vip"):
+            raise ValueError("priority must be 'normal' or 'vip'")
+        if not isinstance(stops, list):
+            raise ValueError("stops must be a list")
+        seen_names: set[str] = set()
+        for position, stop in enumerate(stops):
+            self._validate_stop(stop, position)
+            name = stop["name"].strip()
+            if name in seen_names:
+                raise ValueError(
+                    f"stops[{position}].name '{name}' duplicates an earlier stop")
+            seen_names.add(name)
+        with self._lock:
+            for _attempt in range(20):
+                spj_id = uuid4().hex[:12]
+                now = _utc_now()
+                spj = None
+                connection = self._connect()
+                connection.isolation_level = None
+                try:
+                    with closing(connection):
+                        connection.execute("BEGIN IMMEDIATE")
+                        number = next_spj_number(self)
+                        try:
+                            connection.execute(
+                                "INSERT INTO spj (spj_id, spj_number, date, driver_name, "
+                                "truck_code, destination, weigh_on_site, priority, note, "
+                                "status, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                                (spj_id, number, _today(), driver_name, truck_code,
+                                 destination, int(bool(weigh_on_site)), priority, note,
+                                 "draft", created_by, now),
+                            )
+                            for idx, stop in enumerate(stops):
+                                connection.execute(
+                                    "INSERT INTO spj_stops (spj_id, idx, name, kecamatan, "
+                                    "address, lat, lng, location_type, status) "
+                                    "VALUES (?,?,?,?,?,?,?,?,?)",
+                                    (spj_id, idx, stop["name"].strip(),
+                                     stop["kecamatan"].strip(),
+                                     stop["address"].strip(),
+                                     float(stop["lat"]), float(stop["lng"]),
+                                     stop.get("location_type",
+                                              "Pemukiman Kelas Menengah"),
+                                     "pending"),
+                                )
+                            connection.execute("COMMIT")
+                        except sqlite3.IntegrityError:
+                            connection.execute("ROLLBACK")
+                            continue  # daily-number race: retry
+                        spj = self._load_spj(connection, spj_id)
+                except sqlite3.OperationalError:
+                    raise
+                if spj is not None:
+                    self._spj[spj_id] = spj
+                    return spj
+            raise RuntimeError("SPJ create failed after repeated number conflicts")
     def create(self, driver_name: str, truck_code: str, destination: str,
                weigh_on_site: bool, priority: str, note: str,
                created_by: str = "admin") -> Spj:

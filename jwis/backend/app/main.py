@@ -1645,6 +1645,15 @@ def _spj_or_409(fn, *args, **kwargs):
         raise HTTPException(status_code=409, detail=str(exc))
 
 
+class SpjStopBody(BaseModel):
+    name: str
+    kecamatan: str
+    address: str
+    lat: float
+    lng: float
+    location_type: str = "Pemukiman Kelas Menengah"
+
+
 class SpjCreateBody(BaseModel):
     driver_name: str
     truck_code: str
@@ -1652,6 +1661,10 @@ class SpjCreateBody(BaseModel):
     weigh_on_site: bool = False
     priority: str = "normal"
     note: str = ""
+    # #60: optional composed stops — when present, the SPJ and ALL stops
+    # are created in one atomic transaction; a failing stop rolls the
+    # whole draft back (no partial state).
+    stops: list[SpjStopBody] | None = None
 
 
 class SpjCompleteBody(BaseModel):
@@ -1661,15 +1674,6 @@ class SpjCompleteBody(BaseModel):
 class SpjCompleteOverrideBody(BaseModel):
     override: bool = False
     reason: str = ""
-
-
-class SpjStopBody(BaseModel):
-    name: str
-    kecamatan: str
-    address: str
-    lat: float
-    lng: float
-    location_type: str = "Pemukiman Kelas Menengah"
 
 
 
@@ -1728,9 +1732,15 @@ def get_spj(spj_id: str) -> dict[str, Any]:
 
 @app.post("/api/spj", status_code=201)
 def create_spj(body: SpjCreateBody, _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
-    return _spj_or_409(SPJ_STORE.create, body.driver_name, body.truck_code,
-                       body.destination, body.weigh_on_site, body.priority,
-                       body.note)
+    if body.stops is None:
+        return _spj_or_409(SPJ_STORE.create, body.driver_name, body.truck_code,
+                           body.destination, body.weigh_on_site, body.priority,
+                           body.note)
+    # #60: atomic composed create — SPJ + all stops in one transaction.
+    return _spj_or_409(
+        SPJ_STORE.create_with_stops, body.driver_name, body.truck_code,
+        body.destination, body.weigh_on_site, body.priority, body.note,
+        [s.model_dump() for s in body.stops])
 
 
 @app.post("/api/spj/{spj_id}/stops")
