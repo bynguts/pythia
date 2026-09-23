@@ -23,17 +23,85 @@ logger = logging.getLogger(__name__)
 DESTINATIONS = ("TPST Bantargebang", "JRC Pesanggrahan", "RDF Plant Jakarta")
 
 MAX_EVIDENCE_PHOTO_CHARS = 7_000_000
+MAX_STOP_WEIGHT_KG = 60_000  # matches the receipt operational bound (#57)
+SUPPORTED_FRACTIONS = ("Residu", "Organik", "Anorganik")
+# Greater Jakarta operational region; loose enough for reroutes.
+JAKARTA_LAT_RANGE = (-7.5, -5.5)
+JAKARTA_LNG_RANGE = (105.5, 107.5)
+
+
+def _require_text(value, field: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"evidence.{field} is required")
+
+
+def _require_photo(value, field: str) -> None:
+    _require_text(value, field)
+    if len(value) > MAX_EVIDENCE_PHOTO_CHARS:
+        raise ValueError(f"evidence.{field} exceeds 7,000,000 chars")
+
+
+def _require_coord(value, field: str, rng: tuple[float, float]) -> None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"evidence.{field} is required") from None
+    if not (rng[0] <= number <= rng[1]):
+        raise ValueError(
+            f"evidence.{field}={number} is outside the Jakarta operational "
+            f"region [{rng[0]}, {rng[1]}]")
 
 
 def _validate_evidence(evidence: dict) -> None:
+    """Server-side evidence contract for stop completion (#54).
+
+    A filename alone is NOT evidence: the arrival record needs image data
+    and valid Jakarta-region coordinates, every weighing entry needs a
+    supported fraction, a positive bounded weight, and photo proof, and
+    the officer record needs both identity and photo proof. Every error
+    names the offending field.
+    """
+    if not isinstance(evidence, dict):
+        raise ValueError("evidence must be an object")
+
     arrival = evidence.get("arrival") or {}
-    if not arrival.get("photo_name"):
-        raise ValueError("evidence.arrival.photo_name is required")
-    photos = [arrival.get("photo_b64"), (evidence.get("officer") or {}).get("photo_b64")]
-    photos += [w.get("photo_b64") for w in (evidence.get("weighing") or [])]
-    for photo in photos:
-        if photo and len(photo) > MAX_EVIDENCE_PHOTO_CHARS:
-            raise ValueError("evidence photo_b64 exceeds 7,000,000 chars")
+    if not isinstance(arrival, dict):
+        raise ValueError("evidence.arrival is required")
+    _require_photo(arrival.get("photo_name"), "arrival.photo_name")
+    _require_photo(arrival.get("photo_b64"), "arrival.photo_b64")
+    _require_coord(arrival.get("lat"), "arrival.lat", JAKARTA_LAT_RANGE)
+    _require_coord(arrival.get("lng"), "arrival.lng", JAKARTA_LNG_RANGE)
+
+    weighing = evidence.get("weighing")
+    if weighing is None:
+        weighing = []
+    if not isinstance(weighing, list):
+        raise ValueError("evidence.weighing must be a list")
+    for i, entry in enumerate(weighing):
+        if not isinstance(entry, dict):
+            raise ValueError(f"evidence.weighing[{i}] must be an object")
+        if entry.get("fraction") not in SUPPORTED_FRACTIONS:
+            raise ValueError(
+                f"evidence.weighing[{i}].fraction must be one of "
+                f"{SUPPORTED_FRACTIONS}")
+        try:
+            weight = float(entry.get("weight_kg"))
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"evidence.weighing[{i}].weight_kg is required") from None
+        if not (0 < weight <= MAX_STOP_WEIGHT_KG):
+            raise ValueError(
+                f"evidence.weighing[{i}].weight_kg={weight} must be "
+                f"0 < w <= {MAX_STOP_WEIGHT_KG}")
+        _require_photo(entry.get("photo_name"), f"weighing[{i}].photo_name")
+        _require_photo(entry.get("photo_b64"), f"weighing[{i}].photo_b64")
+
+    officer = evidence.get("officer") or {}
+    if not isinstance(officer, dict):
+        raise ValueError("evidence.officer is required")
+    _require_text(officer.get("name"), "officer.name")
+    _require_photo(officer.get("photo_name"), "officer.photo_name")
+    _require_photo(officer.get("photo_b64"), "officer.photo_b64")
 
 
 def spj_summary_payload(spj: Spj) -> dict:

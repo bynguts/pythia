@@ -70,8 +70,12 @@ class ReceiptWeightValidationTests(unittest.TestCase):
             "name": "S", "kecamatan": "K", "address": "A", "lat": -6.2, "lng": 106.8})
         self.client.post(f"/api/spj/{self.spj_id}/activate")
         done = self.client.post(f"/api/spj/{self.spj_id}/stops/0/complete", json={"evidence": {
-            "arrival": {"photo_name": "a.jpg", "photo_b64": "data:image/jpeg;base64,AAA"},
-            "weighing": [], "officer": {"photo_name": "p.jpg"}}})
+            "arrival": {"photo_name": "a.jpg", "photo_b64": "data:image/jpeg;base64,AAA",
+                        "lat": -6.2, "lng": 106.8},
+            "weighing": [],
+            "officer": {"photo_name": "p.jpg",
+                        "photo_b64": "data:image/jpeg;base64,CCC",
+                        "name": "X"}}})
         self.assertEqual(done.status_code, 200)
 
     def tearDown(self):
