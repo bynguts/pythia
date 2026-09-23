@@ -15,10 +15,12 @@ import tempfile
 import threading
 from contextlib import closing
 from dataclasses import asdict, dataclass, field
+from app.osrm import road_route
 from datetime import datetime, timezone
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
+
 
 DESTINATIONS = ("TPST Bantargebang", "JRC Pesanggrahan", "RDF Plant Jakarta")
 
@@ -151,6 +153,10 @@ class Spj:
     created_at: str = ""
     activated_at: str | None = None
     completed_at: str | None = None
+    # #58: road-following compliance geometry resolved at activation.
+    route_geometry: list[tuple[float, float]] = field(default_factory=list)
+    route_source: str | None = None      # LIVE_EXTERNAL | FALLBACK_DEGRADED
+    route_resolved_at: str | None = None
 
 
 def _utc_now() -> str:
@@ -240,10 +246,19 @@ class SpjStore:
                         created_by TEXT NOT NULL DEFAULT 'admin',
                         created_at TEXT NOT NULL,
                         activated_at TEXT,
-                        completed_at TEXT
+                        completed_at TEXT,
+                        route_geometry TEXT,
+                        route_source TEXT,
+                        route_resolved_at TEXT
                     )
                     """
                 )
+                # #58: existing databases gain the route columns.
+                columns = {r["name"] for r in connection.execute(
+                    "PRAGMA table_info(spj)").fetchall()}
+                for col in ("route_geometry", "route_source", "route_resolved_at"):
+                    if col not in columns:
+                        connection.execute(f"ALTER TABLE spj ADD COLUMN {col} TEXT")
                 connection.execute(
                     """
                     CREATE TABLE IF NOT EXISTS spj_stops (
@@ -346,10 +361,15 @@ class SpjStore:
         except Exception:  # noqa: BLE001
             logger.exception("legacy SPJ JSON migration failed for %s", legacy)
 
-    # -- row <-> dataclass ---------------------------------------------------
-
     @staticmethod
     def _row_to_spj(spj_row: sqlite3.Row, stop_rows: list) -> Spj:
+        route_geometry = None
+        if spj_row["route_geometry"] if "route_geometry" in spj_row.keys() else None:
+            try:
+                route_geometry = [tuple(p) for p in json.loads(
+                    spj_row["route_geometry"])]
+            except (ValueError, TypeError):
+                route_geometry = None
         return Spj(
             spj_id=spj_row["spj_id"], spj_number=spj_row["spj_number"],
             date=spj_row["date"], driver_name=spj_row["driver_name"],
@@ -365,6 +385,9 @@ class SpjStore:
             status=spj_row["status"], created_by=spj_row["created_by"],
             created_at=spj_row["created_at"], activated_at=spj_row["activated_at"],
             completed_at=spj_row["completed_at"],
+            route_geometry=route_geometry or [],
+            route_source=spj_row["route_source"] if "route_source" in spj_row.keys() else None,
+            route_resolved_at=spj_row["route_resolved_at"] if "route_resolved_at" in spj_row.keys() else None,
         )
 
     def _load_spj(self, connection: sqlite3.Connection, spj_id: str) -> Spj | None:
@@ -390,6 +413,91 @@ class SpjStore:
 
     # -- public API (transactional, multi-process safe) -----------------------
 
+    @staticmethod
+    def _validate_stop(stop: dict, position: int) -> None:
+        """Field-level stop validation for composed creates (#60)."""
+        for field in ("name", "kecamatan", "address"):
+            value = stop.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"stops[{position}].{field} is required")
+        for field in ("lat", "lng"):
+            try:
+                number = float(stop.get(field))
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"stops[{position}].{field} must be a number") from None
+            if not (-90.0 <= number <= 90.0 if field == "lat"
+                    else -180.0 <= number <= 180.0):
+                raise ValueError(
+                    f"stops[{position}].{field}={number} out of range")
+
+    def create_with_stops(self, driver_name: str, truck_code: str,
+                          destination: str, weigh_on_site: bool, priority: str,
+                          note: str, stops: list[dict],
+                          created_by: str = "admin") -> Spj:
+        """Create a draft SPJ and ALL of its stops in ONE transaction (#60).
+
+        Either the SPJ exists with every stop in exact order, or nothing
+        is persisted — a failing stop rolls the whole draft back.
+        """
+        if destination not in DESTINATIONS:
+            raise ValueError(f"destination must be one of {DESTINATIONS}")
+        if priority not in ("normal", "vip"):
+            raise ValueError("priority must be 'normal' or 'vip'")
+        if not isinstance(stops, list):
+            raise ValueError("stops must be a list")
+        seen_names: set[str] = set()
+        for position, stop in enumerate(stops):
+            self._validate_stop(stop, position)
+            name = stop["name"].strip()
+            if name in seen_names:
+                raise ValueError(
+                    f"stops[{position}].name '{name}' duplicates an earlier stop")
+            seen_names.add(name)
+        with self._lock:
+            for _attempt in range(20):
+                spj_id = uuid4().hex[:12]
+                now = _utc_now()
+                spj = None
+                connection = self._connect()
+                connection.isolation_level = None
+                try:
+                    with closing(connection):
+                        connection.execute("BEGIN IMMEDIATE")
+                        number = next_spj_number(self)
+                        try:
+                            connection.execute(
+                                "INSERT INTO spj (spj_id, spj_number, date, driver_name, "
+                                "truck_code, destination, weigh_on_site, priority, note, "
+                                "status, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                                (spj_id, number, _today(), driver_name, truck_code,
+                                 destination, int(bool(weigh_on_site)), priority, note,
+                                 "draft", created_by, now),
+                            )
+                            for idx, stop in enumerate(stops):
+                                connection.execute(
+                                    "INSERT INTO spj_stops (spj_id, idx, name, kecamatan, "
+                                    "address, lat, lng, location_type, status) "
+                                    "VALUES (?,?,?,?,?,?,?,?,?)",
+                                    (spj_id, idx, stop["name"].strip(),
+                                     stop["kecamatan"].strip(),
+                                     stop["address"].strip(),
+                                     float(stop["lat"]), float(stop["lng"]),
+                                     stop.get("location_type",
+                                              "Pemukiman Kelas Menengah"),
+                                     "pending"),
+                                )
+                            connection.execute("COMMIT")
+                        except sqlite3.IntegrityError:
+                            connection.execute("ROLLBACK")
+                            continue  # daily-number race: retry
+                        spj = self._load_spj(connection, spj_id)
+                except sqlite3.OperationalError:
+                    raise
+                if spj is not None:
+                    self._spj[spj_id] = spj
+                    return spj
+            raise RuntimeError("SPJ create failed after repeated number conflicts")
     def create(self, driver_name: str, truck_code: str, destination: str,
                weigh_on_site: bool, priority: str, note: str,
                created_by: str = "admin") -> Spj:
@@ -493,6 +601,14 @@ class SpjStore:
         return self._mutate(spj_id, mutate)
 
     def activate(self, spj_id: str) -> Spj:
+        """Activate after resolving road-following compliance geometry (#58).
+
+        Every leg (stops in order + destination) is resolved via OSRM
+        BEFORE the status flips. A degraded (straight-line) result FAILS
+        activation visibly — it is never silently promoted as ground
+        truth — unless JWIS_SPJ_STRAIGHT_FALLBACK=on, in which case the
+        fallback is recorded in the audit trail.
+        """
         def mutate(connection):
             row = self._fetch_status(connection, spj_id)
             if row["status"] != "draft":
@@ -506,10 +622,40 @@ class SpjStore:
                 (row["truck_code"],)).fetchone()
             if active is not None:
                 raise ValueError(f"truck {row['truck_code']} already has an active SPJ")
+
+            # #58: resolve road-following geometry for the whole path.
+            stops = connection.execute(
+                "SELECT lat, lng FROM spj_stops WHERE spj_id=? ORDER BY idx",
+                (spj_id,)).fetchall()
+            waypoints = [(s["lat"], s["lng"]) for s in stops]
+            dest = DESTINATION_COORDS.get(row["destination"])
+            if dest is not None and (not waypoints or waypoints[-1] != dest):
+                waypoints.append(dest)
+            route = road_route(waypoints) if len(waypoints) >= 2 else {
+                "geometry": [{"lat": la, "lng": ln} for la, ln in waypoints],
+                "source": "LIVE_EXTERNAL", "distance_km": 0.0, "duration_min": 0,
+            }
+            source = route.get("source", "FALLBACK_DEGRADED")
+            if source == "FALLBACK_DEGRADED":
+                if os.getenv("JWIS_SPJ_STRAIGHT_FALLBACK", "off").lower() != "on":
+                    raise ValueError(
+                        "cannot activate: road-following geometry could not be "
+                        "resolved (routing service unavailable); refusing to "
+                        "promote a straight-line path as ground truth")
+                self._audit(
+                    connection, spj_id, "straight_fallback", row["created_by"],
+                    reason="JWIS_SPJ_STRAIGHT_FALLBACK=on: activated with "
+                           "unresolved road geometry",
+                    payload={"source": source})
+            geometry = [(p["lat"], p["lng"]) for p in route.get("geometry", [])]
+            now = _utc_now()
             connection.execute(
-                "UPDATE spj SET status='aktif', activated_at=? WHERE spj_id=?",
-                (_utc_now(), spj_id))
-            self._audit(connection, spj_id, "activate", row["created_by"])
+                "UPDATE spj SET status='aktif', activated_at=?, route_geometry=?, "
+                "route_source=?, route_resolved_at=? WHERE spj_id=?",
+                (now, json.dumps(geometry), source, now, spj_id))
+            self._audit(connection, spj_id, "activate", row["created_by"],
+                        payload={"route_source": source,
+                                 "route_points": len(geometry)})
         return self._mutate(spj_id, mutate)
 
     def complete_stop(self, spj_id: str, index: int,
@@ -621,13 +767,12 @@ DESTINATION_COORDS: dict[str, tuple[float, float]] = {
 
 
 def spj_polyline(spj: Spj) -> list[tuple[float, float]]:
-    """Stops in order + destination as a straight-segment polyline.
-
-    Straight segments are sufficient for the 500 m deviation detector —
-    SPJ stops in Jakarta are typically >1 km apart and deviation is measured
-    to the nearest segment. Upgrading each leg to road-following OSRM
-    geometry is the Fase 4 live-integration path.
+    """Compliance polyline: the road-following geometry resolved at
+    activation (#58), falling back to stop-to-stop straight segments only
+    for legacy SPJs activated before road resolution existed.
     """
+    if getattr(spj, "route_geometry", None):
+        return list(spj.route_geometry)
     points: list[tuple[float, float]] = []
     for stop in spj.stops:
         pt = (stop.lat, stop.lng)

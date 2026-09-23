@@ -86,7 +86,10 @@ pip install -r requirements.txt
 # OPENWA_API_KEY=your-wa-api-key
 # OPENWA_SESSION_ID=default
 
-python -m uvicorn app.main:app --port 8001
+# JWIS_AI_ENGINE=on starts the background engine (auto-reroute, TPA queue
+# predictor, event forecast). Without it every /api/ai/* endpoint returns
+# empty — see /api/health fields ai_engine_configured/ai_engine_running.
+JWIS_AI_ENGINE=on python -m uvicorn app.main:app --port 8001
 ```
 *Note: The backend will warm all Prophet + XGBoost prediction caches on startup (~20-25 seconds) to ensure instant responses.*
 

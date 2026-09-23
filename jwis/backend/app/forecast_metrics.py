@@ -56,13 +56,57 @@ def mase(actual: Sequence[float], predicted: Sequence[float], seasonal_period: i
 def suitability_labels() -> dict[str, str]:
     """Which forecast resolutions JWIS may present as reliable.
 
-    Grounded in the multi-resolution evaluation: strong at spatial/weekly/monthly,
-    NOT supported at daily-district (calibrated-synthetic target).
+    Grounded in the multi-resolution evaluation (#18): 'reliable' is only
+    claimed where OBSERVED holdout evidence exists at that resolution.
+    Weekly/monthly per-district metrics are evaluated against the
+    calibrated-synthetic district series (avg daily-district R² -0.033),
+    so they are labeled synthetic-validated, not reliable.
     """
     return {
         "hotspot_rank": "high",
         "city_day": "reliable",
-        "district_month": "reliable",
-        "district_week": "reliable",
+        "district_month": "synthetic_validated",
+        "district_week": "synthetic_validated",
         "district_day": "not_supported",
+    }
+
+
+def suitability_details() -> dict[str, dict]:
+    """Per-resolution validation evidence backing the labels (#18).
+
+    validation_target is 'observed' (real holdout data at that
+    resolution) or 'synthetic' (calibrated-synthetic series). 'reliable'
+    in suitability_labels() requires an observed target here.
+    """
+    return {
+        "hotspot_rank": {
+            "validation_target": "observed",
+            "sample": "42 kecamatan, SILIKA 2023 spatial baseline",
+            "period": "2023",
+            "baseline": "Spearman rank vs per-kecamatan tonnage (rho 0.998)",
+        },
+        "city_day": {
+            "validation_target": "observed",
+            "sample": "DKI daily series anchored to SIPSN city timbulan",
+            "period": "2021-2025",
+            "baseline": "SIPSN yearly per-city timbulan (real)",
+        },
+        "district_week": {
+            "validation_target": "synthetic",
+            "sample": "42 kecamatan calibrated-synthetic daily series",
+            "period": "2016-2026 held-out 20%",
+            "baseline": "SILIKA 2023 baseline with ~8% noise; not observed ground truth",
+        },
+        "district_month": {
+            "validation_target": "synthetic",
+            "sample": "42 kecamatan calibrated-synthetic daily series",
+            "period": "2016-2026 held-out 20%",
+            "baseline": "SILIKA 2023 baseline with ~8% noise; not observed ground truth",
+        },
+        "district_day": {
+            "validation_target": "synthetic",
+            "sample": "42 kecamatan calibrated-synthetic daily series (noise-dominated)",
+            "period": "2016-2026 held-out 20%",
+            "baseline": "avg per-district daily R² -0.033 vs naive",
+        },
     }

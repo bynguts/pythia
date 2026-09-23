@@ -24,7 +24,13 @@ class SpjEndpointTests(unittest.TestCase):
             "address": "Jl. Test 1", "lat": -6.29, "lng": 106.79,
         })
         self.assertEqual(r.status_code, 200)
-        act = self.client.post(f"/api/spj/{self.spj['spj_id']}/activate")
+        from unittest import mock as _mock
+        with _mock.patch("app.spj.road_route",
+                         side_effect=lambda coords: {
+                             "geometry": [{"lat": la, "lng": ln} for la, ln in coords],
+                             "distance_km": 1.0, "duration_min": 2,
+                             "source": "LIVE_EXTERNAL"}):
+            act = self.client.post(f"/api/spj/{self.spj['spj_id']}/activate")
         self.assertEqual(act.status_code, 200)
         return act.json()
 

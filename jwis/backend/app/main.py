@@ -28,7 +28,7 @@ import time
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Literal
 from fastapi import FastAPI, HTTPException, Query, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -51,7 +51,7 @@ from app.cv_surveillance import surveillance_status
 from app.map_truth import build_map_truth, _snapped_for
 from app.queue_simulation import simulate_queue
 from app.operations_optimizer import Demand, Vehicle, build_operational_plan
-from app.forecast_metrics import suitability_labels
+from app.forecast_metrics import suitability_labels, suitability_details
 from app.auth import ROLES, authenticate, has_permission, token_for, role_for_token
 from app.impact import build_impact_report
 from app.osrm import fetch_osrm_route
@@ -88,6 +88,9 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="JWIS FastAPI Backend", version="2.5.0", lifespan=_lifespan)
 history_store = HistoryStore()
 dispatch_center = DispatchCenter()
+# #36: handle on the AI engine so /api/health can report configured vs
+# running state instead of silently serving empty /api/ai/*.
+_AI_ENGINE_STATE: dict[str, bool] = {"running": False}
 
 
 def _warm_route_cache() -> None:
@@ -227,7 +230,11 @@ class DispatchRequest(BaseModel):
     manager_id: str = Field(default="manager_central", min_length=1, max_length=50)
 
 class DispatchConfirmRequest(BaseModel):
-    status: str = Field(min_length=1, max_length=30)
+    # #24: documented field-status enum. PENDING is the initial DB state,
+    # not a confirmable outcome; confirmations are READY (acknowledged and
+    # ready to execute), ISSUE (field problem reported), SIAP (legacy
+    # Indonesian READY used by existing clients), and DONE (completed).
+    status: Literal["READY", "ISSUE", "SIAP", "DONE"]
     note: str = Field(default="", max_length=500)
 
 class HybridPredictRequest(BaseModel):
@@ -252,8 +259,16 @@ class EventPermitRequest(BaseModel):
 # ── Existing Endpoints ───────────────────────────────────────────────
 
 @app.get("/api/health")
-def health() -> dict[str, str]:
-    return {"status": "healthy", "service": "jwis-backend", "version": "2.5.0"}
+def health() -> dict[str, Any]:
+    # #36: report the configured vs running AI engine state so an
+    # accidentally-empty /api/ai/* is visible from health, not silent.
+    return {
+        "status": "healthy",
+        "service": "jwis-backend",
+        "version": "2.5.0",
+        "ai_engine_configured": os.getenv("JWIS_AI_ENGINE", "off").lower() == "on",
+        "ai_engine_running": _AI_ENGINE_STATE["running"],
+    }
 
 @app.get("/api/health/detailed")
 def health_detailed() -> dict[str, Any]:
@@ -1042,9 +1057,16 @@ def ml_models_status() -> list[dict[str, Any]]:
 
 @app.get("/api/ml/suitability")
 def ml_suitability() -> dict[str, Any]:
-    """Honest per-resolution suitability; daily-district is not claimed reliable."""
+    """Honest per-resolution suitability with validation-target classes (#18).
+
+    'reliable' is only claimed for observed holdout targets; resolutions
+    validated against the calibrated-synthetic district series are
+    labeled 'synthetic_validated' with their evidence exposed.
+    """
     return {
+        # 'resolutions' key retained for existing frontend consumers.
         "resolutions": suitability_labels(),
+        "details": suitability_details(),
         "note": "Daily per-district resolution is calibrated-synthetic and must not be presented as observed accuracy.",
     }
 
@@ -1576,7 +1598,9 @@ _ai_forecast = EventImpactForecaster(feed=EVENT_FEED)
 def _start_ai_engine() -> None:
     engine = maybe_start_engine()
     if engine is None:
+        _AI_ENGINE_STATE["running"] = False
         return
+    _AI_ENGINE_STATE["running"] = True
     engine.register("auto_reroute", _ai_rerouter.run)
     engine.register("tpa_queue", _ai_queue.update)
     engine.register("deviation_replay", _ai_deviation.check)
@@ -1641,6 +1665,15 @@ def _spj_or_409(fn, *args, **kwargs):
         raise HTTPException(status_code=409, detail=str(exc))
 
 
+class SpjStopBody(BaseModel):
+    name: str
+    kecamatan: str
+    address: str
+    lat: float
+    lng: float
+    location_type: str = "Pemukiman Kelas Menengah"
+
+
 class SpjCreateBody(BaseModel):
     driver_name: str
     truck_code: str
@@ -1648,6 +1681,10 @@ class SpjCreateBody(BaseModel):
     weigh_on_site: bool = False
     priority: str = "normal"
     note: str = ""
+    # #60: optional composed stops — when present, the SPJ and ALL stops
+    # are created in one atomic transaction; a failing stop rolls the
+    # whole draft back (no partial state).
+    stops: list[SpjStopBody] | None = None
 
 
 class SpjCompleteBody(BaseModel):
@@ -1657,15 +1694,6 @@ class SpjCompleteBody(BaseModel):
 class SpjCompleteOverrideBody(BaseModel):
     override: bool = False
     reason: str = ""
-
-
-class SpjStopBody(BaseModel):
-    name: str
-    kecamatan: str
-    address: str
-    lat: float
-    lng: float
-    location_type: str = "Pemukiman Kelas Menengah"
 
 
 
@@ -1724,9 +1752,15 @@ def get_spj(spj_id: str) -> dict[str, Any]:
 
 @app.post("/api/spj", status_code=201)
 def create_spj(body: SpjCreateBody, _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
-    return _spj_or_409(SPJ_STORE.create, body.driver_name, body.truck_code,
-                       body.destination, body.weigh_on_site, body.priority,
-                       body.note)
+    if body.stops is None:
+        return _spj_or_409(SPJ_STORE.create, body.driver_name, body.truck_code,
+                           body.destination, body.weigh_on_site, body.priority,
+                           body.note)
+    # #60: atomic composed create — SPJ + all stops in one transaction.
+    return _spj_or_409(
+        SPJ_STORE.create_with_stops, body.driver_name, body.truck_code,
+        body.destination, body.weigh_on_site, body.priority, body.note,
+        [s.model_dump() for s in body.stops])
 
 
 @app.post("/api/spj/{spj_id}/stops")

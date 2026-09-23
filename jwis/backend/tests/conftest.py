@@ -12,13 +12,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 os.environ.setdefault("JWIS_AI_ENGINE", "off")
 
-# Isolate the SQLite-backed SPJ store per test session: without this, the
-# global SPJ_STORE persists to a shared temp file and later runs collide
-# with leftover active SPJs (truck-already-active 409s) from earlier runs.
-_session_db = os.path.join(tempfile.mkdtemp(prefix="jwis_test_db_"), "jwis_test.db")
-os.environ.setdefault("JWIS_DB_PATH", _session_db)
-os.environ.setdefault("JWIS_SPJ_SEED", "off")
-
+# Determinism (#58): tests that activate SPJs without mocking the router
+# use the explicit straight-fallback (audited) instead of live OSRM, so
+# CI never depends on an external routing service. Unit tests for the
+# road contract mock road_route directly.
+os.environ.setdefault("JWIS_SPJ_STRAIGHT_FALLBACK", "on")
 from app.main import app  # noqa: E402
 @pytest.fixture(scope="session")
 def api_client() -> TestClient:
