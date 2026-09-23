@@ -682,8 +682,8 @@ export function LiveFleetMap({
                 <h4 style="margin: 0 0 6px; font-weight: bold;">${lang === "id" ? "Acara" : "Event"}: ${ev.name}</h4>
                 <p style="margin: 0 0 4px; font-size: 11px;"><b>${lang === "id" ? "Izin" : "Permit"}:</b> ${ev.permit_number}</p>
                 <p style="margin: 0 0 4px; font-size: 11px;"><b>${lang === "id" ? "Perkiraan" : "Forecast"}:</b> ${Number(ev.predicted_waste_tons).toLocaleString(lang === "id" ? "id-ID" : "en-US")} ${countUnit(ev.predicted_waste_tons, lang, "ton sampah", "ton of waste", "tons of waste")}</p>
-                <p style="margin: 0 0 4px; font-size: 11px;"><b>${lang === "id" ? "Petugas lapangan" : "Field crews"}:</b> ${ev.crews_required} ${countUnit(ev.crews_required, lang, "orang", "person", "people")}</p>
-                <p style="margin: 0; font-size: 11px;"><b>${lang === "id" ? "Armada cadangan" : "Backup fleet"}:</b> ${ev.backup_trucks_required} ${countUnit(ev.backup_trucks_required, lang, "truk", "truck", "trucks")}</p>
+                <p style="margin: 0 0 4px; font-size: 11px;"><b>${lang === "id" ? "Kru lapangan" : "Field crews"}:</b> ${ev.crews_required} ${countUnit(ev.crews_required, lang, "tim", "team", "teams")} · ${ev.workers_required} ${countUnit(ev.workers_required, lang, "orang", "person", "people")}</p>
+                <p style="margin: 0; font-size: 11px;"><b>${lang === "id" ? "Armada cadangan" : "Backup fleet"}:</b> ${ev.trucks_required} ${countUnit(ev.trucks_required, lang, "truk", "truck", "trucks")}</p>
                 <p class="popup-src" style="margin: 6px 0 0;">${dataClass(ev.data_class, lang)} · ${lang === "id" && ev.data_note === "Illustrative event; not official DLH permit data." ? "Acara ilustratif; bukan data izin resmi DLH." : ev.data_note || (lang === "id" ? "Acara ilustratif; bukan data izin resmi DLH." : "Illustrative event; not official DLH permit data.")}</p>
               </div>
             `);

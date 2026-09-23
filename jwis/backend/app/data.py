@@ -6,6 +6,7 @@ from typing import Any
 from .engine import detect_route_deviation, forecast_waste_risk, recommend_routes
 from .osrm import fetch_osrm_route
 from .real_data import baseline_tons_for
+from .units import event_tons_for_attendance, resource_requirements
 
 
 ASSIGNED_PATHS = {
@@ -488,8 +489,9 @@ def _build_predictions_uncached() -> list[dict[str, Any]]:
                 "baseline_tons": pred["prophet_baseline_tons"],
                 "predicted_tons": pred["predicted_tons"],
                 "crews_required": pred["crews_required"],
+                "workers_required": pred["workers_required"],
                 "man_hours_required": pred["man_hours_required"],
-                "disposal_bins_required": pred["disposal_bins_required"],
+                "bins_required": pred["bins_required"],
             })
             
         cities = ["Jakarta Barat", "Jakarta Utara", "Jakarta Timur", "Jakarta Selatan", "Jakarta Pusat"]
@@ -520,8 +522,7 @@ def _build_predictions_uncached() -> list[dict[str, Any]]:
             elif spike_pct >= 10:
                 risk_level = "watch"
                 
-            extra_trucks = max(0, round((pred_tons - base_tons) / 18))
-            
+            resources = resource_requirements(pred_tons, baseline_tons=base_tons)
             predictions.append({
                 "district": city,
                 "date": target_date_str,
@@ -530,11 +531,13 @@ def _build_predictions_uncached() -> list[dict[str, Any]]:
                 "spike_percent": spike_pct,
                 "risk_level": risk_level,
                 "factors": factors or ["No unusual driver detected."],
-                "recommended_extra_trucks": extra_trucks,
-                "recommended_extra_crews": max(0, round(extra_trucks / 2)),
-                "man_hours_required": sum(p["man_hours_required"] for p in city_kecs),
                 "crews_required": sum(p["crews_required"] for p in city_kecs),
-                "disposal_bins_required": sum(p["disposal_bins_required"] for p in city_kecs),
+                "workers_required": sum(p["workers_required"] for p in city_kecs),
+                "man_hours_required": sum(p["man_hours_required"] for p in city_kecs),
+                "bins_required": sum(p["bins_required"] for p in city_kecs),
+                "recommended_extra_trucks": resources["recommended_extra_trucks"],
+                "recommended_extra_crews": resources["recommended_extra_crews"],
+                "recommended_extra_workers": resources["recommended_extra_workers"],
                 "fuel_consumption_liters": round(pred_tons * 1.8, 1),
                 "co2_emissions_kg": round(pred_tons * 1.8 * 2.68, 1),
             })
@@ -829,11 +832,6 @@ def events_permits_payload() -> list[dict[str, Any]]:
             "lat": -6.1754,
             "lng": 106.8272,
             "expected_attendance": 45000,
-            "predicted_waste_tons": 54.0,
-            "man_hours_required": 144,
-            "crews_required": 18,
-            "backup_trucks_required": 3,
-            "large_bins_required": 12,
             "status": "APPROVED",
         },
         {
@@ -844,11 +842,6 @@ def events_permits_payload() -> list[dict[str, Any]]:
             "lat": -6.2183,
             "lng": 106.8022,
             "expected_attendance": 65000,
-            "predicted_waste_tons": 78.5,
-            "man_hours_required": 208,
-            "crews_required": 26,
-            "backup_trucks_required": 5,
-            "large_bins_required": 18,
             "status": "APPROVED",
         },
         {
@@ -859,17 +852,18 @@ def events_permits_payload() -> list[dict[str, Any]]:
             "lat": -6.1950,
             "lng": 106.8230,
             "expected_attendance": 25000,
-            "predicted_waste_tons": 18.2,
-            "man_hours_required": 48,
-            "crews_required": 6,
-            "backup_trucks_required": 1,
-            "large_bins_required": 6,
             "status": "ACTIVE_SUNDAY",
         },
     ]
     # Fixture events: permit numbers/attendance are illustrative, not official
     # DLH permit data. Label each so the UI never presents them as real permits.
+    # Resources come from the same canonical formula as the forecast and the
+    # live permit intake — the fixtures used to carry literals that no producer
+    # would ever emit (18 crews for a 54 t event, i.e. 3 t per crew).
     for e in events:
+        tons = event_tons_for_attendance(e["expected_attendance"])
+        e["predicted_waste_tons"] = tons
+        e.update(resource_requirements(tons))
         e["data_class"] = "SIMULATED"
         e["data_note"] = "Illustrative event; not official DLH permit data."
     return events

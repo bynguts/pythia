@@ -4,6 +4,9 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
+EVIDENCE = {"arrival": {"photo_name": "a.jpg", "lat": -6.29, "lng": 106.79},
+            "weighing": [], "officer": {"photo_name": "p.jpg", "name": "Petugas"}}
+
 
 class SpjEndpointTests(unittest.TestCase):
     def setUp(self):
@@ -84,6 +87,8 @@ class SpjEndpointTests(unittest.TestCase):
             json={"evidence": self.EVIDENCE})
         self.assertEqual(done.status_code, 200)
         self.assertEqual(done.json()["status"], "selesai")
+        self.assertEqual(done.json()["stops"][0]["evidence"]["officer"]["name"],
+                         "Dicky")
         cancel = self.client.post(f"/api/spj/{self.spj['spj_id']}/cancel")
         self.assertEqual(cancel.status_code, 409)  # selesai cannot cancel
 

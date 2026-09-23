@@ -28,6 +28,44 @@ on refresh failure. Rows and KPIs describe current assignments, **not**
 historical trips, fuel efficiency, or driver performance scores. Pilot telemetry
 and assignments are simulated; fleet composition uses the DKI 2023 truck census.
 
+### Durable record storage
+
+SPJ work orders, submitted event permits, pre-trip inspections, damage reports,
+and service history live in SQLite record stores (`app/storage.py`,
+`RecordStore`) whose location follows `JWIS_DB_PATH` (its directory when set,
+otherwise the temp directory). Mutations are transactional: a request is only
+acknowledged after the row commits, a failed commit returns HTTP 503 instead of
+a success object, and the SPJ lifecycle uses `BEGIN IMMEDIATE` read-modify-write
+transactions so two API workers cannot both activate an order for the same
+truck or allocate the same daily number. Any pre-existing `jwis_*.json` store is
+imported once on first start and renamed `*.json.migrated`.
+
+### Operational resource units
+
+`app/units.py` is the single source for every resource quantity, and each API
+response carries a `units` glossary next to the numbers:
+
+| Field | Unit |
+|---|---|
+| `trucks_required` | trucks (1 truck = 18 t per shift) |
+| `crews_required` | crew teams (1 team operates 1 truck) |
+| `workers_required` | people (crews × 4) |
+| `man_hours_required` | person-hours (workers × 8 h shift) |
+| `bins_required` | large bins (2.5 t each) |
+| `recommended_extra_*` | the same units, for demand above the baseline |
+
+### SPJ evidence and override
+
+Closing a stop requires field evidence (arrival photo, weighing, officer).
+`POST /api/spj/{id}/complete` is the exceptional path: it needs a supervisor
+override with a reason and is gated by the `dispatch:override` permission, which
+only the `supervisor` and `administrator` roles hold. Receipt submission is
+idempotent per `operation_id`; replacing an existing receipt requires a
+`replace_reason` and archives the previous one in `receipt_history`. Destination
+coordinates come from `app/facilities.py`; a destination without a sourced
+coordinate (`JRC Pesanggrahan`) is reported as `usable_for_routing: false` and
+does not become a deviation-scoring reference path.
+
 ## Interface
 
 | Entry | Preview |

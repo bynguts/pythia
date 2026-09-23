@@ -26,6 +26,14 @@ desktop.ini
 # Runtime SQLite (regenerated at runtime)
 jwis_history.db
 *.db-journal
+# Durable record stores (SPJ, permits, pretrip, damage, service) and the
+# one-time legacy JSON import marker.
+jwis_spj.db*
+jwis_permits.db*
+jwis_pretrip.db*
+jwis_damage_reports.db*
+jwis_service_history.db*
+*.json.migrated
 
 # --- Secrets & runtime artifacts (MUST NOT be committed) ---
 

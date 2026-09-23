@@ -18,11 +18,16 @@ const copy = {
     draft: "Draf", aktif: "Aktif", selesai: "Selesai", batal: "Dibatalkan",
     pending: "Belum selesai", completed: "Selesai", unknown: "Tidak diketahui",
     showDetails: "Tampilkan rincian", hideDetails: "Sembunyikan rincian",
-    stopComplete: "Tandai titik selesai", activate: "Ubah ke aktif",
-    complete: "Selesaikan SPJ", cancel: "Batalkan SPJ", tableLabel: "Daftar surat perintah jalan",
+    activate: "Ubah ke aktif",
+    cancel: "Batalkan SPJ", tableLabel: "Daftar surat perintah jalan",
     evidenceLoading: "Memuat ringkasan bukti…", evidenceEmpty: "Belum ada bukti untuk SPJ ini.",
     arrival: "Kedatangan (geotag)", weighing: "Penimbangan", photos: "foto",
-    officer: "Petugas", retry: "Coba lagi", noSession: "Sesi berakhir atau belum masuk. Masuk kembali, lalu coba lagi.",
+    officer: "Petugas", override: "Penyelesaian oleh pengawas",
+    overrideReason: "Alasan pengawas (wajib, min. 10 karakter)",
+    overrideSubmit: "Selesaikan dengan alasan",
+    overrideHint: "Penyelesaian tanpa bukti lapangan hanya melalui pengawas dan tercatat di jejak audit.",
+    evidenceRequired: "Titik hanya dapat diselesaikan dengan bukti lapangan dari aplikasi pengemudi. Pengawas dapat menyelesaikan seluruh SPJ dengan alasan yang tercatat.",
+    close: "Tutup", retry: "Coba lagi", noSession: "Sesi berakhir atau belum masuk. Masuk kembali, lalu coba lagi.",
     forbidden: "Akun ini tidak memiliki izin untuk tindakan SPJ tersebut. Gunakan akun dengan izin pengiriman atau hubungi pengawas.",
     conflict: "Status atau persyaratan SPJ telah berubah. Perbarui daftar dan periksa titiknya.",
     invalid: "Periksa data SPJ lalu coba lagi.", serverFailed: "Layanan sedang bermasalah. Coba lagi nanti.",
@@ -48,11 +53,16 @@ const copy = {
     draft: "Draft", aktif: "Active", selesai: "Completed", batal: "Canceled",
     pending: "Pending", completed: "Completed", unknown: "Unknown",
     showDetails: "Show details for", hideDetails: "Hide details for",
-    stopComplete: "Mark stop complete", activate: "Change to active",
-    complete: "Complete order", cancel: "Cancel order", tableLabel: "Dispatch order list",
+    activate: "Change to active",
+    cancel: "Cancel order", tableLabel: "Dispatch order list",
     evidenceLoading: "Loading evidence summary…", evidenceEmpty: "No evidence recorded for this order.",
     arrival: "Arrival (geotag)", weighing: "Weighing", photos: "photos",
-    officer: "Officer", retry: "Try again", noSession: "Your session has expired or you are not signed in. Sign in again, then retry.",
+    officer: "Officer", override: "Closed by supervisor override",
+    overrideReason: "Supervisor reason (required, 10+ characters)",
+    overrideSubmit: "Complete with reason",
+    overrideHint: "Closing an order without field evidence is a supervisor action and is recorded in the audit trail.",
+    evidenceRequired: "Stops close only with field evidence from the driver app. A supervisor can close the whole order with a recorded reason.",
+    close: "Close", retry: "Try again", noSession: "Your session has expired or you are not signed in. Sign in again, then retry.",
     forbidden: "This account cannot perform that dispatch action. Use an account with dispatch permission or contact a supervisor.",
     conflict: "The order status or requirements changed. Refresh the list and check its stops.",
     invalid: "Check the order details and try again.", serverFailed: "The service is unavailable. Try again later.",
@@ -273,6 +283,9 @@ export function SpjPanel() {
   const [evidence, setEvidence] = useState(null);
   const [evidenceError, setEvidenceError] = useState(null);
   const [evidenceLoading, setEvidenceLoading] = useState(null);
+  const [overrideFor, setOverrideFor] = useState(null);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [overrideError, setOverrideError] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -304,16 +317,16 @@ export function SpjPanel() {
       .finally(() => setEvidenceLoading((current) => current === spjId ? null : current));
   };
 
-  const act = async (path) => {
-    if (pendingAction) return;
+  const act = async (path, payload) => {
+    if (pendingAction) return false;
     setPendingAction(path);
     setActionError(null);
     try {
-      await post(path);
+      await post(path, payload);
     } catch (err) {
       setActionError(err);
       setPendingAction("");
-      return;
+      return false;
     }
     await load();
     if (open) {
@@ -326,6 +339,7 @@ export function SpjPanel() {
       }
     }
     setPendingAction("");
+    return true;
   };
 
   const statusPill = {
@@ -383,17 +397,16 @@ export function SpjPanel() {
                         <ol>
                           {stops.map((stop, i) => (
                             <li key={i}>
-                              {stop.name} — {stop.kecamatan} · {words[stop.status] || words.unknown}{" "}
-                              {stop.status !== "completed" && s.status === "aktif" && (
-                                <button type="button" className="compact-enforce-btn"
-                                  disabled={!!pendingAction}
-                                  onClick={() => act(`${base}/stops/${i}/complete`)}>
-                                  {words.stopComplete}
-                                </button>
+                              {stop.name} — {stop.kecamatan} · {words[stop.status] || words.unknown}
+                              {stop.override && (
+                                <em className="spj-override-note">
+                                  {" "}· {words.override}: {stop.override.reason} ({stop.override.actor})
+                                </em>
                               )}
                             </li>
                           ))}
                         </ol>
+                        {s.status === "aktif" && <p className="spj-hint">{words.evidenceRequired}</p>}
                         {evidenceLoading === s.spj_id && <p role="status">{words.evidenceLoading}</p>}
                         {evidenceError?.spjId === s.spj_id && <p className="spj-form-error" role="alert">
                           {errorMessage(evidenceError.error, words.evidenceFailed, words)}
@@ -419,8 +432,42 @@ export function SpjPanel() {
                             onClick={() => act(`${base}/activate`)}>{words.activate}</button>
                         )}
                         {s.status === "aktif" && (
-                          <button type="button" className="compact-enforce-btn" disabled={!!pendingAction}
-                            onClick={() => act(`${base}/complete`)}>{words.complete}</button>
+                          overrideFor === s.spj_id ? (
+                            <form className="spj-override-form"
+                              onSubmit={async (event) => {
+                                event.preventDefault();
+                                if (overrideReason.trim().length < 10) {
+                                  setOverrideError(words.overrideReason);
+                                  return;
+                                }
+                                setOverrideError("");
+                                const done = await act(`${base}/complete`,
+                                    { override: { reason: overrideReason.trim() } });
+                                // A refused override (e.g. a role without the
+                                // permission) keeps the form open with its reason
+                                // so the operator can retry, not retype.
+                                if (done) { setOverrideFor(null); setOverrideReason(""); }
+                              }}>
+                              <label>
+                                {words.overrideReason}
+                                <input type="text" value={overrideReason}
+                                  onChange={(event) => setOverrideReason(event.target.value)}
+                                  aria-label={words.overrideReason} />
+                              </label>
+                              {overrideError && <p className="spj-form-error" role="alert">{overrideError}</p>}
+                              <p className="spj-hint">{words.overrideHint}</p>
+                              <button type="submit" className="compact-enforce-btn"
+                                disabled={!!pendingAction}>{words.overrideSubmit}</button>
+                              <button type="button" className="compact-enforce-btn"
+                                onClick={() => { setOverrideFor(null); setOverrideReason(""); setOverrideError(""); }}>
+                                {words.close}
+                              </button>
+                            </form>
+                          ) : (
+                            <button type="button" className="compact-enforce-btn" disabled={!!pendingAction}
+                              onClick={() => { setOverrideFor(s.spj_id); setOverrideReason(""); setOverrideError(""); }}>
+                              {words.override}</button>
+                          )
                         )}
                         {["draft", "aktif"].includes(s.status) && (
                           <button type="button" className="compact-enforce-btn" disabled={!!pendingAction}

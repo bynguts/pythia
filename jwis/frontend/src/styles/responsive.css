@@ -337,3 +337,28 @@
     flex: 0 0 auto;
   }
 }
+
+/* ── Migrated from the retired legacy.css layer (issue #66) ─────────────
+   Only declarations no later layer already defined; duplicate selector
+   ownership is what made visual fixes order-dependent. ─────────────── */
+
+@media(max-width:640px) {
+  .map-legend:not([open]) span {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .map-footer-panels {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 900px) {
+  .panel table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}

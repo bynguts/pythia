@@ -56,6 +56,7 @@ def compute_driver_score(driver_name: str, truck_codes: list[str],
         if t["truck_code"] in codes and (t.get("deviation") or {}).get("violated"))
 
     stops_without_evidence = 0
+    stops_closed_by_override = 0
     late_completions = 0
     spj_dates: set[str] = set()
     for spj in SPJ_STORE.list():
@@ -67,9 +68,16 @@ def compute_driver_score(driver_name: str, truck_codes: list[str],
                 and (spj.completed_at or "")[:10] > spj.date):
             late_completions += 1
         for stop in spj.stops:
-            if (stop.status == "completed"
-                    and _in_window(stop.completed_at, start)
-                    and stop.evidence is None):
+            if not (stop.status == "completed" and _in_window(stop.completed_at, start)):
+                continue
+            if stop.evidence is not None:
+                continue
+            # A stop closed without field evidence is either an audited
+            # supervisor override (a supervisor decision, reported but not
+            # charged to the driver) or an unaudited gap that must never exist.
+            if stop.override:
+                stops_closed_by_override += 1
+            else:
                 stops_without_evidence += 1
 
     unresolved_heavy = sum(
@@ -96,6 +104,7 @@ def compute_driver_score(driver_name: str, truck_codes: list[str],
         "breakdown": {
             "deviation_violations": deviation_violations,
             "stops_without_evidence": stops_without_evidence,
+            "stops_closed_by_override": stops_closed_by_override,
             "late_completions": late_completions,
             "unresolved_heavy_reports": unresolved_heavy,
             "days_without_pretrip": days_without_pretrip,

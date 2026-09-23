@@ -23,6 +23,8 @@ import joblib
 
 from functools import lru_cache
 
+from app.units import resource_requirements
+
 MODELS_DIR = Path(__file__).resolve().parents[1] / "data" / "models"
 # 42 Jakarta kecamatan (matches scripts/train_models.py; models named by slug).
 _KELURAHAN_SLUGS = [
@@ -330,14 +332,11 @@ def forecast_waste_risk(
     elif spike_percent >= 10:
         risk_level = "watch"
 
-    extra_trucks = max(0, round((predicted_tons - baseline_tons) / 18))
-    
-    # Estimate operational requirements (Case 2: man-hours, crews, facilities)
-    # 1 truck carries 18 tons. Crew size = 4 people per truck.
-    # 1 crew works 8 hours. Man-hours = crews * 8.
-    crews_needed = int(np.ceil(predicted_tons / 18))
-    man_hours = crews_needed * 8
-    disposal_bins_needed = int(np.ceil(predicted_tons / 2.5))  # 2.5 tons per large trash bin
+    # Operational requirements in the canonical units (app.units): one truck
+    # carries TRUCK_CAPACITY_TONS, one crew rides one truck, man-hours are
+    # person-hours. Every producer in the backend shares this block.
+    resources = resource_requirements(predicted_tons,
+                                      baseline_tons=baseline_tons)
 
     return {
         "baseline_tons": baseline_tons,
@@ -345,11 +344,7 @@ def forecast_waste_risk(
         "spike_percent": spike_percent,
         "risk_level": risk_level,
         "factors": factors or ["No unusual driver detected."],
-        "recommended_extra_trucks": extra_trucks,
-        "recommended_extra_crews": max(0, round(extra_trucks / 2)),
-        "man_hours_required": man_hours,
-        "crews_required": crews_needed,
-        "disposal_bins_required": disposal_bins_needed,
+        **resources,
         "fuel_consumption_liters": round(predicted_tons * 1.8, 1),
         "co2_emissions_kg": round(predicted_tons * 1.8 * 2.68, 1), # 2.68 kg CO2 per liter solar
     }
@@ -381,9 +376,7 @@ def predict_waste_hybrid(
         predicted_tons = max(0.0, round(float(prophet_pred + residual_pred), 1))
         
         # Calculate requirements
-        crews = int(np.ceil(predicted_tons / 18))
-        man_hours = crews * 8
-        bins = int(np.ceil(predicted_tons / 2.5))
+        resources = resource_requirements(predicted_tons)
         
         return {
             "kelurahan": kelurahan,
@@ -414,9 +407,7 @@ def predict_waste_hybrid(
                 "rain_3d": round(rainfall_mm * 1.5, 2),
             },
             "factors": ["Model files missing; loaded robust statistical fallback heuristics for demo."],
-            "man_hours_required": man_hours,
-            "crews_required": crews,
-            "disposal_bins_required": bins,
+            **resources,
             "fuel_consumption_liters": round(predicted_tons * 1.8, 1),
             "co2_emissions_kg": round(predicted_tons * 1.8 * 2.68, 1)
         }
@@ -482,10 +473,8 @@ def predict_waste_hybrid(
     if is_holiday:
         factors.append("National holiday detected — reduced commercial waste, possible spike from public gatherings.")
 
-    # Requirements calculations
-    crews = int(np.ceil(predicted_tons / 18))
-    man_hours = crews * 8
-    bins = int(np.ceil(predicted_tons / 2.5))
+    # Requirements calculations (canonical units, app.units)
+    resources = resource_requirements(predicted_tons)
 
     # Honest uncertainty band: daily-district resolution is calibrated-synthetic,
     # so expose a wide interval and a suitability flag instead of a point claim.
@@ -503,9 +492,7 @@ def predict_waste_hybrid(
         "factor_attribution": attribution,
         "features_used": dict(X_features.iloc[0]),
         "factors": factors or ["Prophet baseline trend stable; no exceptional drivers."],
-        "man_hours_required": man_hours,
-        "crews_required": crews,
-        "disposal_bins_required": bins,
+        **resources,
         "fuel_consumption_liters": round(predicted_tons * 1.8, 1),
         "co2_emissions_kg": round(predicted_tons * 1.8 * 2.68, 1)
     }

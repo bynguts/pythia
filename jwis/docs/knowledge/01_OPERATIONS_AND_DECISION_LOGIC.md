@@ -20,7 +20,7 @@ keputusan operasional. Ini adalah sumber jawaban utama Ana saat ditanya "kenapa 
 - Akhir pekan -> +7% (aktivitas komersial dan ruang publik).
 - `predicted_tons = baseline_tons * (1 + spike)`.
 - `risk_level`: >=30% critical, >=20% high, >=10% watch, selain itu normal.
-- Output per kelurahan menyertakan kebutuhan: kru, man-hours, gerobak/bin, truk tambahan, dan fuel/CO2.
+- Output per kelurahan menyertakan kebutuhan: tim kru, jam-orang (person-hours), tong/bin, truk, dan fuel/CO2. Satuan baku ada di `app/units.py` dan disertakan sebagai `units` pada setiap respons.
 
 ## C. Skor Rekomendasi Rute
 

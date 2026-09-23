@@ -34,9 +34,37 @@ class SpjPolylineTests(unittest.TestCase):
         # Road geometry is the resolved waypoints: S1, S2, destination.
         self.assertEqual(len(line), 3)
         self.assertEqual(line[0], (-6.20, 106.80))
-        self.assertAlmostEqual(line[-1][0], -6.331, places=3)
-        self.assertAlmostEqual(line[-1][1], 106.991, places=3)
+        # Verified TPST Bantargebang coordinate (see app.facilities provenance).
+        self.assertAlmostEqual(line[-1][0], -6.3495, places=3)
+        self.assertAlmostEqual(line[-1][1], 106.9981, places=3)
 
+    def test_polyline_refuses_unverified_destination(self):
+        """A destination without a sourced coordinate cannot become ground truth.
+
+        Activation FAILS VISIBLY for an unverified destination (#59) —
+        stricter than refusing only at polyline time: an SPJ must never go
+        active with compliance geometry that cannot be resolved.
+        """
+        import tempfile
+        from app.facilities import FACILITIES, provenance_payload
+        path = os.path.join(tempfile.gettempdir(), "test_spj_unverified.json")
+        if os.path.exists(path):
+            os.remove(path)
+        store = SpjStore(db_path=path)
+        spj = store.create(driver_name="A", truck_code="T-997",
+                           destination="JRC Pesanggrahan", weigh_on_site=False,
+                           priority="normal", note="")
+        store.add_stop(spj.spj_id, name="S1", kecamatan="K", address="A",
+                       lat=-6.20, lng=106.80)
+        with self.assertRaises(ValueError) as ctx:
+            store.activate(spj.spj_id)
+        self.assertIn("no verified ground-truth", str(ctx.exception))
+        self.assertEqual(store.get(spj.spj_id).status, "draft")
+        self.assertFalse(FACILITIES["JRC Pesanggrahan"].is_ground_truth)
+        provenance = provenance_payload("JRC Pesanggrahan")
+        self.assertEqual(provenance["verification_status"], "unverified")
+        self.assertFalse(provenance["usable_for_routing"])
+        self.assertTrue(provenance["source_url"])
     def test_active_path_for_truck_with_spj(self):
         store = SpjStore(persist_path=fresh_store_path("test_spj_active.json"))
         self._active_spj(store, truck="T-999")

@@ -280,3 +280,298 @@
   border-radius: 6px;
   display: inline-block;
 }
+
+/* ── Migrated from the retired legacy.css layer (issue #66) ─────────────
+   Only declarations no later layer already defined; duplicate selector
+   ownership is what made visual fixes order-dependent. ─────────────── */
+
+.truck-marker, .fleet-marker {
+  position: absolute;
+  min-width: 48px;
+  min-height: var(--tap-min);
+  border: 2px solid #ffffff;
+  border-radius: 8px;
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(20, 32, 43, 0.22);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  font-size: var(--fs-caption);
+  font-weight: 900;
+  line-height: 1;
+  transition: min-width 160ms ease, min-height 160ms ease, padding 160ms ease, font-size 160ms ease;
+}
+
+.map-zoom-low .truck-marker {
+  min-width: 14px;
+  min-height: 14px;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border-radius: 50%;
+  border-width: 2px;
+  font-size: 0;
+  box-shadow: 0 2px 6px rgba(20, 32, 43, 0.3);
+}
+
+.map-zoom-low .truck-marker > span {
+  display: none;
+}
+
+.truck-marker .truck-heading {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: block;
+  font-size: var(--fs-caption);
+  line-height: 1;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+  z-index: 2;
+  transition: transform 0.5s ease;
+}
+
+.marker.diverted span {
+  background: #dc2626 !important;
+}
+
+.map-controls-grid {
+  grid-template-columns: repeat(4, max-content);
+  align-items: center;
+}
+
+.playback-select-wrap {
+  grid-column: 1 / -1;
+}
+
+.map-search {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 300px;
+  max-width: calc(100% - 24px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.map-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(203, 213, 223, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.97);
+  color: #1c2733;
+  font-size: var(--fs-caption);
+  padding: 7px 12px;
+  box-shadow: 0 2px 8px rgba(20, 32, 43, 0.12);
+  outline: none;
+}
+
+.map-search-input::placeholder {
+  color: #8a97a5;
+}
+
+.map-search:focus-within .map-search-input {
+  border-color: #176b54;
+}
+
+.map-search-results {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(203, 213, 223, 0.9);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(20, 32, 43, 0.14);
+  max-height: 260px;
+  overflow-y: auto;
+  z-index: 6;
+}
+
+.map-search-results li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: var(--fs-caption);
+  color: #344452;
+}
+
+.map-search-results li:hover {
+  background: #eef4f1;
+}
+
+.map-search-results strong {
+  display: block;
+  font-size: var(--fs-caption);
+  color: #1c2733;
+}
+
+.map-search-results small {
+  display: block;
+  font-size: var(--fs-caption);
+  color: #64748b;
+}
+
+.map-search-kind {
+  flex: 0 0 auto;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #176b54;
+  border: 1px solid rgba(23, 107, 84, 0.35);
+  border-radius: 5px;
+  padding: 2px 5px;
+  background: rgba(23, 107, 84, 0.06);
+}
+
+.map-basemap {
+  position: absolute;
+  right: 12px;
+  bottom: 28px;
+  z-index: 5;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(203, 213, 223, 0.9);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(20, 32, 43, 0.12);
+}
+
+.map-basemap button {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #344452;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.map-basemap button:hover {
+  background: #eef4f1;
+}
+
+.map-basemap button.active {
+  background: #176b54;
+  color: #ffffff;
+}
+
+.map-route-pill {
+  position: absolute;
+  bottom: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 24px);
+  padding: 7px 10px 7px 12px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid rgba(203, 213, 223, 0.9);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(20, 32, 43, 0.12);
+}
+
+.map-route-pill strong {
+  display: block;
+  font-size: var(--fs-caption);
+  color: #1c2733;
+}
+
+.map-route-pill small {
+  display: block;
+  font-size: var(--fs-caption);
+  color: #526170;
+}
+
+.map-route-pill button {
+  border: 1px solid rgba(23, 107, 84, 0.35);
+  background: rgba(23, 107, 84, 0.06);
+  color: #176b54;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.map-route-pill button:hover {
+  background: #176b54;
+  color: #ffffff;
+}
+
+.map-follow-chip {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  border: 1px solid rgba(23, 107, 84, 0.4);
+  background: rgba(255, 255, 255, 0.97);
+  color: #176b54;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 5px 12px;
+  box-shadow: 0 2px 8px rgba(20, 32, 43, 0.14);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.map-follow-chip:hover {
+  background: #eef4f1;
+}
+
+.map-reset-btn {
+  position: absolute;
+  left: 12px;
+  bottom: 40px;
+  z-index: 5;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(203, 213, 223, 0.9);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.97);
+  color: #344452;
+  font-size: 15px;
+  line-height: 1;
+  box-shadow: 0 2px 8px rgba(20, 32, 43, 0.12);
+  cursor: pointer;
+}
+
+.map-reset-btn:hover {
+  background: #eef4f1;
+}
+
+.popup-track {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  border: 1px solid rgba(23, 107, 84, 0.35);
+  border-radius: 6px;
+  background: rgba(23, 107, 84, 0.06);
+  color: #176b54;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+
+.popup-track:hover {
+  background: #176b54;
+  color: #ffffff;
+}

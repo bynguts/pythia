@@ -103,10 +103,10 @@ export function PermitSubmissionPanel({ onPermitSubmitted }) {
           <h3>{lang === "id" ? "Estimasi Dampak Sampah —" : "Estimated impact —"} {result.permit.name}</h3>
           <div className="facility-summary">
             <div><b>{result.impact.predicted_waste_tons} t</b><span>{lang === "id" ? "prediksi sampah" : "predicted waste"}</span></div>
-            <div><b>{result.impact.backup_trucks_required}</b><span>{lang === "id" ? "truk cadangan" : "backup trucks"}</span></div>
-            <div><b>{result.impact.crews_required}</b><span>{lang === "id" ? "kru lapangan" : "field crews"}</span></div>
-            <div><b>{result.impact.man_hours_required}</b><span>{lang === "id" ? "jam-kerja kru" : "man-hours"}</span></div>
-            <div><b>{result.impact.large_bins_required}</b><span>{lang === "id" ? "tong sampah besar" : "large bins"}</span></div>
+            <div><b>{result.impact.trucks_required}</b><span>{lang === "id" ? "truk cadangan" : "backup trucks"}</span></div>
+            <div><b>{result.impact.crews_required}</b><span>{lang === "id" ? "tim kru lapangan" : "field crew teams"}</span></div>
+            <div><b>{result.impact.man_hours_required}</b><span>{lang === "id" ? "jam-orang" : "person-hours"}</span></div>
+            <div><b>{result.impact.bins_required}</b><span>{lang === "id" ? "tong sampah besar" : "large bins"}</span></div>
           </div>
           <p className="permit-affected">
             {lang === "id" ? "Kecamatan terdampak:" : "Affected districts:"} {result.affected_kecamatan.map((a) => a.kecamatan).join(", ") || "nearest district assigned"}.

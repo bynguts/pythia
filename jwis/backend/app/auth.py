@@ -16,8 +16,8 @@ import time
 ROLES: dict[str, set[str]] = {
     "executive": {"dashboard:read", "reports:read", "history:read"},
     "dispatcher": {"dashboard:read", "operations:plan", "dispatch:create", "history:read"},
-    "supervisor": {"dashboard:read", "dispatch:create", "operations:approve", "history:read",
-                   "spj:override"},
+    "supervisor": {"dashboard:read", "dispatch:create", "dispatch:confirm",
+                   "operations:approve", "history:read", "spj:override"},
     "driver": {"dispatch:confirm"},
     "auditor": {"history:read", "reports:read", "provenance:read"},
     "administrator": {"dashboard:read", "reports:read", "history:read", "operations:plan",

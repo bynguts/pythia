@@ -88,7 +88,7 @@ class SpjEvidenceTests(unittest.TestCase):
         store = SpjStore(persist_path=path)
         spj = self._active_spj(store)
         store.complete_stop(spj.spj_id, 0, evidence=EVIDENCE)
-        store2 = SpjStore(persist_path=path)
+        store2 = SpjStore(db_path=path)
         loaded = store2.get(spj.spj_id)
         self.assertEqual(loaded.stops[0].evidence["weighing"][0]["weight_kg"],
                          37.2)

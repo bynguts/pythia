@@ -3,6 +3,12 @@
 An active SPJ becomes the truck's assigned reference path: the existing
 deviation detector (rule 500m + IsolationForest + hysteresis) then measures
 compliance against the SPJ stops without any change to detection logic.
+
+Records live in the shared durable store (SQLite, see app.storage), so several
+API workers read one consistent state and a mutation is only acknowledged once
+it has committed. Field evidence is a precondition of normal completion; the
+exceptional supervisor path is explicit, permission-gated, reasoned and
+audited.
 """
 
 from __future__ import annotations
@@ -15,13 +21,16 @@ import tempfile
 import threading
 from contextlib import closing
 from dataclasses import asdict, dataclass, field
-from app.osrm import road_route
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from app.osrm import road_route
+from app.facilities import provenance_payload, route_ground_truth
+
 logger = logging.getLogger(__name__)
 
-
+# Canonical destination list comes from the verified facilities registry
+# (#59); the tuple below only re-exports it for backward compatibility.
 DESTINATIONS = ("TPST Bantargebang", "JRC Pesanggrahan", "RDF Plant Jakarta")
 
 MAX_EVIDENCE_PHOTO_CHARS = 7_000_000
@@ -52,6 +61,9 @@ def _require_coord(value, field: str, rng: tuple[float, float]) -> None:
         raise ValueError(
             f"evidence.{field}={number} is outside the Jakarta operational "
             f"region [{rng[0]}, {rng[1]}]")
+
+TABLE = "jwis_spj"
+LEGACY_JSON = "jwis_spj.json"
 
 
 def _validate_evidence(evidence: dict) -> None:
@@ -106,6 +118,32 @@ def _validate_evidence(evidence: dict) -> None:
     _require_photo(officer.get("photo_b64"), "officer.photo_b64")
 
 
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _today() -> str:
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+def _validate_override(override: dict | None, actor: str | None) -> dict:
+    """An override must name who authorized it and why — never a bare bypass."""
+    if not isinstance(override, dict):
+        raise ValueError(
+            "closing a stop without field evidence requires a supervisor "
+            "override object with a reason")
+    reason = str(override.get("reason") or "").strip()
+    if len(reason) < 10:
+        raise ValueError(
+            "a supervisor override without field evidence requires a reason "
+            "of at least 10 characters")
+    who = str(override.get("actor") or actor or "").strip()
+    if not who:
+        raise ValueError("supervisor override requires the authorizing actor")
+    return {"reason": reason, "actor": who, "at": _utc_now(),
+            "documents": override.get("documents") or None}
+
+
 def spj_summary_payload(spj: Spj) -> dict:
     """List projection: stop evidence and the receipt photo stay out.
 
@@ -142,6 +180,7 @@ class SpjStop:
     status: str = "pending"  # pending | completed
     completed_at: str | None = None
     evidence: dict | None = None
+    override: dict | None = None  # supervisor override that closed this stop
 
 
 @dataclass
@@ -218,8 +257,10 @@ class SpjStore:
 
     _BUSY_TIMEOUT_MS = 10_000
 
-    def __init__(self, persist_path: str | None = None) -> None:
-        self._path = persist_path or _default_persist_path()
+    def __init__(self, persist_path: str | None = None,
+                 db_path: str | None = None) -> None:
+        # db_path is the PR #90 keyword alias for the same path.
+        self._path = persist_path or db_path or _default_persist_path()
         self._spj: dict[str, Spj] = {}  # read cache; SQLite is the source of truth
         self._lock = threading.RLock()
         self._init_schema()
@@ -282,10 +323,17 @@ class SpjStore:
                         status TEXT NOT NULL DEFAULT 'pending',
                         completed_at TEXT,
                         evidence TEXT,
+                        override TEXT,
                         PRIMARY KEY (spj_id, idx)
                     )
                     """
                 )
+                # Existing databases gain the override column (#63 PR #90).
+                stop_columns = {r["name"] for r in connection.execute(
+                    "PRAGMA table_info(spj_stops)").fetchall()}
+                if "override" not in stop_columns:
+                    connection.execute(
+                        "ALTER TABLE spj_stops ADD COLUMN override TEXT")
                 connection.execute(
                     """
                     CREATE TABLE IF NOT EXISTS spj_receipts (
@@ -414,6 +462,7 @@ class SpjStore:
                 lat=r["lat"], lng=r["lng"], location_type=r["location_type"],
                 status=r["status"], completed_at=r["completed_at"],
                 evidence=json.loads(r["evidence"]) if r["evidence"] else None,
+                override=json.loads(r["override"]) if r["override"] else None,
             ) for r in sorted(stop_rows, key=lambda r: r["idx"])],
             status=spj_row["status"], created_by=spj_row["created_by"],
             created_at=spj_row["created_at"], activated_at=spj_row["activated_at"],
@@ -676,8 +725,13 @@ class SpjStore:
                 "SELECT lat, lng FROM spj_stops WHERE spj_id=? ORDER BY idx",
                 (spj_id,)).fetchall()
             waypoints = [(s["lat"], s["lng"]) for s in stops]
-            dest = DESTINATION_COORDS.get(row["destination"])
-            if dest is not None and (not waypoints or waypoints[-1] != dest):
+            dest = route_ground_truth(row["destination"])
+            if dest is None:
+                raise ValueError(
+                    f"cannot activate: destination '{row['destination']}' has "
+                    "no verified ground-truth coordinate (#59); refusing to "
+                    "route compliance through a guessed point")
+            if not waypoints or waypoints[-1] != dest:
                 waypoints.append(dest)
             route = road_route(waypoints) if len(waypoints) >= 2 else {
                 "geometry": [{"lat": la, "lng": ln} for la, ln in waypoints],
@@ -707,7 +761,9 @@ class SpjStore:
         return self._mutate(spj_id, mutate)
 
     def complete_stop(self, spj_id: str, index: int,
-                      evidence: dict | None = None) -> Spj:
+                      evidence: dict | None = None,
+                      override: dict | None = None,
+                      actor: str | None = None) -> Spj:
         def mutate(connection):
             row = self._fetch_status(connection, spj_id)
             if row["status"] != "aktif":
@@ -719,17 +775,36 @@ class SpjStore:
                 raise ValueError(f"stop index {index} out of range")
             if stops[index]["status"] == "completed":
                 return  # idempotent
-            if evidence is None:
+            # #55 (PR #90): route order is a server-side invariant — a
+            # stop cannot complete while an earlier stop is still open.
+            earlier_open = [s["idx"] for s in stops[:index]
+                            if s["status"] != "completed"]
+            if earlier_open and override is None:
                 raise ValueError(
-                    "stop completion requires field evidence "
-                    "(arrival, weighing, officer)")
-            _validate_evidence(evidence)
-            connection.execute(
-                "UPDATE spj_stops SET status='completed', completed_at=?, "
-                "evidence=? WHERE spj_id=? AND idx=?",
-                (_utc_now(), json.dumps(evidence), spj_id, index))
-            self._audit(connection, spj_id, "complete_stop", row["created_by"],
-                        payload={"stop_index": index})
+                    f"stop {index} cannot complete before earlier stop(s) "
+                    f"{earlier_open}; route order is a server-side invariant")
+            if evidence is None:
+                if override is None:
+                    raise ValueError(
+                        "stop completion requires field evidence "
+                        "(arrival, weighing, officer)")
+                # Audited supervisor override closing this stop without
+                # evidence (PR #90 #63): reason >= 10 chars, actor named.
+                checked = _validate_override(override, actor or row["created_by"])
+                connection.execute(
+                    "UPDATE spj_stops SET status='completed', completed_at=?, "
+                    "override=? WHERE spj_id=? AND idx=?",
+                    (_utc_now(), json.dumps(checked), spj_id, index))
+                self._audit(connection, spj_id, "override", checked["actor"],
+                            checked["reason"], payload={"stop_index": index})
+            else:
+                _validate_evidence(evidence)
+                connection.execute(
+                    "UPDATE spj_stops SET status='completed', completed_at=?, "
+                    "evidence=? WHERE spj_id=? AND idx=?",
+                    (_utc_now(), json.dumps(evidence), spj_id, index))
+                self._audit(connection, spj_id, "complete_stop",
+                            row["created_by"], payload={"stop_index": index})
             pending = connection.execute(
                 "SELECT COUNT(*) FROM spj_stops WHERE spj_id=? "
                 "AND status != 'completed'", (spj_id,)).fetchone()[0]
@@ -792,13 +867,16 @@ class SpjStore:
                 "SELECT photo_b64 FROM spj_receipts WHERE spj_id=?", (spj_id,)).fetchone()
         return row["photo_b64"] if row else None
 
-    def complete(self, spj_id: str, override: dict | None = None) -> Spj:
+    def complete(self, spj_id: str, override: dict | None = None,
+                 actor: str | None = None) -> Spj:
         """Close an active SPJ.
 
         Normal completion requires every stop to be completed WITH field
         evidence — the same invariant the driver workflow enforces. A
-        supervisor override ({"actor": ..., "reason": ...}) forces closure
-        and is recorded in the audit trail; the reason must be non-empty.
+        supervisor override ({"actor": ..., "reason": ...}) forces closure,
+        is recorded in the audit trail AND on each stop it closed, so the
+        compliance score can distinguish a supervisor decision from a
+        driver's missing evidence (reason >= 10 chars, PR #90 #63).
         """
         def mutate(connection):
             row = self._fetch_status(connection, spj_id)
@@ -808,26 +886,34 @@ class SpjStore:
                 "SELECT COUNT(*) FROM spj_stops WHERE spj_id=? "
                 "AND (status != 'completed' OR evidence IS NULL)",
                 (spj_id,)).fetchone()[0]
-            actor = None
-            reason = None
+            checked = None
             if unevidenced:
                 if override is None:
                     raise ValueError(
                         f"cannot complete: {unevidenced} stop(s) lack field evidence; "
                         "a supervisor override with a reason is required")
-                actor = (override or {}).get("actor") or "unknown"
-                reason = str((override or {}).get("reason") or "").strip()
-                if not reason:
-                    raise ValueError("override requires a non-empty reason")
+                checked = _validate_override(override, actor or row["created_by"])
             now = _utc_now()
-            connection.execute(
-                "UPDATE spj_stops SET status='completed', completed_at=? "
-                "WHERE spj_id=? AND status != 'completed'", (now, spj_id))
+            if checked is not None:
+                # Mark the forced stops so compliance reports (not charges)
+                # them as supervisor decisions.
+                connection.execute(
+                    "UPDATE spj_stops SET status='completed', completed_at=? "
+                    "WHERE spj_id=? AND status != 'completed'", (now, spj_id))
+                connection.execute(
+                    "UPDATE spj_stops SET override=? WHERE spj_id=? "
+                    "AND evidence IS NULL",
+                    (json.dumps(checked), spj_id))
+            else:
+                connection.execute(
+                    "UPDATE spj_stops SET status='completed', completed_at=? "
+                    "WHERE spj_id=? AND status != 'completed'", (now, spj_id))
             connection.execute(
                 "UPDATE spj SET status='selesai', completed_at=? WHERE spj_id=?",
                 (now, spj_id))
-            if unevidenced:
-                self._audit(connection, spj_id, "override", actor, reason,
+            if checked is not None:
+                self._audit(connection, spj_id, "override", checked["actor"],
+                            checked["reason"],
                             payload={"forced_stops": unevidenced})
             else:
                 self._audit(connection, spj_id, "complete", row["created_by"])
@@ -849,37 +935,66 @@ class SpjStore:
             raise ValueError(f"SPJ {spj_id} not found")
         return spj
 
-    def _require(self, spj_id: str) -> Spj:
-        spj = self._spj.get(spj_id)
-        if spj is None:
-            raise ValueError(f"SPJ {spj_id} not found")
-        return spj
+    def _commit(self, spj: Spj) -> Spj:
+        """Write a record without invariant checks (legacy test fixtures).
+
+        Only for reproducing pre-migration record shapes that no public
+        transition can produce any more; never call this from request paths.
+        """
+        def mutate(connection):
+            row = connection.execute(
+                "SELECT status FROM spj WHERE spj_id=?",
+                (spj.spj_id,)).fetchone()
+            if row is None:
+                raise ValueError(f"SPJ {spj.spj_id} not found")
+            connection.execute(
+                "UPDATE spj SET status=?, completed_at=? WHERE spj_id=?",
+                (spj.status, spj.completed_at, spj.spj_id))
+            for idx, stop in enumerate(spj.stops):
+                connection.execute(
+                    "UPDATE spj_stops SET status=?, completed_at=? "
+                    "WHERE spj_id=? AND idx=?",
+                    (stop.status, stop.completed_at, spj.spj_id, idx))
+        with self._lock:
+            connection = self._connect()
+            connection.isolation_level = None
+            try:
+                with closing(connection):
+                    connection.execute("BEGIN IMMEDIATE")
+                    try:
+                        mutate(connection)
+                    except Exception:
+                        connection.execute("ROLLBACK")
+                        raise
+                    else:
+                        connection.execute("COMMIT")
+            except sqlite3.OperationalError:
+                raise
+            fresh = self._load_fresh(spj.spj_id)
+            self._spj[spj.spj_id] = fresh
+            return fresh
 
 
-from app.astar_routing import NODES as _ASTAR_NODES
 
-_TPA = _ASTAR_NODES["TPA_BANTARGEBANG"]
-# JRC/RDF coordinates are approximate, non-official placeholders.
-DESTINATION_COORDS: dict[str, tuple[float, float]] = {
-    "TPST Bantargebang": (_TPA[0], _TPA[1]),
-    "JRC Pesanggrahan": (-6.2594, 106.7640),
-    "RDF Plant Jakarta": (-6.1340, 106.8850),
-}
-
-
-def spj_polyline(spj: Spj) -> list[tuple[float, float]]:
+def spj_polyline(spj: Spj) -> list[tuple[float, float]] | None:
     """Compliance polyline: the road-following geometry resolved at
     activation (#58), falling back to stop-to-stop straight segments only
     for legacy SPJs activated before road resolution existed.
+
+    Returns None when the destination has no verified ground-truth
+    coordinate (#59) — the caller falls back to the corridor instead of
+    promoting a guessed point.
     """
     if getattr(spj, "route_geometry", None):
         return list(spj.route_geometry)
+    dest = route_ground_truth(spj.destination)
+    if dest is None:
+        return None  # unverified destination (#59): never guess
     points: list[tuple[float, float]] = []
     for stop in spj.stops:
         pt = (stop.lat, stop.lng)
         if not points or points[-1] != pt:
             points.append(pt)
-    dest = DESTINATION_COORDS[spj.destination]
     if not points or points[-1] != dest:
         points.append(dest)
     return points
@@ -891,6 +1006,12 @@ def active_path_for(truck_code: str) -> list[tuple[float, float]] | None:
         if spj is None:
             return None
         line = spj_polyline(spj)
+        if line is None:
+            logger.warning(
+                "active SPJ %s for %s has no verified destination coordinate "
+                "(%s); falling back to the corridor reference path",
+                spj.spj_id, truck_code, spj.destination)
+            return None
         if len(line) < 2:
             return None
         return line
@@ -900,8 +1021,13 @@ def active_path_for(truck_code: str) -> list[tuple[float, float]] | None:
         return None
 
 
+def destination_provenance(destination: str) -> dict:
+    """Provenance record for one destination (surfaced by the API)."""
+    return provenance_payload(destination)
+
+
 def _maybe_seed(store: SpjStore) -> None:
-    if os.path.exists(store._path) or os.getenv("JWIS_SPJ_SEED", "on") == "off":
+    if len(store.list()) > 0 or os.getenv("JWIS_SPJ_SEED", "on") == "off":
         return
     seed = store.create(
         driver_name="Joko Wijaya", truck_code="T-088",

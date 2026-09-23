@@ -74,6 +74,17 @@ async function post(path, data) {
   return res.json();
 }
 
+function receiptDoneFor(spj) {
+  // The server is the source of truth: a receipt recorded on another device (or
+  // after this browser's storage was cleared) must still count as done, or the
+  // driver is asked to submit a second receipt for the same handover.
+  if (spj?.receipt) return true;
+  try {
+    return localStorage.getItem(`jwis_receipt_${spj?.spj_id}`) === "done";
+  } catch {
+    return false;
+  }
+}
 
 function Toast({ message }) {
   if (!message) return null;
@@ -570,6 +581,9 @@ function DeliveryCard({ spj, say, onDone }) {
         weight_source: weightSource,
         operation_id: operationId.current,
       });
+      try {
+        localStorage.setItem(`jwis_receipt_${spj.spj_id}`, "done");
+      } catch { /* flag is best-effort; receipt is already recorded server-side */ }
       onDone();
     } catch (err) {
       say(err.message || "Gagal mengirim struk");
@@ -738,7 +752,13 @@ export default function DriverApp() {
       // chosen from that order and the server-side receipt field, not from
       // localStorage.
       .then((body) =>
-        setHistory((body.spj || []).filter((s) => s.truck_code === driver.truck_code)),
+        setHistory(
+          (body.spj || [])
+            .filter((s) => s.truck_code === driver.truck_code)
+            // Newest first: the list arrives in creation order, and the newest
+            // completed order is the one the driver is working on now.
+            .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))),
+        ),
       )
       .catch(() => {});
   }, [driver]);
@@ -929,7 +949,7 @@ export default function DriverApp() {
             />
           )}
 
-          {!spjAktif && pendingReceipt && (
+          {!spjAktif && history[0] && !receiptDoneFor(history[0]) && (
             <DeliveryCard
               spj={pendingReceipt}
               say={say}
