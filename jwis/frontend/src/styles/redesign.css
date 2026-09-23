@@ -585,3 +585,168 @@ button { color: inherit; }
 .planning-stage-content .req-chip b {
   color: var(--ui-accent);
 }
+
+/* ── Migrated from the retired legacy.css layer (issue #66) ─────────────
+   Only declarations no later layer already defined; duplicate selector
+   ownership is what made visual fixes order-dependent. ─────────────── */
+
+.district-priority-chart, .district-vertical-chart, .weather-trend-chart {
+  margin-bottom: var(--space-4);
+}
+
+.district-priority-chart h3, .district-vertical-chart h3, .weather-trend-chart h3 {
+  margin: 0 0 10px;
+  color: var(--ui-ink);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+}
+
+.district-priority-bar, .weather-trend-bars {
+  height: 9px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--ui-surface-muted);
+}
+
+.ai-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.ai-feed-empty {
+  margin-top: 12px;
+  font-size: var(--fs-caption);
+  color: var(--ui-muted);
+  background: var(--ui-surface-muted);
+  border: 1px dashed var(--ui-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.ai-outlook {
+  margin-bottom: 16px;
+  background: var(--ui-surface-muted);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.ai-outlook h4 {
+  margin: 0 0 10px;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: var(--ui-ink);
+}
+
+.ai-outlook .ai-feed-empty {
+  margin-top: 0;
+}
+
+.ai-outlook-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-caption);
+}
+
+.ai-outlook-table th {
+  text-align: left;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--ui-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 8px 6px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.ai-outlook-table td {
+  padding: 6px 8px;
+  color: var(--ui-ink);
+  border-bottom: 1px solid var(--ui-border);
+  vertical-align: top;
+}
+
+.ai-outlook-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ai-feed-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-left: 3px solid var(--ui-accent);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.ai-feed-item.ai-feed-auto_reroute {
+  border-left-color: #dc2626;
+}
+
+.ai-feed-item.ai-feed-jam_cleared {
+  border-left-color: #16a34a;
+}
+
+.ai-feed-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ai-feed-badge {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--ui-accent);
+  background: var(--ui-surface-muted);
+  border: 1px solid var(--ui-border);
+  border-radius: 9999px;
+  padding: 2px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ai-feed-time {
+  font-size: var(--fs-caption);
+  color: var(--ui-muted);
+  white-space: nowrap;
+}
+
+.ai-feed-title {
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--ui-ink);
+  line-height: 1.4;
+}
+
+.ai-ack-btn {
+  align-self: flex-start;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: #fff;
+  background: var(--ui-accent);
+  border: none;
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.ai-ack-btn:hover {
+  opacity: 0.85;
+}
+
+.ai-ack-done {
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: #16a34a;
+}

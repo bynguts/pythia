@@ -133,7 +133,7 @@ export function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setR
   const manHours = top5.reduce((s, k) => s + (k.man_hours_required || 0), 0);
   const crews = top5.reduce((s, k) => s + (k.crews_required || 0), 0);
   const trucks = top5.reduce((s, k) => s + (k.trucks_required || 0), 0);
-  const bins = top5.reduce((s, k) => s + (k.disposal_bins_required || 0), 0);
+  const bins = top5.reduce((s, k) => s + (k.bins_required || 0), 0);
 
   const locale = lang === "id" ? "id-ID" : "en-US";
   const number = (value) => Number(value ?? 0).toLocaleString(locale, { maximumFractionDigits: 2 });
@@ -233,8 +233,8 @@ export function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setR
         ) : <span>{loading ? (lang === "id" ? "Menghitung kebutuhan skenario..." : "Calculating scenario demand...") : (lang === "id" ? "Belum ada hasil skenario." : "No scenario result is available.")}</span>}
       </div>
       {data && <div className="scenario-reqs" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
-        <div className="req-chip" style={{ padding: "10px 12px" }}><b>{number(manHours)}</b><span>{lang === "id" ? "jam kerja kru (5 teratas)" : "crew-hours (top 5)"}</span></div>
-        <div className="req-chip" style={{ padding: "10px 12px" }}><b>{number(crews)}</b><span>{lang === "id" ? "kru lapangan (5 teratas)" : "field crews (top 5)"}</span></div>
+        <div className="req-chip" style={{ padding: "10px 12px" }}><b>{number(manHours)}</b><span>{lang === "id" ? "jam-orang (5 teratas)" : "person-hours (top 5)"}</span></div>
+        <div className="req-chip" style={{ padding: "10px 12px" }}><b>{number(crews)}</b><span>{lang === "id" ? "tim kru lapangan (5 teratas)" : "field crew teams (top 5)"}</span></div>
         <div className="req-chip" style={{ padding: "10px 12px" }}><b>{number(trucks)}</b><span>{lang === "id" ? "truk armada (5 teratas)" : "trucks (top 5)"}</span></div>
         <div className="req-chip" style={{ padding: "10px 12px" }}><b>{number(bins)}</b><span>{lang === "id" ? "tong besar (5 teratas)" : "large bins (top 5)"}</span></div>
       </div>}

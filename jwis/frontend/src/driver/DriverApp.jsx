@@ -74,9 +74,13 @@ async function post(path, data) {
   return res.json();
 }
 
-function receiptDoneFor(spjId) {
+function receiptDoneFor(spj) {
+  // The server is the source of truth: a receipt recorded on another device (or
+  // after this browser's storage was cleared) must still count as done, or the
+  // driver is asked to submit a second receipt for the same handover.
+  if (spj?.receipt) return true;
   try {
-    return localStorage.getItem(`jwis_receipt_${spjId}`) === "done";
+    return localStorage.getItem(`jwis_receipt_${spj?.spj_id}`) === "done";
   } catch {
     return false;
   }
@@ -511,13 +515,24 @@ function DeliveryCard({ spj, say, onDone }) {
     setBusy(true);
     try {
       const kg = parseFloat(totalWeight);
+      // Stable per-attempt operation ID: a retry of the same submission (double
+      // tap, flaky network) returns the recorded receipt instead of adding a
+      // second one. A new upload attempt gets a new ID.
+      let operationId = localStorage.getItem(`jwis_receipt_op_${spj.spj_id}`);
+      if (!operationId) {
+        operationId = `receipt-${spj.spj_id}-${Date.now().toString(36)}`;
+        try { localStorage.setItem(`jwis_receipt_op_${spj.spj_id}`, operationId); }
+        catch { /* storage may be unavailable; server still generates one */ }
+      }
       await post(`/spj/${spj.spj_id}/receipt`, {
         photo_name: receipt.name,
         photo_b64: receipt.b64,
         total_weight_kg: Number.isFinite(kg) ? kg : null,
+        operation_id: operationId,
       });
       try {
         localStorage.setItem(`jwis_receipt_${spj.spj_id}`, "done");
+        localStorage.removeItem(`jwis_receipt_op_${spj.spj_id}`);
       } catch { /* flag is best-effort; receipt is already recorded server-side */ }
       onDone();
     } catch (err) {
@@ -629,7 +644,13 @@ export default function DriverApp() {
     fetch(`${API_URL}/spj?status=selesai`)
       .then((r) => r.json())
       .then((body) =>
-        setHistory((body.spj || []).filter((s) => s.truck_code === driver.truck_code)),
+        setHistory(
+          (body.spj || [])
+            .filter((s) => s.truck_code === driver.truck_code)
+            // Newest first: the list arrives in creation order, and the newest
+            // completed order is the one the driver is working on now.
+            .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))),
+        ),
       )
       .catch(() => {});
   }, [driver]);
@@ -817,7 +838,7 @@ export default function DriverApp() {
             />
           )}
 
-          {!spjAktif && history[0] && !receiptDoneFor(history[0].spj_id) && (
+          {!spjAktif && history[0] && !receiptDoneFor(history[0]) && (
             <DeliveryCard
               spj={history[0]}
               say={say}
