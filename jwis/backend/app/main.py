@@ -1688,13 +1688,33 @@ def ai_event_forecast() -> dict[str, Any]:
 
 # ── SPJ (Surat Perintah Jalan) ───────────────────────────────────────────────
 
+def _receipt_payload(receipt) -> dict[str, Any] | None:
+    """Receipt projection: metadata plus a retrieval reference, never the bytes.
+
+    The image is multi-megabyte and lives in its own table; clients fetch it
+    from the receipt-photo endpoint only when they display it.
+    """
+    if receipt is None:
+        return None
+    return {
+        "photo_name": receipt.get("photo_name"),
+        "total_weight_kg": receipt.get("total_weight_kg"),
+        "weight_source": receipt.get("weight_source"),
+        "submitted_by": receipt.get("submitted_by"),
+        "recorded_at": receipt.get("recorded_at"),
+        "has_photo": bool(receipt.get("has_photo")),
+    }
+
+
 def _spj_payload(spj) -> dict[str, Any]:
     """Detail projection: receipt metadata plus a media reference, no bytes.
 
     The receipt image is multi-megabyte; clients fetch it from the
     receipt-photo endpoint only when they display it.
     """
-    return _asdict(spj)
+    payload = _asdict(spj)
+    payload["receipt"] = _receipt_payload(payload.get("receipt"))
+    return payload
 
 
 def _spj_or_409(fn, *args, **kwargs):
