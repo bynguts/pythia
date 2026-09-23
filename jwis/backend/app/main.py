@@ -21,6 +21,7 @@ logging.getLogger(__name__).info(
 )
 
 import json
+import math
 import re
 import threading
 import time
@@ -433,8 +434,7 @@ def predictions_kecamatan(
             "model_available": pred["model_available"],
             "crews_required": pred["crews_required"],
             "man_hours_required": pred["man_hours_required"],
-            "disposal_bins_required": pred["disposal_bins_required"],
-            "trucks_required": max(1, round(tons / 18)),
+            "trucks_required": max(1, math.ceil(tons / 18)),
             "facility_over_capacity": facility_alert,
             "prophet_baseline_tons": pred.get("prophet_baseline_tons"),
             "xgboost_residual": pred.get("xgboost_residual"),
@@ -1653,7 +1653,12 @@ class SpjStopBody(BaseModel):
 class SpjReceiptBody(BaseModel):
     photo_name: str
     photo_b64: str = Field(default="", max_length=7_000_000)
-    total_weight_kg: float | None = None
+    # #57: operational bound for one truck's single-run handover weight.
+    # Absent (None) is allowed — not all handovers are weighed; when
+    # present the value must be finite and 0 < w <= 60,000 kg.
+    total_weight_kg: float | None = Field(
+        default=None, gt=0, le=60_000,
+        description="Receipt total weight in kg; omit when unweighed.")
 
 
 class PretripBody(BaseModel):

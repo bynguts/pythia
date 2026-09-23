@@ -244,7 +244,8 @@ class SpjStore:
                 row = connection.execute("SELECT COUNT(*) AS n FROM spj").fetchone()
                 if row["n"] > 0:
                     return  # DB already populated; JSON is stale
-                raw = json.loads(open(legacy, encoding="utf-8").read())
+                with open(legacy, encoding="utf-8") as fh:
+                    raw = json.loads(fh.read())
                 with connection:
                     for item in raw:
                         stops = item.pop("stops", [])
