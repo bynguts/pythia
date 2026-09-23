@@ -28,7 +28,7 @@ from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
 from typing import Any, AsyncIterator
-from fastapi import FastAPI, HTTPException, Query, Header, Depends
+from fastapi import FastAPI, HTTPException, Query, Header, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -56,7 +56,7 @@ from app.impact import build_impact_report
 from app.osrm import fetch_osrm_route
 from app.weather import fetch_jakarta_weather_forecast
 from app.assistant import answer_with_openai_if_configured, build_executive_summary
-from app.storage import HistoryStore
+from app.storage import HistoryStore, StorageError
 from app.whatsapp import OpenWAClient, build_alert_message
 from app.real_data import data_provenance, load_official_events, load_city_timbulan, load_fleet_composition, load_kecamatan_map, build_provenance_records, load_kelurahan_heatmap, load_real_tps_coordinates, load_real_wr_coordinates
 from app.astar_routing import is_traffic_jam_active, set_traffic_jam_active
@@ -70,7 +70,12 @@ from app.ai.forecasters.event_impact import EventImpactForecaster
 from app.ai.forecasters.fuel_model import CarbonCalculator
 from app.ai.forecasters.queue_predictor import TpaQueuePredictor
 from app.spj import SPJ_STORE, active_path_for as spj_active_path, \
-    spj_summary_payload
+    destination_provenance, spj_summary_payload
+from app.facilities import DESTINATIONS
+from app.permits import PERMIT_STORE
+from app.units import (TRUCK_CAPACITY_TONS, UNIT_GLOSSARY,
+                       event_tons_for_attendance, resource_basis,
+                       resource_requirements)
 from app.service_history import SERVICE_STORE, due_date_for
 from dataclasses import asdict as _asdict
 
@@ -419,9 +424,10 @@ def predictions_kecamatan(
             **horizon_block,
             "model_available": pred["model_available"],
             "crews_required": pred["crews_required"],
+            "workers_required": pred["workers_required"],
             "man_hours_required": pred["man_hours_required"],
-            "disposal_bins_required": pred["disposal_bins_required"],
-            "trucks_required": max(1, round(tons / 18)),
+            "bins_required": pred["bins_required"],
+            "trucks_required": pred["trucks_required"],
             "facility_over_capacity": facility_alert,
             "prophet_baseline_tons": pred.get("prophet_baseline_tons"),
             "xgboost_residual": pred.get("xgboost_residual"),
@@ -446,11 +452,16 @@ def predictions_kecamatan(
             "rainfall_mm": rainfall_mm, "event_attendance": event_attendance,
             "is_weekend": is_weekend, "is_holiday": is_holiday,
             "event_lat": event_lat, "event_lng": event_lng,
+            # Which kecamatan the event attendance was localized to. Empty when
+            # no attendance was supplied, so a bare location cannot look like
+            # demand.
+            "targeted_kecamatan": sorted(target_slugs),
         },
         "kecamatan_count": len(features),
         "total_predicted_tons": round(total, 1),
         "top_hotspots": features[:5],
         "kecamatan": features,
+        "units": UNIT_GLOSSARY,
         "source": "SILIKA DLH 2023 baseline + Prophet/XGBoost hybrid (real 5yr pipeline)",
     }
     return _kecamatan_cache["payload"]
@@ -728,7 +739,9 @@ def executive_summary() -> dict:
             "predicted_tons": h["predicted_tons"],
             "trucks_required": h["trucks_required"],
             "crews_required": h["crews_required"],
+            "workers_required": h["workers_required"],
             "man_hours_required": h["man_hours_required"],
+            "bins_required": h["bins_required"],
             "facility_readiness": h.get("facility_readiness"),
         }
         for h in preds["top_hotspots"][:5]
@@ -1091,11 +1104,22 @@ def create_operations_plan(
     event_attendance: int = 0,
     is_weekend: bool = False,
     top_n: int = 5,
+    event_lat: float | None = Query(None, ge=-90, le=90,
+                                    description="Event latitude; localizes attendance demand"),
+    event_lng: float | None = Query(None, ge=-180, le=180,
+                                    description="Event longitude; localizes attendance demand"),
     _role: str = Depends(require_permission("operations:plan")),
 ) -> dict[str, Any]:
-    """Build a dispatch plan from forecast hotspots + real fleet via CP-SAT."""
+    """Build a dispatch plan from forecast hotspots + real fleet via CP-SAT.
+
+    The event location is part of the scenario: when `event_lat`/`event_lng`
+    are supplied with a non-zero attendance, the same coordinate the map uses
+    localizes the demand, so two different event sites no longer produce an
+    identical plan.
+    """
     preds = predictions_kecamatan(rainfall_mm=rainfall_mm, event_attendance=event_attendance,
-                                  is_weekend=is_weekend)
+                                  is_weekend=is_weekend,
+                                  event_lat=event_lat, event_lng=event_lng)
     hotspots = preds["top_hotspots"][:top_n]
     demands = [
         Demand(area=h["slug"], tons=float(h["predicted_tons"]),
@@ -1104,12 +1128,26 @@ def create_operations_plan(
         for rank, h in enumerate(reversed(hotspots), start=1)
     ]
     vehicles = [
-        Vehicle(truck_code=t["truck_code"], capacity_tons=18.0,
+        Vehicle(truck_code=t["truck_code"], capacity_tons=TRUCK_CAPACITY_TONS,
                 available=not t["is_damaged"],
                 permit_compliant=not t["deviation"]["violated"])
         for t in TRUCKS
     ]
     plan = build_operational_plan(demands, vehicles)
+    # The stored scenario is the full normalized input, not just the subset the
+    # optimizer happened to use, so an approved plan can be reproduced exactly.
+    scenario = {
+        "rainfall_mm": rainfall_mm,
+        "event_attendance": event_attendance,
+        "is_weekend": is_weekend,
+        "event_lat": event_lat,
+        "event_lng": event_lng,
+        "top_n": top_n,
+        "targeted_kecamatan": preds["scenario"]["targeted_kecamatan"],
+        "top_kecamatan": [h["slug"] for h in hotspots],
+        "total_predicted_tons": preds["total_predicted_tons"],
+        "kecamatan_count": preds["kecamatan_count"],
+    }
     payload = {
         "plan_id": plan.plan_id,
         "status": "proposed",
@@ -1121,11 +1159,11 @@ def create_operations_plan(
         "unmet_reasons": plan.unmet_reasons,
         "total_demand_tons": plan.total_demand_tons,
         "total_assigned_tons": plan.total_assigned_tons,
-        "scenario": {"rainfall_mm": rainfall_mm, "event_attendance": event_attendance,
-                     "is_weekend": is_weekend},
+        "scenario": scenario,
     }
     _OPERATIONS_PLANS[plan.plan_id] = payload
-    history_store.record_event("operations_plan_created", {"plan_id": plan.plan_id})
+    history_store.record_event("operations_plan_created", {
+        "plan_id": plan.plan_id, "scenario": scenario})
     return payload
 
 
@@ -1192,15 +1230,9 @@ def get_tpa_queue_status(scenario: str = Query("live", pattern="^(live|peak)$"))
         _tpa_cache[scenario] = cached
     return cached["payload"]
 
-_SUBMITTED_PERMITS: list[dict[str, Any]] = []
-
-
 @app.get("/api/events/permits")
 def get_events_permits() -> list[dict[str, Any]]:
-    return events_permits_payload() + list(_SUBMITTED_PERMITS)
-
-
-_EVENT_WASTE_KG_PER_PERSON = 1.2  # consistent with the labeled fixture permits (45k -> 54 t)
+    return events_permits_payload() + PERMIT_STORE.list()
 
 
 @app.post("/api/events/permits", status_code=201)
@@ -1208,19 +1240,19 @@ def submit_event_permit(payload: EventPermitRequest, _role: str = Depends(requir
     """Case 2 crowd-permit intake: a permit submitted to the authority becomes a
     live scenario — the system estimates waste generation, resource needs, and
     the affected kecamatan, and the permit joins the map's event layer."""
-    from math import ceil as _ceil
     from app.engine import _haversine_meters
 
-    tons = round(payload.expected_attendance * _EVENT_WASTE_KG_PER_PERSON / 1000.0, 1)
-    trucks = max(1, _ceil(tons / 18.0))
-    crews = trucks * 4
+    tons = event_tons_for_attendance(payload.expected_attendance)
+    resources = resource_requirements(tons)
     impact = {
         "predicted_waste_tons": tons,
-        "backup_trucks_required": trucks,
-        "crews_required": crews,
-        "man_hours_required": crews * 8,
-        "large_bins_required": max(1, _ceil(tons / 2.5)),
-        "resource_basis": "engine constants: 18 t/truck, 4 crew/truck, 8h shift, 2.5 t/bin; 1.2 kg waste/person/event",
+        "trucks_required": resources["trucks_required"],
+        "crews_required": resources["crews_required"],
+        "workers_required": resources["workers_required"],
+        "man_hours_required": resources["man_hours_required"],
+        "bins_required": resources["bins_required"],
+        "units": resources["units"],
+        "resource_basis": resource_basis(),
     }
 
     affected = []
@@ -1245,7 +1277,7 @@ def submit_event_permit(payload: EventPermitRequest, _role: str = Depends(requir
     affected.sort(key=lambda a: a["distance_m"])
 
     permit = {
-        "id": f"EV-USER-{len(_SUBMITTED_PERMITS) + 1:03d}",
+        "id": PERMIT_STORE.next_id(),
         "name": payload.name,
         "permit_number": f"SUBMITTED-{payload.event_date.isoformat()}",
         "location_name": payload.location_name,
@@ -1260,7 +1292,7 @@ def submit_event_permit(payload: EventPermitRequest, _role: str = Depends(requir
         **impact,
         "affected_kecamatan": affected,
     }
-    _SUBMITTED_PERMITS.append(permit)
+    PERMIT_STORE.add(permit)
     history_store.record_event("event_permit_submitted", {
         "id": permit["id"], "name": permit["name"],
         "expected_attendance": permit["expected_attendance"],
@@ -1445,9 +1477,10 @@ def get_fleet_executive_report() -> JSONResponse:
     top_base = base_lookup.get(top["slug"], top["predicted_tons"])
     spike_pct = round((top["predicted_tons"] - top_base) / top_base * 100, 1) if top_base else 0.0
     extra_crews = sum(k["crews_required"] for k in scenario_kecs["top_hotspots"])
+    extra_workers = sum(k["workers_required"] for k in scenario_kecs["top_hotspots"])
     extra_manhours = sum(k["man_hours_required"] for k in scenario_kecs["top_hotspots"])
     extra_trucks = sum(k["trucks_required"] for k in scenario_kecs["top_hotspots"])
-    extra_bins = sum(k["disposal_bins_required"] for k in scenario_kecs["top_hotspots"])
+    extra_bins = sum(k["bins_required"] for k in scenario_kecs["top_hotspots"])
 
     stagger = simulate_staggered_dispatch(32)
 
@@ -1465,7 +1498,7 @@ Sistem optimalisasi logistik JWIS meningkatkan efisiensi armada (angka dari simu
 Hasil prediksi spasial-temporal model Hybrid Prophet + XGBoost untuk {scenario_kecs['kecamatan_count']} kecamatan Jakarta (skenario hujan ekstrim 42mm + akhir pekan):
 - **Puncak Prediksi Volume:** Kecamatan {top['kecamatan']} ({top['city']}) diproyeksikan mengalami volume sampah tertinggi sebesar **{top['predicted_tons']:.1f} ton/hari** (**+{spike_pct}%** vs kondisi normal).
 - **Total Volume Kota:** Estimasi total {scenario_kecs['kecamatan_count']} kecamatan mencapai **{scenario_kecs['total_predicted_tons']:.1f} ton/hari** pada skenario ini.
-- **Kebutuhan Manpower (5 hotspot teratas):** Dibutuhkan **{extra_crews} kru lapangan** dengan alokasi total **{extra_manhours} man-hours**.
+- **Kebutuhan Manpower (5 hotspot teratas):** Dibutuhkan **{extra_crews} tim kru** (**{extra_workers} orang**) dengan alokasi total **{extra_manhours} person-hours**.
 - **Kesiapan Armada & Fasilitas (5 hotspot teratas):** Merekomendasikan pengerahan **{extra_trucks} unit armada** dan penempatan **{extra_bins} unit tempat penampungan sampah besar**.
 
 ## 3. REKOMENDASI MANAJEMEN SEGERA
@@ -1607,6 +1640,12 @@ def _spj_or_409(fn, *args, **kwargs):
         return _spj_payload(fn(*args, **kwargs))
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+    except StorageError as exc:
+        # A mutation that never reached the durable store must not look like
+        # success — the caller has to know the write did not commit.
+        logger.error("SPJ persistence failure: %s", exc)
+        raise HTTPException(status_code=503,
+                            detail="SPJ storage is unavailable; the change was not saved.")
 
 
 class SpjCreateBody(BaseModel):
@@ -1627,14 +1666,22 @@ class SpjStopBody(BaseModel):
     location_type: str = "Pemukiman Kelas Menengah"
 
 
+class SpjOverrideBody(BaseModel):
+    reason: str = Field(min_length=10, max_length=500)
+    documents: str | None = Field(default=None, max_length=500)
+
+
 class SpjCompleteBody(BaseModel):
     evidence: dict | None = None
+    override: SpjOverrideBody | None = None
 
 
 class SpjReceiptBody(BaseModel):
     photo_name: str
     photo_b64: str = Field(default="", max_length=7_000_000)
     total_weight_kg: float | None = None
+    operation_id: str | None = Field(default=None, min_length=8, max_length=80)
+    replace_reason: str | None = Field(default=None, min_length=10, max_length=500)
 
 
 class PretripBody(BaseModel):
@@ -1663,12 +1710,28 @@ def list_spj(status: str | None = None) -> dict[str, Any]:
 
 @app.get("/api/spj/active-path/{truck_code}")
 def spj_active_path_endpoint(truck_code: str) -> dict[str, Any]:
+    spj = SPJ_STORE.active_for_truck(truck_code)
     path = spj_active_path(truck_code)
     return {
         "truck_code": truck_code,
-        "has_active_spj": path is not None,
+        "has_active_spj": spj is not None,
+        "has_reference_path": path is not None,
+        "destination": spj.destination if spj is not None else None,
+        "destination_provenance": (
+            destination_provenance(spj.destination) if spj is not None else None),
         "path": [{"lat": lat, "lng": lng} for lat, lng in (path or [])],
     }
+
+
+@app.get("/api/spj/destinations")
+def spj_destinations() -> dict[str, Any]:
+    """Every disposal destination with its coordinate provenance.
+
+    `usable_for_routing` is false when no sourced coordinate exists, so a client
+    can see that an active SPJ to that destination has no verified reference
+    path instead of assuming the last polyline vertex is the facility.
+    """
+    return {"destinations": [destination_provenance(d) for d in DESTINATIONS]}
 
 
 @app.get("/api/spj/{spj_id}")
@@ -1700,6 +1763,26 @@ def _refresh_fleet_caches() -> None:
     _map_truth_cache["ts"] = 0.0
 
 
+def require_supervisor_override(authorization: str | None = Header(default=None)) -> str:
+    """Dependency for the exceptional SPJ completion path: `dispatch:override` only."""
+    return require_any_permission("dispatch:override")(authorization)
+
+
+def _override_payload(body: "SpjCompleteBody | None", actor: str,
+                      required: bool = False) -> dict | None:
+    """Normalize the optional override block; None when the caller sent none."""
+    override = getattr(body, "override", None)
+    if override is None:
+        if required:
+            raise HTTPException(
+                status_code=409,
+                detail="completing an order without field evidence requires a "
+                       "supervisor override with a reason")
+        return None
+    return {"reason": override.reason, "documents": override.documents,
+            "actor": actor}
+
+
 @app.post("/api/spj/{spj_id}/activate")
 def activate_spj(spj_id: str, _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
     result = _spj_or_409(SPJ_STORE.activate, spj_id)
@@ -1711,16 +1794,30 @@ def activate_spj(spj_id: str, _role: str = Depends(require_permission("dispatch:
 def complete_spj_stop(spj_id: str, index: int,
                       body: SpjCompleteBody | None = None,
                       _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
+    """Close one stop. Requires field evidence, or an explicit supervisor override."""
+    override = _override_payload(body, _role)
     result = _spj_or_409(SPJ_STORE.complete_stop, spj_id, index,
-                         (body.evidence if body else None))
+                         (body.evidence if body else None), override, _role)
     _refresh_fleet_caches()
     return result
 
 
 @app.post("/api/spj/{spj_id}/complete")
-def complete_spj(spj_id: str, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
-    result = _spj_or_409(SPJ_STORE.complete, spj_id)
+def complete_spj(spj_id: str,
+                 body: SpjCompleteBody | None = None,
+                 _role: str = Depends(require_supervisor_override)) -> dict[str, Any]:
+    """Supervisor override: close the whole order without field evidence.
+
+    Guarded by `dispatch:override`, so an ordinary dispatcher cannot use it to
+    skip the Driver workflow; the reason and authorizing actor are stored on
+    every stop it closes.
+    """
+    override = _override_payload(body, _role, required=True)
+    result = _spj_or_409(SPJ_STORE.complete, spj_id, override, _role)
     _refresh_fleet_caches()
+    history_store.record_event("spj_completed_by_override", {
+        "spj_id": spj_id, "actor": override["actor"], "reason": override["reason"],
+    })
     return result
 
 
@@ -1759,28 +1856,55 @@ def spj_evidence_summary(spj_id: str) -> dict[str, Any]:
             "total_weight_kg": total,
             "fractions": fractions,
             "officer_name": (ev.get("officer") or {}).get("name"),
+            "override": stop.override,
         })
     return {"spj_id": spj_id, "stops": stops,
+            "receipt": _receipt_payload(spj.receipt) if spj.receipt else None,
             "complete": all(s["has_arrival"] for s in stops) and len(stops) > 0}
 
 
 @app.post("/api/spj/{spj_id}/receipt", status_code=201)
-def submit_spj_receipt(spj_id: str, body: SpjReceiptBody, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
+def submit_spj_receipt(spj_id: str, body: SpjReceiptBody,
+                       response: Response,
+                       _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
+    """Record the one current receipt for an SPJ.
+
+    A retry carrying the same `operation_id` returns the stored receipt
+    unchanged instead of writing a second one; a different receipt is rejected
+    unless the caller supplies `replace_reason`, which archives the previous
+    receipt into the SPJ's history.
+    """
     spj = SPJ_STORE.get(spj_id)
     if spj is None:
         raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
-    if spj.status != "selesai":
-        raise HTTPException(status_code=409,
-                            detail="receipt can only be submitted after the SPJ is selesai")
-    if not body.photo_name.strip() or not body.photo_b64.strip():
-        raise HTTPException(status_code=409,
-                            detail="receipt photo_name and photo_b64 are required")
-    history_store.record_event("spj_receipt_submitted", {
-        "spj_id": spj_id, "spj_number": spj.spj_number,
-        "photo_name": body.photo_name,
-        "total_weight_kg": body.total_weight_kg,
-    })
-    return {"status": "recorded", "spj_id": spj_id}
+    try:
+        receipt, created = SPJ_STORE.submit_receipt(
+            spj_id, body.photo_name, body.photo_b64, body.total_weight_kg,
+            body.operation_id, actor=_role, replace_reason=body.replace_reason)
+    except StorageError as exc:
+        logger.error("SPJ receipt persistence failure: %s", exc)
+        raise HTTPException(status_code=503,
+                            detail="SPJ storage is unavailable; the receipt was not saved.")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    if created:
+        history_store.record_event("spj_receipt_submitted", {
+            "spj_id": spj_id, "spj_number": spj.spj_number,
+            "operation_id": receipt["operation_id"],
+            "photo_name": receipt["photo_name"],
+            "total_weight_kg": receipt["total_weight_kg"],
+            "sequence": receipt["sequence"],
+        })
+    else:
+        response.status_code = 200
+    return {"status": "recorded" if created else "already_recorded",
+            "spj_id": spj_id, "created": created,
+            "receipt": _receipt_payload(receipt)}
+
+
+def _receipt_payload(receipt: dict[str, Any]) -> dict[str, Any]:
+    """Receipt without the base64 payload (the evidence stays in the store)."""
+    return {k: v for k, v in receipt.items() if k != "photo_b64"}
 
 
 @app.post("/api/pretrip", status_code=201)

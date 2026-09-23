@@ -25,9 +25,9 @@ from app.real_data import (
     load_kelurahan_heatmap,
     load_kelurahan_tps_counts,
 )
+from app.units import TRUCK_CAPACITY_TONS as _TRUCK_CAPACITY_TONS
 
 _AVG_TPS_SITE_CAPACITY_TONS = 3.0  # data-driven: 2,956 t/day proxy over 1,081 real TPS sites ≈ 2.73
-_TRUCK_CAPACITY_TONS = 18.0
 # The capacity proxy covers only ~38% of modeled citywide demand (the rest is
 # direct-hauled to TPST). Recommendations therefore split the gap into levers:
 # trip intensification on existing sites first, new sites for a bounded share.

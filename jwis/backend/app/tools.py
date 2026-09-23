@@ -333,8 +333,9 @@ def _predictions_payload(args: dict) -> dict[str, Any]:
         hotspots.append({
             "kecamatan": k["kecamatan"], "city": k["city"],
             "predicted_tons": pred["predicted_tons"],
-            "trucks_required": max(1, round(pred["predicted_tons"] / 18)),
+            "trucks_required": pred["trucks_required"],
             "crews_required": pred["crews_required"],
+            "workers_required": pred["workers_required"],
             "man_hours_required": pred["man_hours_required"],
         })
     hotspots.sort(key=lambda h: -h["predicted_tons"])
