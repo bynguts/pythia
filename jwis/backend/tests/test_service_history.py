@@ -12,7 +12,7 @@ def _store(name="test_service.json"):
     path = os.path.join(tempfile.gettempdir(), name)
     if os.path.exists(path):
         os.remove(path)
-    return ServiceStore(persist_path=path)
+    return ServiceStore(db_path=path)
 
 
 class ServiceStoreTests(unittest.TestCase):

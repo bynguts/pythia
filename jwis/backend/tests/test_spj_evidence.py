@@ -9,7 +9,7 @@ def _store(name="test_spj_evidence.json"):
     path = os.path.join(tempfile.gettempdir(), name)
     if os.path.exists(path):
         os.remove(path)
-    return SpjStore(persist_path=path)
+    return SpjStore(db_path=path)
 
 
 EVIDENCE = {
@@ -39,11 +39,35 @@ class SpjEvidenceTests(unittest.TestCase):
         self.assertEqual(spj.stops[0].evidence["officer"]["name"], "Dicky")
         self.assertEqual(spj.status, "selesai")  # only stop -> auto complete
 
-    def test_complete_stop_without_evidence_stays_compatible(self):
+    def test_complete_stop_without_evidence_requires_override(self):
+        """A bare completion is refused; the override path is the only way."""
         store = _store()
         spj = self._active_spj(store)
-        spj = store.complete_stop(spj.spj_id, 0)
-        self.assertIsNone(spj.stops[0].evidence)
+        with self.assertRaises(ValueError):
+            store.complete_stop(spj.spj_id, 0)
+        self.assertEqual(store.get(spj.spj_id).stops[0].status, "pending")
+
+    def test_override_completion_records_reason_and_actor(self):
+        store = _store()
+        spj = self._active_spj(store)
+        spj = store.complete_stop(
+            spj.spj_id, 0, actor="supervisor",
+            override={"reason": "Evidence photos lost with the handset"})
+        stop = spj.stops[0]
+        self.assertIsNone(stop.evidence)
+        self.assertEqual(stop.override["actor"], "supervisor")
+        self.assertEqual(stop.override["reason"],
+                         "Evidence photos lost with the handset")
+        self.assertEqual(spj.status, "selesai")
+
+    def test_override_requires_a_substantive_reason(self):
+        store = _store()
+        spj = self._active_spj(store)
+        for bad in (None, {}, {"reason": "too short"}):
+            with self.assertRaises(ValueError):
+                store.complete_stop(spj.spj_id, 0, actor="supervisor",
+                                    override=bad)
+        self.assertEqual(store.get(spj.spj_id).stops[0].status, "pending")
 
     def test_evidence_requires_arrival_photo(self):
         store = _store()
@@ -55,10 +79,10 @@ class SpjEvidenceTests(unittest.TestCase):
         path = os.path.join(tempfile.gettempdir(), "test_spj_evi_persist.json")
         if os.path.exists(path):
             os.remove(path)
-        store = SpjStore(persist_path=path)
+        store = SpjStore(db_path=path)
         spj = self._active_spj(store)
         store.complete_stop(spj.spj_id, 0, evidence=EVIDENCE)
-        store2 = SpjStore(persist_path=path)
+        store2 = SpjStore(db_path=path)
         loaded = store2.get(spj.spj_id)
         self.assertEqual(loaded.stops[0].evidence["weighing"][0]["weight_kg"],
                          37.2)

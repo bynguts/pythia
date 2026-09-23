@@ -8,6 +8,9 @@ from app.main import app
 ALL_OK = {"rem": True, "mesin": True, "ban": True, "bbm": True,
           "oli": True, "bak_compactor": True, "lampu": True}
 
+_EVIDENCE = {"arrival": {"photo_name": "a.jpg", "lat": -6.2, "lng": 106.8},
+             "weighing": [], "officer": {"photo_name": "p.jpg", "name": "Dicky"}}
+
 
 class PretripEndpointTests(unittest.TestCase):
     def setUp(self):
@@ -105,11 +108,36 @@ class DamageEndpointTests(unittest.TestCase):
             "name": "S", "kecamatan": "K", "address": "A",
             "lat": -6.2, "lng": 106.8})
         self.client.post(f"/api/spj/{spj_id}/activate")
-        self.client.post(f"/api/spj/{spj_id}/stops/0/complete")
-        ok = self.client.post(f"/api/spj/{spj_id}/receipt", json={
-            "photo_name": "struk.jpg", "photo_b64": "data:image/jpeg;base64,AA",
-            "total_weight_kg": 120.5})
+        self.client.post(f"/api/spj/{spj_id}/stops/0/complete",
+                         json={"evidence": _EVIDENCE})
+        body = {"photo_name": "struk.jpg",
+                "photo_b64": "data:image/jpeg;base64,AA",
+                "total_weight_kg": 120.5,
+                "operation_id": "receipt-op-0001"}
+        ok = self.client.post(f"/api/spj/{spj_id}/receipt", json=body)
         self.assertEqual(ok.status_code, 201)
+        self.assertTrue(ok.json()["created"])
+        # A retry of the same operation returns the original receipt, not a second one.
+        retry = self.client.post(f"/api/spj/{spj_id}/receipt", json=body)
+        self.assertEqual(retry.status_code, 200)
+        self.assertFalse(retry.json()["created"])
+        self.assertEqual(retry.json()["receipt"]["operation_id"], "receipt-op-0001")
+        # A different receipt without a reason is refused.
+        conflict = self.client.post(f"/api/spj/{spj_id}/receipt", json={
+            "photo_name": "lain.jpg", "photo_b64": "data:image/jpeg;base64,BB",
+            "total_weight_kg": 99.0, "operation_id": "receipt-op-0002"})
+        self.assertEqual(conflict.status_code, 409)
+        # ... and with a reason it supersedes, keeping the old one in history.
+        replaced = self.client.post(f"/api/spj/{spj_id}/receipt", json={
+            "photo_name": "lain.jpg", "photo_b64": "data:image/jpeg;base64,BB",
+            "total_weight_kg": 99.0, "operation_id": "receipt-op-0003",
+            "replace_reason": "Struk pertama salah unggah"})
+        self.assertEqual(replaced.status_code, 201)
+        self.assertEqual(replaced.json()["receipt"]["sequence"], 2)
+        detail = self.client.get(f"/api/spj/{spj_id}").json()
+        self.assertEqual(detail["receipt"]["operation_id"], "receipt-op-0003")
+        self.assertEqual([r["operation_id"] for r in detail["receipt_history"]],
+                         ["receipt-op-0001"])
 
     def test_complete_stop_with_evidence_and_summary(self):
         create = self.client.post("/api/spj", json={
@@ -168,7 +196,8 @@ class DamageEndpointTests(unittest.TestCase):
         self.client.post(f"/api/spj/{spj_id}/stops", json={
             "name": "S", "kecamatan": "K", "address": "A", "lat": -6.2, "lng": 106.8})
         self.client.post(f"/api/spj/{spj_id}/activate")
-        self.client.post(f"/api/spj/{spj_id}/stops/0/complete")
+        self.client.post(f"/api/spj/{spj_id}/stops/0/complete",
+                         json={"evidence": _EVIDENCE})
         r = self.client.post(f"/api/spj/{spj_id}/receipt", json={
             "photo_name": "", "photo_b64": "", "total_weight_kg": 10.0})
         self.assertEqual(r.status_code, 409)

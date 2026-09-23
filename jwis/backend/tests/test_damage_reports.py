@@ -10,7 +10,7 @@ def _store(name="test_damage.json"):
     path = os.path.join(tempfile.gettempdir(), name)
     if os.path.exists(path):
         os.remove(path)
-    return DamageReportStore(persist_path=path)
+    return DamageReportStore(db_path=path)
 
 
 class DamageReportTests(unittest.TestCase):
@@ -69,11 +69,11 @@ class DamageReportTests(unittest.TestCase):
         path = os.path.join(tempfile.gettempdir(), "test_damage_persist.json")
         if os.path.exists(path):
             os.remove(path)
-        store = DamageReportStore(persist_path=path)
+        store = DamageReportStore(db_path=path)
         rep = store.create("T-112", "Rizky", "bak_compactor", "berat",
                            "Hidrolik bocor", photo_name="foto.jpg",
                            photo_b64="data:image/jpeg;base64,AAA")
-        store2 = DamageReportStore(persist_path=path)
+        store2 = DamageReportStore(db_path=path)
         self.assertEqual(store2.active_override_for("T-112").report_id,
                          rep.report_id)
 

@@ -9,7 +9,7 @@ def _store(name="test_pretrip.json"):
     path = os.path.join(tempfile.gettempdir(), name)
     if os.path.exists(path):
         os.remove(path)
-    return PreTripStore(persist_path=path)
+    return PreTripStore(db_path=path)
 
 
 ALL_OK = {k: True for k in PRETRIP_ITEMS}
@@ -59,9 +59,9 @@ class PreTripTests(unittest.TestCase):
         path = os.path.join(tempfile.gettempdir(), "test_pretrip_persist.json")
         if os.path.exists(path):
             os.remove(path)
-        store = PreTripStore(persist_path=path)
+        store = PreTripStore(db_path=path)
         rec = store.submit("T-088", "Joko", dict(ALL_OK, oli=False), note="Oli rembes")
-        store2 = PreTripStore(persist_path=path)
+        store2 = PreTripStore(db_path=path)
         loaded = store2.today("T-088")
         self.assertEqual(loaded.record_id, rec.record_id)
         self.assertFalse(loaded.items["oli"])
