@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { ArrowRight, Building2, CheckCircle2, Eye, EyeOff, LockKeyhole, Radio, Route, UserRound } from "lucide-react";
+import { ArrowRight, Building2, CheckCircle2, Eye, EyeOff, LockKeyhole, Radio, UserRound } from "lucide-react";
 import { API_URL } from "../config.js";
 import { useLanguage } from "../i18n.jsx";
+import { JwisRouteMark } from "../ui/EnterprisePrimitives.jsx";
 
 export function LoginPage({ onLogin }) {
   const { lang, setLang, t } = useLanguage();
@@ -38,7 +39,7 @@ export function LoginPage({ onLogin }) {
     <main className="login-shell">
       <section className="login-surface" aria-labelledby="login-title">
         <aside className="login-story">
-          <div className="login-story-brand"><span>J</span><div><strong>JWIS</strong><small>Jakarta Waste Intelligence System</small></div></div>
+          <div className="login-story-brand"><span aria-hidden="true"><JwisRouteMark /></span><div><strong>JWIS</strong><small>Jakarta Waste Intelligence System</small></div></div>
           <div className="login-story-copy">
             <span className="login-story-kicker"><Radio size={14} /> Pusat kendali operasional</span>
             <h1>Satu keputusan.<br />Seluruh operasi bergerak.</h1>
@@ -57,7 +58,7 @@ export function LoginPage({ onLogin }) {
             <button type="button" className={lang === "id" ? "active" : ""} onClick={() => setLang("id")}>ID</button>
             <button type="button" className={lang === "en" ? "active" : ""} onClick={() => setLang("en")}>EN</button>
           </div>
-          <div className="login-mobile-brand"><span><Route size={20} /></span><strong>JWIS</strong></div>
+          <div className="login-mobile-brand"><span aria-hidden="true"><JwisRouteMark /></span><strong>JWIS</strong></div>
           <header>
             <span className="login-eyebrow">Akses operator</span>
             <h2 id="login-title">{lang === "id" ? "Masuk ke pusat kendali" : "Sign in to command center"}</h2>

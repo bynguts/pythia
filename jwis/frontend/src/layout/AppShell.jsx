@@ -1,23 +1,27 @@
-import React, { useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   BarChart3,
   Bot,
   ChevronDown,
   CircleUserRound,
   LogOut,
+  PanelLeftClose,
   ShieldCheck,
+  ScanSearch,
   Sparkles,
   Truck,
   Users,
   Workflow,
 } from "lucide-react";
 import { useLanguage } from "../i18n.jsx";
+import { JwisRouteMark } from "../ui/EnterprisePrimitives.jsx";
 
 const items = [
   { id: "fleet", key: "nav_armada", icon: Truck, description: "Pantau dan tangani operasi hari ini" },
   { id: "forecast", key: "nav_prediksi", icon: BarChart3, description: "Antisipasi beban layanan berikutnya" },
   { id: "planning", key: "nav_rencana", icon: Workflow, description: "Susun dan setujui rencana operasi" },
   { id: "drivers", key: "nav_sopir", icon: Users, description: "Kelola kepatuhan dan kinerja pengemudi" },
+  { id: "scentinel", key: "nav_scentinel", icon: ScanSearch, description: "Skrining muatan dan bukti kesiapan sensor" },
   { id: "audit", key: "nav_audit", icon: ShieldCheck, description: "Periksa mutu data dan model" },
 ];
 
@@ -32,7 +36,11 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
   const { lang, setLang, t } = useLanguage();
   const resolvedWorkspace = ALIASES[activeWorkspace] || activeWorkspace;
   const current = items.find((item) => item.id === resolvedWorkspace) || items[0];
+  const connectionLabel = online
+    ? (lang === "id" ? "Sistem terhubung" : "System connected")
+    : (lang === "id" ? "Mode terbatas" : "Limited mode");
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const assistantTriggerRef = useRef(null);
   const assistantDialogRef = useRef(null);
   const shellRef = useRef(null);
@@ -91,29 +99,60 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
     };
   }, [assistantOpen]);
 
+  useEffect(() => {
+    if (sidebarCollapsed) return;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setSidebarCollapsed(true);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [sidebarCollapsed]);
+
   function selectWorkspace(id) {
     onWorkspaceChange(id);
+    setSidebarCollapsed(true);
     window.scrollTo({ top: 0, behavior: "instant" });
   }
 
+  function toggleSidebar() {
+    setSidebarCollapsed((collapsed) => !collapsed);
+  }
+
   return (
-    <div className="command-shell" ref={shellRef}>
+    <div className={`command-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`} ref={shellRef}>
       <aside className="command-sidebar" aria-label="Navigasi utama JWIS">
         <div className="command-brand">
-          <span className="command-brand-mark" aria-hidden="true">J</span>
-          <div>
+          <span className="command-brand-mark" aria-hidden="true">
+            <JwisRouteMark />
+          </span>
+          <div className="command-brand-copy">
             <strong>JWIS</strong>
             <small>Pusat kendali DLH</small>
           </div>
         </div>
 
-        <div className="command-nav-label">Ruang kerja</div>
+        <div className="command-nav-heading">
+          <div className="command-nav-label">Ruang kerja</div>
+          <button
+            className="command-sidebar-toggle"
+            type="button"
+            aria-controls="workspace-navigation"
+            aria-expanded={!sidebarCollapsed}
+            aria-label={sidebarCollapsed ? (lang === "id" ? "Perluas sidebar" : "Expand sidebar") : (lang === "id" ? "Ciutkan sidebar" : "Collapse sidebar")}
+            title={sidebarCollapsed ? (lang === "id" ? "Perluas sidebar" : "Expand sidebar") : (lang === "id" ? "Ciutkan sidebar" : "Collapse sidebar")}
+            onClick={toggleSidebar}
+          >
+            <PanelLeftClose size={18} strokeWidth={1.8} />
+          </button>
+        </div>
         <nav className="command-nav" id="workspace-navigation" data-testid="workspace-navigation">
           {items.map(({ id, key, icon: Icon }) => (
             <button
               key={id}
               type="button"
               className={`command-nav-item ${resolvedWorkspace === id ? "active" : ""}`}
+              aria-label={t(key)}
+              title={sidebarCollapsed ? t(key) : undefined}
               aria-current={resolvedWorkspace === id ? "page" : undefined}
               onClick={() => selectWorkspace(id)}
             >
@@ -124,27 +163,28 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
         </nav>
 
         <div className="command-sidebar-footer">
-          <div className="system-connection">
+          <div className="system-connection" role="status" aria-label={sidebarCollapsed ? connectionLabel : undefined} title={sidebarCollapsed ? connectionLabel : undefined}>
             <span className={`connection-dot ${online ? "online" : "offline"}`} />
             <div>
               <strong>{online ? "Sistem terhubung" : "Mode terbatas"}</strong>
               <small>{online ? "Data diperbarui otomatis" : "Menggunakan data cadangan"}</small>
             </div>
           </div>
-          <button className="command-logout" type="button" onClick={onLogout}>
+          <button className="command-logout" type="button" aria-label={lang === "id" ? "Keluar" : "Log out"} title={sidebarCollapsed ? (lang === "id" ? "Keluar" : "Log out") : undefined} onClick={onLogout}>
             <LogOut size={18} />
             <span>Keluar</span>
           </button>
         </div>
       </aside>
+      {!sidebarCollapsed && <div className="command-sidebar-dismiss" aria-hidden="true" onClick={() => setSidebarCollapsed(true)} />}
 
-      <main className="command-main" id="overview">
+      <main className="command-main" id="overview" inert={!sidebarCollapsed}>
         <header className="command-topbar">
           <div className="command-context">
             <span className="command-eyebrow">Operasi DKI Jakarta</span>
             <div className="command-title-row">
               <strong>{t(current.key)}</strong>
-              <span>{current.description}</span>
+              <span>{resolvedWorkspace === "scentinel" && lang === "en" ? "Load screening and sensor evidence" : current.description}</span>
             </div>
           </div>
 

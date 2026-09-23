@@ -144,7 +144,7 @@ test("planning presents scenario, allocation, and approval as one flow", async (
 });
 
 test("audit workspace exposes provenance and model suitability evidence", async ({ page }) => {
-  await page.getByRole("button", { name: "Audit Data & Model ML" }).click();
+  await page.getByRole("button", { name: "Audit data & model" }).click();
   await expect(page.getByRole("heading", { name: "Audit data & model" })).toBeVisible();
   await expect(page.locator(".audit-table tbody tr").first()).toBeVisible({ timeout: 15000 });
   expect(await page.locator(".audit-table tbody tr").count()).toBeGreaterThan(0);

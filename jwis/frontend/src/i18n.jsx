@@ -27,6 +27,7 @@ const translations = {
     nav_prediksi: "Forecast",
     nav_rencana: "Planning",
     nav_sopir: "Drivers",
+    nav_scentinel: "Scentinel",
 
     // Action card
     ac_no_alerts: "No active alerts",
@@ -194,11 +195,12 @@ const translations = {
     nav_weighbridge: "Log Jembatan Timbang",
     nav_wa: "Gateway WhatsApp",
     nav_iot: "Sensor TPS IoT",
-    nav_audit: "Audit Data & Model ML",
+    nav_audit: "Audit data & model",
     nav_armada: "Armada",
     nav_prediksi: "Prediksi",
     nav_rencana: "Rencana",
     nav_sopir: "Sopir",
+    nav_scentinel: "Scentinel",
 
     // Kartu aksi
     ac_no_alerts: "Tidak ada peringatan aktif",

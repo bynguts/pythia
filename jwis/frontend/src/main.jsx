@@ -23,6 +23,7 @@ import { PERMIT_VENUE_PRESETS, PermitSubmissionPanel } from "./workspaces/Permit
 import { FacilityGapPanel } from "./workspaces/FacilityGapPanel.jsx";
 import { KecamatanMapPanel } from "./workspaces/KecamatanMapPanel.jsx";
 import { DataAuditWorkspace } from "./workspaces/DataAuditWorkspace.jsx";
+import { ScentinelWorkspace } from "./workspaces/ScentinelWorkspace.jsx";
 import { WeatherPanel } from "./workspaces/WeatherPanel.jsx";
 import { FleetTable } from "./workspaces/FleetTable.jsx";
 import { ExecutiveSummary } from "./workspaces/ExecutiveSummary.jsx";
@@ -490,6 +491,9 @@ function CommandCenter({ onLogout }) {
         )}
 
         {activeWorkspace === "audit" && <ErrorBoundary name="audit"><DataAuditWorkspace /></ErrorBoundary>}
+        {activeWorkspace === "scentinel" && (
+          <ErrorBoundary name="scentinel"><ScentinelWorkspace /></ErrorBoundary>
+        )}
       </section>
       )}
       {toast && <div className="toast" role={toast.error ? "alert" : "status"}>{toast.error ? <AlertTriangle size={16} /> : <Check size={16} />} {toast.message || toast}</div>}

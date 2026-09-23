@@ -1,5 +1,15 @@
 import React from "react";
 
+export function JwisRouteMark() {
+  return (
+    <svg viewBox="0 0 38 38" fill="none" aria-hidden="true" focusable="false">
+      <path d="M6 30h6c5 0 7-3 7-8v-6c0-5 3-8 8-8h5" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="5" cy="30" r="3" fill="currentColor" />
+      <circle cx="33" cy="8" r="3" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function StatusDot({ tone = "neutral", pulsing = false }) {
   return (
     <span

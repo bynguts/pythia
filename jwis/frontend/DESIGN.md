@@ -16,6 +16,7 @@ structured, calm, readable, and evidence-first.
 Design direction:
 - Deep forest command rail with a light operational canvas.
 - Compact top context bar; page purpose and decision context remain visible.
+- JWIS brand mark on the command rail and login is a small route-and-endpoints glyph, not a letter monogram.
 - One primary action per screen; evidence and secondary controls recede.
 - Flat joined metric strips instead of repeated KPI card grids.
 - Orange is the only product accent; status colors remain semantic.
@@ -85,7 +86,7 @@ Rules:
 ## 4. Layout Grid
 
 - Page padding: 24px desktop, 16px tablet/mobile.
-- Command rail: 232px desktop.
+- Command rail: 72px collapsed; 232px overlay popout while navigating, without resizing the workspace.
 - Main canvas: fluid up to 1600px.
 - Gap: 16px between operational surfaces.
 - Surface padding: 22px desktop, 16px mobile.
@@ -203,7 +204,7 @@ Opening this page must never show a blank white workspace.
 ## 8. Responsive Behavior
 
 Desktop:
-- Command rail fixed at 232px.
+- Command rail starts collapsed at 72px and pops out to 232px; selection, Escape, or outside click closes it.
 - Context bar remains sticky.
 - Primary/evidence splits use the full remaining canvas.
 

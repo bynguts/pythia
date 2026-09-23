@@ -28,10 +28,10 @@ async function expectMinimumTouchTarget(locator) {
 
 test.beforeEach(async ({ page }) => signIn(page));
 
-test("command rail exposes five task workspaces and preserves active state", async ({ page }) => {
+test("command rail exposes six task workspaces and preserves active state", async ({ page }) => {
   const nav = page.getByTestId("workspace-navigation");
   await expect(nav).toBeVisible();
-  const labels = ["Armada", "Prediksi", "Rencana", "Sopir", "Audit Data & Model ML"];
+  const labels = ["Armada", "Prediksi", "Rencana", "Sopir", "Scentinel", "Audit data & model"];
   await expect(nav.getByRole("button")).toHaveCount(labels.length);
   for (const label of labels) await expect(nav.getByRole("button", { name: label })).toBeVisible();
 
@@ -41,6 +41,33 @@ test("command rail exposes five task workspaces and preserves active state", asy
     await expect(button).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
   }
+});
+
+test("command rail pops out without moving the workspace and closes on selection or Escape", async ({ page }) => {
+  const rail = page.locator(".command-sidebar");
+  const main = page.locator(".command-main");
+  await expect.poll(async () => (await rail.boundingBox())?.width).toBe(72);
+  const mainX = (await main.boundingBox()).x;
+
+  await page.getByRole("button", { name: "Perluas sidebar" }).click();
+  await expect(page.getByRole("button", { name: "Ciutkan sidebar" })).toHaveAttribute("aria-expanded", "true");
+  await expect.poll(async () => (await rail.boundingBox())?.width).toBe(232);
+  expect((await main.boundingBox()).x).toBe(mainX);
+  await expect(main).toHaveAttribute("inert");
+
+  const audit = page.getByTestId("workspace-navigation").getByRole("button", { name: "Audit data & model" });
+  await audit.click();
+  await expect(audit).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Audit data & model" })).toBeVisible();
+  await expect.poll(async () => (await rail.boundingBox())?.width).toBe(72);
+  await expect(main).not.toHaveAttribute("inert");
+
+  await page.getByRole("button", { name: "Perluas sidebar" }).click();
+  await page.keyboard.press("Escape");
+  await expect.poll(async () => (await rail.boundingBox())?.width).toBe(72);
+  await page.getByRole("button", { name: "Perluas sidebar" }).click();
+  await page.locator(".command-sidebar-dismiss").click({ position: { x: 500, y: 200 } });
+  await expect.poll(async () => (await rail.boundingBox())?.width).toBe(72);
 });
 
 test("desktop and mobile layouts never create document-level horizontal overflow", async ({ page }) => {
@@ -55,13 +82,26 @@ test("mobile bottom navigation stays reachable and switches workspaces", async (
   await page.setViewportSize({ width: 390, height: 844 });
   const nav = page.locator(".command-mobile-nav");
   await expect(nav).toBeVisible();
-  await expect(nav.getByRole("button")).toHaveCount(5);
+  await expect(nav.getByRole("button")).toHaveCount(6);
   for (const button of await nav.getByRole("button").all()) await expectMinimumTouchTarget(button);
 
   const planning = nav.getByRole("button", { name: "Rencana" });
   await planning.click();
   await expect(planning).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "Rencana operasi terpadu" })).toBeVisible();
+});
+
+test("Scentinel workspace explains screening evidence without claiming live telemetry", async ({ page }) => {
+  const button = page.getByTestId("workspace-navigation").getByRole("button", { name: "Scentinel" });
+  await button.click();
+  await expect(button).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Scentinel: dari muatan truk ke keputusan yang dapat diuji" })).toBeVisible();
+  await expect(page.locator(".scentinel-bin")).toBeVisible();
+  await expect(page.getByRole("table")).toBeVisible();
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2)).toBe(true);
+  }
 });
 
 test("assistant opens as a modal and closes without leaving the workspace", async ({ page }) => {
@@ -113,7 +153,7 @@ test("core workspaces meet text contrast requirements", async ({ page }) => {
     [null, "Operasi armada hari ini"],
     ["Prediksi", "Prediksi timbulan sampah"],
     ["Rencana", "Rencana operasi terpadu"],
-    ["Audit Data & Model ML", "Audit data & model"],
+    ["Audit data & model", "Audit data & model"],
   ]) {
     if (workspace) await page.getByTestId("workspace-navigation").getByRole("button", { name: workspace }).click();
     await expect(page.getByRole("heading", { name: heading }).first()).toBeVisible();
@@ -125,7 +165,7 @@ test("workspace navigation emits no runtime errors", async ({ page }) => {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
-  for (const label of ["Prediksi", "Rencana", "Sopir", "Audit Data & Model ML", "Armada"]) {
+  for (const label of ["Prediksi", "Rencana", "Sopir", "Audit data & model", "Armada"]) {
     await page.getByTestId("workspace-navigation").getByRole("button", { name: label }).click();
   }
   expect(errors).toEqual([]);
