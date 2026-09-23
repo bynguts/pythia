@@ -51,7 +51,7 @@ from app.cv_surveillance import surveillance_status
 from app.map_truth import build_map_truth, _snapped_for
 from app.queue_simulation import simulate_queue
 from app.operations_optimizer import Demand, Vehicle, build_operational_plan
-from app.forecast_metrics import suitability_labels
+from app.forecast_metrics import suitability_labels, suitability_details
 from app.auth import ROLES, authenticate, has_permission, token_for, role_for_token
 from app.impact import build_impact_report
 from app.osrm import fetch_osrm_route
@@ -1046,9 +1046,16 @@ def ml_models_status() -> list[dict[str, Any]]:
 
 @app.get("/api/ml/suitability")
 def ml_suitability() -> dict[str, Any]:
-    """Honest per-resolution suitability; daily-district is not claimed reliable."""
+    """Honest per-resolution suitability with validation-target classes (#18).
+
+    'reliable' is only claimed for observed holdout targets; resolutions
+    validated against the calibrated-synthetic district series are
+    labeled 'synthetic_validated' with their evidence exposed.
+    """
     return {
+        # 'resolutions' key retained for existing frontend consumers.
         "resolutions": suitability_labels(),
+        "details": suitability_details(),
         "note": "Daily per-district resolution is calibrated-synthetic and must not be presented as observed accuracy.",
     }
 
