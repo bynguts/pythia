@@ -1095,7 +1095,13 @@ def ml_predict_all(
 
 # ── Integrated Operations Optimizer (Case 2 -> Case 1 bridge) ────────
 
-_OPERATIONS_PLANS: dict[str, dict[str, Any]] = {}
+from app.operations_plans import OperationsPlanStore
+_OPERATIONS_PLAN_STORE = OperationsPlanStore()
+
+
+def _reload_operations_plans() -> None:
+    """Re-read plan state from durable storage (restart / other worker)."""
+    _OPERATIONS_PLAN_STORE.reload_cache()
 
 
 @app.post("/api/operations/plan")
@@ -1137,29 +1143,42 @@ def create_operations_plan(
         "scenario": {"rainfall_mm": rainfall_mm, "event_attendance": event_attendance,
                      "is_weekend": is_weekend},
     }
-    _OPERATIONS_PLANS[plan.plan_id] = payload
+    payload = _OPERATIONS_PLAN_STORE.save_proposed(plan.plan_id, payload)
     history_store.record_event("operations_plan_created", {"plan_id": plan.plan_id})
     return payload
 
 
 @app.post("/api/operations/{plan_id}/approve")
 def approve_operations_plan(plan_id: str, _role: str = Depends(require_permission("operations:approve"))) -> dict[str, Any]:
-    """Approve a plan and push each assignment through the dispatch contract."""
-    plan = _OPERATIONS_PLANS.get(plan_id)
-    if plan is None:
-        raise HTTPException(status_code=404, detail=f"Plan {plan_id} not found.")
-    plan["status"] = "approved"
-    created = []
-    for a in plan["assignments"]:
-        d = history_store.save_dispatch(
-            truck_code=a["truck_code"],
-            instruction=f"Collect {a['assigned_tons']:.0f}t at {a['area']} (plan {plan_id})",
+    """Approve a plan and push each assignment through the dispatch contract.
+
+    Approval is at-most-once (#17): the status transition and dispatch
+    ids commit in one transaction; a retried or concurrent approval
+    returns the already-committed result without creating new dispatches.
+    """
+    def _create_dispatch(assignment):
+        return history_store.save_dispatch(
+            truck_code=assignment["truck_code"],
+            instruction=(f"Collect {assignment['assigned_tons']:.0f}t at "
+                         f"{assignment['area']} (plan {plan_id})"),
             manager_id="operations_optimizer",
         )
-        dispatch_center._dispatches.append(d)
-        created.append(d["id"])
-    plan["dispatch_ids"] = created
-    history_store.record_event("operations_plan_approved", {"plan_id": plan_id, "dispatches": len(created)})
+
+    try:
+        plan, created_now = _OPERATIONS_PLAN_STORE.approve(
+            plan_id, approved_by=_role, create_dispatch=_create_dispatch)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Plan {plan_id} not found.")
+    if created_now:
+        # Mirror the durable dispatch rows into the in-memory dispatch
+        # center only AFTER the approval transaction committed.
+        dispatch_ids = plan.get("dispatch_ids") or []
+        for dispatch in history_store.list_dispatches():
+            if dispatch["id"] in dispatch_ids:
+                dispatch_center._dispatches.append(dispatch)
+        history_store.record_event(
+            "operations_plan_approved",
+            {"plan_id": plan_id, "dispatches": len(dispatch_ids)})
     return plan
 
 # ── Advanced Fleet Intelligence Endpoints (New) ──────────────────────
