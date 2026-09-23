@@ -28,7 +28,7 @@ import time
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Literal
 from fastapi import FastAPI, HTTPException, Query, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -227,7 +227,11 @@ class DispatchRequest(BaseModel):
     manager_id: str = Field(default="manager_central", min_length=1, max_length=50)
 
 class DispatchConfirmRequest(BaseModel):
-    status: str = Field(min_length=1, max_length=30)
+    # #24: documented field-status enum. PENDING is the initial DB state,
+    # not a confirmable outcome; confirmations are READY (acknowledged and
+    # ready to execute), ISSUE (field problem reported), SIAP (legacy
+    # Indonesian READY used by existing clients), and DONE (completed).
+    status: Literal["READY", "ISSUE", "SIAP", "DONE"]
     note: str = Field(default="", max_length=500)
 
 class HybridPredictRequest(BaseModel):
