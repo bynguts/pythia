@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Camera,
@@ -74,13 +74,6 @@ async function post(path, data) {
   return res.json();
 }
 
-function receiptDoneFor(spjId) {
-  try {
-    return localStorage.getItem(`jwis_receipt_${spjId}`) === "done";
-  } catch {
-    return false;
-  }
-}
 
 function Toast({ message }) {
   if (!message) return null;
@@ -496,29 +489,87 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
 function DeliveryCard({ spj, say, onDone }) {
   const [receipt, setReceipt] = useState(null);
   const [totalWeight, setTotalWeight] = useState("");
+  const [weightSource, setWeightSource] = useState("manual");
+  const [confirmed, setConfirmed] = useState(false);
+  const [ocr, setOcr] = useState({ status: "idle", source: "" });
   const [busy, setBusy] = useState(false);
+  const photoVersion = useRef(0);
+  // One id per submission attempt: a retry after a dropped response replays the
+  // same id, so the server returns the original receipt instead of a conflict.
+  const operationId = useRef(null);
+  const kg = Number(totalWeight);
+  const validWeight = totalWeight.trim() !== "" && Number.isFinite(kg) && kg > 0;
 
   const handlePhoto = async (file) => {
     if (!file) return;
+    const version = ++photoVersion.current;
+    operationId.current = null;
+    setReceipt(null);
+    setTotalWeight("");
+    setWeightSource("manual");
+    setConfirmed(false);
+    setOcr({ status: "loading", source: "" });
+    let photo;
     try {
-      setReceipt(await readPhoto(file));
+      photo = await readPhoto(file);
     } catch (err) {
-      say(err.message);
+      if (version === photoVersion.current) {
+        setOcr({ status: "idle", source: "" });
+        say(err.message);
+      }
+      return;
+    }
+    if (version !== photoVersion.current) return;
+    setReceipt(photo);
+    try {
+      const result = await post("/ocr/timbangan", { photo_b64: photo.b64 });
+      if (version !== photoVersion.current) return;
+      if (result.confidence === "high" &&
+          typeof result.weight_kg === "number" &&
+          Number.isFinite(result.weight_kg) && result.weight_kg > 0) {
+        setTotalWeight(String(result.weight_kg));
+        setWeightSource("ocr");
+        setOcr({
+          status: "suggested",
+          source: result.source || "GutsAI",
+          suggestion: result.weight_kg,
+        });
+      } else {
+        setOcr({
+          status: result.confidence === "failed" ? "unavailable" : "unreadable",
+          source: "",
+        });
+      }
+    } catch {
+      if (version === photoVersion.current) {
+        setOcr({ status: "unavailable", source: "" });
+      }
     }
   };
 
+  const useManual = () => {
+    photoVersion.current += 1; // ignore a response from OCR still in flight
+    operationId.current = null;
+    setTotalWeight("");
+    setWeightSource("manual");
+    setConfirmed(false);
+    setOcr({ status: "manual", source: "" });
+  };
+
   const submit = async () => {
+    if (!receipt || !validWeight || !confirmed || busy || ocr.status === "loading") return;
     setBusy(true);
+    // Kept across a failed attempt so an immediate retry is idempotent; a new
+    // photo or a weight change starts a new operation.
+    operationId.current = operationId.current || `${spj.spj_id}-${Date.now()}`;
     try {
-      const kg = parseFloat(totalWeight);
       await post(`/spj/${spj.spj_id}/receipt`, {
         photo_name: receipt.name,
         photo_b64: receipt.b64,
-        total_weight_kg: Number.isFinite(kg) ? kg : null,
+        total_weight_kg: kg,
+        weight_source: weightSource,
+        operation_id: operationId.current,
       });
-      try {
-        localStorage.setItem(`jwis_receipt_${spj.spj_id}`, "done");
-      } catch { /* flag is best-effort; receipt is already recorded server-side */ }
       onDone();
     } catch (err) {
       say(err.message || "Gagal mengirim struk");
@@ -528,17 +579,18 @@ function DeliveryCard({ spj, say, onDone }) {
   };
 
   return (
-    <section className="driver-card" data-testid="delivery-card">
+    <section className="driver-card" data-testid="delivery-card"
+             data-spj-id={spj.spj_id}>
       <div className="driver-card-head">
         <h2>
           <PackageCheck size={18} /> Bukti serah terima
         </h2>
       </div>
       <p className="driver-muted">
-        Semua titik selesai. Unggah foto struk timbang dari {spj.destination}.
+        Semua titik selesai. Unggah foto struk timbang truk bermuatan dari {spj.destination}.
       </p>
       <label className="driver-label" htmlFor="receipt-photo">
-        Foto struk
+        Foto struk timbang
       </label>
       <input
         id="receipt-photo"
@@ -547,30 +599,84 @@ function DeliveryCard({ spj, say, onDone }) {
         accept="image/*"
         capture="environment"
         className="driver-file"
-        onChange={(e) => handlePhoto(e.target.files?.[0])}
+        disabled={busy}
+        onChange={(e) => {
+          handlePhoto(e.target.files?.[0]);
+          e.target.value = ""; // permit choosing the same image again for another reading
+        }}
       />
       {receipt && <p className="driver-muted">Struk terlampir: {receipt.name}</p>}
-      <label className="driver-label" htmlFor="receipt-weight">
-        Total berat (kg, opsional)
-      </label>
-      <input
-        id="receipt-weight"
-        className="driver-input"
-        type="number"
-        min="0"
-        step="0.1"
-        value={totalWeight}
-        onChange={(e) => setTotalWeight(e.target.value)}
-        placeholder="0"
-      />
+      {ocr.status === "loading" && (
+        <p className="weigh-feedback" role="status">Membaca angka pada struk…</p>
+      )}
+      {ocr.status === "suggested" && (
+        <p className="weigh-feedback" role="status">
+          Saran {ocr.source}: {ocr.suggestion} kg.{" "}
+          {weightSource === "ocr"
+            ? "Cocokkan dengan struk sebelum konfirmasi."
+            : "Berat yang Anda ubah akan dicatat sebagai entri manual."}
+        </p>
+      )}
+      {ocr.status === "unavailable" && (
+        <p className="weigh-feedback" role="status">
+          Pembacaan otomatis tidak tersedia. Masukkan angka dari struk secara manual.
+        </p>
+      )}
+      {ocr.status === "unreadable" && (
+        <p className="weigh-feedback" role="status">
+          Angka pada struk tidak terbaca. Masukkan berat yang tertera secara manual.
+        </p>
+      )}
+      {ocr.status === "manual" && (
+        <p className="weigh-feedback" role="status">
+          Entri manual. Isi berat yang tertera pada struk foto.
+        </p>
+      )}
+      {receipt && (ocr.status === "loading" || ocr.status === "suggested") && (
+        <button type="button" className="driver-btn ghost weigh-manual" onClick={useManual}>
+          Isi berat manual
+        </button>
+      )}
+      {receipt && ocr.status !== "loading" && (
+        <>
+          <label className="driver-label" htmlFor="receipt-weight">
+            Berat truk bermuatan (kg)
+          </label>
+          <input
+            id="receipt-weight"
+            className="driver-input"
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="any"
+            value={totalWeight}
+            onChange={(e) => {
+              setTotalWeight(e.target.value);
+              setWeightSource("manual");
+              setConfirmed(false);
+              operationId.current = null; // edited weight is a new submission
+            }}
+            placeholder="Contoh: 12450"
+          />
+          <label className="weigh-confirm">
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={(e) => setConfirmed(e.target.checked)}
+              disabled={!validWeight}
+            />
+            <span>Saya sudah mencocokkan berat dengan struk foto.</span>
+          </label>
+        </>
+      )}
       <div className="driver-actions">
         <button
           type="button"
           className="driver-btn primary"
           onClick={submit}
-          disabled={!receipt || busy}
+          disabled={!receipt || !validWeight || !confirmed || busy || ocr.status === "loading"}
         >
-          <Check size={16} /> Kirim Struk
+          <Check size={16} /> {busy ? "Mengirim struk…" : "Kirim struk"}
         </button>
       </div>
     </section>
@@ -628,6 +734,9 @@ export default function DriverApp() {
       .catch(() => setOnline(false));
     fetch(`${API_URL}/spj?status=selesai`)
       .then((r) => r.json())
+      // The API orders completed SPJs newest first; the pending-receipt task is
+      // chosen from that order and the server-side receipt field, not from
+      // localStorage.
       .then((body) =>
         setHistory((body.spj || []).filter((s) => s.truck_code === driver.truck_code)),
       )
@@ -728,6 +837,9 @@ export default function DriverApp() {
   const stops = spjAktif?.stops || [];
   const pendingIndex = stops.findIndex((s) => s.status !== "completed");
   const allStopsDone = spjAktif && pendingIndex === -1 && stops.length > 0;
+  // Newest completed SPJ still missing its receipt: `history` arrives newest
+  // first, and receipt state comes from the server, so two browsers agree.
+  const pendingReceipt = spjAktif ? null : history.find((s) => !s.receipt) || null;
 
   return (
     <main className="driver-shell" data-testid="driver-app">
@@ -817,9 +929,9 @@ export default function DriverApp() {
             />
           )}
 
-          {!spjAktif && history[0] && !receiptDoneFor(history[0].spj_id) && (
+          {!spjAktif && pendingReceipt && (
             <DeliveryCard
-              spj={history[0]}
+              spj={pendingReceipt}
               say={say}
               onDone={() => {
                 setDoneScreen(true);

@@ -71,7 +71,7 @@ from app.ai.forecasters.event_impact import EventImpactForecaster
 from app.ai.forecasters.fuel_model import CarbonCalculator
 from app.ai.forecasters.queue_predictor import TpaQueuePredictor
 from app.spj import SPJ_STORE, active_path_for as spj_active_path, \
-    spj_summary_payload
+    spj_summary_payload, MAX_STOP_WEIGHT_KG as MAX_RECEIPT_WEIGHT_KG
 from app.service_history import SERVICE_STORE, due_date_for
 from dataclasses import asdict as _asdict
 
@@ -687,13 +687,12 @@ def weather() -> dict:
     return fetch_jakarta_weather_forecast()
 
 @app.post("/api/assistant/query")
-async def assistant_query(payload: AssistantRequest, _role: str = Depends(require_permission("dashboard:read"))) -> dict:
-    # Run everything synchronously on the main thread to avoid Session 0 threadpool deadlock
+def assistant_query(payload: AssistantRequest, _role: str = Depends(require_permission("dashboard:read"))) -> dict:
+    # FastAPI executes sync endpoints in a worker; gateway latency must not block the event loop.
     try:
         from app.tools import ToolContext
-        weather = fetch_jakarta_weather_forecast()
-        snapshot = command_center_snapshot(dispatch_center.audit_log(), weather=weather)
         tool_ctx = ToolContext(dispatch_center=dispatch_center, history_store=history_store)
+        snapshot = {}
         images = None
         if payload.file_data and payload.file_type:
             from app.pdf_vision import resolve_file_to_images
@@ -1655,6 +1654,11 @@ def ai_event_forecast() -> dict[str, Any]:
 # ── SPJ (Surat Perintah Jalan) ───────────────────────────────────────────────
 
 def _spj_payload(spj) -> dict[str, Any]:
+    """Detail projection: receipt metadata plus a media reference, no bytes.
+
+    The receipt image is multi-megabyte; clients fetch it from the
+    receipt-photo endpoint only when they display it.
+    """
     return _asdict(spj)
 
 
@@ -1704,8 +1708,15 @@ class SpjReceiptBody(BaseModel):
     # Absent (None) is allowed — not all handovers are weighed; when
     # present the value must be finite and 0 < w <= 60,000 kg.
     total_weight_kg: float | None = Field(
-        default=None, gt=0, le=60_000,
+        default=None, gt=0, le=MAX_RECEIPT_WEIGHT_KG, allow_inf_nan=False,
         description="Receipt total weight in kg; omit when unweighed.")
+    # Provenance of the number above. Callers that do not state one are not
+    # guessed at: "unspecified" keeps an unlabelled submission from being
+    # recorded as if a human had typed it.
+    weight_source: Literal["ocr", "manual", "unspecified"] = "unspecified"
+    # Client-generated id for one submission attempt; a retry with the same id
+    # returns the original receipt instead of a conflict.
+    operation_id: str | None = Field(default=None, max_length=64)
 
 
 class PretripBody(BaseModel):
@@ -1871,21 +1882,39 @@ def spj_evidence_summary(spj_id: str) -> dict[str, Any]:
 
 @app.post("/api/spj/{spj_id}/receipt", status_code=201)
 def submit_spj_receipt(spj_id: str, body: SpjReceiptBody, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
+    """Record the weighbridge receipt once.
+
+    Replaying the same operation_id is a no-op retry; a different submission
+    for an SPJ that already has a receipt is a conflict, so a double tap or a
+    second browser cannot silently replace handover evidence.
+    """
     spj = SPJ_STORE.get(spj_id)
     if spj is None:
         raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
-    if spj.status != "selesai":
-        raise HTTPException(status_code=409,
-                            detail="receipt can only be submitted after the SPJ is selesai")
-    if not body.photo_name.strip() or not body.photo_b64.strip():
-        raise HTTPException(status_code=409,
-                            detail="receipt photo_name and photo_b64 are required")
-    history_store.record_event("spj_receipt_submitted", {
-        "spj_id": spj_id, "spj_number": spj.spj_number,
-        "photo_name": body.photo_name,
-        "total_weight_kg": body.total_weight_kg,
-    })
+    already_recorded = spj.receipt is not None
+    _spj_or_409(SPJ_STORE.record_receipt, spj_id, body.photo_name,
+                body.photo_b64, body.total_weight_kg, body.weight_source,
+                _role, body.operation_id)
+    if not already_recorded:  # a replayed operation_id is not a second event
+        history_store.record_event("spj_receipt_submitted", {
+            "spj_id": spj_id, "spj_number": spj.spj_number,
+            "photo_name": body.photo_name, "total_weight_kg": body.total_weight_kg,
+            "weight_source": body.weight_source, "submitted_by": _role,
+        })
     return {"status": "recorded", "spj_id": spj_id}
+
+
+@app.get("/api/spj/{spj_id}/receipt/photo")
+def spj_receipt_photo(spj_id: str, _role: str = Depends(require_any_permission(
+        "dispatch:confirm", "dispatch:create", "history:read"))) -> dict[str, Any]:
+    """Retrieval path for the stored receipt image (kept out of detail reads)."""
+    spj = SPJ_STORE.get(spj_id)
+    if spj is None:
+        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
+    photo = SPJ_STORE.receipt_photo(spj_id)
+    if not photo:
+        raise HTTPException(status_code=404, detail="no receipt photo recorded")
+    return {"spj_id": spj_id, "photo_b64": photo}
 
 
 @app.post("/api/pretrip", status_code=201)

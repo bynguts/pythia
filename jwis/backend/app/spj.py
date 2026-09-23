@@ -107,19 +107,27 @@ def _validate_evidence(evidence: dict) -> None:
 
 
 def spj_summary_payload(spj: Spj) -> dict:
-    payload = asdict(spj)
-    for stop in payload["stops"]:
-        ev = stop.pop("evidence", None)
-        if ev is None:
-            stop["evidence_summary"] = None
-            continue
-        weighing = ev.get("weighing") or []
-        stop["evidence_summary"] = {
-            "has_evidence": True,
-            "weighing_count": len(weighing),
-            "total_weight_kg": round(
-                sum(float(w.get("weight_kg") or 0) for w in weighing), 1),
-        }
+    """List projection: stop evidence and the receipt photo stay out.
+
+    Receipt metadata is small and drives the driver's pending-receipt task;
+    the image bytes are served only by the detail endpoint.
+    """
+    payload = {key: value for key, value in vars(spj).items() if key != "stops"}
+    payload["stops"] = []
+    for stop in spj.stops:
+        item = {key: value for key, value in vars(stop).items() if key != "evidence"}
+        evidence = stop.evidence
+        if evidence is None:
+            item["evidence_summary"] = None
+        else:
+            weighing = evidence.get("weighing") or []
+            item["evidence_summary"] = {
+                "has_evidence": True,
+                "weighing_count": len(weighing),
+                "total_weight_kg": round(
+                    sum(float(w.get("weight_kg") or 0) for w in weighing), 1),
+            }
+        payload["stops"].append(item)
     return payload
 
 
@@ -157,6 +165,7 @@ class Spj:
     route_geometry: list[tuple[float, float]] = field(default_factory=list)
     route_source: str | None = None      # LIVE_EXTERNAL | FALLBACK_DEGRADED
     route_resolved_at: str | None = None
+    receipt: dict | None = None
 
 
 def _utc_now() -> str:
@@ -279,6 +288,20 @@ class SpjStore:
                 )
                 connection.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS spj_receipts (
+                        spj_id TEXT PRIMARY KEY REFERENCES spj(spj_id) ON DELETE CASCADE,
+                        photo_name TEXT NOT NULL,
+                        photo_b64 TEXT NOT NULL,
+                        total_weight_kg REAL,
+                        weight_source TEXT NOT NULL,
+                        submitted_by TEXT NOT NULL,
+                        operation_id TEXT,
+                        recorded_at TEXT NOT NULL
+                    )
+                    """
+                )
+                connection.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS spj_audit (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         spj_id TEXT NOT NULL,
@@ -290,6 +313,15 @@ class SpjStore:
                     )
                     """
                 )
+                self._migrate_receipt_columns(connection)
+
+    @staticmethod
+    def _migrate_receipt_columns(connection: sqlite3.Connection) -> None:
+        """Add columns introduced after a database was first created."""
+        columns = {row["name"] for row in
+                   connection.execute("PRAGMA table_info(spj_receipts)")}
+        if columns and "operation_id" not in columns:
+            connection.execute("ALTER TABLE spj_receipts ADD COLUMN operation_id TEXT")
 
     @staticmethod
     def _audit(connection: sqlite3.Connection, spj_id: str, action: str,
@@ -362,7 +394,8 @@ class SpjStore:
             logger.exception("legacy SPJ JSON migration failed for %s", legacy)
 
     @staticmethod
-    def _row_to_spj(spj_row: sqlite3.Row, stop_rows: list) -> Spj:
+    def _row_to_spj(spj_row: sqlite3.Row, stop_rows: list,
+                    receipt_row: sqlite3.Row | None = None) -> Spj:
         route_geometry = None
         if spj_row["route_geometry"] if "route_geometry" in spj_row.keys() else None:
             try:
@@ -388,6 +421,11 @@ class SpjStore:
             route_geometry=route_geometry or [],
             route_source=spj_row["route_source"] if "route_source" in spj_row.keys() else None,
             route_resolved_at=spj_row["route_resolved_at"] if "route_resolved_at" in spj_row.keys() else None,
+            receipt=({**{key: receipt_row[key] for key in
+                        ("photo_name", "total_weight_kg", "weight_source",
+                         "submitted_by", "recorded_at")},
+                      "has_photo": bool(receipt_row["has_photo"])}
+                     if receipt_row is not None else None),
         )
 
     def _load_spj(self, connection: sqlite3.Connection, spj_id: str) -> Spj | None:
@@ -397,7 +435,11 @@ class SpjStore:
         stops = connection.execute(
             "SELECT * FROM spj_stops WHERE spj_id=? ORDER BY idx", (spj_id,)
         ).fetchall()
-        return self._row_to_spj(row, stops)
+        receipt = connection.execute(
+            "SELECT photo_name, total_weight_kg, weight_source, submitted_by, "
+            "recorded_at, (photo_b64 IS NOT NULL AND photo_b64 != '') AS has_photo "
+            "FROM spj_receipts WHERE spj_id=?", (spj_id,)).fetchone()
+        return self._row_to_spj(row, stops, receipt)
 
     def _reload_cache(self) -> None:
         with closing(self._connect()) as connection:
@@ -542,8 +584,14 @@ class SpjStore:
             return self._spj.get(spj_id)
 
     def list(self, status: str | None = None) -> list[Spj]:
+        """Newest first, so a client can rely on position instead of guessing.
+
+        Ordering by created_at descending is part of the contract: the driver
+        app picks the newest receipt-pending SPJ from this response.
+        """
         with self._lock:
             items = list(self._spj.values())
+        items.sort(key=lambda s: (s.created_at, s.spj_number), reverse=True)
         if status is None:
             return items
         return [s for s in items if s.status == status]
@@ -690,6 +738,59 @@ class SpjStore:
                     "UPDATE spj SET status='selesai', completed_at=? WHERE spj_id=?",
                     (_utc_now(), spj_id))
         return self._mutate(spj_id, mutate)
+
+    def record_receipt(self, spj_id: str, photo_name: str, photo_b64: str,
+                       total_weight_kg: float | None, weight_source: str,
+                       submitted_by: str = "driver",
+                       operation_id: str | None = None) -> Spj:
+        """Attach the weighbridge receipt exactly once.
+
+        The photo lives in its own table: the SPJ cache reloads every record
+        on mutation, and a multi-megabyte image must not ride along.
+
+        `total_weight_kg` is optional — not every handover is weighed — but a
+        supplied value must be a finite 0 < w <= MAX_STOP_WEIGHT_KG, the same
+        bound the API and the stop evidence schema enforce.
+
+        Retrying with the same operation_id returns the original receipt
+        unchanged; a different submission for an SPJ that already has one is
+        a conflict rather than a silent overwrite of handover evidence.
+        """
+        def mutate(connection):
+            row = self._fetch_status(connection, spj_id)
+            if row["status"] != "selesai":
+                raise ValueError("receipt can only be submitted after the SPJ is selesai")
+            if not photo_name.strip() or not photo_b64.strip():
+                raise ValueError("receipt photo_name and photo_b64 are required")
+            if total_weight_kg is not None and not (
+                    0 < total_weight_kg <= MAX_STOP_WEIGHT_KG):
+                raise ValueError(
+                    f"total_weight_kg must be 0 < w <= {MAX_STOP_WEIGHT_KG}")
+            existing = connection.execute(
+                "SELECT * FROM spj_receipts WHERE spj_id=?", (spj_id,)).fetchone()
+            if existing is not None:
+                if operation_id and existing["operation_id"] == operation_id:
+                    return  # client retry of an accepted submission
+                raise ValueError("receipt already submitted")
+            connection.execute(
+                "INSERT INTO spj_receipts (spj_id, photo_name, photo_b64, "
+                "total_weight_kg, weight_source, submitted_by, operation_id, "
+                "recorded_at) VALUES (?,?,?,?,?,?,?,?)",
+                (spj_id, photo_name, photo_b64, total_weight_kg, weight_source,
+                 submitted_by, operation_id, _utc_now()))
+            self._audit(connection, spj_id, "receipt", submitted_by,
+                        payload={"total_weight_kg": total_weight_kg,
+                                 "weight_source": weight_source,
+                                 "photo_name": photo_name,
+                                 "operation_id": operation_id})
+        return self._mutate(spj_id, mutate)
+
+    def receipt_photo(self, spj_id: str) -> str | None:
+        """Receipt image bytes, read only when a detail view asks for them."""
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT photo_b64 FROM spj_receipts WHERE spj_id=?", (spj_id,)).fetchone()
+        return row["photo_b64"] if row else None
 
     def complete(self, spj_id: str, override: dict | None = None) -> Spj:
         """Close an active SPJ.
