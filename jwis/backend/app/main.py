@@ -88,6 +88,9 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="JWIS FastAPI Backend", version="2.5.0", lifespan=_lifespan)
 history_store = HistoryStore()
 dispatch_center = DispatchCenter()
+# #36: handle on the AI engine so /api/health can report configured vs
+# running state instead of silently serving empty /api/ai/*.
+_AI_ENGINE_STATE: dict[str, bool] = {"running": False}
 
 
 def _warm_route_cache() -> None:
@@ -256,8 +259,16 @@ class EventPermitRequest(BaseModel):
 # ── Existing Endpoints ───────────────────────────────────────────────
 
 @app.get("/api/health")
-def health() -> dict[str, str]:
-    return {"status": "healthy", "service": "jwis-backend", "version": "2.5.0"}
+def health() -> dict[str, Any]:
+    # #36: report the configured vs running AI engine state so an
+    # accidentally-empty /api/ai/* is visible from health, not silent.
+    return {
+        "status": "healthy",
+        "service": "jwis-backend",
+        "version": "2.5.0",
+        "ai_engine_configured": os.getenv("JWIS_AI_ENGINE", "off").lower() == "on",
+        "ai_engine_running": _AI_ENGINE_STATE["running"],
+    }
 
 @app.get("/api/health/detailed")
 def health_detailed() -> dict[str, Any]:
@@ -1587,7 +1598,9 @@ _ai_forecast = EventImpactForecaster(feed=EVENT_FEED)
 def _start_ai_engine() -> None:
     engine = maybe_start_engine()
     if engine is None:
+        _AI_ENGINE_STATE["running"] = False
         return
+    _AI_ENGINE_STATE["running"] = True
     engine.register("auto_reroute", _ai_rerouter.run)
     engine.register("tpa_queue", _ai_queue.update)
     engine.register("deviation_replay", _ai_deviation.check)
