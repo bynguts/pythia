@@ -150,10 +150,12 @@ test("driver is offered the newest receipt-pending SPJ, not the oldest", async (
     await page.request.post(`${API}/spj/${spj.spj_id}/stops/0/complete`, {
       headers,
       data: { evidence: {
-        arrival: { photo_name: "a.jpg", lat: -6.29, lng: 106.79,
-                   at: "2026-09-14T09:00:00" },
-        weighing: [{ fraction: "Residu", weight_kg: 40.0, photo_name: "t.jpg" }],
-        officer: { photo_name: "p.jpg", name: "Dicky" },
+        arrival: { photo_name: "a.jpg", photo_b64: "data:image/jpeg;base64,AAA",
+                   lat: -6.29, lng: 106.79, at: "2026-09-14T09:00:00" },
+        weighing: [{ fraction: "Residu", weight_kg: 40.0, photo_name: "t.jpg",
+                     photo_b64: "data:image/jpeg;base64,BBB" }],
+        officer: { photo_name: "p.jpg", photo_b64: "data:image/jpeg;base64,CCC",
+                   name: "Dicky" },
       } },
     });
     return spj;
@@ -230,6 +232,13 @@ test("admin sees damage report and resolves it", async ({ page }) => {
 
 test("admin sees spj evidence summary after driver flow", async ({ page }) => {
   const headers = await signIn(page);
+  // A previous failed run can leave T-231 active, which blocks activation.
+  const existing = await page.request.get(`${API}/spj?status=aktif`);
+  for (const stale of (await existing.json()).spj || []) {
+    if (stale.truck_code === "T-231") {
+      await page.request.post(`${API}/spj/${stale.spj_id}/cancel`, { headers });
+    }
+  }
   const create = await page.request.post(`${API}/spj`, {
     headers,
     data: {
@@ -248,9 +257,12 @@ test("admin sees spj evidence summary after driver flow", async ({ page }) => {
     headers,
     data: {
       evidence: {
-        arrival: { photo_name: "a.jpg", lat: -6.29, lng: 106.79, at: "2026-09-14T09:00:00" },
-        weighing: [{ fraction: "Residu", weight_kg: 40.0, photo_name: "t.jpg" }],
-        officer: { photo_name: "p.jpg", name: "Dicky" },
+        arrival: { photo_name: "a.jpg", photo_b64: "data:image/jpeg;base64,AAA",
+                   lat: -6.29, lng: 106.79, at: "2026-09-14T09:00:00" },
+        weighing: [{ fraction: "Residu", weight_kg: 40.0, photo_name: "t.jpg",
+                     photo_b64: "data:image/jpeg;base64,BBB" }],
+        officer: { photo_name: "p.jpg", photo_b64: "data:image/jpeg;base64,CCC",
+                   name: "Dicky" },
       },
     },
   });
