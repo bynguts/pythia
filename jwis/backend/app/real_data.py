@@ -25,10 +25,17 @@ from typing import Any
 REAL_DIR = Path(__file__).resolve().parents[2] / "data" / "real"
 RAW_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
 
+# #38: one taxonomy for every classification in the registry.
+# ACTUAL_DATA_CLASSIFICATIONS is what "actual/observed data" means when
+# counting real datasets — modeled, proxy, derived, and synthetic
+# records are deliberately excluded.
+ACTUAL_DATA_CLASSIFICATIONS = ("real", "official")
+
 # Registry of the datasets JWIS actually loads. Each entry states its real
-# source, classification (real / derived / proxy / calibrated_synthetic), and
-# limitations so /api/data/provenance can never silently present a proxy as
-# official operational data.
+# source, classification (real / modeled_from_real_baseline / derived /
+# proxy / calibrated_synthetic), and limitations so /api/data/provenance
+# can never silently present a proxy or modeled series as official
+# operational data.
 _DATA_SOURCE_REGISTRY: list[dict[str, Any]] = [
     {
         "name": "sipsn_timbulan_2018_2025_dki.csv",
@@ -67,8 +74,10 @@ _DATA_SOURCE_REGISTRY: list[dict[str, Any]] = [
         "source_url": "https://silika.jakarta.go.id/timbulan_sampah",
         "as_of": "2023",
         "granularity": "kecamatan-year",
-        "classification": "real",
-        "limitations": "Per-kecamatan generation modeled by SILIKA population formula; lat/lng column labels swapped in source.",
+        # #38: values are MODELED from the SILIKA population formula —
+        # a real-source baseline, not observed per-kecamatan tonnage.
+        "classification": "modeled_from_real_baseline",
+        "limitations": "Per-kecamatan generation modeled by SILIKA population formula (real source, modeled values); lat/lng column labels swapped in source.",
     },
     {
         "name": "tps_capacity_vs_timbulan_kecamatan.csv",
@@ -550,6 +559,11 @@ def data_provenance() -> dict[str, Any]:
     timbulan = load_city_timbulan()
     events = load_official_events()
     fleet = load_fleet_composition()
+    # #38: count only ACTUAL datasets — modeled/proxy/derived/synthetic
+    # records never inflate the actual-data number.
+    real_data_count = sum(
+        1 for r in build_provenance_records()
+        if r["classification"] in ACTUAL_DATA_CLASSIFICATIONS)
     return {
         "timbulan_cities_loaded": len(timbulan),
         "timbulan_year": next(iter(timbulan.values()), {}).get("year") if timbulan else None,
@@ -557,6 +571,7 @@ def data_provenance() -> dict[str, Any]:
         "official_events_loaded": len(events),
         "fleet_units_real": fleet.get("total_units"),
         "using_real_baselines": bool(timbulan),
+        "real_data_count": real_data_count,
     }
 
 
