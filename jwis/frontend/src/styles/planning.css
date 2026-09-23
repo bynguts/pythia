@@ -433,3 +433,219 @@
   background: var(--green-light);
   color: var(--green);
 }
+
+/* ── Migrated from the retired legacy.css layer (issue #66) ─────────────
+   Only declarations no later layer already defined; duplicate selector
+   ownership is what made visual fixes order-dependent. ─────────────── */
+
+.scenario-result {
+  border-top: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.scenario-result strong {
+  font-family: inherit;
+  font-weight: 600;
+}
+
+.scenario-reqs {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.req-chip b {
+  font-weight: 500;
+}
+
+.traffic-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.traffic-status-badge.clear {
+  border: 1px solid #bbf7d0;
+}
+
+.traffic-status-badge.congested {
+  border: 1px solid #fecaca;
+}
+
+.astar-info-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.astar-msg-icon.congested {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.astar-msg-icon.clear {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.astar-stats {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.astar-stat-col {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+
+.astar-stat-col span {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.astar-stat-col strong {
+  font-weight: 700;
+}
+
+.astar-reroute-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.astar-route-step {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--fs-caption);
+  color: var(--ui-muted);
+}
+
+.astar-route-step strong {
+  color: var(--ui-ink);
+  font-weight: 600;
+}
+
+.tpa-logs {
+  margin-top: var(--space-4);
+}
+
+.tpa-logs h3 {
+  font-weight: 700;
+}
+
+.tpa-logs ul {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  overflow: hidden;
+  background: var(--ui-surface);
+}
+
+.tpa-logs li {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 64px minmax(78px, 1fr) minmax(76px, 0.8fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.tpa-logs li:last-child {
+  border-bottom: 0;
+}
+
+.tpa-logs .time {
+  font-variant-numeric: tabular-nums;
+}
+
+.tpa-logs .truck {
+  color: var(--ui-muted);
+  font-weight: 600;
+}
+
+.tpa-logs .weight {
+  color: var(--ui-ink);
+  font-weight: 600;
+  text-align: right;
+}
+
+.tpa-logs .status-badge {
+  min-height: 22px;
+  justify-self: end;
+}
+
+.tpa-live-gauge {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.tpa-wait-number {
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.tpa-wait-number span {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ui-muted);
+}
+
+.tpa-live-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+}
+
+.tpa-live-stats > div {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  padding: 8px 10px;
+}
+
+.tpa-live-stats span {
+  display: block;
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.tpa-live-stats strong {
+  font-size: 15px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-stats-grid {
+  border-top: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.plan-stat-item {
+  padding: var(--space-3);
+  border-left: 1px solid var(--ui-border);
+}
+
+.plan-stat-item:first-child {
+  border-left: 0;
+}
+
+.assign-card {
+  border-top: 1px solid var(--ui-border);
+}
+
+.assign-card:first-child {
+  border-top: 0;
+}

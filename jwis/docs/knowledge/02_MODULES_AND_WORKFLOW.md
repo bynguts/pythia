@@ -21,7 +21,7 @@ forecast sampah, perencanaan dispatch, konfirmasi lapangan, dan pelaporan audit 
 
 1. **Command Center** — KPI (truk aktif, isu, antrean TPA), alert aktif, headline eksekutif, snapshot.
 2. **Fleet Operations** — peta MapyLibre live, status koridor, T-047 demo deviasi, route recovery.
-3. **Waste Forecast** — prediksi per kelurahan/kecamatan, spike%, man-hours, bins, tonase, CO2.
+3. **Waste Forecast** — prediksi per kelurahan/kecamatan, spike%, jam-orang (person-hours), tong/bin, truk, tim kru, tonase, CO2.
 4. **Integrated Planning** — CP-SAT optimizer: demand -> assignment truk, plan approve.
 5. **Dispatch & WhatsApp** — instruksi ke FieldApp + gateway Baileys; status OpenWA live.
 6. **Field App** — halaman `/field`: driver melihat misi, konfirmasi status.

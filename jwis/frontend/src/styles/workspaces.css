@@ -1554,3 +1554,204 @@
 .field-shell .field-card select {
   min-height: 56px;
 }
+
+/* ── Migrated from the retired legacy.css layer (issue #66) ─────────────
+   Only declarations no later layer already defined; duplicate selector
+   ownership is what made visual fixes order-dependent. ─────────────── */
+.spj-panel {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.spj-panel .panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.spj-panel .panel-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ui-ink);
+}
+
+.spj-form {
+  border: 1px dashed var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.spj-form h4 {
+  margin: 0;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--ui-ink);
+}
+
+.spj-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.spj-form-grid select, .spj-form-grid input[type="text"] {
+  min-height: 32px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  padding: 4px 8px;
+  font-size: var(--fs-caption);
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+}
+
+.spj-weigh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-caption);
+  color: var(--ui-ink);
+}
+
+.spj-form-error {
+  margin: 0;
+  font-size: var(--fs-caption);
+  color: var(--red, #b42318);
+}
+
+.spj-stop-picker {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.spj-stop-picker input {
+  flex: 1;
+  min-height: 32px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  padding: 4px 8px;
+  font-size: var(--fs-caption);
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+}
+
+.spj-stop-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-caption);
+}
+
+.spj-stop-list li button {
+  margin-left: 8px;
+  border: none;
+  background: transparent;
+  color: var(--red, #b42318);
+  cursor: pointer;
+  font-size: var(--fs-caption);
+}
+
+.spj-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-caption);
+}
+
+.spj-table th, .spj-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ui-border);
+  text-align: left;
+}
+
+.spj-table th {
+  font-size: var(--fs-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ui-ink-muted, #64748b);
+}
+
+.spj-row {
+  cursor: pointer;
+}
+
+.spj-row:hover {
+  background: var(--ui-surface-muted);
+}
+
+.spj-detail td {
+  background: var(--ui-surface-muted);
+}
+
+.spj-detail ol {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.spj-detail .compact-enforce-btn {
+  margin-right: 8px;
+}
+
+.spj-evidence {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  font-size: var(--fs-caption);
+  line-height: 1.7;
+  background: var(--ui-surface-muted, #f8fafc);
+  border-radius: var(--ui-radius-control, 8px);
+  border-left: 3px solid var(--ui-accent, #176b54);
+}
+
+.spj-hint {
+  margin: 6px 0;
+  font-size: var(--fs-caption);
+  color: var(--ui-muted, #526170);
+}
+
+.spj-override-note {
+  font-style: normal;
+  font-size: var(--fs-caption);
+  color: var(--ui-muted, #526170);
+}
+
+.spj-override-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-border, #d7e0e8);
+  border-radius: var(--ui-radius-control, 8px);
+  background: var(--ui-surface-muted, #f8fafc);
+}
+
+.spj-override-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-caption);
+  color: var(--ui-ink, #14202b);
+}
+
+.spj-override-form input {
+  min-height: 32px;
+  border: 1px solid var(--ui-border, #d7e0e8);
+  border-radius: var(--ui-radius-control, 8px);
+  padding: 4px 8px;
+  font-size: var(--fs-caption);
+}

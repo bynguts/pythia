@@ -61,7 +61,9 @@ test("admin sees SPJ in panel, expands it, and activates it", async ({ page }) =
 });
 
 test("Fleet SPJ mutations and lifecycle labels follow authorization and ID/EN", async ({ page }) => {
-  test.setTimeout(90000);
+  // The scenario now also exercises the permission-gated supervisor override,
+  // which adds a second sign-in round trip to the flow.
+  test.setTimeout(150000);
   const headers = await signIn(page);
   const dispatcherToken = headers.Authorization.slice(7);
   const driverLogin = await page.request.post(`${API}/auth/login`, {
@@ -76,6 +78,14 @@ test("Fleet SPJ mutations and lifecycle labels follow authorization and ID/EN", 
   const panel = page.locator(".spj-panel");
   const row = (number) => panel.locator(".spj-row").filter({ hasText: number });
   const status = (number) => row(number).locator("td").last();
+  // The scenario drives T-209, and a truck holds at most one active SPJ, so a
+  // leftover from an earlier run must be cleared or activation is refused.
+  const existing = await page.request.get(`${API}/spj`);
+  for (const spj of (await existing.json()).spj || []) {
+    if (spj.truck_code === "T-209" && ["draft", "aktif"].includes(spj.status)) {
+      await page.request.post(`${API}/spj/${spj.spj_id}/cancel`, { headers });
+    }
+  }
   async function addStop() {
     await panel.locator(".spj-form input[list='spj-sites']").fill(site);
     await panel.getByRole("button", { name: "Tambah titik" }).click();
@@ -109,10 +119,28 @@ test("Fleet SPJ mutations and lifecycle labels follow authorization and ID/EN", 
     await expect(status(first.spj_number)).toHaveText("Aktif");
     await page.getByRole("button", { name: "EN", exact: true }).click();
     await expect(status(first.spj_number)).toHaveText("Active");
-    await panel.getByRole("button", { name: "Mark stop complete" }).first().click();
-    await expect(row(first.spj_number)).toContainText("1/2");
-    await panel.getByRole("button", { name: "Complete order" }).click();
+    // The operator panel cannot close a stop without evidence: the old
+    // "Mark stop complete" button is gone and the panel says why.
+    await expect(panel.getByRole("button", { name: "Mark stop complete" })).toHaveCount(0);
+    await expect(panel.getByText(/Stops close only with field evidence/)).toBeVisible();
+    // The exceptional path is a reasoned, permission-gated supervisor override:
+    // a dispatcher is refused, a supervisor may close the order with a reason.
+    await panel.getByRole("button", { name: "Closed by supervisor override" }).click();
+    await panel.getByRole("textbox", { name: /Supervisor reason/ }).fill("Bukti lapangan tidak tersedia");
+    await panel.getByRole("button", { name: "Complete with reason" }).click();
+    await expect(panel.getByRole("alert")).toContainText("cannot perform that dispatch action");
+    await expect(status(first.spj_number)).toHaveText("Active");
+    const supervisorLogin = await page.request.post(`${API}/auth/login`, {
+      data: { username: "supervisor", password: "supervisor-demo-pass" },
+    });
+    expect(supervisorLogin.ok()).toBeTruthy();
+    const { token: supervisorToken } = await supervisorLogin.json();
+    await page.evaluate((token) => localStorage.setItem("jwis_token", token), supervisorToken);
+    await panel.getByRole("button", { name: "Complete with reason" }).click();
     await expect(status(first.spj_number)).toHaveText("Completed");
+    // Both stops of the order carry the same recorded override reason.
+    await expect(panel.getByText(/Bukti lapangan tidak tersedia/).first()).toBeVisible();
+    await page.evaluate((token) => localStorage.setItem("jwis_token", token), dispatcherToken);
     await page.getByRole("button", { name: "ID", exact: true }).click();
     await expect(status(first.spj_number)).toHaveText("Selesai");
 

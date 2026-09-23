@@ -15,9 +15,9 @@ def _fresh_stores():
         path = os.path.join(tmp, name)
         if os.path.exists(path):
             os.remove(path)
-    return (SpjStore(persist_path=os.path.join(tmp, "comp_spj.json")),
-            PreTripStore(persist_path=os.path.join(tmp, "comp_pre.json")),
-            DamageReportStore(persist_path=os.path.join(tmp, "comp_dmg.json")))
+    return (SpjStore(db_path=os.path.join(tmp, "comp_spj.json")),
+            PreTripStore(db_path=os.path.join(tmp, "comp_pre.json")),
+            DamageReportStore(db_path=os.path.join(tmp, "comp_dmg.json")))
 
 
 class _Swap:
@@ -35,7 +35,14 @@ class _Swap:
          comp.DAMAGE_STORE, comp.get_dynamic_trucks) = self._old
 
 
-def _make_spj(spj_store, driver, truck, complete_with_evidence=True):
+def _make_spj(spj_store, driver, truck, complete_with_evidence=True,
+              close_by="override"):
+    """Create one active SPJ and close its single stop.
+
+    `complete_with_evidence=False` closes the stop without field evidence:
+    either through the audited supervisor override (`close_by="override"`) or,
+    to reproduce pre-migration data, by writing an unaudited stop directly.
+    """
     spj = spj_store.create(driver_name=driver, truck_code=truck,
                            destination="TPST Bantargebang", weigh_on_site=True,
                            priority="normal", note="")
@@ -80,15 +87,30 @@ class ComplianceScoreTests(unittest.TestCase):
         self.assertEqual(result["score"], 85.0)
         self.assertEqual(result["breakdown"]["deviation_violations"], 1)
 
-    def test_stop_without_evidence_deducts_10(self):
+    def test_unaudited_stop_without_evidence_deducts_10(self):
+        """Legacy/unaudited gaps are still charged to the driver."""
+        spj, pre, dmg = _fresh_stores()
+        trucks = [{"truck_code": "T-001", "driver_name": "Budi",
+                   "deviation": {"violated": False}}]
+        _make_spj(spj, "Budi", "T-001", complete_with_evidence=False,
+                  close_by="legacy")
+        with _Swap(spj, pre, dmg, trucks):
+            result = compute_driver_score("Budi", ["T-001"], today="2026-09-14")
+        self.assertEqual(result["score"], 85.0)
+        self.assertEqual(result["breakdown"]["stops_without_evidence"], 1)
+        self.assertEqual(result["breakdown"]["stops_closed_by_override"], 0)
+
+    def test_audited_override_does_not_charge_the_driver(self):
+        """A supervisor override is reported, not deducted — it is not the driver's call."""
         spj, pre, dmg = _fresh_stores()
         trucks = [{"truck_code": "T-001", "driver_name": "Budi",
                    "deviation": {"violated": False}}]
         _make_spj(spj, "Budi", "T-001", complete_with_evidence=False)
         with _Swap(spj, pre, dmg, trucks):
             result = compute_driver_score("Budi", ["T-001"], today="2026-09-14")
-        self.assertEqual(result["score"], 85.0)
-        self.assertEqual(result["breakdown"]["stops_without_evidence"], 1)
+        self.assertEqual(result["score"], 95.0)  # only the 5-point pretrip gap
+        self.assertEqual(result["breakdown"]["stops_without_evidence"], 0)
+        self.assertEqual(result["breakdown"]["stops_closed_by_override"], 1)
 
     def test_unresolved_heavy_report_deducts_10(self):
         spj, pre, dmg = _fresh_stores()

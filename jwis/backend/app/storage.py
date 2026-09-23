@@ -1,14 +1,273 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
 import tempfile
-from contextlib import closing
+from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 from uuid import uuid4
+
+logger = logging.getLogger(__name__)
+
+
+class StorageError(RuntimeError):
+    """A mutation could not be durably committed.
+
+    Raised instead of logging-and-continuing so no caller can acknowledge a
+    write that never reached disk (see the JSON-store regression where a failed
+    write still returned a successful domain object).
+    """
+
+
+def default_records_db(name: str) -> Path:
+    """Durable store location: next to $JWIS_DB_PATH, else the temp dir.
+
+    Same contract the JSON stores used, so an operator who pinned JWIS_DB_PATH
+    keeps every record in one directory.
+    """
+    db_path = os.environ.get("JWIS_DB_PATH")
+    if db_path:
+        return Path(db_path).parent / f"{name}.db"
+    return Path(tempfile.gettempdir()) / f"{name}.db"
+
+
+class RecordStore:
+    """Durable single-table record store backed by SQLite.
+
+    One row per record with the domain object serialized as JSON, so the
+    payload shape stays exactly what the JSON stores produced while the commit
+    becomes atomic, ordered, and safe across worker processes (SQLite
+    serializes writers; the primary key guarantees one row per record id).
+    """
+
+    def __init__(self, table: str, db_path: Path | str | None = None) -> None:
+        if not table.isidentifier():
+            raise ValueError(f"invalid table name: {table!r}")
+        self.table = table
+        self.db_path = Path(db_path) if db_path is not None else default_records_db(table)
+        try:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            self._init_schema()
+        except (sqlite3.Error, OSError, StorageError) as exc:
+            raise StorageError(
+                f"cannot open durable store {table} at {self.db_path}: {exc}") from exc
+
+    def _connect(self) -> sqlite3.Connection:
+        try:
+            connection = sqlite3.connect(self.db_path, timeout=15.0)
+            connection.row_factory = sqlite3.Row
+            # busy_timeout must be set before anything that takes a lock, so a
+            # concurrent worker waits instead of failing immediately.
+            connection.execute("PRAGMA busy_timeout=15000")
+            try:
+                # WAL is persistent, so this is a no-op after the first worker.
+                # It briefly needs an exclusive lock, which is why the timeout
+                # above comes first; losing the race is not an error.
+                connection.execute("PRAGMA journal_mode=WAL")
+            except sqlite3.OperationalError:
+                logger.debug("%s: WAL already being set by another worker",
+                             self.table)
+        except sqlite3.Error as exc:
+            raise StorageError(
+                f"{self.table}: cannot open {self.db_path}: {exc}") from exc
+        return connection
+
+    def _init_schema(self) -> None:
+        with closing(self._connect()) as connection:
+            with connection:
+                connection.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {self.table} (
+                        record_id TEXT PRIMARY KEY,
+                        payload TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    )
+                    """
+                )
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS sequences (
+                        name TEXT PRIMARY KEY,
+                        value INTEGER NOT NULL
+                    )
+                    """
+                )
+
+    @contextmanager
+    def _transaction(self, connection: sqlite3.Connection | None) -> Iterator[sqlite3.Connection]:
+        if connection is not None:
+            yield connection
+            return
+        owned = self._connect()
+        try:
+            with owned:
+                yield owned
+        except sqlite3.Error as exc:
+            raise StorageError(f"{self.table}: transaction failed: {exc}") from exc
+        finally:
+            owned.close()
+
+    @contextmanager
+    def transaction(self) -> Iterator[sqlite3.Connection]:
+        """Exclusive read-modify-write transaction (BEGIN IMMEDIATE).
+
+        `IMMEDIATE` takes the write lock before the first read, so two workers
+        cannot both read the same state, both decide their change is legal, and
+        both commit — the failure mode that let two processes activate an SPJ
+        for the same truck.
+        """
+        connection = self._connect()
+        try:
+            connection.isolation_level = None
+            connection.execute("BEGIN IMMEDIATE")
+        except sqlite3.Error as exc:
+            connection.close()
+            raise StorageError(
+                f"{self.table}: cannot begin transaction: {exc}") from exc
+        try:
+            yield connection
+        except BaseException:
+            try:
+                connection.execute("ROLLBACK")
+            except sqlite3.Error:
+                pass
+            connection.close()
+            raise
+        try:
+            connection.execute("COMMIT")
+        except sqlite3.Error as exc:
+            connection.close()
+            raise StorageError(f"{self.table}: commit failed: {exc}") from exc
+        connection.close()
+
+    def write(self, record_id: str, payload: dict[str, Any],
+              connection: sqlite3.Connection | None = None) -> None:
+        """Insert or replace one record. Commits before returning."""
+        now = datetime.now(timezone.utc).isoformat()
+        blob = json.dumps(payload, ensure_ascii=False)
+        try:
+            with self._transaction(connection) as connection:
+                connection.execute(
+                    f"""
+                    INSERT INTO {self.table} (record_id, payload, created_at, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(record_id) DO UPDATE SET
+                        payload = excluded.payload,
+                        updated_at = excluded.updated_at
+                    """,
+                    (record_id, blob, now, now),
+                )
+        except sqlite3.Error as exc:
+            raise StorageError(f"{self.table}: cannot persist {record_id}: {exc}") from exc
+
+    def get(self, record_id: str,
+            connection: sqlite3.Connection | None = None) -> dict[str, Any] | None:
+        try:
+            if connection is not None:
+                row = connection.execute(
+                    f"SELECT payload FROM {self.table} WHERE record_id=?",
+                    (record_id,),
+                ).fetchone()
+            else:
+                with closing(self._connect()) as owned:
+                    row = owned.execute(
+                        f"SELECT payload FROM {self.table} WHERE record_id=?",
+                        (record_id,),
+                    ).fetchone()
+        except sqlite3.Error as exc:
+            raise StorageError(f"{self.table}: cannot read {record_id}: {exc}") from exc
+        return json.loads(row["payload"]) if row is not None else None
+
+    def all(self, connection: sqlite3.Connection | None = None) -> list[dict[str, Any]]:
+        """Every record in insertion order (matches the JSON list order)."""
+        try:
+            if connection is not None:
+                rows = connection.execute(
+                    f"SELECT payload FROM {self.table} ORDER BY rowid ASC"
+                ).fetchall()
+            else:
+                with closing(self._connect()) as owned:
+                    rows = owned.execute(
+                        f"SELECT payload FROM {self.table} ORDER BY rowid ASC"
+                    ).fetchall()
+        except sqlite3.Error as exc:
+            raise StorageError(f"{self.table}: cannot list records: {exc}") from exc
+        return [json.loads(row["payload"]) for row in rows]
+
+    def count(self) -> int:
+        try:
+            with closing(self._connect()) as connection:
+                row = connection.execute(f"SELECT COUNT(*) AS n FROM {self.table}").fetchone()
+        except sqlite3.Error as exc:
+            raise StorageError(f"{self.table}: cannot count records: {exc}") from exc
+        return int(row["n"])
+
+    def allocate_sequence(self, name: str,
+                          connection: sqlite3.Connection | None = None) -> int:
+        """Atomically reserve the next value of a monotonic counter."""
+        try:
+            with self._transaction(connection) as connection:
+                row = connection.execute(
+                    """
+                    INSERT INTO sequences (name, value) VALUES (?, 1)
+                    ON CONFLICT(name) DO UPDATE SET value = value + 1
+                    RETURNING value
+                    """,
+                    (name,),
+                ).fetchone()
+        except sqlite3.Error as exc:
+            raise StorageError(f"{self.table}: cannot allocate {name}: {exc}") from exc
+        return int(row["value"])
+
+    def peek_sequence(self, name: str) -> int:
+        """Next value without reserving it (display/formatting only)."""
+        try:
+            with closing(self._connect()) as connection:
+                row = connection.execute(
+                    "SELECT value FROM sequences WHERE name=?", (name,)
+                ).fetchone()
+        except sqlite3.Error as exc:
+            raise StorageError(f"{self.table}: cannot read {name}: {exc}") from exc
+        return int(row["value"]) + 1 if row is not None else 1
+
+    def migrate_legacy_json(self, path: Path | str, id_key: str) -> int:
+        """Import a pre-SQLite JSON store once, then retire the file.
+
+        Returns the number of imported records. The JSON file is renamed so the
+        import cannot run twice and cannot resurrect deleted records.
+        """
+        legacy = Path(path)
+        if not legacy.exists() or self.count() > 0:
+            return 0
+        try:
+            raw = json.loads(legacy.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            logger.error("legacy store %s unreadable, not importing: %s", legacy, exc)
+            return 0
+        if not isinstance(raw, list):
+            return 0
+        imported = 0
+        connection = self._connect()
+        try:
+            with connection:
+                for item in raw:
+                    if not isinstance(item, dict) or not item.get(id_key):
+                        continue
+                    self.write(str(item[id_key]), item, connection=connection)
+                    imported += 1
+        except (sqlite3.Error, StorageError) as exc:
+            logger.error("legacy import of %s failed: %s", legacy, exc)
+            return 0
+        finally:
+            connection.close()
+        legacy.rename(legacy.with_suffix(legacy.suffix + ".migrated"))
+        logger.info("imported %s records from %s", imported, legacy)
+        return imported
 
 
 class HistoryStore:

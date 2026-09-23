@@ -2,7 +2,6 @@
 @import url("https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@5/index.css");
 @import "./styles/tokens.css";
 @import "./styles/base.css";
-@import "./styles/legacy.css";
 @import "./styles/map.css";
 @import "./styles/forecast.css";
 @import "./styles/planning.css";

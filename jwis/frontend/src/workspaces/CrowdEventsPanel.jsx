@@ -48,15 +48,15 @@ export function CrowdEventsPanel({ onSimulateEvent }) {
               </div>
               <div className="event-metric">
                 <span>{lang === "id" ? "Kru Lapangan" : "Field Crews"}</span>
-                <strong>{ev.crews_required} {lang === "id" ? "orang" : "people"} ({ev.man_hours_required} jam-kru)</strong>
+                <strong>{ev.crews_required} {lang === "id" ? "tim" : "teams"} · {ev.workers_required} {lang === "id" ? "orang" : "people"} ({ev.man_hours_required} {lang === "id" ? "jam-orang" : "person-hours"})</strong>
               </div>
               <div className="event-metric">
                 <span>{lang === "id" ? "Armada Cadangan" : "Backup Fleet"}</span>
-                <strong>{ev.backup_trucks_required} {lang === "id" ? "truk" : "trucks"}</strong>
+                <strong>{ev.trucks_required} {lang === "id" ? "truk" : "trucks"}</strong>
               </div>
               <div className="event-metric">
                 <span>{lang === "id" ? "Tong Sampah Besar" : "Large Bins"}</span>
-                <strong>{ev.large_bins_required} {lang === "id" ? "unit" : "units"}</strong>
+                <strong>{ev.bins_required} {lang === "id" ? "unit" : "units"}</strong>
               </div>
             </div>
             {onSimulateEvent && (

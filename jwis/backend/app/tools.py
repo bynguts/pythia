@@ -7,6 +7,7 @@ recommends actions and the operator executes them in the dashboard.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -336,14 +337,16 @@ def _predictions_payload(args: dict) -> dict[str, Any]:
             hotspots.append({
                 "kecamatan": k["kecamatan"], "city": k["city"],
                 "predicted_tons": pred["predicted_tons"],
-                "trucks_required": max(1, round(pred["predicted_tons"] / 18)),
+                "trucks_required": pred.get("trucks_required")
+                    or max(1, math.ceil(pred["predicted_tons"] / 18)),
                 "crews_required": pred["crews_required"],
+                "workers_required": pred.get("workers_required"),
                 "man_hours_required": pred["man_hours_required"],
             })
         hotspots.sort(key=lambda h: -h["predicted_tons"])
         out["kecamatan_hotspots_top5"] = hotspots[:5]
         out["kecamatan_count"] = len(hotspots)
-        out["note"] = "kecamatan_hotspots_top5 dari model hybrid Prophet+XGBoost per kecamatan."
+        out["note"] = "kecamatan_hotspots_top5 dari model hybrid Prophet+XGBoost per kecamatan; pakai angka ini apa adanya."
 
     if args.get("kelurahan"):
         out["detail"] = predict_waste_hybrid(

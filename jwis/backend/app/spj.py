@@ -3,11 +3,16 @@
 An active SPJ becomes the truck's assigned reference path: the existing
 deviation detector (rule 500m + IsolationForest + hysteresis) then measures
 compliance against the SPJ stops without any change to detection logic.
+
+Records live in the shared durable store (SQLite, see app.storage), so several
+API workers read one consistent state and a mutation is only acknowledged once
+it has committed. Field evidence is a precondition of normal completion; the
+exceptional supervisor path is explicit, permission-gated, reasoned and
+audited.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import sqlite3
@@ -17,7 +22,11 @@ from contextlib import closing
 from dataclasses import asdict, dataclass, field
 from app.osrm import road_route
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
+
+from app.facilities import DESTINATIONS, provenance_payload, route_ground_truth
+from app.storage import RecordStore, default_records_db
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +61,9 @@ def _require_coord(value, field: str, rng: tuple[float, float]) -> None:
         raise ValueError(
             f"evidence.{field}={number} is outside the Jakarta operational "
             f"region [{rng[0]}, {rng[1]}]")
+
+TABLE = "jwis_spj"
+LEGACY_JSON = "jwis_spj.json"
 
 
 def _validate_evidence(evidence: dict) -> None:
@@ -106,6 +118,32 @@ def _validate_evidence(evidence: dict) -> None:
     _require_photo(officer.get("photo_b64"), "officer.photo_b64")
 
 
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _today() -> str:
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+def _validate_override(override: dict | None, actor: str | None) -> dict:
+    """An override must name who authorized it and why — never a bare bypass."""
+    if not isinstance(override, dict):
+        raise ValueError(
+            "closing a stop without field evidence requires a supervisor "
+            "override object with a reason")
+    reason = str(override.get("reason") or "").strip()
+    if len(reason) < 10:
+        raise ValueError(
+            "a supervisor override without field evidence requires a reason "
+            "of at least 10 characters")
+    who = str(override.get("actor") or actor or "").strip()
+    if not who:
+        raise ValueError("supervisor override requires the authorizing actor")
+    return {"reason": reason, "actor": who, "at": _utc_now(),
+            "documents": override.get("documents") or None}
+
+
 def spj_summary_payload(spj: Spj) -> dict:
     """List projection: stop evidence and the receipt photo stay out.
 
@@ -142,6 +180,7 @@ class SpjStop:
     status: str = "pending"  # pending | completed
     completed_at: str | None = None
     evidence: dict | None = None
+    override: dict | None = None  # supervisor override that closed this stop
 
 
 @dataclass
@@ -849,22 +888,100 @@ class SpjStore:
             raise ValueError(f"SPJ {spj_id} not found")
         return spj
 
-    def _require(self, spj_id: str) -> Spj:
-        spj = self._spj.get(spj_id)
-        if spj is None:
-            raise ValueError(f"SPJ {spj_id} not found")
+    def submit_receipt(self, spj_id: str, photo_name: str, photo_b64: str,
+                       total_weight_kg: float | None, operation_id: str | None,
+                       actor: str | None = None,
+                       replace_reason: str | None = None) -> tuple[dict, bool]:
+        """Record the single current receipt for an SPJ.
+
+        Returns (receipt, created). Replaying the same operation ID returns the
+        stored receipt unchanged; a different receipt is rejected unless the
+        caller asks for an audited replacement.
+        """
+        photo_name = (photo_name or "").strip()
+        photo_b64 = (photo_b64 or "").strip()
+        if not photo_name or not photo_b64:
+            raise ValueError("receipt photo_name and photo_b64 are required")
+        if len(photo_b64) > MAX_EVIDENCE_PHOTO_CHARS:
+            raise ValueError("receipt photo_b64 exceeds 7,000,000 chars")
+        outcome: dict[str, Any] = {}
+
+        def change(spj: Spj) -> None:
+            if spj.status != "selesai":
+                raise ValueError("receipt can only be submitted after the SPJ is selesai")
+            current = spj.receipt
+            if current is not None:
+                if operation_id and current.get("operation_id") == operation_id:
+                    outcome["receipt"], outcome["created"] = current, False
+                    return
+                if not replace_reason or len(str(replace_reason).strip()) < 10:
+                    raise ValueError(
+                        "SPJ already has a receipt; replacing it requires a reason "
+                        "of at least 10 characters")
+                superseded = dict(current)
+                superseded["superseded_at"] = _utc_now()
+                superseded["superseded_by"] = operation_id or uuid4().hex[:12]
+                superseded["superseded_reason"] = str(replace_reason).strip()
+                superseded["superseded_by_actor"] = actor or "unknown"
+                spj.receipt_history.append(superseded)
+                sequence = int(current.get("sequence") or 1) + 1
+            else:
+                sequence = 1
+            receipt = {
+                "operation_id": operation_id or uuid4().hex[:12],
+                "photo_name": photo_name,
+                "photo_b64": photo_b64,
+                "total_weight_kg": total_weight_kg,
+                "sequence": sequence,
+                "submitted_at": _utc_now(),
+                "submitted_by": actor or "unknown",
+            }
+            spj.receipt = receipt
+            outcome["receipt"], outcome["created"] = receipt, True
+
+        self._mutate(spj_id, change)
+        return outcome["receipt"], outcome["created"]
+
+    # ── internals ────────────────────────────────────────────────────────────
+    def _commit(self, spj: Spj) -> None:
+        """Persist a record without re-reading it.
+
+        Only for writing data that no public transition could produce — the
+        test fixtures that reproduce pre-migration record shapes.
+        """
+        self._records.write(spj.spj_id, asdict(spj))
+
+    def _mutate(self, spj_id: str, change) -> Spj:
+        """Apply `change` to the stored SPJ inside one exclusive transaction.
+
+        The read, the invariant checks and the write share a single
+        `BEGIN IMMEDIATE` transaction, so a second worker cannot interleave
+        between them: whichever process starts second re-reads the state the
+        first one committed and has its conflicting change refused.
+        """
+        with self._records.transaction() as connection:
+            raw = self._records.get(spj_id, connection=connection)
+            if raw is None:
+                raise ValueError(f"SPJ {spj_id} not found")
+            spj = self._to_spj(raw)
+            change(spj)
+            self._records.write(spj.spj_id, asdict(spj), connection=connection)
         return spj
 
+    def _finish_if_complete(self, spj: Spj) -> None:
+        if spj.stops and all(s.status == "completed" for s in spj.stops):
+            spj.status = "selesai"
+            spj.completed_at = _utc_now()
 
-from app.astar_routing import NODES as _ASTAR_NODES
-
-_TPA = _ASTAR_NODES["TPA_BANTARGEBANG"]
-# JRC/RDF coordinates are approximate, non-official placeholders.
-DESTINATION_COORDS: dict[str, tuple[float, float]] = {
-    "TPST Bantargebang": (_TPA[0], _TPA[1]),
-    "JRC Pesanggrahan": (-6.2594, 106.7640),
-    "RDF Plant Jakarta": (-6.1340, 106.8850),
-}
+    def _to_spj(self, raw: dict) -> Spj:
+        payload = {k: v for k, v in raw.items()
+                   if k in Spj.__dataclass_fields__}
+        payload["stops"] = [
+            SpjStop(**{k: v for k, v in stop.items()
+                       if k in SpjStop.__dataclass_fields__})
+            for stop in raw.get("stops") or []
+        ]
+        return Spj(**payload)
 
 
 def spj_polyline(spj: Spj) -> list[tuple[float, float]]:
@@ -879,9 +996,8 @@ def spj_polyline(spj: Spj) -> list[tuple[float, float]]:
         pt = (stop.lat, stop.lng)
         if not points or points[-1] != pt:
             points.append(pt)
-    dest = DESTINATION_COORDS[spj.destination]
-    if not points or points[-1] != dest:
-        points.append(dest)
+    if not points or points[-1] != destination:
+        points.append(destination)
     return points
 
 
@@ -891,6 +1007,12 @@ def active_path_for(truck_code: str) -> list[tuple[float, float]] | None:
         if spj is None:
             return None
         line = spj_polyline(spj)
+        if line is None:
+            logger.warning(
+                "active SPJ %s for %s has no verified destination coordinate "
+                "(%s); falling back to the corridor reference path",
+                spj.spj_id, truck_code, spj.destination)
+            return None
         if len(line) < 2:
             return None
         return line
@@ -900,8 +1022,13 @@ def active_path_for(truck_code: str) -> list[tuple[float, float]] | None:
         return None
 
 
+def destination_provenance(destination: str) -> dict:
+    """Provenance record for one destination (surfaced by the API)."""
+    return provenance_payload(destination)
+
+
 def _maybe_seed(store: SpjStore) -> None:
-    if os.path.exists(store._path) or os.getenv("JWIS_SPJ_SEED", "on") == "off":
+    if store.count() > 0 or os.getenv("JWIS_SPJ_SEED", "on") == "off":
         return
     seed = store.create(
         driver_name="Joko Wijaya", truck_code="T-088",

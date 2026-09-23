@@ -1,0 +1,83 @@
+﻿name: jwis-stack
+
+# Memory budget for a 2 vCPU / 4 GB server (OS itself takes ~0.5 GB):
+#   backend     1.2 GB   42 Prophet/XGBoost models, ~600 MB warmup peak
+#   frontend    64  MB   nginx serving a static build
+#   wa-gateway  384 MB   Baileys WhatsApp session
+#   scentinel   1.2 GB   gmsh mesh + case + API; the OpenFOAM solve runs in
+#                        its own container via the host engine socket
+#   caps total  2.85 GB  leaving ~1.6 GB headroom for the OpenFOAM solve
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      additional_contexts:
+        app: ../jwis/backend
+        dataset: ../jwis/data
+    restart: unless-stopped
+    environment:
+      JWIS_ALLOWED_ORIGINS: "${JWIS_ALLOWED_ORIGINS:-http://localhost}"
+      OPENWA_BASE_URL: "http://wa-gateway:2785"
+      JWIS_OPENAI_BASE_URL: "${JWIS_OPENAI_BASE_URL:-}"
+      JWIS_OPENAI_API_KEY: "${JWIS_OPENAI_API_KEY:-}"
+    volumes:
+      - jwis-history:/app/data/history
+    mem_limit: 1200m
+    cpus: 1.5
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 90s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      additional_contexts:
+        app: ../jwis/frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    mem_limit: 64m
+    cpus: 0.3
+
+  wa-gateway:
+    build:
+      context: ./wa-gateway
+      dockerfile: Dockerfile
+      additional_contexts:
+        app: ../jwis/backend/wa-gateway
+    restart: unless-stopped
+    volumes:
+      - wa-auth:/app/baileys_auth_info
+    mem_limit: 384m
+    cpus: 0.3
+
+  scentinel:
+    build:
+      context: ./scentinel
+      dockerfile: Dockerfile
+      additional_contexts:
+        app: D:/ai open presu lomba/scentinel
+    restart: unless-stopped
+    environment:
+      SCENTINEL_HOME: /data/scentinel-home
+    volumes:
+      - scentinel-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    mem_limit: 1200m
+    cpus: 1.5
+    ports:
+      - "8090:8090"
+
+volumes:
+  jwis-history:
+  wa-auth:
+  scentinel-data:

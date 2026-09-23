@@ -176,15 +176,15 @@ export function KecamatanMapPanel({ horizon = "7d" }) {
                 </li>
                 <li className="kec-details-item">
                   <span>{lang === "id" ? "Kru lapangan:" : "Required field crews:"}</span>
-                  <b>{selectedKec.crews_required} {lang === "id" ? "orang" : "people"}</b>
+                  <b>{selectedKec.crews_required} {lang === "id" ? "tim" : "teams"} · {selectedKec.workers_required} {lang === "id" ? "orang" : "people"}</b>
                 </li>
                 <li className="kec-details-item">
                   <span>{lang === "id" ? "Total jam kerja:" : "Total work hours:"}</span>
-                  <b>{selectedKec.man_hours_required} {lang === "id" ? "jam" : "hours"}</b>
+                  <b>{selectedKec.man_hours_required} {lang === "id" ? "jam-orang" : "person-hours"}</b>
                 </li>
                 <li className="kec-details-item">
                   <span>{lang === "id" ? "Tong sampah besar:" : "Large waste bins:"}</span>
-                  <b>{selectedKec.disposal_bins_required || 0} {lang === "id" ? "unit" : "units"}</b>
+                  <b>{selectedKec.bins_required || 0} {lang === "id" ? "unit" : "units"}</b>
                 </li>
                 <li className="kec-details-item-total">
                   <span>Status TPS:</span>
@@ -272,7 +272,7 @@ export function KecamatanMapPanel({ horizon = "7d" }) {
             </div>
             <div className="kec-meta">
               <b>{k.predicted_tons.toLocaleString(lang === "id" ? "id-ID" : "en-US")} t</b>
-              <span>{k.trucks_required} {lang === "id" ? "truk" : "trucks"} / {k.crews_required} {lang === "id" ? "kru" : "crews"} / {k.man_hours_required} {lang === "id" ? "jam-kerja" : "man-hours"}</span>
+              <span>{k.trucks_required} {lang === "id" ? "truk" : "trucks"} / {k.crews_required} {lang === "id" ? "tim" : "teams"} / {k.man_hours_required} {lang === "id" ? "jam-orang" : "person-hours"}</span>
               {k.horizon_total_tons != null && (
                 <span className="kec-horizon">
                   {lang === "id" ? `Total ${horizonDays} hari` : `${horizonDays}d total`} {Math.round(k.horizon_total_tons).toLocaleString(lang === "id" ? "id-ID" : "en-US")} t · {lang === "id" ? "puncak" : "peak"} {k.horizon_peak_date} ({Math.round(k.horizon_peak_tons)} t)

@@ -33,7 +33,8 @@ CURATED_KNOWLEDGE = [
         "text": (
             "The Waste Forecast module predicts waste tonnage for the next 7 days. It uses district-level predictions with "
             "predicted_tons, baseline_tons, spike_percent, risk_level, recommended_extra_trucks, recommended_extra_crews, "
-            "man_hours_required, crews_required, disposal_bins_required, fuel consumption, and CO2 impact. Forecast drivers include "
+            "trucks_required, crews_required, workers_required, man_hours_required (person-hours), bins_required, "
+            "fuel consumption, and CO2 impact. Forecast drivers include "
             "Open-Meteo rainfall, temperature, wind, weekends, holidays, and permitted crowd events. The frontend also has 14-day "
             "and 30-day projection controls for demo planning, extending the 7-day source baseline."
         ),

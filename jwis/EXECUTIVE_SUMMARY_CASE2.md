@@ -31,7 +31,7 @@ Verifikasi runtime: **42/42 model kecamatan ter-load (`model_available: True`)**
 
 ### DARI PREDIKSI KE AKSI — PERENCANAAN SUMBER DAYA
 Setiap prediksi volume otomatis diterjemahkan menjadi kebutuhan operasional konkret:
-- **Man-hours & kru lapangan** (1 truk = 18 ton, kru 4 orang, shift 8 jam).
+- **Man-hours & kru lapangan** (1 truk = 18 ton, 1 tim kru = 4 orang per truk, shift 8 jam; `man_hours_required` adalah jam-orang).
 - **Armada cadangan tambahan** untuk lonjakan.
 - **Penempatan bak sampah besar** di zona merah banjir (2.5 ton/bak).
 

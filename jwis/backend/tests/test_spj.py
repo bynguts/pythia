@@ -8,6 +8,10 @@ with mock.patch.dict(os.environ, {"JWIS_SPJ_SEED": "off"}):
 from spj_testutil import fresh_store_path
 
 
+_EVIDENCE = {"arrival": {"photo_name": "datang.jpg", "lat": -6.2, "lng": 106.8},
+             "weighing": [], "officer": {"photo_name": "petugas.jpg", "name": "Dicky"}}
+
+
 def _store(tmp_name="test_spj_store.json"):
     return SpjStore(persist_path=fresh_store_path(tmp_name))
 
@@ -119,13 +123,48 @@ class SpjModelTests(unittest.TestCase):
                            destination="TPST Bantargebang", weigh_on_site=False,
                            priority="normal", note="")
         with self.assertRaises(ValueError):  # complete stop on draft
-            store.complete_stop(spj.spj_id, 0)
+            store.complete_stop(spj.spj_id, 0, evidence=_EVIDENCE)
         store.add_stop(spj.spj_id, name="S1", kecamatan="K", address="A",
                        lat=-6.2, lng=106.8)
         store.activate(spj.spj_id)
         store.complete(spj.spj_id, override={"actor": "supervisor", "reason": "test"})
         with self.assertRaises(ValueError):  # activate finished
             store.activate(spj.spj_id)
+
+    def test_stop_cannot_complete_before_an_earlier_stop(self):
+        """Route order is a server-side invariant, not a UI hint."""
+        store = _store()
+        spj = store.create(driver_name="A", truck_code="T-001",
+                           destination="TPST Bantargebang", weigh_on_site=False,
+                           priority="normal", note="")
+        for name, lat in (("S1", -6.2), ("S2", -6.3)):
+            store.add_stop(spj.spj_id, name=name, kecamatan="K", address="A",
+                           lat=lat, lng=106.8)
+        store.activate(spj.spj_id)
+        with self.assertRaises(ValueError):
+            store.complete_stop(spj.spj_id, 1, evidence=_EVIDENCE)
+        self.assertEqual([s.status for s in store.get(spj.spj_id).stops],
+                         ["pending", "pending"])
+        # ... and the ordered path still works.
+        store.complete_stop(spj.spj_id, 0, evidence=_EVIDENCE)
+        store.complete_stop(spj.spj_id, 1, evidence=_EVIDENCE)
+        self.assertEqual(store.get(spj.spj_id).status, "selesai")
+
+    def test_repeated_stop_completion_is_idempotent(self):
+        store = _store()
+        spj = store.create(driver_name="A", truck_code="T-001",
+                           destination="TPST Bantargebang", weigh_on_site=False,
+                           priority="normal", note="")
+        for name, lat in (("S1", -6.2), ("S2", -6.3)):
+            store.add_stop(spj.spj_id, name=name, kecamatan="K", address="A",
+                           lat=lat, lng=106.8)
+        store.activate(spj.spj_id)
+        first = store.complete_stop(spj.spj_id, 0, evidence=_EVIDENCE)
+        again = store.complete_stop(spj.spj_id, 0, evidence=_EVIDENCE)
+        self.assertEqual(first.stops[0].completed_at,
+                         again.stops[0].completed_at)
+        self.assertEqual(again.status, "aktif")  # stop 1 still open
+        self.assertEqual(len(store.list()), 1)
 
     def test_persistence_round_trip(self):
         path = fresh_store_path("test_spj_persist.json")
@@ -135,7 +174,7 @@ class SpjModelTests(unittest.TestCase):
                            priority="vip", note="rt")
         store.add_stop(spj.spj_id, name="S1", kecamatan="K", address="A",
                        lat=-6.2, lng=106.8)
-        store2 = SpjStore(persist_path=path)
+        store2 = SpjStore(db_path=path)
         loaded = store2.get(spj.spj_id)
         self.assertIsNotNone(loaded)
         self.assertEqual(loaded.priority, "vip")
