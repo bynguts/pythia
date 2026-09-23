@@ -1975,14 +1975,14 @@ def spj_evidence_summary(spj_id: str) -> dict[str, Any]:
 
 
 @app.post("/api/spj/{spj_id}/receipt", status_code=201)
-def submit_spj_receipt(spj_id: str, body: SpjReceiptBody, response: Response,
+def submit_spj_receipt(spj_id: str, body: SpjReceiptBody,
                        _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
     """Record the weighbridge receipt once (#52 + PR #90 #56).
 
-    Replaying the same operation_id is a no-op retry (200, not a second
-    record); a different submission for an SPJ that already has a receipt
-    is a conflict, so a double tap or a second browser cannot silently
-    replace handover evidence.
+    Replaying the same operation_id is a no-op retry (still 201 — the
+    stored receipt is returned unchanged); a different submission for an
+    SPJ that already has a receipt is a conflict, so a double tap or a
+    second browser cannot silently replace handover evidence.
     """
     spj = SPJ_STORE.get(spj_id)
     if spj is None:
@@ -1997,8 +1997,6 @@ def submit_spj_receipt(spj_id: str, body: SpjReceiptBody, response: Response,
             "photo_name": body.photo_name, "total_weight_kg": body.total_weight_kg,
             "weight_source": body.weight_source, "submitted_by": _role,
         })
-    else:
-        response.status_code = 200  # idempotent replay: 200, not 201
     return {"status": "recorded", "spj_id": spj_id}
 
 

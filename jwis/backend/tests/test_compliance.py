@@ -58,10 +58,22 @@ def _make_spj(spj_store, driver, truck, complete_with_evidence=True,
                                 "photo_b64": "data:image/jpeg;base64,CCC",
                                 "name": "X"}}
     else:
+        if close_by == "legacy":
+            # Pre-migration record shape: a stop closed with no evidence AND
+            # no override/audit — written directly, bypassing the current
+            # invariant, exactly what old data looks like.
+            closed = spj_store.get(spj.spj_id)
+            for stop in closed.stops:
+                stop.status = "completed"
+                stop.completed_at = closed.activated_at
+            closed.status = "selesai"
+            closed.completed_at = closed.activated_at
+            spj_store._commit(closed)
+            return spj
         # Unevidenced closure only happens through an audited supervisor
         # override now (issue #63 contract).
         spj_store.complete(spj.spj_id,
-                           override={"actor": "supervisor", "reason": "test"})
+                           override={"actor": "supervisor", "reason": "supervisor test override"})
     return spj
 
 

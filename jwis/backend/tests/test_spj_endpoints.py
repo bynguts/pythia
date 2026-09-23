@@ -88,7 +88,7 @@ class SpjEndpointTests(unittest.TestCase):
         self.assertEqual(done.status_code, 200)
         self.assertEqual(done.json()["status"], "selesai")
         self.assertEqual(done.json()["stops"][0]["evidence"]["officer"]["name"],
-                         "Petugas")
+                         "Dicky")
         cancel = self.client.post(f"/api/spj/{self.spj['spj_id']}/cancel")
         self.assertEqual(cancel.status_code, 409)  # selesai cannot cancel
 

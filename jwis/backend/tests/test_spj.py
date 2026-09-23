@@ -8,8 +8,15 @@ with mock.patch.dict(os.environ, {"JWIS_SPJ_SEED": "off"}):
 from spj_testutil import fresh_store_path
 
 
-_EVIDENCE = {"arrival": {"photo_name": "datang.jpg", "lat": -6.2, "lng": 106.8},
-             "weighing": [], "officer": {"photo_name": "petugas.jpg", "name": "Dicky"}}
+_EVIDENCE = {
+    "arrival": {"photo_name": "datang.jpg",
+                "photo_b64": "data:image/jpeg;base64,AAA",
+                "lat": -6.2, "lng": 106.8},
+    "weighing": [],
+    "officer": {"photo_name": "petugas.jpg",
+                "photo_b64": "data:image/jpeg;base64,CCC",
+                "name": "Dicky"},
+}
 
 
 def _store(tmp_name="test_spj_store.json"):
@@ -110,7 +117,7 @@ class SpjModelTests(unittest.TestCase):
                        lat=-6.2, lng=106.8)
         store.activate(spj.spj_id)
         self.assertEqual(store.complete(
-            spj.spj_id, override={"actor": "supervisor", "reason": "test"}).status,
+            spj.spj_id, override={"actor": "supervisor", "reason": "supervisor test override"}).status,
             "selesai")
         draft = store.create(driver_name="B", truck_code="T-088",
                              destination="JRC Pesanggrahan", weigh_on_site=False,
@@ -127,7 +134,7 @@ class SpjModelTests(unittest.TestCase):
         store.add_stop(spj.spj_id, name="S1", kecamatan="K", address="A",
                        lat=-6.2, lng=106.8)
         store.activate(spj.spj_id)
-        store.complete(spj.spj_id, override={"actor": "supervisor", "reason": "test"})
+        store.complete(spj.spj_id, override={"actor": "supervisor", "reason": "supervisor test override"})
         with self.assertRaises(ValueError):  # activate finished
             store.activate(spj.spj_id)
 

@@ -39,7 +39,12 @@ class SpjPolylineTests(unittest.TestCase):
         self.assertAlmostEqual(line[-1][1], 106.9981, places=3)
 
     def test_polyline_refuses_unverified_destination(self):
-        """A destination without a sourced coordinate cannot become ground truth."""
+        """A destination without a sourced coordinate cannot become ground truth.
+
+        Activation FAILS VISIBLY for an unverified destination (#59) —
+        stricter than refusing only at polyline time: an SPJ must never go
+        active with compliance geometry that cannot be resolved.
+        """
         import tempfile
         from app.facilities import FACILITIES, provenance_payload
         path = os.path.join(tempfile.gettempdir(), "test_spj_unverified.json")
@@ -51,14 +56,15 @@ class SpjPolylineTests(unittest.TestCase):
                            priority="normal", note="")
         store.add_stop(spj.spj_id, name="S1", kecamatan="K", address="A",
                        lat=-6.20, lng=106.80)
-        store.activate(spj.spj_id)
+        with self.assertRaises(ValueError) as ctx:
+            store.activate(spj.spj_id)
+        self.assertIn("no verified ground-truth", str(ctx.exception))
+        self.assertEqual(store.get(spj.spj_id).status, "draft")
         self.assertFalse(FACILITIES["JRC Pesanggrahan"].is_ground_truth)
-        self.assertIsNone(spj_polyline(store.get(spj.spj_id)))
         provenance = provenance_payload("JRC Pesanggrahan")
         self.assertEqual(provenance["verification_status"], "unverified")
         self.assertFalse(provenance["usable_for_routing"])
         self.assertTrue(provenance["source_url"])
-
     def test_active_path_for_truck_with_spj(self):
         store = SpjStore(persist_path=fresh_store_path("test_spj_active.json"))
         self._active_spj(store, truck="T-999")

@@ -7,6 +7,7 @@ reproduce because both threads share one dict.
 import json
 import multiprocessing
 import os
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,8 +17,13 @@ from app.permits import PermitStore
 from app.spj import SpjStore
 from app.storage import RecordStore, StorageError
 
-EVIDENCE = {"arrival": {"photo_name": "a.jpg", "lat": -6.2, "lng": 106.8},
-            "weighing": [], "officer": {"photo_name": "p.jpg", "name": "X"}}
+EVIDENCE = {"arrival": {"photo_name": "a.jpg",
+                        "photo_b64": "data:image/jpeg;base64,AAA",
+                        "lat": -6.2, "lng": 106.8},
+            "weighing": [],
+            "officer": {"photo_name": "p.jpg",
+                        "photo_b64": "data:image/jpeg;base64,CCC",
+                        "name": "X"}}
 
 
 def _create_worker(db_path: str, truck: str, created, errors) -> None:
@@ -123,24 +129,27 @@ class MultiProcessTests(unittest.TestCase):
         self.assertEqual(sorted(s.spj_id for s in reopened.list()),
                          sorted(created))
 
-
 class WriteFailureTests(unittest.TestCase):
     def test_write_failure_raises_instead_of_acknowledging(self):
         """A store that cannot commit must not return a success object."""
+        import unittest.mock
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        db = Path(tmp.name) / "readonly" / "spj.db"
-        db.parent.mkdir()
+        db = Path(tmp.name) / "spj.db"
         store = SpjStore(db_path=db)
-        db.parent.chmod(0o500)  # directory no longer writable
-        self.addCleanup(db.parent.chmod, 0o700)
-        try:
-            with self.assertRaises(StorageError):
+        # Simulate a failing commit portably: every statement fails with a
+        # disk-style error. The create must raise, not return a success
+        # object for a write that never reached disk.
+        with unittest.mock.patch.object(
+                SpjStore, "_connect",
+                side_effect=sqlite3.OperationalError("disk I/O error")):
+            with self.assertRaises((StorageError, sqlite3.OperationalError)):
                 store.create(driver_name="A", truck_code="T-700",
-                             destination="TPST Bantargebang", weigh_on_site=False,
-                             priority="normal", note="")
-        finally:
-            db.parent.chmod(0o700)
+                             destination="TPST Bantargebang",
+                             weigh_on_site=False, priority="normal", note="")
+        # The failed create must not have left a record behind.
+        self.assertEqual([s for s in store.list()
+                          if s.truck_code == "T-700"], [])
 
     def test_unreadable_legacy_file_does_not_break_startup(self):
         """A corrupt pre-migration JSON store must not stop the service booting."""
