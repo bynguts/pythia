@@ -447,14 +447,13 @@ function CommandCenter({ onLogout }) {
         {activeWorkspace === "planning" && (
         <ErrorBoundary name="planning">
           <PlanningDecisionFlow
-            snapshot={snapshot}
             attendance={attendance}
             setAttendance={setAttendance}
             rainfall={rainfall}
             setRainfall={setRainfall}
             eventLat={eventLat}
             eventLng={eventLng}
-            summary={snapshot.executive_summary}
+            snapshot={snapshot}
             queue={snapshot.tpa_queue}
           /></ErrorBoundary>
         )}

@@ -128,6 +128,23 @@ export function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setR
     }
   }
 
+  // #21: map the live scenario response into the review's evidence shape so
+  // stage 03 always reflects the currently simulated inputs.
+  const scenarioReview = data
+    ? {
+        ...snapshot,
+        predictions: (data.kecamatan || []).map((k) => ({
+          district: k.kecamatan,
+          predicted_tons: k.predicted_tons,
+          baseline_tons: k.baseline_tons_per_day,
+          spike_percent: k.baseline_tons_per_day > 0
+            ? Math.round(((k.predicted_tons - k.baseline_tons_per_day) / k.baseline_tons_per_day) * 100)
+            : 0,
+          recommended_extra_trucks: k.crews_required ? Math.ceil(k.crews_required / 2) : 0,
+          recommended_extra_crews: k.crews_required || 0,
+        })),
+      }
+    : null;
   const top5 = (data?.top_hotspots || []).slice(0, 5);
   const totalTons = data?.total_predicted_tons || 0;
   const manHours = top5.reduce((s, k) => s + (k.man_hours_required || 0), 0);
@@ -160,7 +177,9 @@ export function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setR
 
   return (
     <IntegratedPlanning
-      summary={<ExecutiveSummary snapshot={snapshot} queue={queue} />}
+      // #21: the review derives from the ACTIVE scenario response once one
+      // exists; the preloaded snapshot is only the pre-simulation fallback.
+      summary={<ExecutiveSummary snapshot={scenarioReview || snapshot} queue={queue} />}
       scenario={{
         inputs: (
           <ScenarioPanel mode="inputs">
