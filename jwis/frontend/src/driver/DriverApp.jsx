@@ -14,6 +14,7 @@ import {
   User,
   WifiOff,
 } from "lucide-react";
+import { enqueueDriverOperation, flushDriverOutbox, readDriverOutbox } from "./DriverOutbox.js";
 import "./driver.css";
 import { useLanguage } from "../i18n.jsx";
 
@@ -64,6 +65,8 @@ function getPosition(stop) {
   });
 }
 
+// #45: a network-level failure (fetch rejected / no response) is queueable;
+// an HTTP error response is a permanent failure the driver must act on.
 async function post(path, data) {
   const token = localStorage.getItem("jwis_token");
   const res = await fetch(`${API_URL}${path}`, {
@@ -82,6 +85,23 @@ async function post(path, data) {
     throw new Error(body.detail || fallback);
   }
   return res.json();
+}
+
+// #45: post() variant whose failures carry a `network` flag so callers can
+// route them to the durable outbox instead of surfacing a dead error.
+async function postQueueable(path, data) {
+  try {
+    return await post(path, data);
+  } catch (err) {
+    // post() only throws with a parsed message for HTTP responses; a raw
+    // TypeError comes from fetch itself (offline / unreachable backend).
+    if (err instanceof TypeError || !err.message) {
+      const wrapped = new Error(err.message || "network");
+      wrapped.network = true;
+      throw wrapped;
+    }
+    throw err;
+  }
 }
 
 function receiptDoneFor(spj) {
@@ -122,7 +142,7 @@ function PreTripForm({ driver, done, onDone, say }) {
   const markRestOk = () => {
     setItems((prev) => {
       const next = { ...prev };
-      PRETRIP_ITEMS.forEach(([key]) => {
+      PRETRIP_ITEMS.forEach((key) => {
         if (!(key in next)) next[key] = true;
       });
       return next;
@@ -133,7 +153,7 @@ function PreTripForm({ driver, done, onDone, say }) {
     setBusy(true);
     let pretripSaved = false;
     try {
-      await post("/pretrip", {
+      await postQueueable("/pretrip", {
         truck_code: driver.truck_code,
         driver_name: driver.driver_name,
         items,
@@ -156,6 +176,16 @@ function PreTripForm({ driver, done, onDone, say }) {
       if (pretripSaved) {
         onDone();
         say(t("drv_pretrip_damage_failed"));
+      } else if (err?.network) {
+        // #45: keep the inspection durably; it replays on reconnect.
+        enqueueDriverOperation({
+          path: "/pretrip",
+          data: { truck_code: driver.truck_code, driver_name: driver.driver_name, items, note },
+          label: t("drv_pretrip_title"),
+        });
+        window.dispatchEvent(new Event("jwis-driver-outbox-changed"));
+        onDone();
+        say(t("drv_queued_offline"));
       } else {
         say(err.message || t("drv_pretrip_save_failed"));
       }
@@ -309,9 +339,11 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
 
   const submit = async () => {
     setBusy(true);
+    // #45: evidence is hoisted so the offline catch can queue it durably.
+    let evidence = null;
     try {
       const pos = await getPosition(stop);
-      const evidence = {
+      evidence = {
         arrival: {
           photo_name: arrival.name,
           photo_b64: arrival.b64,
@@ -322,10 +354,23 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
         weighing,
         officer: { name: officerName.trim(), photo_name: officerPhoto.name, photo_b64: officerPhoto.b64 },
       };
-      await post(`/spj/${spj.spj_id}/stops/${index}/complete`, { evidence });
+      await postQueueable(`/spj/${spj.spj_id}/stops/${index}/complete`, { evidence });
       onCompleted();
     } catch (err) {
-      say(err.message || t("drv_stop_complete_failed"));
+      if (err?.network && evidence) {
+        // #45: queue durably and optimistically complete the stop; the
+        // outbox replays the evidence when connectivity returns.
+        enqueueDriverOperation({
+          path: `/spj/${spj.spj_id}/stops/${index}/complete`,
+          data: { evidence },
+          label: t("drv_stop_title").replace("{n}", index + 1).replace("{name}", stop.name),
+        });
+        window.dispatchEvent(new Event("jwis-driver-outbox-changed"));
+        onCompleted();
+        say(t("drv_queued_offline"));
+      } else {
+        say(err.message || t("drv_stop_complete_failed"));
+      }
     } finally {
       setBusy(false);
     }
@@ -587,7 +632,7 @@ function DeliveryCard({ spj, say, onDone }) {
     // photo or a weight change starts a new operation.
     operationId.current = operationId.current || `${spj.spj_id}-${Date.now()}`;
     try {
-      await post(`/spj/${spj.spj_id}/receipt`, {
+      await postQueueable(`/spj/${spj.spj_id}/receipt`, {
         photo_name: receipt.name,
         photo_b64: receipt.b64,
         total_weight_kg: kg,
@@ -599,7 +644,29 @@ function DeliveryCard({ spj, say, onDone }) {
       } catch { /* flag is best-effort; receipt is already recorded server-side */ }
       onDone();
     } catch (err) {
-      say(err.message || t("drv_receipt_failed"));
+      if (err?.network) {
+        // #45: the receipt replays with its stable operation_id, so a
+        // reconnect can never double-record the handover.
+        enqueueDriverOperation({
+          path: `/spj/${spj.spj_id}/receipt`,
+          data: {
+            photo_name: receipt.name,
+            photo_b64: receipt.b64,
+            total_weight_kg: kg,
+            weight_source: weightSource,
+            operation_id: operationId.current,
+          },
+          label: t("drv_receipt_title"),
+        });
+        window.dispatchEvent(new Event("jwis-driver-outbox-changed"));
+        try {
+          localStorage.setItem(`jwis_receipt_${spj.spj_id}`, "done");
+        } catch { /* best-effort */ }
+        onDone();
+        say(t("drv_queued_offline"));
+      } else {
+        say(err.message || t("drv_receipt_failed"));
+      }
     } finally {
       setBusy(false);
     }
@@ -726,6 +793,9 @@ export default function DriverApp() {
   const [toast, setToast] = useState("");
   const [online, setOnline] = useState(navigator.onLine);
   const [doneScreen, setDoneScreen] = useState(false);
+  // #45: durable outbox — queued driver mutations replay on reconnect.
+  const [queuedCount, setQueuedCount] = useState(readDriverOutbox().length);
+  const [flushing, setFlushing] = useState(false);
 
   const say = (msg, ms = 4000) => {
     setToast(msg);
@@ -798,6 +868,46 @@ export default function DriverApp() {
       window.removeEventListener("offline", onOffline);
     };
   }, []);
+
+  // #45: replay the durable queue whenever connectivity returns, a new
+  // operation is queued, or the periodic poll notices work to do.
+  const flushQueue = useCallback(async () => {
+    if (readDriverOutbox().length === 0) {
+      setQueuedCount(0);
+      return;
+    }
+    setFlushing(true);
+    try {
+      const { flushed, remaining } = await flushDriverOutbox(API_URL);
+      setQueuedCount(remaining);
+      if (flushed > 0) {
+        say(t("drv_synced_n").replace("{n}", flushed));
+        loadSpj();
+      }
+    } finally {
+      setFlushing(false);
+    }
+  }, [loadSpj, say, t]);
+
+  useEffect(() => {
+    const onChanged = () => setQueuedCount(readDriverOutbox().length);
+    window.addEventListener("jwis-driver-outbox-changed", onChanged);
+    return () => window.removeEventListener("jwis-driver-outbox-changed", onChanged);
+  }, []);
+
+  useEffect(() => {
+    if (queuedCount > 0 && !flushing) flushQueue();
+  }, [queuedCount, flushing, flushQueue]);
+
+  // #45: periodic retry — connectivity may return without an `online` event
+  // (e.g. a page reload right after the network came back).
+  useEffect(() => {
+    if (queuedCount === 0) return undefined;
+    const id = setInterval(() => {
+      if (!flushing) flushQueue();
+    }, 5000);
+    return () => clearInterval(id);
+  }, [queuedCount, flushing, flushQueue]);
 
   useEffect(() => {
     setScreen(driver ? "home" : "gate");
@@ -885,6 +995,13 @@ export default function DriverApp() {
           </span>
         </span>
         <span className="driver-header-right">
+          {queuedCount > 0 && (
+            <span className="driver-queued" data-testid="driver-queued-count">
+              {flushing
+                ? t("drv_syncing")
+                : t("drv_queued_n").replace("{n}", queuedCount)}
+            </span>
+          )}
           {!online && (
             <span className="driver-offline">
               <WifiOff size={14} /> {t("drv_offline")}

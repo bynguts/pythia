@@ -40,7 +40,15 @@ self.addEventListener("message", (event) => {
 
 function cachePut(request, response) {
   if (response.ok) {
-    const copy = response.clone();
+    // #46: stamp the cached copy with the wall-clock time of the live write
+    // so a later cache fallback can surface the age of the data.
+    const headers = new Headers(response.headers);
+    headers.set("X-Jwis-Cached-At", new Date().toISOString());
+    const copy = new Response(response.clone().body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
     // Return the write promise so callers can attach it to the fetch
     // event lifetime; a rejected write is swallowed so the live response
     // is unaffected either way.
@@ -57,6 +65,23 @@ function cachePut(request, response) {
   return Promise.resolve(null);
 }
 
+// #46: re-serve a cached API response with observable stale metadata —
+// operators must be able to tell cache-served data from a live backend.
+function serveStaleApi(request) {
+  return caches.match(request).then((cached) => {
+    if (!cached) return Response.json({ detail: "offline" }, { status: 503 });
+    const headers = new Headers(cached.headers);
+    const cachedAt = headers.get("X-Jwis-Cached-At") || new Date(0).toISOString();
+    headers.set("X-Jwis-Stale", "1");
+    headers.set("X-Jwis-Cached-At", cachedAt);
+    return new Response(cached.body, {
+      status: cached.status,
+      statusText: cached.statusText,
+      headers,
+    });
+  });
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
@@ -71,7 +96,7 @@ self.addEventListener("fetch", (event) => {
           event.waitUntil(cachePut(request, response));
           return response;
         })
-        .catch(() => caches.match(request)),
+        .catch(() => serveStaleApi(request)),
     );
     return;
   }

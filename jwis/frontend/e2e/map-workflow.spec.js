@@ -159,19 +159,21 @@ test("map-truth payload has road-following geometry and synced snapped GPS", asy
   expect(typeof t.deviation_m).toBe("number");
 });
 
-test("jam toggle diverts T-047 end-to-end (UI, reroute API, map-truth agree)", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByTestId("deck-tools-toggle").click();
-  await expect(page.getByTestId("deck-tools-panel")).toBeVisible();
-  await page.waitForFunction(
-    () => (window.__jwisMapFeatures?.actualKinds || []).length > 0,
-    null,
-    { timeout: 15000 }
-  );
+// #69: deterministic jam isolation — the endpoint notes a 90s manual override
+// so the AI engine loop cannot flip the global flag mid-test; the helper
+// always verifies the server state before the scenario acts on it.
+async function verifiedJamCleared(page) {
+  await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, { headers: authHeaders });
+  await expect.poll(async () => {
+    const mt = await (await page.request.get(`${API_BASE}/api/fleet/map-truth`)).json();
+    const t047 = mt.trucks?.find((x) => x.truck_code === "T-047");
+    return Boolean(t047?.traffic && t047.traffic.jam_active === false);
+  }, { timeout: 30000, intervals: [500, 1000, 2000] }).toBe(true);
+}
 
-  const before = await page.evaluate(() => window.__jwisMapFeatures?.actualKinds || []);
-  expect(before).toContain("actual-violation");
-
+// #69: the diverted-state assertions live in a helper so the finally clause
+// in the caller can restore the cleared state even on failure.
+async function runJamDiversionScenario(page) {
   await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=true`, { headers: authHeaders });
   await expect(page.getByTestId("deck-tools-panel").locator(".traffic-status-badge")).toContainText(/JAM TERDETEKSI AI|Jam Active|Macet Aktif/, { timeout: 45000 });
 
@@ -209,9 +211,41 @@ test("jam toggle diverts T-047 end-to-end (UI, reroute API, map-truth agree)", a
     null,
     { timeout: 15000 }
   );
+  return "diverted";
+}
+
+test("jam toggle diverts T-047 end-to-end (UI, reroute API, map-truth agree)", async ({ page }) => {
+  // Known initial state first, restored even when the scenario fails (#69).
+  await verifiedJamCleared(page);
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByTestId("deck-tools-toggle").click();
+  await expect(page.getByTestId("deck-tools-panel")).toBeVisible();
+  await page.waitForFunction(
+    () => (window.__jwisMapFeatures?.actualKinds || []).length > 0,
+    null,
+    { timeout: 15000 }
+  );
+
+  const before = await page.evaluate(() => window.__jwisMapFeatures?.actualKinds || []);
+  expect(before).toContain("actual-violation");
+
+  // #69: the manual override hold (90s) keeps the AI loop from flipping the
+  // flag mid-test; the finally clause restores the cleared state even when
+  // an assertion below fails, so later runs start from a known state.
+  let scenario = null;
+  try {
+    scenario = await runJamDiversionScenario(page);
+  } finally {
+    await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, { headers: authHeaders });
+  }
+  expect(scenario).toBe("diverted");
+
 });
 
 test("restore traffic returns T-047 to compliant and clears abandoned line", async ({ page }) => {
+  // #69: known initial state (cleared) before turning the jam on, so the
+  // scenario cannot race a leftover jam from a prior run or test.
+  await verifiedJamCleared(page);
   await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=true`, { headers: authHeaders });
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.getByTestId("deck-tools-toggle").click();
@@ -225,7 +259,16 @@ test("restore traffic returns T-047 to compliant and clears abandoned line", asy
   await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, { headers: authHeaders });
   // The AI engine loop keeps running and can re-set the jam flag after the
   // manual restore: keep re-posting false until the server stays cleared,
-  // then assert the UI settles on the normal state.
+  // then assert the UI settles on the normal state. The finally clause
+  // guarantees the cleared state even when an assertion below fails (#69).
+  try {
+    await restoreScenario(page);
+  } finally {
+    await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, { headers: authHeaders });
+  }
+});
+
+async function restoreScenario(page) {
   await expect.poll(async () => {
     const r = await (await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)).json();
     if (r.jam_active || r.diversion_applied) {
@@ -244,7 +287,7 @@ test("restore traffic returns T-047 to compliant and clears abandoned line", asy
     null,
     { timeout: 15000 }
   );
-});
+}
 
 
 test("TPS and WR layers survive basemap switch", async ({ page }) => {

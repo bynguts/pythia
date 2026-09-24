@@ -273,6 +273,10 @@ const translations = {
     drv_gate_title: "Who is on duty?",
     drv_gate_loading: "Loading fleet roster…",
     drv_offline: "Offline",
+    drv_queued_offline: "Saved offline — will sync automatically",
+    drv_queued_n: "{n} queued",
+    drv_synced_n: "Synced {n} saved action(s)",
+    drv_syncing: "Syncing…",
     drv_switch: "Change",
     drv_kicker: "Have a safe shift",
     drv_no_spj: " — no active dispatch order yet",
@@ -617,6 +621,10 @@ const translations = {
     drv_gate_title: "Siapa yang bertugas?",
     drv_gate_loading: "Memuat daftar armada…",
     drv_offline: "Offline",
+    drv_queued_offline: "Tersimpan offline — akan tersinkron otomatis",
+    drv_queued_n: "{n} antrean",
+    drv_synced_n: "Tersinkron: {n} aksi tersimpan",
+    drv_syncing: "Menyinkronkan…",
     drv_switch: "Ganti",
     drv_kicker: "Selamat bertugas",
     drv_no_spj: " — belum ada SPJ aktif",
@@ -709,6 +717,8 @@ export function LanguageProvider({ children }) {
     } catch {
       // The selected language still applies when browser storage is unavailable.
     }
+    // #84: locale-aware surfaces outside React (the SW update banner) re-render.
+    window.dispatchEvent(new Event("jwis-lang-change"));
   }
 
   function t(key) {
