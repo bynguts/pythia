@@ -47,10 +47,11 @@ export function KecamatanMapPanel({ horizon = "7d" }) {
   const rows = data?.kecamatan || [];
   const maxTons = rows.length ? rows[0].predicted_tons : 1;
   const readinessColor = {
-    sufficient: "#16a34a",
-    tight: "#d97706",
-    under_capacity: "#dc2626",
-    unknown: "#64748b",
+    // #42: darkened to meet WCAG AA (4.5:1) against the card background.
+    sufficient: "#15803d",
+    tight: "#92400e",
+    under_capacity: "#b91c1c",
+    unknown: "#475569",
   };
 
   const filteredRows = rows.filter((k) => {
@@ -267,7 +268,10 @@ export function KecamatanMapPanel({ horizon = "7d" }) {
               <strong>{k.kecamatan}</strong>
               <span>{k.city}</span>
             </div>
-            <div className="bar" aria-label={`${k.predicted_tons} ${lang === "id" ? "ton" : "tons"}`}>
+            {/* #42: the bar is decorative; district, amount, and unit are
+                already announced by the visible kec-meta text. No aria-label
+                on plain divs (aria-prohibited-attr). */}
+            <div className="bar" aria-hidden="true">
               <span style={{ width: `${Math.min(100, (k.predicted_tons / maxTons) * 100)}%` }} />
             </div>
             <div className="kec-meta">
