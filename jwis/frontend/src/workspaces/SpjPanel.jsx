@@ -442,7 +442,7 @@ export function SpjPanel() {
                                 }
                                 setOverrideError("");
                                 const done = await act(`${base}/complete`,
-                                    { override: { reason: overrideReason.trim() } });
+                                    { override: true, reason: overrideReason.trim() });
                                 // A refused override (e.g. a role without the
                                 // permission) keeps the form open with its reason
                                 // so the operator can retry, not retype.
