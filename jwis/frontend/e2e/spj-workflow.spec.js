@@ -1,7 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { assertNoLeftoverActiveSpj, cancelSpjIndependently, disposeCleanupContext } from "./lib/spjCleanup.js";
 
 const API = "http://127.0.0.1:8001/api";
 const TEST_TRUCK = "T-210";
+
+test.afterAll(async () => {
+  await disposeCleanupContext();
+});
 
 async function signIn(page) {
   await page.goto("/");
@@ -56,7 +61,11 @@ test("admin sees SPJ in panel, expands it, and activates it", async ({ page }) =
     await page.getByRole("button", { name: "Ubah ke aktif" }).click();
     await expect(page.getByText("Aktif", { exact: true }).first()).toBeVisible({ timeout: 10000 });
   } finally {
-    await page.request.post(`${API}/spj/${spj.spj_id}/cancel`, { headers });
+    // #89: independent bounded context, not page.request.
+    const token = headers.Authorization.slice(7);
+    const outcome = await cancelSpjIndependently(token, spj.spj_id);
+    console.log(`[cleanup] ${spj.spj_number}: ${outcome}`);
+    await assertNoLeftoverActiveSpj(token);
   }
 });
 
@@ -161,11 +170,10 @@ test("Fleet SPJ mutations and lifecycle labels follow authorization and ID/EN", 
     await expect(status(second.spj_number)).toHaveText("Canceled");
     await expect(panel.getByRole("heading", { name: "Dispatch orders" })).toBeVisible();
   } finally {
+    // #89: independent bounded context, not page.request.
     for (const id of created) {
-      const response = await page.request.get(`${API}/spj/${id}`);
-      if (response.ok() && ["draft", "aktif"].includes((await response.json()).status)) {
-        await page.request.post(`${API}/spj/${id}/cancel`, { headers });
-      }
+      const outcome = await cancelSpjIndependently(dispatcherToken, id);
+      console.log(`[cleanup] ${id}: ${outcome}`);
     }
   }
 });

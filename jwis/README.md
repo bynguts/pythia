@@ -97,7 +97,8 @@ does not become a deviation-scoring reference path.
 4. **Integrated Planning:**
    - Review constraints and approve the weekly staggered queue plan.
 5. **Data & ML Audit:**
-   - Audit the Prophet/XGBoost models' accuracy metrics (WAPE, MAE), training limits, and data provenance.
+   - Audit per-Kecamatan model suitability: each resolution (Kecamatan, Kelurahan, RW) carries a suitability label — `reliable`, `synthetic-validated`, or `not supported` — together with the data provenance behind it.
+   - The audit workspace surfaces validation-target classes and provenance for every predicted series, so planners can see exactly which numbers rest on observed data versus synthetic coverage. (Accuracy metrics like WAPE/MAE are computed in `app/forecast_metrics.py` for offline evaluation but are not part of the current audit UI/API surface.)
 
 
 ### Driver weighbridge receipt

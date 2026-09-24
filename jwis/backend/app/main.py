@@ -242,6 +242,11 @@ class DispatchConfirmRequest(BaseModel):
     # Indonesian READY used by existing clients), and DONE (completed).
     status: Literal["READY", "ISSUE", "SIAP", "DONE"]
     note: str = Field(default="", max_length=500)
+    # #44: optional client operation id. When supplied and already recorded
+    # for this dispatch, the confirmation is treated as a replay: the stored
+    # result is returned and no second history event is written, so flush
+    # retries keep exactly-once observable behavior.
+    operation_id: str | None = Field(default=None, min_length=8, max_length=80)
 
 class HybridPredictRequest(BaseModel):
     kelurahan: str = Field(min_length=1, max_length=50)
@@ -1057,10 +1062,23 @@ def dispatch_status(dispatch_id: str, _role: str = Depends(require_any_permissio
 
 @app.post("/api/dispatch/{dispatch_id}/confirm")
 def confirm_dispatch(dispatch_id: str, payload: DispatchConfirmRequest, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict:
-    try:
-        d = history_store.update_dispatch_status(dispatch_id, payload.status, payload.note)
-    except KeyError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+    # #44: operation_id replay detection. A confirmation carrying an
+    # operation_id already recorded for this dispatch returns the stored
+    # state without writing a second history event, so outbox flush retries
+    # stay exactly-once observable.
+    if payload.operation_id is not None:
+        prior = history_store.get_dispatch_operation(dispatch_id, payload.operation_id)
+        if prior is not None:
+            # Replay of an already-recorded operation: return stored state,
+            # do not write a second history event (#44).
+            return prior
+        d = history_store.update_dispatch_status(
+            dispatch_id, payload.status, payload.note, payload.operation_id)
+    else:
+        try:
+            d = history_store.update_dispatch_status(dispatch_id, payload.status, payload.note)
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
     history_store.record_event("dispatch_confirmed", {"dispatch_id": dispatch_id, "status": payload.status})
     return d
 

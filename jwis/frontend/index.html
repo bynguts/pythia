@@ -3,15 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <script>
-      try {
-        document.documentElement.lang = localStorage.getItem("jwis_lang") === "en" ? "en" : "id";
-      } catch {
-        document.documentElement.lang = "id";
-      }
+      // #49/#85: install metadata follows the app language. ID is the
+      // default (matches documentElement.lang below), EN is opt-in via the
+      // language switch persisted as jwis_lang. The href is built from a
+      // fixed allowlist (no user input reaches the DOM write), and
+      // document.createElement is used instead of document.write/innerHTML.
+      (function () {
+        var lang = "id";
+        try {
+          lang = localStorage.getItem("jwis_lang") === "en" ? "en" : "id";
+        } catch (e) {
+          lang = "id";
+        }
+        document.documentElement.lang = lang;
+        var link = document.createElement("link");
+        link.rel = "manifest";
+        // Fixed allowlist: only these two hrefs can ever be assigned.
+        link.href = lang === "en" ? "/manifest.webmanifest" : "/manifest.id.webmanifest";
+        document.head.appendChild(link);
+      })();
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#176b54" />
-    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Geist+Mono:wght@100..900&display=swap" rel="stylesheet">

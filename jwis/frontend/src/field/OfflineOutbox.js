@@ -17,7 +17,19 @@ function writeOutbox(items) {
 
 export function enqueue(entry) {
   const items = readOutbox();
-  items.push({ ...entry, queued_at: new Date().toISOString() });
+  // #44: queue identity is (dispatchId, status) — the dispatch and the
+  // intended terminal state. Repeated taps of the same choice collapse into
+  // one pending operation (keeping the earliest queued_at so ordering across
+  // distinct operations is stable); a different status on the same dispatch
+  // is a distinct operation and is appended.
+  const existing = items.findIndex(
+    (item) => item.dispatchId === entry.dispatchId && item.status === entry.status,
+  );
+  if (existing >= 0) {
+    items[existing] = { ...items[existing], ...entry, queued_at: items[existing].queued_at };
+  } else {
+    items.push({ ...entry, queued_at: new Date().toISOString() });
+  }
   writeOutbox(items);
   return items.length;
 }
