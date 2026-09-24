@@ -95,7 +95,12 @@ import "./styles.css";
 import { API_URL } from "./config.js";
 import { authenticatedRequest, createAlertDispatch } from "./dispatchApi.js";
 
-if (import.meta.env.PROD && "serviceWorker" in navigator) {
+// Necessary: skip SW registration under test automation. The worker serves
+// cache-first responses that Playwright route stubs cannot intercept, which
+// made stubbed command-center snapshots (field dispatch flows) never reach
+// the UI. Same determinism pattern as LiveFleetMap's IS_AUTOMATION.
+const IS_AUTOMATION = typeof navigator !== "undefined" && Boolean(navigator.webdriver);
+if (import.meta.env.PROD && !IS_AUTOMATION && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register("/sw.js")
@@ -447,14 +452,13 @@ function CommandCenter({ onLogout }) {
         {activeWorkspace === "planning" && (
         <ErrorBoundary name="planning">
           <PlanningDecisionFlow
-            snapshot={snapshot}
             attendance={attendance}
             setAttendance={setAttendance}
             rainfall={rainfall}
             setRainfall={setRainfall}
             eventLat={eventLat}
             eventLng={eventLng}
-            summary={snapshot.executive_summary}
+            snapshot={snapshot}
             queue={snapshot.tpa_queue}
           /></ErrorBoundary>
         )}

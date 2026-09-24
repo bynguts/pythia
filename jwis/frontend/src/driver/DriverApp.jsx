@@ -15,30 +15,37 @@ import {
   WifiOff,
 } from "lucide-react";
 import "./driver.css";
+import { useLanguage } from "../i18n.jsx";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api";
 
-const PRETRIP_ITEMS = [
-  ["rem", "Rem"],
-  ["mesin", "Mesin"],
-  ["ban", "Ban dan roda"],
-  ["bbm", "BBM"],
-  ["oli", "Oli"],
-  ["bak_compactor", "Bak/Compactor"],
-  ["lampu", "Lampu & Kelistrikan"],
-];
+const PRETRIP_ITEMS = ["rem", "mesin", "ban", "bbm", "oli", "bak_compactor", "lampu"];
 const FRACTIONS = ["Residu", "Organik", "Anorganik"];
 const BERAT_COMPONENTS = new Set(["rem", "mesin", "ban"]);
 
+const photoErrors = {
+  photo_too_big: { en: "Photo must be at most 5 MB", id: "Foto maksimal 5 MB" },
+  photo_read_failed: { en: "Failed to read the photo", id: "Gagal membaca foto" },
+};
+
+function currentLang() {
+  try {
+    return localStorage.getItem("jwis_lang") || "id";
+  } catch {
+    return "id";
+  }
+}
+
 function readPhoto(file) {
+  const lang = currentLang();
   return new Promise((resolve, reject) => {
     if (file.size > 5 * 1024 * 1024) {
-      reject(new Error("Foto maksimal 5 MB"));
+      reject(new Error(photoErrors.photo_too_big[lang]));
       return;
     }
     const reader = new FileReader();
     reader.onload = () => resolve({ name: file.name, b64: reader.result });
-    reader.onerror = () => reject(new Error("Gagal membaca foto"));
+    reader.onerror = () => reject(new Error(photoErrors.photo_read_failed[lang]));
     reader.readAsDataURL(file);
   });
 }
@@ -69,7 +76,10 @@ async function post(path, data) {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || `Gagal (${res.status})`);
+    const fallback = currentLang() === "en"
+      ? `Request failed (${res.status})`
+      : `Gagal (${res.status})`;
+    throw new Error(body.detail || fallback);
   }
   return res.json();
 }
@@ -98,12 +108,13 @@ function Toast({ message }) {
 // ── Pre-trip inspection ───────────────────────────────────────────────────────
 
 function PreTripForm({ driver, done, onDone, say }) {
+  const { t } = useLanguage();
   const [items, setItems] = useState({});
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
   const answered = Object.keys(items).length;
-  const failures = PRETRIP_ITEMS.filter(([key]) => items[key] === false);
+  const failures = PRETRIP_ITEMS.filter((key) => items[key] === false);
   const canSubmit =
     answered === PRETRIP_ITEMS.length &&
     (failures.length === 0 || note.trim().length > 0);
@@ -130,13 +141,13 @@ function PreTripForm({ driver, done, onDone, say }) {
       });
       pretripSaved = true;
       // A TIDAK item auto-creates a damage report (source: pretrip).
-      for (const [key, label] of failures) {
+      for (const key of failures) {
         await post("/damage-reports", {
           truck_code: driver.truck_code,
           driver_name: driver.driver_name,
           component: key,
           severity: BERAT_COMPONENTS.has(key) ? "berat" : "ringan",
-          note: note.trim() || `TIDAK saat pretrip: ${label}`,
+          note: note.trim() || t("drv_pretrip_no_reason").replace("{label}", t(`drv_pretrip_item_${key === "bak_compactor" ? "bak" : key}`)),
           source: "pretrip",
         });
       }
@@ -144,9 +155,9 @@ function PreTripForm({ driver, done, onDone, say }) {
     } catch (err) {
       if (pretripSaved) {
         onDone();
-        say("Inspeksi tersimpan, tetapi laporan kerusakan gagal terkirim — laporkan ke admin.");
+        say(t("drv_pretrip_damage_failed"));
       } else {
-        say(err.message || "Gagal menyimpan inspeksi");
+        say(err.message || t("drv_pretrip_save_failed"));
       }
     } finally {
       setBusy(false);
@@ -158,12 +169,12 @@ function PreTripForm({ driver, done, onDone, say }) {
       <section className="driver-card" data-testid="pretrip-done">
         <div className="driver-card-head">
           <h2>
-            <ClipboardCheck size={18} /> Inspeksi pra-jalan
+            <ClipboardCheck size={18} /> {t("drv_pretrip_title")}
           </h2>
-          <span className="driver-badge done">SELESAI</span>
+          <span className="driver-badge done">{t("drv_pretrip_done_badge")}</span>
         </div>
         <p className="driver-muted">
-          Inspeksi hari ini sudah tercatat. Lanjutkan tugas Anda.
+          {t("drv_pretrip_done_desc")}
         </p>
       </section>
     );
@@ -173,7 +184,7 @@ function PreTripForm({ driver, done, onDone, say }) {
     <section className="driver-card" data-testid="pretrip-form">
       <div className="driver-card-head">
         <h2>
-          <ClipboardCheck size={18} /> Inspeksi pra-jalan
+          <ClipboardCheck size={18} /> {t("drv_pretrip_title")}
         </h2>
         <span className="driver-badge">
           {answered}/{PRETRIP_ITEMS.length}
@@ -182,13 +193,13 @@ function PreTripForm({ driver, done, onDone, say }) {
       <div className="driver-progress" aria-hidden="true">
         <div
           className="driver-progress-fill"
-          style={{ width: `${(answered / PRETRIP_ITEMS.length) * 100}%` }}
+          style={{ transform: `scaleX(${answered / PRETRIP_ITEMS.length})` }}
         />
       </div>
       <ul className="pretrip-list">
-        {PRETRIP_ITEMS.map(([key, label]) => (
+        {PRETRIP_ITEMS.map((key) => (
           <li key={key} className="pretrip-item">
-            <span>{label}</span>
+            <span>{t(`drv_pretrip_item_${key === "bak_compactor" ? "bak" : key}`)}</span>
             <div className="pretrip-choices">
               <button
                 type="button"
@@ -204,7 +215,7 @@ function PreTripForm({ driver, done, onDone, say }) {
                 className={`pretrip-choice tidak ${items[key] === false ? "active" : ""}`}
                 onClick={() => setItems((p) => ({ ...p, [key]: false }))}
               >
-                TIDAK
+                {t("drv_no")}
               </button>
             </div>
           </li>
@@ -213,7 +224,7 @@ function PreTripForm({ driver, done, onDone, say }) {
       {failures.length > 0 && (
         <>
           <label className="driver-label" htmlFor="pretrip-note">
-            Catatan (wajib bila ada item TIDAK)
+            {t("drv_pretrip_note_label")}
           </label>
           <textarea
             id="pretrip-note"
@@ -221,7 +232,7 @@ function PreTripForm({ driver, done, onDone, say }) {
             rows={2}
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Jelaskan kondisi item yang bermasalah"
+            placeholder={t("drv_pretrip_note_placeholder")}
           />
         </>
       )}
@@ -232,7 +243,7 @@ function PreTripForm({ driver, done, onDone, say }) {
           onClick={markRestOk}
           disabled={answered === PRETRIP_ITEMS.length}
         >
-          Tandai Sisanya Baik
+          {t("drv_pretrip_rest_ok")}
         </button>
         <button
           type="button"
@@ -240,7 +251,7 @@ function PreTripForm({ driver, done, onDone, say }) {
           onClick={submit}
           disabled={!canSubmit || busy}
         >
-          <Check size={16} /> Simpan Inspeksi
+          <Check size={16} /> {t("drv_pretrip_save")}
         </button>
       </div>
     </section>
@@ -250,6 +261,7 @@ function PreTripForm({ driver, done, onDone, say }) {
 // ── Stop evidence (arrival → weighing → officer) ──────────────────────────────
 
 function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [arrival, setArrival] = useState(null);
   const [weighPhoto, setWeighPhoto] = useState(null);
@@ -280,11 +292,11 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
   const addWeighing = () => {
     const kg = parseFloat(weight);
     if (!weighPhoto) {
-      say("Foto timbang belum ada");
+      say(t("drv_weigh_missing"));
       return;
     }
     if (!Number.isFinite(kg) || kg <= 0) {
-      say("Isi berat timbangan (kg)");
+      say(t("drv_weigh_enter_weight"));
       return;
     }
     setWeighing((prev) => [
@@ -313,7 +325,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
       await post(`/spj/${spj.spj_id}/stops/${index}/complete`, { evidence });
       onCompleted();
     } catch (err) {
-      say(err.message || "Gagal menyelesaikan titik");
+      say(err.message || t("drv_stop_complete_failed"));
     } finally {
       setBusy(false);
     }
@@ -329,9 +341,9 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
     >
       <div className="driver-card-head">
         <h2>
-          <MapPin size={18} /> Titik {index + 1}: {stop.name}
+          <MapPin size={18} /> {t("drv_stop_title").replace("{n}", index + 1).replace("{name}", stop.name)}
         </h2>
-        {completed && <span className="driver-badge done">SELESAI</span>}
+        {completed && <span className="driver-badge done">{t("drv_stop_selesai")}</span>}
       </div>
       <p className="driver-muted">
         {stop.kecamatan} — {stop.address}
@@ -339,7 +351,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
 
       {completed && (
         <ul className="step-list">
-          {["Kedatangan", "Timbang Residu", "Petugas"].map((label) => (
+          {[t("drv_step_arrival"), t("drv_step_weigh"), t("drv_step_officer")].map((label) => (
             <li key={label} className="step done">
               <CheckCircle2 size={15} /> {label}
             </li>
@@ -348,13 +360,13 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
       )}
 
       {locked && !completed && (
-        <p className="driver-muted">Selesaikan titik sebelumnya dulu.</p>
+        <p className="driver-muted">{t("drv_stop_locked")}</p>
       )}
 
       {current && !completed && !open && (
         <div className="driver-actions">
           <button type="button" className="driver-btn primary" onClick={() => setOpen(true)}>
-            <Camera size={16} /> Mulai Titik Ini
+            <Camera size={16} /> {t("drv_stop_start")}
           </button>
         </div>
       )}
@@ -362,7 +374,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
       {current && !completed && open && (
         <div className="stop-form">
           <ol className="step-list">
-            {["Kedatangan", "Timbang Residu", "Petugas"].map((label, i) => (
+            {[t("drv_step_arrival"), t("drv_step_weigh"), t("drv_step_officer")].map((label, i) => (
               <li
                 key={label}
                 className={`step ${step > i + 1 ? "done" : step === i + 1 ? "current" : ""}`}
@@ -375,7 +387,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
 
           {/* Step 1: arrival photo */}
           <label className="driver-label" htmlFor={`arrival-${index}`}>
-            Foto kedatangan di lokasi
+            {t("drv_arrival_label")}
           </label>
           <input
             id={`arrival-${index}`}
@@ -386,13 +398,13 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
             className="driver-file"
             onChange={(e) => handlePhoto(e.target.files?.[0], setArrival)}
           />
-          {arrival && <p className="driver-muted">Foto terlampir: {arrival.name}</p>}
+          {arrival && <p className="driver-muted">{t("drv_photo_attached").replace("{name}", arrival.name)}</p>}
 
           {/* Step 2: weighing */}
           {step >= 2 && (
             <>
               <label className="driver-label" htmlFor={`weigh-${index}`}>
-                Foto timbang residu
+                {t("drv_weigh_label")}
               </label>
               <input
                 id={`weigh-${index}`}
@@ -406,7 +418,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
               <div className="driver-row">
                 <div>
                   <label className="driver-label" htmlFor={`fraction-${index}`}>
-                    Fraksi
+                    {t("drv_fraction")}
                   </label>
                   <select
                     id={`fraction-${index}`}
@@ -421,7 +433,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
                 </div>
                 <div>
                   <label className="driver-label" htmlFor={`weight-${index}`}>
-                    Berat (kg)
+                    {t("drv_weight")}
                   </label>
                   <input
                     id={`weight-${index}`}
@@ -437,7 +449,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
               </div>
               <div className="driver-actions">
                 <button type="button" className="driver-btn ghost" onClick={addWeighing}>
-                  <Scale size={16} /> Tambah Timbangan
+                  <Scale size={16} /> {t("drv_weigh_add")}
                 </button>
               </div>
               {weighing.length > 0 && (
@@ -456,7 +468,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
           {step >= 3 && (
             <>
               <label className="driver-label" htmlFor={`officer-${index}`}>
-                Foto petugas penerima
+                {t("drv_officer_label")}
               </label>
               <input
                 id={`officer-${index}`}
@@ -468,14 +480,14 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
                 onChange={(e) => handlePhoto(e.target.files?.[0], setOfficerPhoto)}
               />
               <label className="driver-label" htmlFor={`officer-name-${index}`}>
-                Nama Petugas
+                {t("drv_officer_name_label")}
               </label>
               <input
                 id={`officer-name-${index}`}
                 className="driver-input"
                 value={officerName}
                 onChange={(e) => setOfficerName(e.target.value)}
-                placeholder="Nama petugas di lokasi"
+                placeholder={t("drv_officer_name_placeholder")}
               />
               <div className="driver-actions">
                 <button
@@ -484,7 +496,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
                   onClick={submit}
                   disabled={!canSubmit || busy}
                 >
-                  <Check size={16} /> Selesaikan Titik
+                  <Check size={16} /> {t("drv_stop_complete")}
                 </button>
               </div>
             </>
@@ -498,6 +510,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
 // ── Delivery / receipt ────────────────────────────────────────────────────────
 
 function DeliveryCard({ spj, say, onDone }) {
+  const { t } = useLanguage();
   const [receipt, setReceipt] = useState(null);
   const [totalWeight, setTotalWeight] = useState("");
   const [weightSource, setWeightSource] = useState("manual");
@@ -586,7 +599,7 @@ function DeliveryCard({ spj, say, onDone }) {
       } catch { /* flag is best-effort; receipt is already recorded server-side */ }
       onDone();
     } catch (err) {
-      say(err.message || "Gagal mengirim struk");
+      say(err.message || t("drv_receipt_failed"));
     } finally {
       setBusy(false);
     }
@@ -597,14 +610,14 @@ function DeliveryCard({ spj, say, onDone }) {
              data-spj-id={spj.spj_id}>
       <div className="driver-card-head">
         <h2>
-          <PackageCheck size={18} /> Bukti serah terima
+          <PackageCheck size={18} /> {t("drv_receipt_title")}
         </h2>
       </div>
       <p className="driver-muted">
-        Semua titik selesai. Unggah foto struk timbang truk bermuatan dari {spj.destination}.
+        {t("drv_receipt_intro").replace("{destination}", spj.destination)}
       </p>
       <label className="driver-label" htmlFor="receipt-photo">
-        Foto struk timbang
+        {t("drv_receipt_photo_label")}
       </label>
       <input
         id="receipt-photo"
@@ -619,42 +632,39 @@ function DeliveryCard({ spj, say, onDone }) {
           e.target.value = ""; // permit choosing the same image again for another reading
         }}
       />
-      {receipt && <p className="driver-muted">Struk terlampir: {receipt.name}</p>}
+      {receipt && <p className="driver-muted">{t("drv_photo_attached").replace("{name}", receipt.name)}</p>}
       {ocr.status === "loading" && (
-        <p className="weigh-feedback" role="status">Membaca angka pada struk…</p>
+        <p className="weigh-feedback" role="status">{t("drv_receipt_reading")}</p>
       )}
       {ocr.status === "suggested" && (
         <p className="weigh-feedback" role="status">
-          Saran {ocr.source}: {ocr.suggestion} kg.{" "}
-          {weightSource === "ocr"
-            ? "Cocokkan dengan struk sebelum konfirmasi."
-            : "Berat yang Anda ubah akan dicatat sebagai entri manual."}
+          {t("drv_receipt_suggested").replace("{source}", ocr.source).replace("{n}", ocr.suggestion).replace("{extra}", weightSource === "ocr" ? t("drv_receipt_confirm_hint") : t("drv_receipt_manual_hint"))}
         </p>
       )}
       {ocr.status === "unavailable" && (
         <p className="weigh-feedback" role="status">
-          Pembacaan otomatis tidak tersedia. Masukkan angka dari struk secara manual.
+          {t("drv_receipt_unavailable")}
         </p>
       )}
       {ocr.status === "unreadable" && (
         <p className="weigh-feedback" role="status">
-          Angka pada struk tidak terbaca. Masukkan berat yang tertera secara manual.
+          {t("drv_receipt_unreadable")}
         </p>
       )}
       {ocr.status === "manual" && (
         <p className="weigh-feedback" role="status">
-          Entri manual. Isi berat yang tertera pada struk foto.
+          {t("drv_receipt_manual_entry")}
         </p>
       )}
       {receipt && (ocr.status === "loading" || ocr.status === "suggested") && (
         <button type="button" className="driver-btn ghost weigh-manual" onClick={useManual}>
-          Isi berat manual
+          {t("drv_receipt_manual_btn")}
         </button>
       )}
       {receipt && ocr.status !== "loading" && (
         <>
           <label className="driver-label" htmlFor="receipt-weight">
-            Berat truk bermuatan (kg)
+            {t("drv_receipt_weight_label")}
           </label>
           <input
             id="receipt-weight"
@@ -670,7 +680,7 @@ function DeliveryCard({ spj, say, onDone }) {
               setConfirmed(false);
               operationId.current = null; // edited weight is a new submission
             }}
-            placeholder="Contoh: 12450"
+            placeholder={t("drv_receipt_weight_placeholder")}
           />
           <label className="weigh-confirm">
             <input
@@ -679,7 +689,7 @@ function DeliveryCard({ spj, say, onDone }) {
               onChange={(e) => setConfirmed(e.target.checked)}
               disabled={!validWeight}
             />
-            <span>Saya sudah mencocokkan berat dengan struk foto.</span>
+            <span>{t("drv_receipt_confirm")}</span>
           </label>
         </>
       )}
@@ -690,7 +700,7 @@ function DeliveryCard({ spj, say, onDone }) {
           onClick={submit}
           disabled={!receipt || !validWeight || !confirmed || busy || ocr.status === "loading"}
         >
-          <Check size={16} /> {busy ? "Mengirim struk…" : "Kirim struk"}
+          <Check size={16} /> {busy ? t("drv_receipt_sending") : t("drv_receipt_send")}
         </button>
       </div>
     </section>
@@ -700,6 +710,7 @@ function DeliveryCard({ spj, say, onDone }) {
 // ── App ───────────────────────────────────────────────────────────────────────
 
 export default function DriverApp() {
+  const { t } = useLanguage();
   const [driver, setDriver] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("jwis_driver"));
@@ -819,18 +830,18 @@ export default function DriverApp() {
             </span>
             <span>
               <strong>JWIS Driver</strong>
-              <small>PWA Sopir</small>
+              <small>{t("drv_subtitle")}</small>
             </span>
           </span>
           {!online && (
             <span className="driver-offline">
-              <WifiOff size={14} /> Offline
+              <WifiOff size={14} /> {t("drv_offline")}
             </span>
           )}
         </header>
         <section className="driver-card">
           <h2>
-            <User size={18} /> Siapa yang bertugas?
+            <User size={18} /> {t("drv_gate_title")}
           </h2>
           <ul className="driver-pick-list">
             {drivers.map((d) => (
@@ -845,7 +856,7 @@ export default function DriverApp() {
               </li>
             ))}
             {drivers.length === 0 && (
-              <li className="driver-muted">Memuat daftar armada…</li>
+              <li className="driver-muted">{t("drv_gate_loading")}</li>
             )}
           </ul>
         </section>
@@ -876,37 +887,37 @@ export default function DriverApp() {
         <span className="driver-header-right">
           {!online && (
             <span className="driver-offline">
-              <WifiOff size={14} /> Offline
+              <WifiOff size={14} /> {t("drv_offline")}
             </span>
           )}
           <button type="button" className="driver-link" onClick={switchDriver}>
-            Ganti
+            {t("drv_switch")}
           </button>
         </span>
       </header>
 
       <section className="driver-card driver-identity">
-        <p className="driver-kicker">Selamat bertugas</p>
+        <p className="driver-kicker">{t("drv_kicker")}</p>
         <h1>{driver.driver_name}</h1>
         <p className="driver-muted">
           {driver.truck_code}
-          {spjAktif ? ` — ${spjAktif.spj_number} → ${spjAktif.destination}` : " — belum ada SPJ aktif"}
+          {spjAktif ? ` — ${spjAktif.spj_number} → ${spjAktif.destination}` : t("drv_no_spj")}
         </p>
       </section>
 
       {doneScreen ? (
         <section className="driver-card driver-done" data-testid="done-screen">
           <ShieldCheck size={40} />
-          <h1>Tugas selesai</h1>
+          <h1>{t("drv_done_title")}</h1>
           <p className="driver-muted">
-            Bukti serah terima sudah tercatat. Terima kasih!
+            {t("drv_done_desc")}
           </p>
           <button
             type="button"
             className="driver-btn ghost"
             onClick={() => setDoneScreen(false)}
           >
-            <ArrowLeft size={16} /> Kembali
+            <ArrowLeft size={16} /> {t("drv_done_back")}
           </button>
         </section>
       ) : (
@@ -916,7 +927,7 @@ export default function DriverApp() {
             done={pretripDone}
             onDone={() => {
               setPretripDone(true);
-              say("Inspeksi tersimpan");
+              say(t("drv_pretrip_saved"));
             }}
             say={say}
           />
@@ -932,7 +943,7 @@ export default function DriverApp() {
                 locked={pendingIndex !== -1 && i > pendingIndex}
                 onCompleted={() => {
                   loadSpj();
-                  say("Titik diselesaikan");
+                  say(t("drv_stop_done_toast"));
                 }}
                 say={say}
               />
@@ -963,8 +974,7 @@ export default function DriverApp() {
           {!spjAktif && (
             <section className="driver-card">
               <p className="driver-muted">
-                Belum ada SPJ aktif untuk truk Anda. Hubungi pengawas bila sudah ada
-                perintah jalan.
+                {t("drv_no_spj_desc")} {t("drv_no_spj_hint")}
               </p>
             </section>
           )}
@@ -972,7 +982,7 @@ export default function DriverApp() {
           {history.length > 0 && !doneScreen && (
             <section className="driver-card" data-testid="history-card">
               <h2>
-                <ClipboardCheck size={18} /> Riwayat tugas
+                <ClipboardCheck size={18} /> {t("drv_history_title")}
               </h2>
               <ul className="history-list">
                 {history.slice(0, 5).map((s) => (
@@ -983,7 +993,7 @@ export default function DriverApp() {
                         {s.date} — {s.destination}
                       </small>
                     </span>
-                    <span className="driver-badge done">selesai</span>
+                    <span className="driver-badge done">{t("drv_history_done")}</span>
                   </li>
                 ))}
               </ul>

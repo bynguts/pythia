@@ -26,18 +26,18 @@ export function PredictionPanel({ predictions, allPredictions = predictions }) {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px", marginBottom: "16px", minWidth: 0 }}>
         <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
           <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{t("fc_hr_districts")}</span>
-          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "var(--ui-danger)" }}>{predictions.length} {lang === "id" ? "distrik" : "districts"}</strong>
+          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", overflowWrap: "anywhere", color: "var(--ui-danger)" }}>{predictions.length} {lang === "id" ? "distrik" : "districts"}</strong>
         </div>
         <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
           <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{t("fc_peak_spike")}</span>
-          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "var(--ui-warning)" }}>+{highestSpike}%</strong>
+          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", overflowWrap: "anywhere", color: "var(--ui-warning)" }}>+{highestSpike}%</strong>
         </div>
         <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
           <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{t("fc_extra_cap")}</span>
-          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "var(--ui-ink)" }}>{totalExtraTrucks} {lang === "id" ? "truk" : "trucks"} · {totalExtraCrews} {lang === "id" ? "kru" : "crews"}</strong>
+          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", overflowWrap: "anywhere", color: "var(--ui-ink)" }}>{totalExtraTrucks} {lang === "id" ? "truk" : "trucks"} · {totalExtraCrews} {lang === "id" ? "kru" : "crews"}</strong>
         </div>
       </div>
 

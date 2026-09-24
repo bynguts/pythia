@@ -40,8 +40,15 @@ button { color: inherit; }
 .command-title-row strong { font-size: 16px; }
 .command-title-row span { overflow: hidden; color: var(--ui-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .command-top-actions { display: flex; align-items: center; gap: 10px; }
+/* #31: the language switch keeps its compact visual size but guarantees a
+   44px hit area on touch viewports via a media query (desktop keeps the
+   denser 34px bar). */
 .command-language { height: 34px; padding: 3px; display: flex; border-radius: 7px; background: var(--ui-surface-muted); }
 .command-language button { min-width: 35px; border: 0; border-radius: 5px; color: var(--ui-muted); background: transparent; font-size: 11px; font-weight: 700; cursor: pointer; }
+@media (max-width: 920px) {
+  .command-language { height: 44px; }
+  .command-language button { min-height: 38px; }
+}
 .command-language button.active { color: var(--ui-ink); background: #fff; box-shadow: 0 1px 3px rgba(20,32,28,.1); }
 .command-assistant { min-height: 38px; padding: 0 13px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--ui-border); border-radius: 8px; color: var(--ui-ink); background: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
 .command-assistant svg { color: var(--ui-accent); }
@@ -637,7 +644,7 @@ button { color: inherit; }
   padding: 12px 14px;
 }
 
-.ai-outlook h4 {
+.ai-outlook h3 {
   margin: 0 0 10px;
   font-size: var(--fs-caption);
   font-weight: 700;

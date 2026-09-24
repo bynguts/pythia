@@ -575,3 +575,14 @@
   background: #176b54;
   color: #ffffff;
 }
+
+
+/* #31: MapLibre stock controls measure 29x29; guarantee the 44px product
+   minimum on touch viewports without breaking the desktop layout. */
+@media (max-width: 920px) {
+  .maplibregl-ctrl-group button,
+  .maplibregl-ctrl button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

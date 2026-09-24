@@ -223,6 +223,9 @@ class AssistantRequest(BaseModel):
     history: list[dict] = Field(default_factory=list, max_length=8)
     file_data: str | None = Field(default=None, max_length=30_000_000)
     file_type: str | None = Field(default=None, pattern="^(image|pdf)$")
+    # #76: UI locale requested explicitly so the answer language follows the
+    # user's selected mode for the whole conversation.
+    language: str = Field(default="id", pattern="^(id|en)$")
 
 class WhatsAppAlertRequest(BaseModel):
     truck_code: str = Field(min_length=1, max_length=20)
@@ -717,7 +720,7 @@ def assistant_query(payload: AssistantRequest, _role: str = Depends(require_perm
             images = resolve_file_to_images(payload.file_data, payload.file_type)
         result = answer_with_openai_if_configured(
             payload.question, snapshot, history=payload.history, tool_ctx=tool_ctx,
-            images=images
+            images=images, language=payload.language
         )
     except Exception as e:
         logger.exception("assistant query failed")
