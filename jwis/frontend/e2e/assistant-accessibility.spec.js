@@ -26,7 +26,7 @@ test("assistant keeps keyboard focus inside and restores it after dismissal", as
   await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Asisten operasi" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("textbox", { name: "Ask Ana anything" })).toBeFocused();
+  await expect(dialog.getByRole("textbox", { name: "Tanya apa saja ke Ana" })).toBeFocused();
   for (const selector of [".command-sidebar", ".command-topbar", ".command-canvas", ".command-mobile-nav"]) {
     await expect(page.locator(selector)).toHaveJSProperty("inert", true);
   }
@@ -37,7 +37,7 @@ test("assistant keeps keyboard focus inside and restores it after dismissal", as
   }
   await dialog.getByRole("button", { name: "Tutup asisten" }).focus();
   await page.keyboard.press("Shift+Tab");
-  await expect(dialog.getByRole("textbox", { name: "Ask Ana anything" })).toBeFocused();
+  await expect(dialog.getByRole("textbox", { name: "Tanya apa saja ke Ana" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(dialog.getByRole("button", { name: "Tutup asisten" })).toBeFocused();
 
@@ -75,9 +75,9 @@ test("signed-in operator can query the protected assistant endpoint", async ({ p
   });
   await page.getByRole("button", { name: "Asisten operasi" }).click();
   const dialog = page.getByRole("dialog", { name: "Asisten operasi" });
-  await dialog.getByRole("textbox", { name: "Ask Ana anything" })
+  await dialog.getByRole("textbox", { name: "Tanya apa saja ke Ana" })
     .fill("Berapa truk yang mengalami deviasi rute?");
-  await dialog.getByRole("button", { name: "Send message" }).click();
+  await dialog.getByRole("button", { name: "Kirim pesan" }).click();
   await expect(dialog.getByText("Data armada JWIS: 1 truk mengalami deviasi rute."))
     .toBeVisible();
 });
