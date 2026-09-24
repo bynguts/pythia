@@ -637,7 +637,7 @@ button { color: inherit; }
   padding: 12px 14px;
 }
 
-.ai-outlook h4 {
+.ai-outlook h3 {
   margin: 0 0 10px;
   font-size: var(--fs-caption);
   font-weight: 700;

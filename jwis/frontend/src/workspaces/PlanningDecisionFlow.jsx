@@ -193,7 +193,7 @@ export function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setR
         </div>
       </div>
       <div className="ai-outlook">
-        <h4>{lang === "id" ? "Prediksi AI 7 hari" : "AI 7-day outlook"}</h4>
+        <h3>{lang === "id" ? "Prediksi AI 7 hari" : "AI 7-day outlook"}</h3>
         {outlook.length === 0 ? (
           <div className="ai-feed-empty">{lang === "id" ? "Prediksi belum tersedia." : "Outlook is not available yet."}</div>
         ) : (
