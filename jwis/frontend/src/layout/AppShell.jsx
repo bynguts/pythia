@@ -13,12 +13,13 @@ import {
 } from "lucide-react";
 import { useLanguage } from "../i18n.jsx";
 
+// #15: descriptions are catalog keys, resolved per active locale at render time.
 const items = [
-  { id: "fleet", key: "nav_armada", icon: Truck, description: "Pantau dan tangani operasi hari ini" },
-  { id: "forecast", key: "nav_prediksi", icon: BarChart3, description: "Antisipasi beban layanan berikutnya" },
-  { id: "planning", key: "nav_rencana", icon: Workflow, description: "Susun dan setujui rencana operasi" },
-  { id: "drivers", key: "nav_sopir", icon: Users, description: "Kelola kepatuhan dan kinerja pengemudi" },
-  { id: "audit", key: "nav_audit", icon: ShieldCheck, description: "Periksa mutu data dan model" },
+  { id: "fleet", key: "nav_armada", descKey: "desc_fleet", icon: Truck },
+  { id: "forecast", key: "nav_prediksi", descKey: "desc_forecast", icon: BarChart3 },
+  { id: "planning", key: "nav_rencana", descKey: "desc_planning", icon: Workflow },
+  { id: "drivers", key: "nav_sopir", descKey: "desc_drivers", icon: Users },
+  { id: "audit", key: "nav_audit", descKey: "desc_audit", icon: ShieldCheck },
 ];
 
 const ALIASES = {
@@ -98,16 +99,17 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
 
   return (
     <div className="command-shell" ref={shellRef}>
-      <aside className="command-sidebar" aria-label="Navigasi utama JWIS">
+
+      <aside className="command-sidebar" aria-label={t("shell_sidebar_label")}>
         <div className="command-brand">
           <span className="command-brand-mark" aria-hidden="true">J</span>
           <div>
             <strong>JWIS</strong>
-            <small>Pusat kendali DLH</small>
+            <small>{t("shell_brand_sub")}</small>
           </div>
         </div>
 
-        <div className="command-nav-label">Ruang kerja</div>
+        <div className="command-nav-label">{t("shell_workspaces")}</div>
         <nav className="command-nav" id="workspace-navigation" data-testid="workspace-navigation">
           {items.map(({ id, key, icon: Icon }) => (
             <button
@@ -127,13 +129,13 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
           <div className="system-connection">
             <span className={`connection-dot ${online ? "online" : "offline"}`} />
             <div>
-              <strong>{online ? "Sistem terhubung" : "Mode terbatas"}</strong>
-              <small>{online ? "Data diperbarui otomatis" : "Menggunakan data cadangan"}</small>
+              <strong>{online ? t("shell_connected_title") : t("shell_offline_title")}</strong>
+              <small>{online ? t("shell_connected_sub") : t("shell_offline_sub")}</small>
             </div>
           </div>
           <button className="command-logout" type="button" onClick={onLogout}>
             <LogOut size={18} />
-            <span>Keluar</span>
+            <span>{t("shell_logout")}</span>
           </button>
         </div>
       </aside>
@@ -141,25 +143,25 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
       <main className="command-main" id="overview">
         <header className="command-topbar">
           <div className="command-context">
-            <span className="command-eyebrow">Operasi DKI Jakarta</span>
+            <span className="command-eyebrow">{t("shell_context_eyebrow")}</span>
             <div className="command-title-row">
               <strong>{t(current.key)}</strong>
-              <span>{current.description}</span>
+              <span>{t(current.descKey)}</span>
             </div>
           </div>
 
           <div className="command-top-actions">
-            <div className="command-language" aria-label="Pilih bahasa">
+            <div className="command-language" aria-label={t("shell_lang_label")}>
               <button type="button" data-testid="lang-switch-id" className={lang === "id" ? "active" : ""} onClick={() => setLang("id")}>ID</button>
               <button type="button" data-testid="lang-switch-en" className={lang === "en" ? "active" : ""} onClick={() => setLang("en")}>EN</button>
             </div>
-            <button className="command-assistant" type="button" ref={assistantTriggerRef} aria-label={lang === "id" ? "Asisten operasi" : "Operations assistant"} onClick={() => setAssistantOpen(true)}>
+            <button className="command-assistant" type="button" ref={assistantTriggerRef} aria-label={t("shell_assistant_label")} onClick={() => setAssistantOpen(true)}>
               <Sparkles size={17} />
-              <span>Asisten operasi</span>
+              <span>{t("shell_assistant")}</span>
             </button>
-            <button className="command-profile" type="button" aria-label="Profil operator">
+            <button className="command-profile" type="button" aria-label={t("shell_profile_label")}>
               <span className="command-avatar"><CircleUserRound size={19} /></span>
-              <span className="command-profile-copy"><strong>JWIS Team</strong><small>Operator DLH</small></span>
+              <span className="command-profile-copy"><strong>{t("shell_profile_name")}</strong><small>{t("shell_profile_role")}</small></span>
               <ChevronDown size={15} />
             </button>
           </div>
@@ -167,7 +169,7 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
 
         <div className="command-canvas">{children}</div>
 
-        <nav className="command-mobile-nav" aria-label="Navigasi ruang kerja seluler">
+        <nav className="command-mobile-nav" aria-label={t("shell_mobile_nav_label")}>
           {items.map(({ id, key, icon: Icon }) => (
             <button
               key={id}
@@ -177,15 +179,15 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
               onClick={() => selectWorkspace(id)}
             >
               <Icon size={20} />
-              <span>{id === "audit" ? "Audit" : t(key)}</span>
+              <span>{id === "audit" ? t("nav_audit") : t(key)}</span>
             </button>
           ))}
         </nav>
 
         {assistantOpen && (
           <div className="assistant-modal-backdrop" role="presentation" onMouseDown={() => setAssistantOpen(false)}>
-            <section className="assistant-modal" ref={assistantDialogRef} role="dialog" aria-modal="true" aria-label={lang === "id" ? "Asisten operasi" : "Operations assistant"} tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
-              <button className="assistant-close" type="button" aria-label={lang === "id" ? "Tutup asisten" : "Close assistant"} onClick={() => setAssistantOpen(false)}>×</button>
+            <section className="assistant-modal" ref={assistantDialogRef} role="dialog" aria-modal="true" aria-label={t("shell_assistant_label")} tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
+              <button className="assistant-close" type="button" aria-label={t("shell_close_assistant")} onClick={() => setAssistantOpen(false)}>×</button>
               {assistant}
             </section>
           </div>
