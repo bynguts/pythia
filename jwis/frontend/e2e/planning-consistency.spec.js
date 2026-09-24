@@ -38,10 +38,14 @@ test("planning review derives from the active scenario inputs", async ({ page })
   await signIn(page);
   // Attach the listener BEFORE opening the workspace: the scenario auto-runs
   // on mount (useEffect on attendance/rainfall).
-  const baselinePromise = page.waitForResponse(
-    (res) => res.url().includes("/predictions/kecamatan") && res.status() === 200,
-    { timeout: 30000 },
-  );
+  // Only PlanningDecisionFlow's own request counts — KecamatanMapPanel fetches
+  // the same endpoint with different params (0/0 defaults) in parallel workers.
+  const isDecisionFlowResponse = (res) =>
+    res.url().includes("/predictions/kecamatan") &&
+    res.url().includes("event_attendance=85000") &&
+    res.url().includes("rainfall_mm=42") &&
+    res.status() === 200;
+  const baselinePromise = page.waitForResponse(isDecisionFlowResponse, { timeout: 30000 });
   await page.locator(".command-nav").getByRole("button", { name: "Rencana", exact: true }).click();
   await expect(page.getByTestId("planning-workspace")).toBeVisible();
   const baselineResponse = await baselinePromise;
@@ -57,7 +61,8 @@ test("planning review derives from the active scenario inputs", async ({ page })
   // Change the simulator inputs drastically → scenario auto-reruns → the
   // review must re-derive from the NEW response.
   const scenarioPromise = page.waitForResponse(
-    (res) => res.url().includes("/predictions/kecamatan") && res.status() === 200,
+    (res) => res.url().includes("/predictions/kecamatan") &&
+      res.url().includes("event_attendance=200000") && res.status() === 200,
     { timeout: 30000 },
   );
   await page.locator('input[type="range"]').first().evaluate((el) => {

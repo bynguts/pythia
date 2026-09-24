@@ -787,5 +787,5 @@ button { color: inherit; }
   padding: 2px 8px;
   border-radius: 999px;
 }
-.scentinel-gates li.good { color: var(--ui-success, #15803d); background: rgba(21, 128, 61, 0.12); }
-.scentinel-gates li.limited { color: var(--ui-warning, #92400e); background: rgba(146, 64, 14, 0.12); }
+.scentinel-gates li.good { color: #14532d; background: #dcfce7; }
+.scentinel-gates li.limited { color: #7c2d12; background: #ffedd5; }
