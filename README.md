@@ -4,7 +4,7 @@
 
 JWIS (Jakarta Waste Intelligence System) is an end-to-end AI command center prototype that addresses **both cases** issued by DLH Jakarta in a single, integrated platform:
 
-- **Case 1 — AI-Based Waste Transportation Monitoring & Supervision System:** real-time fleet tracking, violation detection, and route/schedule optimization.
+- **Case 1 — AI-Based Waste Transportation Monitoring & Supervision System:** fleet tracking (simulated positioning today; live GPS is planned once a reachable runtime path exists), violation detection, and route/schedule optimization.
 - **Case 2 — Waste Volume Prediction System Based on Historical Data & Events**: predictive (not reactive) estimation of waste generation and required resources in crowded areas.
 
 ---
@@ -37,7 +37,7 @@ JWIS (Jakarta Waste Intelligence System) is an end-to-end AI command center prot
 - Live-tracking visuals overlaid on a base map.
 - Transport scheduling optimized by estimated travel time, fleet condition, and landfill (TPA) queue status.
 - Alternative-route recommendations that respect traffic regulations and permits.
-- **Deliverables:** Model · Dashboard (live routes, fleet status, trip history, real-time TPA queue) · Simulator (scheduling, ETA, alternative routes) · Executive summary (optimized schedule, fewer landfill queues).
+- **Deliverables:** Model · Dashboard (live routes, fleet status, trip history, TPA queue view) · Simulator (scheduling, ETA, alternative routes) · Executive summary (optimized schedule, fewer landfill queues).
 
 ### Case 2 — Waste Volume Prediction System Based on Historical Data & Events
 
@@ -69,7 +69,7 @@ Every workflow is an auditable loop — `detect → dispatch → acknowledge →
 ## Key Features
 
 ### Fleet Operations (Fleet Case 1)
-- **Live Fleet Map** (full-width) — real-time GPS positions with on-/off-corridor status (e.g. `T-047` off-corridor, highlighted amber).
+- **Live Fleet Map** (full-width) — simulated fleet positions with on-/off-corridor status (e.g. `T-047` off-corridor, highlighted amber). Positions are refreshed from the backend simulation, not live GPS; the map UI labels them "Data simulasi" / "SIMULATION · not live GPS".
 - **A\* Reroute Simulator** — simulates a traffic jam, then computes a new street-following route for `T-047` to TPA Bantargebang dynamically.
 - **TPA Queue & Staggered Dispatch** — live landfill queue status with staggered dispatch slots.
 - **WhatsApp Alerts** — dispatch reroute instructions via the Baileys gateway straight to driver WhatsApp.
@@ -213,7 +213,11 @@ cd "jwis/frontend"
 npx playwright test --workers 1
 ```
 
-E2E suite: **42 tests**, headless, zero regressions.
+E2E suite (Playwright, headless). The suite grows with every fixed issue, so
+test counts are not tracked in this file — run the command above for the
+current total, or check the CI run attached to each commit/PR for pass/fail
+status. Hygiene gate: `node jwis/frontend/e2e/lib/readme-hygiene.mjs` (fails
+if this README hardcodes a stale count).
 
 ---
 
