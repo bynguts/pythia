@@ -182,7 +182,7 @@ function PreTripForm({ driver, done, onDone, say }) {
       <div className="driver-progress" aria-hidden="true">
         <div
           className="driver-progress-fill"
-          style={{ width: `${(answered / PRETRIP_ITEMS.length) * 100}%` }}
+          style={{ transform: `scaleX(${answered / PRETRIP_ITEMS.length})` }}
         />
       </div>
       <ul className="pretrip-list">
