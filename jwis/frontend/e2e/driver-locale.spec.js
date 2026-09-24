@@ -8,7 +8,7 @@ async function cancelLeftover(headers) {
   const resp = await res.json();
   for (const s of resp.spj || []) {
     if (s.truck_code === TEST_TRUCK) {
-      await fetch(`${API}/spj/${s.spj_id}/cancel`, { method: "POST", ...headers });
+      await fetch(`${API}/spj/${s.spj_id}/cancel`, { method: "POST", headers });
     }
   }
 }
@@ -68,7 +68,7 @@ test("driver pretrip, stop and receipt surfaces localize end to end", async ({ p
       headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify({ name: "TPS E2E", kecamatan: "Cilandak", address: "Jl. E2E", lat: -6.29, lng: 106.79 }),
     });
-    await fetch(`${API}/spj/${spj.spj_id}/activate`, { method: "POST", ...headers });
+    await fetch(`${API}/spj/${spj.spj_id}/activate`, { method: "POST", headers });
 
     await context.grantPermissions(["geolocation"]);
     await context.setGeolocation({ latitude: -6.29, longitude: 106.79 });
@@ -83,6 +83,10 @@ test("driver pretrip, stop and receipt surfaces localize end to end", async ({ p
     // Pretrip surface in English.
     await expect(page.getByRole("heading", { name: "Pre-trip inspection" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Mark the rest as OK" })).toBeVisible();
+    // Regression (#77 refactor follow-up): mark-rest-OK must answer ALL items
+    // (a tuple-destructuring leftover left 5/7 answered with 0 active buttons).
+    await page.getByRole("button", { name: "Mark the rest as OK" }).click();
+    await expect(page.locator(".pretrip-choice.ok.active")).toHaveCount(7);
     await expect(page.getByRole("button", { name: "Save inspection" })).toBeVisible();
     await expect(page.getByText("Brakes")).toBeVisible();
     await expect(page.getByText("Engine")).toBeVisible();
@@ -101,6 +105,6 @@ test("driver pretrip, stop and receipt surfaces localize end to end", async ({ p
     // Receipt surface copy is unit-verified via the i18n catalog; the stop
     // flow above covers the step-gated localization.
   } finally {
-    await fetch(`${API}/spj/${spj.spj_id}/cancel`, { method: "POST", ...headers }).catch(() => {});
+    await fetch(`${API}/spj/${spj.spj_id}/cancel`, { method: "POST", headers }).catch(() => {});
   }
 });

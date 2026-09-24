@@ -68,6 +68,20 @@
   padding: 3px 10px;
 }
 
+/* #45: durable outbox badge — queued driver mutations awaiting sync. */
+.driver-queued {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-accent, #1d4ed8);
+  background: var(--blue-light, #eff6ff);
+  border: 1px solid var(--ui-accent, #1d4ed8);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
 .driver-link {
   background: none;
   border: none;
