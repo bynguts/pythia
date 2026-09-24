@@ -309,7 +309,8 @@ class HistoryStore:
                         field_status TEXT NOT NULL,
                         confirmed_note TEXT NOT NULL DEFAULT '',
                         created_at TEXT NOT NULL,
-                        confirmed_at TEXT
+                        confirmed_at TEXT,
+                        confirm_operation_id TEXT
                     )
                     """
                 )
@@ -359,18 +360,40 @@ class HistoryStore:
                 )
         return dispatch
 
-    def update_dispatch_status(self, dispatch_id: str, status: str, note: str = "") -> dict[str, Any]:
+    def update_dispatch_status(self, dispatch_id: str, status: str, note: str = "",
+                               operation_id: str | None = None) -> dict[str, Any]:
         confirmed_at = datetime.now(timezone.utc).isoformat()
         with closing(self._connect()) as connection:
             with connection:
+                self._ensure_confirm_operation_column(connection)
                 cur = connection.execute(
-                    "UPDATE dispatches SET field_status=?, confirmed_note=?, confirmed_at=? WHERE id=?",
-                    (status, note, confirmed_at, dispatch_id),
+                    "UPDATE dispatches SET field_status=?, confirmed_note=?, confirmed_at=?, "
+                    "confirm_operation_id=? WHERE id=?",
+                    (status, note, confirmed_at, operation_id, dispatch_id),
                 )
                 if cur.rowcount == 0:
                     raise KeyError(f"Dispatch {dispatch_id} was not found.")
         return {"id": dispatch_id, "field_status": status, "confirmed_note": note,
                 "confirmed_at": confirmed_at}
+
+    def get_dispatch_operation(self, dispatch_id: str, operation_id: str) -> dict[str, Any] | None:
+        """Return the stored confirmation for a replayed operation_id (#44)."""
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT * FROM dispatches WHERE id=? AND confirm_operation_id=?",
+                (dispatch_id, operation_id),
+            ).fetchone()
+        if row is None:
+            return None
+        return {"id": row["id"], "field_status": row["field_status"],
+                "confirmed_note": row["confirmed_note"], "confirmed_at": row["confirmed_at"]}
+
+    @staticmethod
+    def _ensure_confirm_operation_column(connection) -> None:
+        # Lightweight migration for databases created before #44.
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(dispatches)")}
+        if "confirm_operation_id" not in columns:
+            connection.execute("ALTER TABLE dispatches ADD COLUMN confirm_operation_id TEXT")
 
     def get_dispatch(self, dispatch_id: str) -> dict[str, Any] | None:
         with closing(self._connect()) as connection:
