@@ -578,12 +578,13 @@
   line-height: 1.5;
 }
 
+/* #31: meet the product's 44px minimum touch target on touch viewports. */
 .search-input {
-  min-height: 40px;
+  min-height: 44px;
 }
 
 .city-select {
-  min-height: 40px;
+  min-height: 44px;
 }
 
 .show-more-btn {
