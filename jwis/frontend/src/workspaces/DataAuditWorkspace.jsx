@@ -32,6 +32,24 @@ const COPY = {
     openSource: (name) => `Buka sumber ${name}`,
     internal: "Tautan tidak tersedia",
     emptyRegistry: "Belum ada dataset yang tercatat.",
+    scentinel: {
+      kicker: "Evidence eksternal",
+      title: "Scentinel — penempatan sensor",
+      empty: "Belum ada evidence Scentinel yang diimpor.",
+      evidenceClass: "Simulasi eksternal",
+      provenance: "Provenansi",
+      digest: "Input digest",
+      rows: "Baris CSV",
+      boundaryTitle: "Batas model: ",
+      boundary: "Hasil Scentinel adalah estimasi simulasi CFD untuk penapisan penempatan sensor — bukan pengukuran sensor kendaraan langsung. Gate validasi eksperimental menunjukkan status verifikasi lapangan saat ini.",
+      gates: {
+        pipeline_success: "Pipeline sukses",
+        numerical_convergence: "Konvergensi numerik",
+        mesh_independence: "Independensi mesh",
+        mass_balance: "Keseimbangan massa",
+        experimental_validation: "Validasi eksperimental",
+      },
+    },
     modelSuitability: "Kelayakan model",
     supportedResolution: "Resolusi yang didukung",
     emptyResolutions: "Belum ada penilaian resolusi.",
@@ -98,6 +116,24 @@ const COPY = {
     openSource: (name) => `Open source for ${name}`,
     internal: "Link unavailable",
     emptyRegistry: "No datasets recorded yet.",
+    scentinel: {
+      kicker: "External evidence",
+      title: "Scentinel — sensor placement",
+      empty: "No Scentinel evidence has been imported yet.",
+      evidenceClass: "External simulation",
+      provenance: "Provenance",
+      digest: "Input digest",
+      rows: "CSV rows",
+      boundaryTitle: "Model boundary: ",
+      boundary: "Scentinel results are CFD screening estimates for sensor placement — not live vehicle sensor measurements. The experimental-validation gate reflects the current field-verification status.",
+      gates: {
+        pipeline_success: "Pipeline success",
+        numerical_convergence: "Numerical convergence",
+        mesh_independence: "Mesh independence",
+        mass_balance: "Mass balance",
+        experimental_validation: "Experimental validation",
+      },
+    },
     modelSuitability: "Model suitability",
     supportedResolution: "Supported resolutions",
     emptyResolutions: "No resolution assessments available yet.",
@@ -170,6 +206,7 @@ export function DataAuditWorkspace() {
   const copy = COPY[lang] || COPY.id;
   const locale = lang === "en" ? "en-US" : "id-ID";
   const [audit, setAudit] = useState(null);
+  const [scentinel, setScentinel] = useState([]);
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
 
@@ -178,6 +215,12 @@ export function DataAuditWorkspace() {
     async function load() {
       setError(false);
       try {
+        // #23: Scentinel evidence is optional external screening data — its
+        // failure must never take the audit workspace down.
+        fetch(`${API_URL}/scentinel/evidence`, { signal: controller.signal })
+          .then((r) => (r.ok ? r.json() : { items: [] }))
+          .then((body) => { if (!controller.signal.aborted) setScentinel(Array.isArray(body.items) ? body.items : []); })
+          .catch(() => { if (!controller.signal.aborted) setScentinel([]); });
         const responses = await Promise.all([
           fetch(`${API_URL}/data/provenance`, { signal: controller.signal }),
           fetch(`${API_URL}/fleet/composition`, { signal: controller.signal }),
@@ -259,6 +302,32 @@ export function DataAuditWorkspace() {
         </section>
 
         <aside className="audit-evidence-rail">
+          <section data-testid="scentinel-evidence-panel">
+            <span className="surface-kicker">{copy.scentinel.kicker}</span>
+            <h2>{copy.scentinel.title}</h2>
+            {scentinel.length === 0 && <p>{copy.scentinel.empty}</p>}
+            {scentinel.map((ev) => (
+              <div key={ev.run_id} className="scentinel-run">
+                <div className="scentinel-run-head">
+                  <strong>{ev.run_id}</strong>
+                  <span className="classification-badge calibrated_synthetic" data-testid="scentinel-evidence-class">{copy.scentinel.evidenceClass}</span>
+                </div>
+                <small>
+                  {ev.truck_code ? `${ev.truck_code} · ` : ""}{ev.scenario} · {ev.gas_set.join(", ")}
+                </small>
+                <ul className="scentinel-gates" data-testid={`scentinel-gates-${ev.run_id}`}>
+                  {Object.entries(ev.quality_gates || {}).map(([gate, ok]) => (
+                    <li key={gate} className={ok ? "good" : "limited"}>{copy.scentinel.gates[gate] || gate}{ok ? " ✓" : " ✗"}</li>
+                  ))}
+                </ul>
+                <small className="audit-source">
+                  {copy.scentinel.provenance}: {ev.source_repository}@{ev.source_version} · {copy.scentinel.digest}: <code>{ev.input_digest}</code> · {copy.scentinel.rows}: {number(ev.sensor_csv_rows)}
+                </small>
+              </div>
+            ))}
+            <p className="model-honesty-note"><strong>{copy.scentinel.boundaryTitle}</strong>{copy.scentinel.boundary}</p>
+          </section>
+
           <section>
             <span className="surface-kicker">{copy.modelSuitability}</span>
             <h2>{copy.supportedResolution}</h2>

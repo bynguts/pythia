@@ -1985,6 +1985,41 @@ def cancel_spj(spj_id: str, _role: str = Depends(require_permission("dispatch:cr
 from app.pretrip import PRETRIP_STORE
 from app.damage_reports import DAMAGE_STORE
 
+# ── Scentinel sensor-placement evidence (#23) ────────────────────────────────
+
+from app.scentinel import (
+    ScentinelImportError,
+    evidence_to_payload,
+    import_scentinel_evidence,
+)
+from app.storage import RecordStore
+
+SCENTINEL_STORE = RecordStore("scentinel_evidence")
+
+
+class ScentinelImportBody(BaseModel):
+    manifest: dict[str, Any]
+    sensor_csv: str
+    truck_code: str | None = None
+
+
+@app.post("/api/scentinel/evidence", status_code=201)
+def scentinel_import(body: ScentinelImportBody, _role: str = Depends(require_any_permission("dispatch:create", "dispatch:confirm"))) -> dict[str, Any]:
+    """Import one immutable Scentinel run manifest + sensor CSV as external
+    screening evidence. The solver itself is never executed here."""
+    try:
+        ev = import_scentinel_evidence(body.manifest, body.sensor_csv, body.truck_code)
+    except ScentinelImportError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    payload = evidence_to_payload(ev)
+    SCENTINEL_STORE.write(ev.run_id, payload)
+    return payload
+
+
+@app.get("/api/scentinel/evidence")
+def scentinel_list() -> dict[str, Any]:
+    return {"items": SCENTINEL_STORE.all()}
+
 
 @app.get("/api/spj/{spj_id}/evidence-summary")
 def spj_evidence_summary(spj_id: str) -> dict[str, Any]:

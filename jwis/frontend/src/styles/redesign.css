@@ -757,3 +757,35 @@ button { color: inherit; }
   font-weight: 600;
   color: #16a34a;
 }
+
+/* #23: Scentinel external-simulation evidence cards (Data & Model Audit). */
+.scentinel-run {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 10px;
+  background: rgba(148, 163, 184, 0.08);
+}
+.scentinel-run-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.scentinel-gates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.scentinel-gates li {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.scentinel-gates li.good { color: var(--ui-success, #15803d); background: rgba(21, 128, 61, 0.12); }
+.scentinel-gates li.limited { color: var(--ui-warning, #92400e); background: rgba(146, 64, 14, 0.12); }
