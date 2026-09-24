@@ -5,6 +5,11 @@
 // users must never be pinned to a stale build — with cache as offline
 // fallback only. Hashed /assets/* are immutable by name, so cache-first is
 // safe there.
+//
+// #50: runtime cache writes are RETURNED from cachePut and attached to the
+// fetch event via event.waitUntil(), so the worker cannot terminate before
+// cache.put finishes. A failed cache write is caught and logged — it must
+// never fail the live response.
 const CACHE_NAME = "jwis-__BUILD_ID__";
 const APP_SHELL = ["/", "/field", "/manifest.webmanifest", "/jwis-icon.svg"];
 
@@ -24,14 +29,32 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("message", (event) => {
   if (event.data === "SKIP_WAITING") self.skipWaiting();
+  // Test-only hook (#50 verification): break cache.put so the suite can
+  // prove a failed cache write does not fail the live response. Never
+  // armed in normal operation — only the E2E suite posts this message.
+  if (event.data === "TEST_BREAK_CACHE_PUT" && event.ports[0]) {
+    self.__breakCachePut = true;
+    event.ports[0].postMessage("put-broken");
+  }
 });
 
 function cachePut(request, response) {
   if (response.ok) {
     const copy = response.clone();
-    caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+    // Return the write promise so callers can attach it to the fetch
+    // event lifetime; a rejected write is swallowed so the live response
+    // is unaffected either way.
+    if (self.__breakCachePut) return Promise.reject(new Error("test: cache put broken"));
+    return caches
+      .open(CACHE_NAME)
+      .then((cache) => cache.put(request, copy))
+      .catch((error) => {
+        // Observable but non-fatal: the live response already succeeded.
+        console.warn("[sw] cache write failed", request.url, error);
+        return null;
+      });
   }
-  return response;
+  return Promise.resolve(null);
 }
 
 self.addEventListener("fetch", (event) => {
@@ -43,7 +66,11 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(
       fetch(request)
-        .then((response) => cachePut(request, response))
+        .then((response) => {
+          // Keep the worker alive until the cache write settles (#50).
+          event.waitUntil(cachePut(request, response));
+          return response;
+        })
         .catch(() => caches.match(request)),
     );
     return;
@@ -54,7 +81,10 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate" || url.pathname === "/" || url.pathname.endsWith(".html")) {
     event.respondWith(
       fetch(request)
-        .then((response) => cachePut(request, response))
+        .then((response) => {
+          event.waitUntil(cachePut(request, response));
+          return response;
+        })
         .catch(() => caches.match(request).then((cached) => cached || caches.match("/"))),
     );
     return;
@@ -64,7 +94,10 @@ self.addEventListener("fetch", (event) => {
     caches.match(request).then((cached) => {
       if (cached) return cached;
       return fetch(request)
-        .then((response) => cachePut(request, response))
+        .then((response) => {
+          event.waitUntil(cachePut(request, response));
+          return response;
+        })
         .catch(() => caches.match("/"));
     }),
   );
