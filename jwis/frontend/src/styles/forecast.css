@@ -238,7 +238,9 @@
 
 .kec-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  /* #71: the card floor never exceeds its own container, so narrow
+     viewports (320px+) never force page-level horizontal scroll. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
   gap: 12px;
 }
 
@@ -544,6 +546,19 @@
 .scenario-controls .primary-button {
   width: auto;
   min-width: 180px;
+}
+
+/* #71: collapse the scenario grid on narrow viewports so the panel never
+   forces page-level horizontal overflow (320px+). */
+@media (max-width: 700px) {
+  .scenario-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scenario-controls .primary-button {
+    min-width: 0;
+    width: 100%;
+  }
 }
 
 .kec-row {

@@ -1366,7 +1366,10 @@ textarea:focus-visible {
   padding: 8px 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-control);
   background: var(--ui-surface); color: var(--ui-ink); font-size: var(--fs-caption);
 }
-.permit-coords { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.permit-coords { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-3); }
+/* #71: intrinsic input widths must not force the coords grid (and the page)
+   wider than the viewport on mobile. */
+.permit-form input { width: 100%; min-width: 0; }
 .permit-error { color: var(--ui-danger); font-size: var(--fs-caption); margin: 0; }
 .permit-impact { margin-top: var(--space-4); border-top: 1px solid var(--ui-border); padding-top: var(--space-3); }
 .permit-impact h3 { margin: 0 0 var(--space-2); font-size: 14px; color: var(--ui-ink); }
