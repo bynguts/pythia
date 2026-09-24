@@ -13,6 +13,8 @@ const copy = {
     fieldOperations: "Operasi lapangan",
     online: "Daring",
     offline: "Luring",
+    staleCache: (minutes) => `Cache · ${minutes} menit lalu`,
+    staleInstructions: "Instruksi dari cache — backend tidak dapat dijangkau.",
     taskVehicle: "Kendaraan tugas",
     onDuty: "Bertugas",
     queued: (count) => `${count} aksi menunggu sinkronisasi`,
@@ -52,6 +54,8 @@ const copy = {
     fieldOperations: "Field operations",
     online: "Online",
     offline: "Offline",
+    staleCache: (minutes) => `Cache · ${minutes} minutes ago`,
+    staleInstructions: "Instructions served from cache — the backend is unreachable.",
     taskVehicle: "Assigned vehicle",
     onDuty: "On duty",
     queued: (count) => `${count} action${count === 1 ? "" : "s"} awaiting sync`,
@@ -144,6 +148,9 @@ export default function FieldApp() {
   const [status, setStatus] = useState("readyStatus");
   const [timeline, setTimeline] = useState([]);
   const [online, setOnline] = useState(navigator.onLine);
+  // #46: age of cached API data, from the SW's X-Jwis-Stale/X-Jwis-Cached-At
+  // metadata. Null while responses are live.
+  const [staleMinutes, setStaleMinutes] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [queued, setQueued] = useState(readOutbox().length);
   const [syncing, setSyncing] = useState(false);
@@ -153,13 +160,24 @@ export default function FieldApp() {
     try {
       const response = await fetch(`${API_URL}/dispatch/${truckCode}`, { headers: authHeaders() });
       if (!response.ok) throw new Error("no api");
+      // #46: a stale (cache-served) response still parses, but its metadata
+      // marks it as not-live so operators never confuse it with fresh data.
+      const staleAt = response.headers.get("X-Jwis-Cached-At");
+      const isStale = response.headers.get("X-Jwis-Stale") === "1" && staleAt;
+      if (isStale) {
+        const ageMin = Math.max(0, Math.round((Date.now() - Date.parse(staleAt)) / 60000));
+        setStaleMinutes(ageMin);
+        setOnline(false);
+      } else {
+        setStaleMinutes(null);
+        setOnline(true);
+      }
       setDispatches(await response.json());
-      setLoadError(null);
-      setOnline(navigator.onLine);
+      setLoadError(isStale ? "staleInstructions" : null);
     } catch {
       setDispatches([]);
       setLoadError(navigator.onLine ? "loadError" : "offlineInstructions");
-      setOnline(navigator.onLine);
+      setOnline(false);
     }
   }
 
@@ -235,7 +253,13 @@ export default function FieldApp() {
         </a>
         <div className="field-header-actions">
           <StatusPill tone={online ? "live" : "warning"}>
-            <span data-testid="conn-status">{online ? text.online : text.offline}</span>
+            <span data-testid="conn-status">
+              {staleMinutes !== null
+                ? text.staleCache(staleMinutes)
+                : online
+                  ? text.online
+                  : text.offline}
+            </span>
           </StatusPill>
           <div className="field-language" role="group" aria-label={text.language}>
             <button type="button" data-testid="field-lang-id" aria-label="Bahasa Indonesia" aria-pressed={lang === "id"} className={lang === "id" ? "active" : ""} onClick={() => setLang("id")}>ID</button>
