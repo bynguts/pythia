@@ -709,6 +709,8 @@ export function LanguageProvider({ children }) {
     } catch {
       // The selected language still applies when browser storage is unavailable.
     }
+    // #84: locale-aware surfaces outside React (the SW update banner) re-render.
+    window.dispatchEvent(new Event("jwis-lang-change"));
   }
 
   function t(key) {
