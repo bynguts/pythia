@@ -2,6 +2,7 @@ import React, { useState, useRef } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { authenticatedRequest } from "../dispatchApi.js";
+import { useLanguage } from "../i18n.jsx";
 import {
   Send,
   X,
@@ -9,17 +10,22 @@ import {
   Paperclip,
 } from "lucide-react";
 
+// #76: every interface string rides the locale catalog, the file-only
+// fallback question is localized, and the chosen language is sent on the
+// wire so the answer language is requested explicitly and preserved for
+// the conversation.
 export function AssistantPanel() {
+  const { t, lang } = useLanguage();
   const [question, setQuestion] = useState("");
-  const [messages, setMessages] = useState([
-    {
-      role: "assistant",
-      text: "Halo, saya Ana. Tanyakan status armada, antrean TPA, rute, sumber data, atau cara kerja JWIS. Saya juga dapat menelaah foto atau PDF.",
-    },
-  ]);
+  const [messages, setMessages] = useState(() => [{ role: "assistant", text: null }]);
   const [loading, setLoading] = useState(false);
   const [attachedFile, setAttachedFile] = useState(null);
   const fileInputRef = useRef(null);
+
+  // Resolve the greeting lazily so it follows live locale switches.
+  const greeting = messages[0]?.role === "assistant" && messages[0].text === null
+    ? t("asst_greeting") : messages[0]?.text;
+  const visibleMessages = [{ ...messages[0], text: greeting }, ...messages.slice(1)];
 
   function handleFileSelect(event) {
     const file = event.target.files[0];
@@ -36,14 +42,15 @@ export function AssistantPanel() {
     const prompt = (promptOverride || question).trim();
     if ((!prompt && !attachedFile) || loading) return;
     const fileMeta = attachedFile ? ` [${attachedFile.name}]` : "";
-    setMessages((current) => [...current, { role: "user", text: (prompt || "Jelaskan isi berkas ini") + fileMeta }]);
+    setMessages((current) => [...current, { role: "user", text: (prompt || t("asst_file_question")) + fileMeta }]);
     const currentFile = attachedFile;
     setQuestion("");
     setAttachedFile(null);
     setLoading(true);
     try {
       const body = {
-        question: prompt || "Jelaskan isi berkas ini terkait operasional JWIS.",
+        question: prompt || t("asst_file_question"),
+        language: lang,
         history: messages.slice(1).filter((m) => m.provider !== "error" && m.provider !== "offline").slice(-8).map((m) => ({ role: m.role, content: m.text })),
       };
       if (currentFile) {
@@ -60,7 +67,7 @@ export function AssistantPanel() {
           ...current,
           {
             role: "assistant",
-            text: `Ana belum dapat menjawab. ${data.detail || "Layanan AI tidak tersedia."} Coba lagi nanti.`,
+            text: `${t("asst_error_prefix")} ${data.detail || t("asst_error_detail")} ${t("asst_error_suffix")}`,
             provider: "error",
           },
         ]);
@@ -70,7 +77,7 @@ export function AssistantPanel() {
         ...current,
         {
           role: "assistant",
-          text: data.answer || "No answer returned.",
+          text: data.answer || t("asst_no_answer"),
           provider: data.provider || "unknown",
           model: data.model || "",
           toolsUsed: data.tools_used || [],
@@ -81,7 +88,7 @@ export function AssistantPanel() {
         ...current,
         {
           role: "assistant",
-          text: "Ana tidak dapat terhubung ke server. Periksa koneksi, lalu coba lagi.",
+          text: t("asst_offline"),
           provider: "offline",
         },
       ]);
@@ -93,9 +100,9 @@ export function AssistantPanel() {
   function humanizeAssistantAnswer(text) {
     if (!text) return text;
     const humanPhrases = {
-      is_damaged: "truck damage confirmed",
-      off_corridor: "off the assigned corridor",
-      far_off_corridor: "far off the assigned corridor",
+      is_damaged: lang === "id" ? "kerusakan truk terkonfirmasi" : "truck damage confirmed",
+      off_corridor: lang === "id" ? "di luar koridor yang ditugaskan" : "off the assigned corridor",
+      far_off_corridor: lang === "id" ? "jauh dari koridor yang ditugaskan" : "far off the assigned corridor",
     };
     return text
       .replace(/flags\s*:\s*([^\n]+)/gi, (match, list) => {
@@ -105,7 +112,7 @@ export function AssistantPanel() {
           .filter(Boolean)
           .map((key) => humanPhrases[key] || key)
           .join(", ");
-        return `Risks: ${cleaned}`;
+        return `${t("asst_risks")}: ${cleaned}`;
       })
       .replace(/`?([a-z_]+)\s*:\s*(?:true|false|yes|no)`?/gi, (match, key) => humanPhrases[key] || match);
   }
@@ -127,15 +134,15 @@ export function AssistantPanel() {
         </span>
         <div>
           <h2>Ana</h2>
-          <p>Tanya status operasional, sumber data, atau cara kerja JWIS.</p>
+          <p>{t("asst_header_sub")}</p>
         </div>
       </header>
 
       <div className="assistant-message-list" role="log" aria-live="polite">
-        {messages.map((message, index) => (
+        {visibleMessages.map((message, index) => (
           <article className={`assistant-message ${message.role}`} key={`${message.role}-${index}`}>
             <span className="assistant-message-avatar" aria-hidden="true">
-              {message.role === "assistant" ? "AI" : "ME"}
+              {message.role === "assistant" ? t("asst_avatar_ai") : t("asst_avatar_user")}
             </span>
             <div className="assistant-bubble">
               <div className="assistant-formatted-answer" dangerouslySetInnerHTML={{ __html: renderAssistantText(message.text) }} />
@@ -144,7 +151,7 @@ export function AssistantPanel() {
         ))}
         {loading && (
           <article className="assistant-message assistant">
-            <span className="assistant-message-avatar" aria-hidden="true">AI</span>
+            <span className="assistant-message-avatar" aria-hidden="true">{t("asst_avatar_ai")}</span>
             <div className="assistant-bubble assistant-thinking">
               <span />
               <span />
@@ -154,12 +161,12 @@ export function AssistantPanel() {
         )}
       </div>
 
-      <div className="assistant-quick-prompts" aria-label="Pertanyaan yang disarankan">
-        <button type="button" disabled={loading} onClick={() => askAssistant("Berapa truk yang bermasalah saat ini?")}>
-          Status armada
+      <div className="assistant-quick-prompts" aria-label={t("asst_prompts_label")}>
+        <button type="button" disabled={loading} onClick={() => askAssistant(t("asst_prompt1_q"))}>
+          {t("asst_prompt1")}
         </button>
-        <button type="button" disabled={loading} onClick={() => askAssistant("Bagaimana cara JWIS menentukan prioritas dispatch?")}>
-          Cara kerja dispatch
+        <button type="button" disabled={loading} onClick={() => askAssistant(t("asst_prompt2_q"))}>
+          {t("asst_prompt2")}
         </button>
       </div>
 
@@ -174,7 +181,7 @@ export function AssistantPanel() {
           <div className="assistant-file-chip">
             <Paperclip size={14} />
             <span>{attachedFile.name}</span>
-            <button type="button" aria-label="Remove file" onClick={() => setAttachedFile(null)}>
+            <button type="button" aria-label={t("asst_remove_file")} onClick={() => setAttachedFile(null)}>
               <X size={14} />
             </button>
           </div>
@@ -189,21 +196,21 @@ export function AssistantPanel() {
         <button
           type="button"
           className="assistant-upload-button"
-          title="Upload image or PDF"
+          title={t("asst_upload_label")}
           onClick={() => fileInputRef.current?.click()}
-          aria-label="Attach photo or PDF"
+          aria-label={t("asst_upload_label")}
         >
           <Paperclip size={18} />
         </button>
-        <label className="sr-only" htmlFor="assistant-question">Ask Ana anything</label>
+        <label className="sr-only" htmlFor="assistant-question">{t("asst_input_label")}</label>
         <input
           id="assistant-question"
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
-          placeholder={attachedFile ? "Ask about this file..." : "Ask Ana anything..."}
+          placeholder={attachedFile ? t("asst_placeholder_file") : t("asst_placeholder")}
           autoComplete="off"
         />
-        <button className="primary-button" type="submit" aria-label="Send message" disabled={loading || (!question.trim() && !attachedFile)}>
+        <button className="primary-button" type="submit" aria-label={t("asst_send")} disabled={loading || (!question.trim() && !attachedFile)}>
           <Send size={16} />
         </button>
       </form>

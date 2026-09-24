@@ -211,7 +211,7 @@ def _answer_locally(question: str, snapshot: dict[str, Any], tool_ctx: ToolConte
 
 
 def answer_with_openai_if_configured(question, snapshot, history=None, tool_ctx=None,
-                                     images=None) -> dict[str, Any]:
+                                     images=None, language="id") -> dict[str, Any]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return _answer_locally(question, snapshot, tool_ctx, images)
@@ -226,6 +226,11 @@ def answer_with_openai_if_configured(question, snapshot, history=None, tool_ctx=
     if rag_context:
         user_prompt += f"\n\nReferensi dokumentasi JWIS (bukan status/angka live):\n{rag_context}"
 
+    # #76: the UI sends the selected locale explicitly; answers stay in that
+    # language for the whole conversation.
+    language_name = "Bahasa Indonesia" if language == "id" else "English"
+    system_prompt = f"{SYSTEM_PROMPT}\nJawab selalu dalam {language_name}."
+
     if images:
         content: list[dict[str, Any]] = [{"type": "text", "text": user_prompt}]
         for img in images[:5]:
@@ -234,7 +239,7 @@ def answer_with_openai_if_configured(question, snapshot, history=None, tool_ctx=
     else:
         user_message = {"role": "user", "content": user_prompt}
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages = [{"role": "system", "content": system_prompt}]
     messages.extend(clean_history)
     messages.append(user_message)
 
