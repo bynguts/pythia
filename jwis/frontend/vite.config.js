@@ -19,6 +19,18 @@ function buildStampServiceWorker() {
 
 export default defineConfig({
   plugins: [react(), buildStampServiceWorker()],
+  build: {
+    rollupOptions: {
+      output: {
+        // #41: keep the map engine in its own long-lived vendor chunk so
+        // deploys re-download only the app code, and Fleet's lazy surface
+        // stays small. PDF tooling already loads on demand (ReportActions).
+        manualChunks(id) {
+          if (id.includes("node_modules/maplibre-gl")) return "maplibre";
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       "/api": {
