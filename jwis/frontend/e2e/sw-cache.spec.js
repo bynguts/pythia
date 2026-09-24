@@ -8,6 +8,10 @@ const API = "http://127.0.0.1:8001/api";
 test("fetched shell and API resources are actually cached once the fetch settles", async ({ page }) => {
   await page.goto("/field");
 
+  // The app skips SW registration under automation (Playwright route stubs
+  // must see live network traffic), so this suite registers the real
+  // worker explicitly before asserting on its runtime caching behavior.
+  await page.evaluate(() => navigator.serviceWorker.register("/sw.js"));
   // The service worker registers itself via the app; give it time to activate.
   const swReady = await page.waitForFunction(
     async () => {
@@ -49,6 +53,8 @@ test("fetched shell and API resources are actually cached once the fetch settles
 
 test("a cache write failure does not fail the live response", async ({ page }) => {
   await page.goto("/");
+  // Explicit registration for the same automation reason as above.
+  await page.evaluate(() => navigator.serviceWorker.register("/sw.js"));
   await page.waitForFunction(
     async () => {
       const regs = await navigator.serviceWorker.getRegistrations();
