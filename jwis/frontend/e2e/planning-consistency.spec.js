@@ -6,6 +6,8 @@ const API = "http://127.0.0.1:8001/api";
 // ACTIVE scenario response — changing simulator inputs must change the
 // review's numbers. The preloaded snapshot is only a fallback before any
 // scenario data exists.
+// NOTE: ExecutiveSummary picks its headline district by the LARGEST ABSOLUTE
+// ton delta (predicted − baseline), not by spike percent — mirror that here.
 async function signIn(page, lang = "id") {
   await page.goto("/");
   const response = await page.request.post(`${API}/auth/login`, {
@@ -18,19 +20,26 @@ async function signIn(page, lang = "id") {
     localStorage.setItem("jwis_token", token);
     localStorage.setItem("jwis_role", role);
   }, { ...principal, lang });
+  // Parallel suites register the PWA service worker on this origin; its fetch
+  // handler would serve stale /api/predictions caches to this suite. Unregister
+  // every worker and clear caches so this page talks to the live backend only.
+  await page.evaluate(async () => {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map((r) => r.unregister()));
+    const keys = await caches.keys();
+    await Promise.all(keys.map((k) => caches.delete(k)));
+  });
   await page.reload({ waitUntil: "domcontentloaded" });
 }
 
 function topDistrictFromScenario(scenario) {
   const districts = scenario.kecamatan || [];
+  // Same criterion as ExecutiveSummary: largest absolute predicted − baseline
+  // ton delta, so the spec's expectation always matches the review headline.
   return districts.reduce((best, k) => {
-    const spike = k.baseline_tons_per_day > 0
-      ? (k.predicted_tons - k.baseline_tons_per_day) / k.baseline_tons_per_day
-      : 0;
-    const bestSpike = best && best.baseline_tons_per_day > 0
-      ? (best.predicted_tons - best.baseline_tons_per_day) / best.baseline_tons_per_day
-      : -1;
-    return spike > bestSpike ? k : best;
+    const delta = k.predicted_tons - k.baseline_tons_per_day;
+    const bestDelta = best ? best.predicted_tons - best.baseline_tons_per_day : -Infinity;
+    return delta > bestDelta ? k : best;
   }, null);
 }
 
