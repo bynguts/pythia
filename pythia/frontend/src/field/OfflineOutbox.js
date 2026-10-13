@@ -15,6 +15,12 @@ function writeOutbox(items) {
   localStorage.setItem(KEY, JSON.stringify(items));
 }
 
+// 8–80 chars, matching the backend's DispatchConfirmRequest.operation_id.
+function newOperationId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return `field-${crypto.randomUUID()}`;
+  return `field-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function enqueue(entry) {
   const items = readOutbox();
   // #44: queue identity is (dispatchId, status) — the dispatch and the
@@ -25,10 +31,16 @@ export function enqueue(entry) {
   const existing = items.findIndex(
     (item) => item.dispatchId === entry.dispatchId && item.status === entry.status,
   );
+  // The operation id is fixed when the operation is first queued, so every
+  // flush retry is recognised by the server as the same confirmation.
   if (existing >= 0) {
-    items[existing] = { ...items[existing], ...entry, queued_at: items[existing].queued_at };
+    const kept = items[existing];
+    items[existing] = {
+      ...kept, ...entry, queued_at: kept.queued_at,
+      operation_id: kept.operation_id || newOperationId(),
+    };
   } else {
-    items.push({ ...entry, queued_at: new Date().toISOString() });
+    items.push({ ...entry, queued_at: new Date().toISOString(), operation_id: newOperationId() });
   }
   writeOutbox(items);
   return items.length;
@@ -48,7 +60,8 @@ export async function flushOutbox(apiUrl) {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ status: item.status, note: item.note }),
+        // Entries queued before operation ids existed replay without one.
+        body: JSON.stringify({ status: item.status, note: item.note, operation_id: item.operation_id }),
       });
       if (!res.ok) throw new Error("send failed");
       flushed += 1;
