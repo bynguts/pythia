@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const API = "http://127.0.0.1:8001/api";
+const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 const TEST_TRUCK = "T-001";
 
 // #43: UI transitions must not animate layout properties (width, height,

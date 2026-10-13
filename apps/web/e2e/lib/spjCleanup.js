@@ -6,7 +6,7 @@
 // in test.afterAll.
 import { expect, request } from "@playwright/test";
 
-const API = "http://127.0.0.1:8001/api";
+const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
 export const CLEANUP_TIMEOUT_MS = 10000;
 let cleanupContext;

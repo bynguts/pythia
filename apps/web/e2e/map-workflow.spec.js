@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 
-const API_BASE = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001";
+// Specs take PLAYWRIGHT_API_BASE_URL with the /api suffix; accept either form.
+const API_BASE = (process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001").replace(/\/api\/?$/, "");
 let authHeaders;
 
 // Necessary: the jam toggle tests mutate GLOBAL server-side state (simulate-jam

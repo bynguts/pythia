@@ -10,7 +10,7 @@ import { expect, test } from "@playwright/test";
  * idempotent (the stop endpoint returns early on a completed stop).
  */
 
-const API = "http://127.0.0.1:8001/api";
+const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 const TEST_TRUCK = "T-088";
 
 async function apiLogin() {

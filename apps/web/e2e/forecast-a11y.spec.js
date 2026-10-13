@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
-const API = "http://127.0.0.1:8001/api";
+const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
 // #42: forecast bars must not carry aria-label on plain divs; adjacent text
 // already exposes district/amount/unit, and the bar row region keeps one

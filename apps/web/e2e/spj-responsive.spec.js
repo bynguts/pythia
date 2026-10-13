@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { cancelSpjIndependently, disposeCleanupContext } from "./lib/spjCleanup.js";
 
-const API = "http://127.0.0.1:8001/api";
+const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
 // #78: the SPJ panel is usable on narrow viewports — the table stays inside
 // a contained scroller with no page overflow, and expansion uses a named
@@ -95,23 +95,23 @@ test("SPJ create form works at 390px without overflow", async ({ page }) => {
 
   const picker = page.locator(".spj-stop-picker input");
   await picker.waitFor({ timeout: 20000 });
-  const site = await page.evaluate(async () => {
-    const res = await fetch("http://127.0.0.1:8001/api/geo/tps-coordinates");
+  const site = await page.evaluate(async (api) => {
+    const res = await fetch(`${api}/geo/tps-coordinates`);
     const body = await res.json();
     const f = (body.features || []).find((x) => x.properties?.name);
     return f?.properties?.name || "";
-  });
+  }, API);
   await picker.fill(site);
   await page.locator(".spj-stop-picker button").click();
   await page.getByRole("button", { name: "Simpan draf" }).click();
 
   // The new order appears in the list (draft state).
   await expect(page.locator(".spj-table tbody tr.spj-row").first()).toBeVisible({ timeout: 20000 });
-  createdIds = await page.evaluate(async () => {
-    const res = await fetch("http://127.0.0.1:8001/api/spj");
+  createdIds = await page.evaluate(async (api) => {
+    const res = await fetch(`${api}/spj`);
     const body = await res.json();
     return (body.spj || []).filter((s) => ["draft", "aktif"].includes(s.status)).map((s) => s.spj_id);
-  });
+  }, API);
 
   const overflow = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,

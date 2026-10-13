@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const API = "http://127.0.0.1:8001/api";
+const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
 // #76: the assistant interface follows ID/EN — greeting, quick prompts,
 // input, upload controls, error and offline fallbacks — and requests the

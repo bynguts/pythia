@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const engineSrc = readFileSync(join(here, "../src/cruiseEngine.js"), "utf-8");
+const engineSrc = readFileSync(join(here, "../src/features/fleet/cruiseEngine.js"), "utf-8");
 
 async function loadEngine(page) {
   await page.goto("about:blank");

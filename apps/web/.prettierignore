@@ -9,3 +9,4 @@ templates/
 .impeccable/
 package-lock.json
 *.md
+.omc/

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const API = "http://127.0.0.1:8001/api";
+const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
 // #21: the planning review (stage 03 executive summary) must derive from the
 // ACTIVE scenario response — changing simulator inputs must change the

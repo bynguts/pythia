@@ -8,7 +8,7 @@ import { expect, test } from "@playwright/test";
  * disclaimer visible in both locales.
  */
 
-const API = "http://127.0.0.1:8001/api";
+const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
 const MANIFEST = {
   schema: "scentinel.run.v1",
