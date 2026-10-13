@@ -54,6 +54,19 @@ def _load_hybrid(kelurahan_slug: str) -> tuple[Any, Any] | None:
         return None
 
 
+@lru_cache(maxsize=4096)
+def _prophet_yhat(kelurahan_slug: str, days: tuple[str, ...]) -> tuple[float, ...]:
+    """Prophet baseline for the given ISO dates.
+
+    Weather and event drivers only enter through the XGBoost residual, so this
+    is shared by every scenario. Necessary: Prophet's predict (uncertainty
+    sampling) dominated scenario recomputes — ~0.5 s per kecamatan call.
+    """
+    prophet_model, _ = _load_hybrid(kelurahan_slug)
+    frame = pd.DataFrame({"ds": pd.to_datetime(list(days))})
+    return tuple(float(v) for v in prophet_model.predict(frame)["yhat"])
+
+
 def hybrid_models_loadable() -> bool:
     """Health probe: True when at least one on-disk hybrid pair unpickles."""
     return _load_hybrid(_KELURAHAN_SLUGS[0]) is not None
@@ -412,12 +425,12 @@ def predict_waste_hybrid(
             "co2_emissions_kg": round(predicted_tons * 1.8 * 2.68, 1)
         }
 
-    prophet_model, xgboost_model = models
-    from_date = pd.Timestamp(target_date) if target_date else pd.Timestamp.now()
+    _, xgboost_model = models
+    # Daily model: forecast the calendar day (midnight), same as the series path.
+    from_date = (pd.Timestamp(target_date) if target_date else pd.Timestamp.now()).normalize()
 
     # Prophet baseline prediction
-    ds_df = pd.DataFrame({"ds": [from_date]})
-    prophet_pred = prophet_model.predict(ds_df)["yhat"].values[0]
+    prophet_pred = _prophet_yhat(slug, (from_date.strftime("%Y-%m-%d"),))[0]
 
     # XGBoost residual correction — feature order must match scripts/train_models.py
     feature_row = {
@@ -543,8 +556,8 @@ def predict_waste_hybrid_series(
 
     models = _load_hybrid(slug)
     if models is not None:
-        prophet_model, xgboost_model = models
-        yhat = prophet_model.predict(pd.DataFrame({"ds": dates}))["yhat"].to_numpy()
+        _, xgboost_model = models
+        yhat = np.array(_prophet_yhat(slug, tuple(d.strftime("%Y-%m-%d") for d in dates)))
         X = pd.DataFrame([{
             "precipitation_mm": rainfall_mm,
             "temp_max_c": temp_max_c,

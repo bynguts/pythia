@@ -85,7 +85,9 @@ from app.ai.forecasters.queue_predictor import TpaQueuePredictor
 from app.spj import SPJ_STORE, active_path_for as spj_active_path, \
     spj_summary_payload, MAX_STOP_WEIGHT_KG as MAX_RECEIPT_WEIGHT_KG, \
     destination_provenance
-from app.facilities import DESTINATIONS
+from app.facilities import DESTINATIONS, FACILITIES
+from app.cities import HCMC_LANDFILL, get_city, hcmc_district_forecasts
+from app.twin import build_scene as build_twin_scene, jakarta_districts as twin_jakarta_districts
 from app.permits import PERMIT_STORE
 from app.units import (TRUCK_CAPACITY_TONS, UNIT_GLOSSARY,
                        event_tons_for_attendance, resource_basis,
@@ -167,6 +169,15 @@ def _warm_route_cache() -> None:
         print("TPA cache warmed.")
     except Exception as e:
         print("TPA warmup failed:", e)
+    # Necessary: the twin's default 7-day scene runs 2×42 Prophet series on a
+    # cold start (~90 s); warming the shared Prophet cache here (main thread,
+    # same xgboost constraint as above) keeps scenario changes at ~1 s.
+    try:
+        twin_scene(city="jakarta", days=7, rainfall_mm=0.0, event_attendance=0,
+                   event_lat=None, event_lng=None)
+        print("Twin scene warmed.")
+    except Exception as e:
+        print("Twin scene warmup failed:", e)
 
     import threading
     from app.astar_routing import warm_edge_cache
@@ -1317,6 +1328,47 @@ def get_tpa_queue_status(scenario: str = Query("live", pattern="^(live|peak)$"))
         cached = {"payload": tpa_queue_status_payload(scenario=scenario), "ts": now}
         _tpa_cache[scenario] = cached
     return cached["payload"]
+
+
+@app.get("/api/twin/scene")
+def twin_scene(
+    city: str = Query("jakarta", pattern="^(jakarta|hcmc)$"),
+    days: int = Query(7, ge=2, le=14),
+    rainfall_mm: float = Query(0.0, ge=0, le=300),
+    event_attendance: int = Query(0, ge=0, le=2_000_000),
+    event_lat: float | None = Query(None, ge=-90, le=90),
+    event_lng: float | None = Query(None, ge=-180, le=180),
+) -> dict[str, Any]:
+    """Everything the 3D digital twin draws for one city, with per-layer provenance.
+
+    Jakarta uses the trained per-kecamatan forecast (via the cached kecamatan
+    endpoint), the simulated pilot fleet and the real SILIKA TPS points. Ho Chi
+    Minh City is a labelled demo city (population-share allocation, no model).
+    """
+    scenario = {"rainfall_mm": rainfall_mm, "event_attendance": event_attendance,
+                "event_lat": event_lat, "event_lng": event_lng}
+    if city == "hcmc":
+        districts = hcmc_district_forecasts(days, rainfall_mm, event_attendance, event_lat, event_lng)
+        landfill = {**HCMC_LANDFILL, "kind": "landfill"}
+        return build_twin_scene(get_city("hcmc"), districts, scenario=scenario, facilities=[landfill],
+                                normal_days=hcmc_district_forecasts(days))
+
+    def kecamatan_forecast(rain: float, attendance: int) -> list[dict[str, Any]]:
+        return twin_jakarta_districts(predictions_kecamatan(
+            rainfall_mm=rain, event_attendance=attendance, is_weekend=False, is_holiday=False,
+            target_date=None, event_lat=event_lat, event_lng=event_lng, horizon_days=days))
+    facilities = [
+        {"name": facility.name, "lat": facility.lat, "lng": facility.lng,
+         "kind": "landfill" if facility.name == "TPST Bantargebang" else "processing"}
+        for facility in FACILITIES.values() if facility.is_ground_truth
+    ]
+    return build_twin_scene(
+        get_city("jakarta"), kecamatan_forecast(rainfall_mm, event_attendance), scenario=scenario,
+        facilities=facilities, normal_days=kecamatan_forecast(0.0, 0),
+        trucks=command_center()["trucks"],
+        tps=load_real_tps_coordinates(),
+        landfill_queue=get_tpa_queue_status(scenario="live"))
+
 
 @app.get("/api/events/permits")
 def get_events_permits() -> list[dict[str, Any]]:
