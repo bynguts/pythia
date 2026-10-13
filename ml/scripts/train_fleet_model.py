@@ -3,11 +3,11 @@
 train_fleet_model.py — Reproducible training pipeline for Pythia Case 1
 (Fleet Monitoring & Supervision) route-deviation anomaly detector.
 
-Run from the `pythia/` directory:
-    python scripts/train_fleet_model.py
+Run from the repository root:
+    python ml/scripts/train_fleet_model.py
 
 Trains the Isolation Forest that flags out-of-corridor / anomalous fleet GPS
-points, saving `backend/data/models/isolation_forest_fleet.joblib` with the
+points, saving `apps/api/data/models/isolation_forest_fleet.joblib` with the
 EXACT feature contract the backend expects (engine.detect_route_deviation):
     features = [latitude, longitude, speed_kmh]
     prediction -1 => anomaly (out of normal operating envelope).
@@ -46,7 +46,7 @@ TRUCK_CSV = DATA_REAL / "data_truk_sampah_dki.csv"
 MODEL_OUT = MODELS_DIR / "isolation_forest_fleet.joblib"
 REPORT_OUT = DATA_PROCESSED / "fleet_anomaly_evaluation.md"
 
-# Feature order MUST match backend/app/engine.py detect_route_deviation.
+# Feature order MUST match apps/api/app/forecast/engine.py detect_route_deviation.
 FEATURE_ORDER = ["latitude", "longitude", "speed_kmh"]
 
 # Realistic waste-collection truck speeds in dense Jakarta (km/h).
@@ -225,7 +225,7 @@ def write_report(n_points: int, fleet_total: int, n_train: int,
         "Fleet Monitoring & Supervision case. Model: **Isolation Forest** "
         "(unsupervised novelty detection) on features "
         "`[latitude, longitude, speed_kmh]` — the exact contract consumed by "
-        "`backend/app/engine.py::detect_route_deviation`.\n",
+        "`apps/api/app/forecast/engine.py::detect_route_deviation`.\n",
         "## Data provenance (honest)\n",
         f"- **REAL geography:** {n_points} DKI mainland kelurahan centroids from "
         "`kelurahan_dki_full_267.geojson` are used as collection corridors.\n"
@@ -245,8 +245,8 @@ def write_report(n_points: int, fleet_total: int, n_train: int,
         f"- **Anomaly F1:** {f1:.3f}\n"
         f"- **Overall accuracy:** {acc:.3f}\n",
         "## Reproducibility\n",
-        "- Command: `python scripts/train_fleet_model.py` from `pythia/`.\n"
-        "- Output: `backend/data/models/isolation_forest_fleet.joblib` "
+        "- Command: `python ml/scripts/train_fleet_model.py` from the repository root.\n"
+        "- Output: `apps/api/data/models/isolation_forest_fleet.joblib` "
         "(previous model backed up to `_synthetic_backup/`), and this report.\n",
     ]
     REPORT_OUT.write_text("\n".join(lines), encoding="utf-8")

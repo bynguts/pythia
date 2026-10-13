@@ -1,0 +1,8 @@
+# Never bake a locally paired WhatsApp session or host node_modules into the image.
+node_modules/
+baileys_auth_info/
+.node-persist/
+.omc/
+*.log
+.env
+.env.*

@@ -24,7 +24,7 @@ import pandas as pd
 from app.core.paths import MODELS_DIR, REAL_DIR
 from app.core.units import resource_requirements
 
-# 42 Jakarta kecamatan (matches scripts/train_models.py; models named by slug).
+# 42 Jakarta kecamatan (matches ml/scripts/train_models.py; models named by slug).
 _KELURAHAN_SLUGS = [
     "gambir",
     "sawah_besar",
@@ -477,7 +477,7 @@ def predict_waste_hybrid(
     # Prophet baseline prediction
     prophet_pred = _prophet_yhat(slug, (from_date.strftime("%Y-%m-%d"),))[0]
 
-    # XGBoost residual correction — feature order must match scripts/train_models.py
+    # XGBoost residual correction — feature order must match ml/scripts/train_models.py
     feature_row = {
         "precipitation_mm": rainfall_mm,
         "temp_max_c": temp_max_c,

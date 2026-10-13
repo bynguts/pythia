@@ -15,11 +15,10 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Resolved before .env is loaded (unchanged from the single-module app), so the
-# dataset location comes from the process environment only.
-from app.core import paths as _paths  # noqa: F401
 from app.core.env import getenv
 
+# Load .env before anything reads settings: app.core.paths and the domain
+# modules read PYTHIA_* values at import time.
 load_dotenv()
 
 key = os.getenv("OPENAI_API_KEY", "")
