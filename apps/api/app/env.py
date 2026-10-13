@@ -1,4 +1,5 @@
 """Pythia settings from the environment: every setting is ``PYTHIA_<NAME>``."""
+
 from __future__ import annotations
 
 import os

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 import threading
-from datetime import datetime, timezone
-from typing import Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
 
 from app.ai.actions.auto_state import AiEvent, EventFeed
 from app.engine import _holiday_dates
@@ -27,10 +27,13 @@ def _parse_event_date(date_raw: str | None) -> str | None:
 
 
 class EventImpactForecaster:
-    def __init__(self, feed: EventFeed,
-                 weather_fn: Callable = fetch_jakarta_weather_forecast,
-                 events_fn: Callable = load_official_events,
-                 holidays_fn: Callable = _holiday_dates) -> None:
+    def __init__(
+        self,
+        feed: EventFeed,
+        weather_fn: Callable = fetch_jakarta_weather_forecast,
+        events_fn: Callable = load_official_events,
+        holidays_fn: Callable = _holiday_dates,
+    ) -> None:
         self._feed = feed
         self._weather_fn = weather_fn
         self._events_fn = events_fn
@@ -51,10 +54,12 @@ class EventImpactForecaster:
         for event in self._events_fn():
             iso = _parse_event_date(event.get("date_raw"))
             if iso:
-                events_by_date.setdefault(iso, []).append({
-                    "name": event.get("name"),
-                    "expected_attendance": event.get("expected_attendance") or 0,
-                })
+                events_by_date.setdefault(iso, []).append(
+                    {
+                        "name": event.get("name"),
+                        "expected_attendance": event.get("expected_attendance") or 0,
+                    }
+                )
 
         holidays = self._holidays_fn()
         outlook: list[dict] = []
@@ -67,31 +72,38 @@ class EventImpactForecaster:
             delta += min(30.0, attendance / 5000.0)
             if is_holiday:
                 delta += 5.0
-            outlook.append({
-                "date": date,
-                "rainfall_mm": day.get("rainfall_mm"),
-                "precipitation_probability": day.get("precipitation_probability"),
-                "risk_level": day.get("risk_level"),
-                "events": day_events,
-                "is_holiday": is_holiday,
-                "volume_delta_pct": round(delta, 1),
-                "operational_advice": day.get("operational_advice"),
-                "source": weather.get("source", "unknown"),
-                "stale": False,
-            })
+            outlook.append(
+                {
+                    "date": date,
+                    "rainfall_mm": day.get("rainfall_mm"),
+                    "precipitation_probability": day.get("precipitation_probability"),
+                    "risk_level": day.get("risk_level"),
+                    "events": day_events,
+                    "is_holiday": is_holiday,
+                    "volume_delta_pct": round(delta, 1),
+                    "operational_advice": day.get("operational_advice"),
+                    "source": weather.get("source", "unknown"),
+                    "stale": False,
+                }
+            )
 
         for day in outlook:
             prev = self._prev_deltas.get(day["date"])
             if prev is not None and abs(day["volume_delta_pct"] - prev) > MATERIAL_DELTA_PCT:
-                self._feed.append(AiEvent(
-                    event_type="forecast_update",
-                    truck_code=None,
-                    title=f"Prediksi volume {day['date']} berubah signifikan",
-                    detail={"date": day["date"], "old_delta_pct": prev,
-                            "new_delta_pct": day["volume_delta_pct"]},
-                    confidence=0.7,
-                    created_at=datetime.now(timezone.utc).isoformat(),
-                ))
+                self._feed.append(
+                    AiEvent(
+                        event_type="forecast_update",
+                        truck_code=None,
+                        title=f"Prediksi volume {day['date']} berubah signifikan",
+                        detail={
+                            "date": day["date"],
+                            "old_delta_pct": prev,
+                            "new_delta_pct": day["volume_delta_pct"],
+                        },
+                        confidence=0.7,
+                        created_at=datetime.now(UTC).isoformat(),
+                    )
+                )
         self._prev_deltas = {d["date"]: d["volume_delta_pct"] for d in outlook}
         with self._lock:
             self._latest = outlook

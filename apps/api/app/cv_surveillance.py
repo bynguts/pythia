@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Computer-vision gate surveillance (Case 1 illegal-activity requirement).
 
 Pipeline: a demo video file loops like a CCTV/ANPR gate feed -> YOLOv8n detects
@@ -17,13 +16,14 @@ Engine (YOLO + EasyOCR) loads lazily on first use so the FastAPI app and test
 suite start fast and offline. In tests the detector/OCR functions are
 monkeypatched, so no model download or GPU is required.
 """
+
 from __future__ import annotations
 
 import threading
 import time
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +31,7 @@ from app.collector_registry import check_vehicle
 
 # Demo clips live next to the API package: apps/api/demo_media/
 from app.paths import DEMO_MEDIA_DIR
+
 # Preferred file name; fall back to the first video found in demo_media/ so a
 # freshly dropped clip is picked up with no code change.
 DEMO_VIDEO = DEMO_MEDIA_DIR / "garbage_truck_demo.mp4"
@@ -46,11 +47,11 @@ FRAME_STEP = 30
 # Plate lives in the lower band of the truck bbox (front/rear of chassis).
 # The band is generous (bottom 45% of the bbox) because plate placement varies
 # between front and rear views; a full-truck OCR pass is tried as fallback.
-PLATE_BAND_FRAC = 0.45          # bottom fraction of bbox height to OCR first
-PLATE_MIN_ALNUM = 5             # ignore OCR hits that are clearly not plates
-PLATE_MIN_ALPHA = 2             # plates mix letters + digits; reject pure numbers
+PLATE_BAND_FRAC = 0.45  # bottom fraction of bbox height to OCR first
+PLATE_MIN_ALNUM = 5  # ignore OCR hits that are clearly not plates
+PLATE_MIN_ALPHA = 2  # plates mix letters + digits; reject pure numbers
 OCR_MIN_CONFIDENCE = 0.30
-DEDUP_SECONDS = 20.0            # same plate re-emitted at most every N seconds
+DEDUP_SECONDS = 20.0  # same plate re-emitted at most every N seconds
 EVENT_HISTORY_SIZE = 50
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 
@@ -103,10 +104,10 @@ class SurveillanceEngine:
         if self._engine is None:
             with self._lock:
                 if self._engine is None:
-                    from ultralytics import YOLO  # lazy: heavy import
                     import easyocr
-
                     import torch
+                    from ultralytics import YOLO  # lazy: heavy import
+
                     device = "cuda" if torch.cuda.is_available() else "cpu"
 
                     model = YOLO(str(self.weights))
@@ -128,7 +129,6 @@ class SurveillanceEngine:
     def detect_trucks(self, frame: Any) -> list[dict[str, Any]]:
         """Return truck detections: [{"bbox": [x1,y1,x2,y2], "conf": float}]."""
         engine = self._ensure_engine()
-        import numpy as np
         model = engine["model"]
         h, w = frame.shape[:2]
         results = model(frame, imgsz=1280, classes=[TRUCK_CLASS_ID], verbose=False)
@@ -138,13 +138,17 @@ class SurveillanceEngine:
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
                 conf = float(box.conf[0])
                 # scale back to original frame coordinates
-                dets.append({
-                    "bbox": [int(x1 * w / r.orig_shape[1]),
-                             int(y1 * h / r.orig_shape[0]),
-                             int(x2 * w / r.orig_shape[1]),
-                             int(y2 * h / r.orig_shape[0])],
-                    "conf": conf,
-                })
+                dets.append(
+                    {
+                        "bbox": [
+                            int(x1 * w / r.orig_shape[1]),
+                            int(y1 * h / r.orig_shape[0]),
+                            int(x2 * w / r.orig_shape[1]),
+                            int(y2 * h / r.orig_shape[0]),
+                        ],
+                        "conf": conf,
+                    }
+                )
         return dets
 
     def read_plate(self, frame: Any, bbox: list[int]) -> tuple[str, float] | None:
@@ -157,12 +161,12 @@ class SurveillanceEngine:
 
         regions: list[Any] = []
         band_top = y1 + int(bh * (1.0 - PLATE_BAND_FRAC))
-        band = frame[max(0, band_top):min(frame.shape[0], y2 + 12),
-                     max(0, x1 - 8):min(frame.shape[1], x2 + 8)]
+        band = frame[
+            max(0, band_top) : min(frame.shape[0], y2 + 12), max(0, x1 - 8) : min(frame.shape[1], x2 + 8)
+        ]
         if band.size > 0:
             regions.append(band)
-        truck = frame[max(0, y1):min(frame.shape[0], y2 + 12),
-                      max(0, x1 - 8):min(frame.shape[1], x2 + 8)]
+        truck = frame[max(0, y1) : min(frame.shape[0], y2 + 12), max(0, x1 - 8) : min(frame.shape[1], x2 + 8)]
         if truck.size > 0 and truck.shape != band.shape:
             regions.append(truck)
 
@@ -174,7 +178,7 @@ class SurveillanceEngine:
             region = cv_resize(region, scale)
             gray = cv_to_gray(region)
             hits = reader.readtext(gray, detail=1, paragraph=False)
-            for (_box, text, conf) in hits:
+            for _box, text, conf in hits:
                 if not is_plate_like(str(text)):
                     continue
                 if float(conf) > best_conf:
@@ -211,7 +215,7 @@ class SurveillanceEngine:
                 authorized=verdict["authorized"],
                 severity=verdict["severity"],
                 reason=verdict["reason"],
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
             )
             self._events.append(event)
             return event
@@ -230,13 +234,13 @@ class SurveillanceEngine:
             if self._thread and self._thread.is_alive():
                 return None
             self._running = True
-            self._thread = threading.Thread(target=self._feed_loop, daemon=True,
-                                            name="cv-surveillance-feed")
+            self._thread = threading.Thread(target=self._feed_loop, daemon=True, name="cv-surveillance-feed")
             self._thread.start()
         return None
 
     def _feed_loop(self) -> None:
         import cv2
+
         try:
             cap = cv2.VideoCapture(str(self.video_path))
             if not cap.isOpened():
@@ -244,7 +248,6 @@ class SurveillanceEngine:
                 self._running = False
                 return
             fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-            total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
             while self._running:
                 ok, frame = cap.read()
                 if not ok:
@@ -318,12 +321,13 @@ def is_plate_like(text: str) -> bool:
 
 def cv_resize(img: Any, scale: float) -> Any:
     import cv2
-    import numpy as np
+
     return cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
 
 
 def cv_to_gray(img: Any) -> Any:
     import cv2
+
     if img.ndim == 2:
         return img
     return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 deviation_state.py — alert hysteresis for corridor deviation (Case 1).
 
@@ -10,6 +9,7 @@ truck returns within 50 m of its corridor (its normal loop start clears it).
 Both fleet surfaces (_truck and map_truth) share this one latch so panels
 never disagree.
 """
+
 from __future__ import annotations
 
 OPEN_THRESHOLD_M = 500.0

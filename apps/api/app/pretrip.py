@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -29,11 +29,11 @@ class PreTripRecord:
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _today() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    return datetime.now(UTC).date().isoformat()
 
 
 class PreTripStore:
@@ -42,17 +42,22 @@ class PreTripStore:
     def __init__(self, db_path: Path | str | None = None) -> None:
         self._records = RecordStore(TABLE, db_path)
 
-    def submit(self, truck_code: str, driver_name: str,
-               items: dict[str, bool], note: str = "") -> PreTripRecord:
+    def submit(
+        self, truck_code: str, driver_name: str, items: dict[str, bool], note: str = ""
+    ) -> PreTripRecord:
         if set(items.keys()) != set(PRETRIP_ITEMS):
             raise ValueError(f"items must contain exactly: {PRETRIP_ITEMS}")
         if any(not v for v in items.values()) and not note.strip():
             raise ValueError("note is required when any inspection item fails")
         rec = PreTripRecord(
-            record_id=uuid4().hex[:12], truck_code=truck_code,
-            driver_name=driver_name, date=_today(),
+            record_id=uuid4().hex[:12],
+            truck_code=truck_code,
+            driver_name=driver_name,
+            date=_today(),
             items={k: bool(v) for k, v in items.items()},
-            note=note.strip(), created_at=_utc_now())
+            note=note.strip(),
+            created_at=_utc_now(),
+        )
         self._records.write(rec.record_id, asdict(rec))
         return rec
 
@@ -64,8 +69,7 @@ class PreTripStore:
         return None
 
     def list_recent(self, truck_code: str, days: int = 30) -> list[PreTripRecord]:
-        records = [PreTripRecord(**raw) for raw in self._records.all()
-                   if raw["truck_code"] == truck_code]
+        records = [PreTripRecord(**raw) for raw in self._records.all() if raw["truck_code"] == truck_code]
         return list(reversed(records))[:days]
 
 

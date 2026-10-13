@@ -32,11 +32,7 @@ VALID_MANIFEST = {
     "input_digest": "abc123def456",
 }
 
-VALID_CSV = (
-    "timestamp,sensor_id,gas,ppm\n"
-    "2026-09-24T04:00:01Z,S1,ch4,12.5\n"
-    "2026-09-24T04:00:02Z,S2,h2s,3.1\n"
-)
+VALID_CSV = "timestamp,sensor_id,gas,ppm\n2026-09-24T04:00:01Z,S1,ch4,12.5\n2026-09-24T04:00:02Z,S2,h2s,3.1\n"
 
 
 def test_valid_import_labels_evidence_external_simulation():
@@ -66,9 +62,7 @@ def test_failed_run_is_rejected():
 
 def test_unconverged_run_imports_but_records_gate_off():
     unconverged = dict(VALID_MANIFEST)
-    unconverged["execution"] = dict(
-        VALID_MANIFEST["execution"], numerical_convergence=False
-    )
+    unconverged["execution"] = dict(VALID_MANIFEST["execution"], numerical_convergence=False)
     ev = import_scentinel_evidence(unconverged, VALID_CSV)
     assert ev.gates["numerical_convergence"] is False
     assert ev.gates["pipeline_success"] is True

@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Tests for the discrete-event Bantargebang queue simulation (Task 3)."""
+
 import unittest
 
 from app.queue_simulation import simulate_queue
@@ -26,8 +26,15 @@ class QueueDeterminismTests(unittest.TestCase):
 
     def test_output_fields_present(self):
         r = simulate_queue(arrival_count=40, weighbridges=2, service_rate_per_hour=30, seed=1)
-        for key in ("mean_wait_minutes", "p95_wait_minutes", "max_queue",
-                    "throughput_per_hour", "utilization", "wait_ci95", "recommended_slots"):
+        for key in (
+            "mean_wait_minutes",
+            "p95_wait_minutes",
+            "max_queue",
+            "throughput_per_hour",
+            "utilization",
+            "wait_ci95",
+            "recommended_slots",
+        ):
             self.assertIn(key, r)
 
 
@@ -35,14 +42,18 @@ class QueueBehaviorTests(unittest.TestCase):
     def test_more_demand_increases_wait(self):
         low = simulate_queue(arrival_count=10, weighbridges=2, service_rate_per_hour=30, seed=3)
         peak = simulate_queue(arrival_count=80, weighbridges=2, service_rate_per_hour=30, seed=3)
-        self.assertGreater(peak["mean_wait_minutes"], low["mean_wait_minutes"],
-                           "peak demand must produce longer waits than low demand")
+        self.assertGreater(
+            peak["mean_wait_minutes"],
+            low["mean_wait_minutes"],
+            "peak demand must produce longer waits than low demand",
+        )
 
     def test_more_weighbridges_reduces_wait(self):
         one = simulate_queue(arrival_count=60, weighbridges=1, service_rate_per_hour=30, seed=5)
         three = simulate_queue(arrival_count=60, weighbridges=3, service_rate_per_hour=30, seed=5)
-        self.assertGreater(one["mean_wait_minutes"], three["mean_wait_minutes"],
-                           "more weighbridges must reduce waiting")
+        self.assertGreater(
+            one["mean_wait_minutes"], three["mean_wait_minutes"], "more weighbridges must reduce waiting"
+        )
 
     def test_utilization_between_zero_and_one_plus(self):
         r = simulate_queue(arrival_count=40, weighbridges=2, service_rate_per_hour=30, seed=2)

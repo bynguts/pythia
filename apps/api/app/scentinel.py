@@ -8,7 +8,6 @@ never as live telemetry. The backend never executes the solver.
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any
@@ -26,7 +25,13 @@ SUPPORTED_SENSOR_CSV_COLUMNS = ("timestamp", "sensor_id", "gas", "ppm")
 
 # Quality gates Scentinel itself distinguishes; Pythia records them but does
 # not re-derive them.
-GATES = ("pipeline_success", "numerical_convergence", "mesh_independence", "mass_balance", "experimental_validation")
+GATES = (
+    "pipeline_success",
+    "numerical_convergence",
+    "mesh_independence",
+    "mass_balance",
+    "experimental_validation",
+)
 
 
 class ScentinelImportError(ValueError):
@@ -46,7 +51,13 @@ class ScentinelManifest(BaseModel):
 
     def gates(self) -> dict[str, bool]:
         out = {g: False for g in GATES}
-        for key in ("pipeline_success", "numerical_convergence", "mesh_independence", "mass_balance", "experimental_validation"):
+        for key in (
+            "pipeline_success",
+            "numerical_convergence",
+            "mesh_independence",
+            "mass_balance",
+            "experimental_validation",
+        ):
             if key in self.execution:
                 out[key] = bool(self.execution[key])
         return out
@@ -88,7 +99,7 @@ def parse_sensor_csv(text: str) -> list[dict[str, str]]:
             raise ScentinelImportError(
                 f"Sensor CSV row has {len(values)} values but the header declares {len(header)}."
             )
-        rows.append(dict(zip(header, values)))
+        rows.append(dict(zip(header, values, strict=True)))  # row length validated above
     return rows
 
 
@@ -96,7 +107,9 @@ def digest_payload(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()[:16]
 
 
-def import_scentinel_evidence(manifest: dict[str, Any], sensor_csv: str, truck_code: str | None = None) -> ScentinelEvidence:
+def import_scentinel_evidence(
+    manifest: dict[str, Any], sensor_csv: str, truck_code: str | None = None
+) -> ScentinelEvidence:
     """Validate and normalize one Scentinel evidence package.
 
     Raises ScentinelImportError with an actionable message on incompatible

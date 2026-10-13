@@ -45,15 +45,16 @@ def _in_window(iso_ts: str | None, start: date) -> bool:
         return False
 
 
-def compute_driver_score(driver_name: str, truck_codes: list[str],
-                         today: str | None = None) -> dict:
+def compute_driver_score(driver_name: str, truck_codes: list[str], today: str | None = None) -> dict:
     ref = date.fromisoformat(today) if today else date.today()
     start = _window_start(ref)
     codes = set(truck_codes)
 
     deviation_violations = sum(
-        1 for t in get_dynamic_trucks()
-        if t["truck_code"] in codes and (t.get("deviation") or {}).get("violated"))
+        1
+        for t in get_dynamic_trucks()
+        if t["truck_code"] in codes and (t.get("deviation") or {}).get("violated")
+    )
 
     stops_without_evidence = 0
     stops_closed_by_override = 0
@@ -63,9 +64,11 @@ def compute_driver_score(driver_name: str, truck_codes: list[str],
         if spj.truck_code not in codes:
             continue
         spj_dates.add(spj.created_at[:10])
-        if (spj.status == "selesai"
-                and _in_window(spj.completed_at, start)
-                and (spj.completed_at or "")[:10] > spj.date):
+        if (
+            spj.status == "selesai"
+            and _in_window(spj.completed_at, start)
+            and (spj.completed_at or "")[:10] > spj.date
+        ):
             late_completions += 1
         for stop in spj.stops:
             if not (stop.status == "completed" and _in_window(stop.completed_at, start)):
@@ -81,21 +84,23 @@ def compute_driver_score(driver_name: str, truck_codes: list[str],
                 stops_without_evidence += 1
 
     unresolved_heavy = sum(
-        1 for r in DAMAGE_STORE.list()
-        if r.driver_name == driver_name and r.severity == "berat"
-        and r.status != "selesai")
+        1
+        for r in DAMAGE_STORE.list()
+        if r.driver_name == driver_name and r.severity == "berat" and r.status != "selesai"
+    )
 
     pretrip_dates: set[str] = set()
     for code in codes:
         for rec in PRETRIP_STORE.list_recent(code, days=WINDOW_DAYS * 4):
             pretrip_dates.add(rec.date)
-    days_without_pretrip = len(
-        {d for d in spj_dates if _in_window(d, start)} - pretrip_dates)
-    deductions = (W_DEVIATION * deviation_violations
-                  + W_NO_EVIDENCE * stops_without_evidence
-                  + W_LATE * late_completions
-                  + W_HEAVY_REPORT * unresolved_heavy
-                  + W_NO_PRETRIP * days_without_pretrip)
+    days_without_pretrip = len({d for d in spj_dates if _in_window(d, start)} - pretrip_dates)
+    deductions = (
+        W_DEVIATION * deviation_violations
+        + W_NO_EVIDENCE * stops_without_evidence
+        + W_LATE * late_completions
+        + W_HEAVY_REPORT * unresolved_heavy
+        + W_NO_PRETRIP * days_without_pretrip
+    )
     score = round(max(0.0, 100.0 - deductions), 1)
     return {
         "driver_name": driver_name,
@@ -109,9 +114,13 @@ def compute_driver_score(driver_name: str, truck_codes: list[str],
             "unresolved_heavy_reports": unresolved_heavy,
             "days_without_pretrip": days_without_pretrip,
         },
-        "weights": {"deviation": W_DEVIATION, "no_evidence": W_NO_EVIDENCE,
-                    "late": W_LATE, "heavy_report": W_HEAVY_REPORT,
-                    "no_pretrip": W_NO_PRETRIP},
+        "weights": {
+            "deviation": W_DEVIATION,
+            "no_evidence": W_NO_EVIDENCE,
+            "late": W_LATE,
+            "heavy_report": W_HEAVY_REPORT,
+            "no_pretrip": W_NO_PRETRIP,
+        },
         "computed_at": ref.isoformat(),
         "window_days": WINDOW_DAYS,
         "classification": "derived",
@@ -122,7 +131,6 @@ def compute_fleet_scores(today: str | None = None) -> list[dict]:
     drivers: dict[str, list[str]] = {}
     for truck in get_dynamic_trucks():
         drivers.setdefault(truck["driver_name"], []).append(truck["truck_code"])
-    scores = [compute_driver_score(name, codes, today=today)
-              for name, codes in drivers.items()]
+    scores = [compute_driver_score(name, codes, today=today) for name, codes in drivers.items()]
     scores.sort(key=lambda s: s["score"], reverse=True)
     return scores

@@ -52,8 +52,9 @@ class MultiProcessConcurrencyTests(unittest.TestCase):
         script = _WORKER_SRC.format(backend_dir=backend_dir, db=db, count=per_worker)
         script = "import json\n" + script
         procs = [
-            subprocess.Popen([sys.executable, "-c", script],
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            subprocess.Popen(
+                [sys.executable, "-c", script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
             for _ in range(2)
         ]
         outputs = []
@@ -63,7 +64,9 @@ class MultiProcessConcurrencyTests(unittest.TestCase):
             outputs.append(json.loads(out.strip().splitlines()[-1]))
         all_numbers = outputs[0] + outputs[1]
         self.assertEqual(len(all_numbers), 2 * per_worker)
-        self.assertEqual(len(set(all_numbers)), len(all_numbers), "duplicate daily SPJ numbers across workers")
+        self.assertEqual(
+            len(set(all_numbers)), len(all_numbers), "duplicate daily SPJ numbers across workers"
+        )
         # Every record must survive: reload and count.
         script_check = (
             "import json,sys\n"
@@ -73,8 +76,7 @@ class MultiProcessConcurrencyTests(unittest.TestCase):
             f"store = SpjStore(persist_path={db!r})\n"
             f"print(json.dumps([s.spj_number for s in store.list()]))\n"
         )
-        out = subprocess.run([sys.executable, "-c", script_check],
-                             capture_output=True, text=True, timeout=60)
+        out = subprocess.run([sys.executable, "-c", script_check], capture_output=True, text=True, timeout=60)
         self.assertEqual(out.returncode, 0, out.stderr)
         stored = json.loads(out.stdout.strip().splitlines()[-1])
         self.assertEqual(len(stored), 2 * per_worker, "records lost across workers")
@@ -98,8 +100,7 @@ class MultiProcessConcurrencyTests(unittest.TestCase):
             "    ids.append(spj.spj_id)\n"
             "print(json.dumps(ids))\n"
         )
-        out = subprocess.run([sys.executable, "-c", seed_script],
-                             capture_output=True, text=True, timeout=60)
+        out = subprocess.run([sys.executable, "-c", seed_script], capture_output=True, text=True, timeout=60)
         self.assertEqual(out.returncode, 0, out.stderr)
         ids = json.loads(out.stdout.strip().splitlines()[-1])
 
@@ -115,16 +116,21 @@ class MultiProcessConcurrencyTests(unittest.TestCase):
             "except ValueError as e:\n    print('CONFLICT')\n"
         )
         procs = [
-            subprocess.Popen([sys.executable, "-c", activate_script, str(w)],
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            subprocess.Popen(
+                [sys.executable, "-c", activate_script, str(w)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
             for w in range(2)
         ]
         statuses = [p.communicate(timeout=60)[0].strip().splitlines()[-1] for p in procs]
         for p in procs:
             self.assertEqual(p.returncode, 0)
         # Exactly one activation must succeed.
-        self.assertEqual(sorted(statuses), ["CONFLICT", "OK"],
-                         f"expected one OK and one CONFLICT, got {statuses}")
+        self.assertEqual(
+            sorted(statuses), ["CONFLICT", "OK"], f"expected one OK and one CONFLICT, got {statuses}"
+        )
 
         check_script = (
             "import json,sys\n"
@@ -135,28 +141,33 @@ class MultiProcessConcurrencyTests(unittest.TestCase):
             "active = store.active_for_truck('T-SHARED')\n"
             "print(json.dumps(1 if active else 0))\n"
         )
-        out = subprocess.run([sys.executable, "-c", check_script],
-                             capture_output=True, text=True, timeout=60)
+        out = subprocess.run([sys.executable, "-c", check_script], capture_output=True, text=True, timeout=60)
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertEqual(json.loads(out.stdout.strip()), 1, "truck must have exactly one active SPJ")
 
 
 class InProcessConcurrencyTests(unittest.TestCase):
     def test_threaded_creates_unique_numbers(self):
-        with_open = os.environ.get
         os.environ["PYTHIA_SPJ_SEED"] = "off"
         try:
             from app.spj import SpjStore
         finally:
             pass
         db = _db_path("test_spj_threads.db")
-        store = SpjStore(persist_path=db)
+        SpjStore(persist_path=db)
+
         # New connections per thread exercise SQLite-level contention.
         def worker(n: int):
             s = SpjStore(persist_path=db)
-            return s.create(driver_name="W", truck_code=f"T-{n}", destination="TPST Bantargebang",
-                            weigh_on_site=True, priority="normal", note="",
-                            created_by="thread").spj_number
+            return s.create(
+                driver_name="W",
+                truck_code=f"T-{n}",
+                destination="TPST Bantargebang",
+                weigh_on_site=True,
+                priority="normal",
+                note="",
+                created_by="thread",
+            ).spj_number
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
             numbers = list(ex.map(worker, range(8)))

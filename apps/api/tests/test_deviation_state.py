@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*-
 """Tests for deviation alert hysteresis and TPA queue scenario contract."""
+
 import unittest
 
-from app.deviation_state import apply_hysteresis, reset_hysteresis
 from app.data import tpa_queue_status_payload
+from app.deviation_state import apply_hysteresis, reset_hysteresis
 
 
 class HysteresisTests(unittest.TestCase):
@@ -15,8 +15,7 @@ class HysteresisTests(unittest.TestCase):
 
     def test_holds_in_deadband(self):
         apply_hysteresis("T-X", 600.0)
-        self.assertTrue(apply_hysteresis("T-X", 300.0),
-                        "alert must hold between 50-500m (no flicker)")
+        self.assertTrue(apply_hysteresis("T-X", 300.0), "alert must hold between 50-500m (no flicker)")
 
     def test_clears_under_50m(self):
         apply_hysteresis("T-X", 600.0)
@@ -33,8 +32,11 @@ class TpaQueueScenarioTests(unittest.TestCase):
         self.assertEqual(peak["trucks_in_queue"], 47)
         self.assertEqual(peak["scenario"], "peak")
         self.assertIn("peak_hour_scenario", peak["arrival_profile"])
-        self.assertGreater(peak["avg_wait_minutes"], 60,
-                           "documented DLH peak (47 trucks/h) must reproduce the ~117 min bottleneck")
+        self.assertGreater(
+            peak["avg_wait_minutes"],
+            60,
+            "documented DLH peak (47 trucks/h) must reproduce the ~117 min bottleneck",
+        )
 
     def test_live_scenario_uses_clock(self):
         live = tpa_queue_status_payload(scenario="live")

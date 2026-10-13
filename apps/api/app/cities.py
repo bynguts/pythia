@@ -6,6 +6,7 @@ City is a *demo* city that shows how Pythia expands across Southeast Asia: no
 model is trained there, so its volumes come from a transparent allocation of
 the published citywide total and are labelled SIMULATED DEMO CITY everywhere.
 """
+
 from __future__ import annotations
 
 import math
@@ -35,8 +36,10 @@ CITIES: dict[str, City] = {
         center=(106.8456, -6.2088),
         zoom=10.4,
         data_class="MODEL_OUTPUT",
-        note=("Per-kecamatan Prophet + XGBoost forecast over the real SILIKA DLH 2023 "
-              "baseline; fleet telemetry is simulated for the pilot."),
+        note=(
+            "Per-kecamatan Prophet + XGBoost forecast over the real SILIKA DLH 2023 "
+            "baseline; fleet telemetry is simulated for the pilot."
+        ),
     ),
     "hcmc": City(
         id="hcmc",
@@ -45,8 +48,10 @@ CITIES: dict[str, City] = {
         center=(106.6600, 10.7900),
         zoom=10.2,
         data_class="SIMULATED_DEMO_CITY",
-        note=("Demo city for SEA expansion: the published citywide total is allocated "
-              "to former districts by 2019 census population. No model is trained here."),
+        note=(
+            "Demo city for SEA expansion: the published citywide total is allocated "
+            "to former districts by 2019 census population. No model is trained here."
+        ),
     ),
 }
 
@@ -99,12 +104,18 @@ def get_city(city_id: str) -> City:
 def _nearest_district(lat: float, lng: float) -> str:
     def dist(row):
         return math.hypot(row[2] - lat, (row[3] - lng) * math.cos(math.radians(lat)))
+
     return min(HCMC_DISTRICTS, key=dist)[0]
 
 
-def hcmc_district_forecasts(days: int, rainfall_mm: float = 0.0, event_attendance: int = 0,
-                            event_lat: float | None = None, event_lng: float | None = None,
-                            start: date | None = None) -> list[dict[str, Any]]:
+def hcmc_district_forecasts(
+    days: int,
+    rainfall_mm: float = 0.0,
+    event_attendance: int = 0,
+    event_lat: float | None = None,
+    event_lng: float | None = None,
+    start: date | None = None,
+) -> list[dict[str, Any]]:
     """Daily demo volumes per HCMC district.
 
     tons = citywide total × census population share × (1 + weekend uplift)
@@ -115,8 +126,9 @@ def hcmc_district_forecasts(days: int, rainfall_mm: float = 0.0, event_attendanc
     rain_factor = 1.0 + min(RAIN_UPLIFT_CAP, max(0.0, rainfall_mm) * RAIN_UPLIFT_PER_MM)
     event_district = None
     if event_attendance > 0:
-        event_district = _nearest_district(event_lat if event_lat is not None else 10.7769,
-                                           event_lng if event_lng is not None else 106.7009)
+        event_district = _nearest_district(
+            event_lat if event_lat is not None else 10.7769, event_lng if event_lng is not None else 106.7009
+        )
     out = []
     for slug, name, lat, lng, population in HCMC_DISTRICTS:
         base = HCMC_DAILY_TONS * population / HCMC_POPULATION_2019
@@ -127,17 +139,19 @@ def hcmc_district_forecasts(days: int, rainfall_mm: float = 0.0, event_attendanc
             if slug == event_district:
                 tons += event_attendance * EVENT_WASTE_KG_PER_PERSON / 1000.0
             series.append({"date": day.isoformat(), "predicted_tons": round(tons, 1)})
-        out.append({
-            "id": slug,
-            "name": name,
-            "admin_area": "Ho Chi Minh City",
-            "lat": lat,
-            "lng": lng,
-            "population_2019": population,
-            "baseline_tons": round(base, 1),
-            "series": series,
-            "interval_p10_p90": None,
-            "capacity_tons": None,
-            "event_localized": slug == event_district,
-        })
+        out.append(
+            {
+                "id": slug,
+                "name": name,
+                "admin_area": "Ho Chi Minh City",
+                "lat": lat,
+                "lng": lng,
+                "population_2019": population,
+                "baseline_tons": round(base, 1),
+                "series": series,
+                "interval_p10_p90": None,
+                "capacity_tons": None,
+                "event_localized": slug == event_district,
+            }
+        )
     return out

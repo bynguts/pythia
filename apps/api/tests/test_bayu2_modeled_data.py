@@ -26,37 +26,41 @@ class ModeledSilikaClassificationTests(unittest.TestCase):
         rec = next((r for r in records if r["name"] == MODELED_FILE), None)
         self.assertIsNotNone(rec, "registry entry must exist")
         self.assertEqual(
-            rec["classification"], "modeled_from_real_baseline",
-            "SILIKA-modeled values must not be classified as real/actual")
+            rec["classification"],
+            "modeled_from_real_baseline",
+            "SILIKA-modeled values must not be classified as real/actual",
+        )
 
     def test_actual_data_count_excludes_modeled(self):
         summary = data_provenance()
         actual = summary["real_data_count"] if isinstance(summary, dict) else None
         self.assertIsNotNone(actual, "data_provenance must expose real_data_count")
         records = build_provenance_records()
-        recount = sum(
-            1 for r in records
-            if r["classification"] in ACTUAL_DATA_CLASSIFICATIONS)
-        self.assertEqual(actual, recount,
-                         "real_data_count must match only actual classifications")
-        modeled = [r for r in records
-                   if r["classification"] == "modeled_from_real_baseline"]
-        self.assertTrue(any(r["name"] == MODELED_FILE for r in modeled),
-                        "the SILIKA-modeled file must be present and excluded")
+        recount = sum(1 for r in records if r["classification"] in ACTUAL_DATA_CLASSIFICATIONS)
+        self.assertEqual(actual, recount, "real_data_count must match only actual classifications")
+        modeled = [r for r in records if r["classification"] == "modeled_from_real_baseline"]
+        self.assertTrue(
+            any(r["name"] == MODELED_FILE for r in modeled),
+            "the SILIKA-modeled file must be present and excluded",
+        )
 
     def test_actual_classifications_do_not_include_modeled(self):
-        for banned in ("modeled_from_real_baseline", "proxy",
-                       "calibrated_synthetic", "derived"):
+        for banned in ("modeled_from_real_baseline", "proxy", "calibrated_synthetic", "derived"):
             self.assertNotIn(banned, ACTUAL_DATA_CLASSIFICATIONS)
 
     def test_registry_classifications_are_documented(self):
         allowed = set(ACTUAL_DATA_CLASSIFICATIONS) | {
-            "modeled_from_real_baseline", "proxy", "calibrated_synthetic",
-            "derived"}
+            "modeled_from_real_baseline",
+            "proxy",
+            "calibrated_synthetic",
+            "derived",
+        }
         for rec in build_provenance_records():
-            self.assertIn(rec["classification"], allowed,
-                          f"undocumented classification {rec['classification']} "
-                          f"on {rec['name']}")
+            self.assertIn(
+                rec["classification"],
+                allowed,
+                f"undocumented classification {rec['classification']} on {rec['name']}",
+            )
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ Tools call the same Python functions used by the API endpoints (single source
 of truth). Ana is read-only: no dispatch/approve/send tools are exposed; she
 recommends actions and the operator executes them in the dashboard.
 """
+
 from __future__ import annotations
 
 import json
@@ -11,11 +12,15 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+from app.astar_routing import (
+    is_traffic_jam_active,
+    reroute_payload,
+)
 from app.data import (
     command_center_snapshot,
-    get_dynamic_trucks,
     events_permits_payload,
     fleet_history_payload,
+    get_dynamic_trucks,
     tpa_queue_status_payload,
     unlicensed_collectors_payload,
 )
@@ -28,11 +33,6 @@ from app.forecast_metrics import suitability_labels
 from app.gps_feed import latest_breadcrumbs
 from app.impact import build_impact_report
 from app.osrm import fetch_osrm_route
-from app.weather import fetch_jakarta_weather_forecast
-from app.astar_routing import (
-    is_traffic_jam_active,
-    reroute_payload,
-)
 from app.real_data import (
     build_provenance_records,
     data_provenance,
@@ -41,7 +41,7 @@ from app.real_data import (
     load_official_events,
     load_real_wr_coordinates,
 )
-from app.queue_simulation import simulate_queue
+from app.weather import fetch_jakarta_weather_forecast
 from app.whatsapp import OpenWAClient
 
 
@@ -127,12 +127,24 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "type": "object",
                 "properties": {
                     "date": {"type": "string", "description": "Opsional YYYY-MM-DD"},
-                    "kelurahan": {"type": "string", "description": "Opsional detail per kelurahan, misal 'Menteng'"},
-                    "rainfall_mm": {"type": "number", "description": "Opsional curah hujan (mm) untuk detail"},
-                    "event_attendance": {"type": "integer", "description": "Opsional jumlah pengunjung event"},
+                    "kelurahan": {
+                        "type": "string",
+                        "description": "Opsional detail per kelurahan, misal 'Menteng'",
+                    },
+                    "rainfall_mm": {
+                        "type": "number",
+                        "description": "Opsional curah hujan (mm) untuk detail",
+                    },
+                    "event_attendance": {
+                        "type": "integer",
+                        "description": "Opsional jumlah pengunjung event",
+                    },
                     "is_weekend": {"type": "boolean", "description": "Opsional penanda akhir pekan"},
                     "is_holiday": {"type": "boolean", "description": "Opsional penanda hari libur"},
-                    "include_kecamatan": {"type": "boolean", "description": "Aktifkan hanya untuk prediksi tingkat kecamatan; lebih mahal dari prediksi kota"},
+                    "include_kecamatan": {
+                        "type": "boolean",
+                        "description": "Aktifkan hanya untuk prediksi tingkat kecamatan; lebih mahal dari prediksi kota",
+                    },
                 },
             },
         },
@@ -152,7 +164,9 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "description": "Status antrean TPA Bantargebang: jumlah truk, waktu tunggu rata-rata/p95, status label, dan recommended action. Skenario 'live' (jam berjalan) atau 'peak' (puncak terdokumentasi DLH 47 truk/jam).",
             "parameters": {
                 "type": "object",
-                "properties": {"scenario": {"type": "string", "enum": ["live", "peak"], "description": "Default live"}},
+                "properties": {
+                    "scenario": {"type": "string", "enum": ["live", "peak"], "description": "Default live"}
+                },
             },
         },
     },
@@ -163,7 +177,9 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "description": "Simulasi jadwal keberangkatan bertahap (staggered dispatch) untuk mengurangi antrean TPA; output pengurangan rata-rata waktu tunggu.",
             "parameters": {
                 "type": "object",
-                "properties": {"active_trucks": {"type": "integer", "description": "Jumlah truk aktif, default 5"}},
+                "properties": {
+                    "active_trucks": {"type": "integer", "description": "Jumlah truk aktif, default 5"}
+                },
             },
         },
     },
@@ -228,20 +244,22 @@ def _fleet_status_tool(args: dict) -> dict[str, Any]:
         trucks = [t for t in trucks if t["truck_code"] == args["truck_code"]]
     slim = []
     for t in trucks:
-        slim.append({
-            "truck_code": t["truck_code"],
-            "driver_name": t["driver_name"],
-            "zone": t["assigned_zone"],
-            "vehicle_type": t.get("vehicle_type"),
-            "status": t["status"],
-            "activity": t.get("activity", {}).get("label"),
-            "is_damaged": t["is_damaged"],
-            "damage_note": (t.get("damage_status") or {}).get("note"),
-            "deviation_violated": t["deviation"]["violated"],
-            "deviation_meters": t["deviation"]["distance_meters"],
-            "severity": t["deviation"]["severity"],
-            "speed_kmh": t["latest_position"]["speed_kmh"],
-        })
+        slim.append(
+            {
+                "truck_code": t["truck_code"],
+                "driver_name": t["driver_name"],
+                "zone": t["assigned_zone"],
+                "vehicle_type": t.get("vehicle_type"),
+                "status": t["status"],
+                "activity": t.get("activity", {}).get("label"),
+                "is_damaged": t["is_damaged"],
+                "damage_note": (t.get("damage_status") or {}).get("note"),
+                "deviation_violated": t["deviation"]["violated"],
+                "deviation_meters": t["deviation"]["distance_meters"],
+                "severity": t["deviation"]["severity"],
+                "speed_kmh": t["latest_position"]["speed_kmh"],
+            }
+        )
     problem = [t for t in slim if t["deviation_violated"] or t["is_damaged"]]
     return {
         "total_trucks": len(slim),
@@ -266,7 +284,13 @@ _TOOLS_IMPL: dict[str, Any] = {
         "source": "simulated",
         "note": "Simulated breadcrumb feed; swap to DLH AVL at pilot with no contract change.",
         "breadcrumbs": [
-            {"lat": b.lat, "lng": b.lng, "timestamp": b.timestamp, "speed_kmh": b.speed_kmh, "source": b.source}
+            {
+                "lat": b.lat,
+                "lng": b.lng,
+                "timestamp": b.timestamp,
+                "speed_kmh": b.speed_kmh,
+                "source": b.source,
+            }
             for b in latest_breadcrumbs(args["truck_code"])
         ],
     },
@@ -281,7 +305,9 @@ _TOOLS_IMPL: dict[str, Any] = {
         "note": "Daily per-district resolution is calibrated-synthetic and must not be presented as observed accuracy.",
     },
     "get_tpa_queue": lambda args, ctx: tpa_queue_status_payload(scenario=args.get("scenario", "live")),
-    "simulate_staggered_dispatch": lambda args, ctx: simulate_staggered_dispatch(int(args.get("active_trucks", 47))),
+    "simulate_staggered_dispatch": lambda args, ctx: simulate_staggered_dispatch(
+        int(args.get("active_trucks", 47))
+    ),
     "get_weather": lambda args, ctx: fetch_jakarta_weather_forecast(),
     "get_events": lambda args, ctx: [
         *[{"id": e.get("id"), "name": e.get("title") or e.get("name"), **e} for e in load_official_events()],
@@ -334,19 +360,24 @@ def _predictions_payload(args: dict) -> dict[str, Any]:
                 is_holiday=bool(args.get("is_holiday", False)),
                 event_attendance=int(args.get("event_attendance", 0)),
             )
-            hotspots.append({
-                "kecamatan": k["kecamatan"], "city": k["city"],
-                "predicted_tons": pred["predicted_tons"],
-                "trucks_required": pred.get("trucks_required")
+            hotspots.append(
+                {
+                    "kecamatan": k["kecamatan"],
+                    "city": k["city"],
+                    "predicted_tons": pred["predicted_tons"],
+                    "trucks_required": pred.get("trucks_required")
                     or max(1, math.ceil(pred["predicted_tons"] / 18)),
-                "crews_required": pred["crews_required"],
-                "workers_required": pred.get("workers_required"),
-                "man_hours_required": pred["man_hours_required"],
-            })
+                    "crews_required": pred["crews_required"],
+                    "workers_required": pred.get("workers_required"),
+                    "man_hours_required": pred["man_hours_required"],
+                }
+            )
         hotspots.sort(key=lambda h: -h["predicted_tons"])
         out["kecamatan_hotspots_top5"] = hotspots[:5]
         out["kecamatan_count"] = len(hotspots)
-        out["note"] = "kecamatan_hotspots_top5 dari model hybrid Prophet+XGBoost per kecamatan; pakai angka ini apa adanya."
+        out["note"] = (
+            "kecamatan_hotspots_top5 dari model hybrid Prophet+XGBoost per kecamatan; pakai angka ini apa adanya."
+        )
 
     if args.get("kelurahan"):
         out["detail"] = predict_waste_hybrid(
@@ -393,10 +424,12 @@ def run_tools_pass(tool_calls: list[dict], ctx: ToolContext, max_calls: int = 2)
                     output = {"tool": fname, "error": f"Unknown or unavailable tool: {fname}"}
         except (ValueError, TypeError):
             output = {"tool": fname, "error": "Invalid tool arguments."}
-        messages.append({
-            "role": "tool",
-            "tool_call_id": call.get("id", ""),
-            "name": fname,
-            "content": sanitize_json_payload(output),
-        })
+        messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": call.get("id", ""),
+                "name": fname,
+                "content": sanitize_json_payload(output),
+            }
+        )
     return messages

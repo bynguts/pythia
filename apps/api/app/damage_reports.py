@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -34,7 +34,7 @@ class DamageReport:
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class DamageReportStore:
@@ -43,18 +43,32 @@ class DamageReportStore:
     def __init__(self, db_path: Path | str | None = None) -> None:
         self._records = RecordStore(TABLE, db_path)
 
-    def create(self, truck_code: str, driver_name: str, component: str,
-               severity: str, note: str, photo_name: str | None = None,
-               photo_b64: str | None = None,
-               source: str = "driver_pwa") -> DamageReport:
+    def create(
+        self,
+        truck_code: str,
+        driver_name: str,
+        component: str,
+        severity: str,
+        note: str,
+        photo_name: str | None = None,
+        photo_b64: str | None = None,
+        source: str = "driver_pwa",
+    ) -> DamageReport:
         if severity not in SEVERITIES:
             raise ValueError(f"severity must be one of {SEVERITIES}")
         rep = DamageReport(
-            report_id=uuid4().hex[:12], truck_code=truck_code,
-            driver_name=driver_name, component=component,
-            severity=severity, note=note, photo_name=photo_name,
-            photo_b64=photo_b64, source=source, status="baru",
-            created_at=_utc_now())
+            report_id=uuid4().hex[:12],
+            truck_code=truck_code,
+            driver_name=driver_name,
+            component=component,
+            severity=severity,
+            note=note,
+            photo_name=photo_name,
+            photo_b64=photo_b64,
+            source=source,
+            status="baru",
+            created_at=_utc_now(),
+        )
         self._records.write(rep.report_id, asdict(rep))
         return rep
 
@@ -78,9 +92,7 @@ class DamageReportStore:
 
     def active_override_for(self, truck_code: str) -> DamageReport | None:
         for raw in reversed(self._records.all()):
-            if (raw["truck_code"] == truck_code
-                    and raw["severity"] == "berat"
-                    and raw["status"] != "selesai"):
+            if raw["truck_code"] == truck_code and raw["severity"] == "berat" and raw["status"] != "selesai":
                 return DamageReport(**raw)
         return None
 

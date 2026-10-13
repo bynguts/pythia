@@ -1,4 +1,3 @@
-import time
 import unittest
 
 from app.ai.actions.auto_reroute import (
@@ -16,14 +15,18 @@ class FakeSource:
         self._speeds = speeds
 
     def current_positions(self):
-        return [{"truck_code": c,
-                 "latest_position": {"lat": -6.2, "lng": 106.8, "speed_kmh": s[-1]}}
-                for c, s in self._speeds.items()]
+        return [
+            {"truck_code": c, "latest_position": {"lat": -6.2, "lng": 106.8, "speed_kmh": s[-1]}}
+            for c, s in self._speeds.items()
+        ]
 
     def breadcrumbs(self, truck_code, points):
-        return [GpsBreadcrumb(truck_code=truck_code, lat=-6.2, lng=106.8,
-                              timestamp="2026-09-10T00:00:00", speed_kmh=s)
-                for s in self._speeds[truck_code][-points:]]
+        return [
+            GpsBreadcrumb(
+                truck_code=truck_code, lat=-6.2, lng=106.8, timestamp="2026-09-10T00:00:00", speed_kmh=s
+            )
+            for s in self._speeds[truck_code][-points:]
+        ]
 
 
 class ManualOverrideTests(unittest.TestCase):
@@ -37,6 +40,7 @@ class ManualOverrideTests(unittest.TestCase):
 
     def test_rerouter_suppressed_during_override(self):
         import app.astar_routing as astar
+
         astar.set_traffic_jam_active(False)
         feed = EventFeed(maxlen=10)
         rerouter = AutoRerouter(detector=SpeedAnomalyDetector(), feed=feed)

@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Tests for the integrated operations optimizer (Task 4)."""
+
 import unittest
 
 from app.operations_optimizer import Demand, Vehicle, build_operational_plan

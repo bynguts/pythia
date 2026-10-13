@@ -5,16 +5,16 @@ import logging
 import os
 import sqlite3
 import tempfile
+from collections.abc import Iterator
 from contextlib import closing, contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 from uuid import uuid4
 
 from app.env import getenv
 
 logger = logging.getLogger(__name__)
-
 
 
 class StorageError(RuntimeError):
@@ -38,7 +38,6 @@ def default_records_db(name: str) -> Path:
     return Path(tempfile.gettempdir()) / f"{name}.db"
 
 
-
 class RecordStore:
     """Durable single-table record store backed by SQLite.
 
@@ -57,8 +56,7 @@ class RecordStore:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             self._init_schema()
         except (sqlite3.Error, OSError, StorageError) as exc:
-            raise StorageError(
-                f"cannot open durable store {table} at {self.db_path}: {exc}") from exc
+            raise StorageError(f"cannot open durable store {table} at {self.db_path}: {exc}") from exc
 
     def _connect(self) -> sqlite3.Connection:
         try:
@@ -73,11 +71,9 @@ class RecordStore:
                 # above comes first; losing the race is not an error.
                 connection.execute("PRAGMA journal_mode=WAL")
             except sqlite3.OperationalError:
-                logger.debug("%s: WAL already being set by another worker",
-                             self.table)
+                logger.debug("%s: WAL already being set by another worker", self.table)
         except sqlite3.Error as exc:
-            raise StorageError(
-                f"{self.table}: cannot open {self.db_path}: {exc}") from exc
+            raise StorageError(f"{self.table}: cannot open {self.db_path}: {exc}") from exc
         return connection
 
     def _init_schema(self) -> None:
@@ -131,8 +127,7 @@ class RecordStore:
             connection.execute("BEGIN IMMEDIATE")
         except sqlite3.Error as exc:
             connection.close()
-            raise StorageError(
-                f"{self.table}: cannot begin transaction: {exc}") from exc
+            raise StorageError(f"{self.table}: cannot begin transaction: {exc}") from exc
         try:
             yield connection
         except BaseException:
@@ -149,10 +144,11 @@ class RecordStore:
             raise StorageError(f"{self.table}: commit failed: {exc}") from exc
         connection.close()
 
-    def write(self, record_id: str, payload: dict[str, Any],
-              connection: sqlite3.Connection | None = None) -> None:
+    def write(
+        self, record_id: str, payload: dict[str, Any], connection: sqlite3.Connection | None = None
+    ) -> None:
         """Insert or replace one record. Commits before returning."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         blob = json.dumps(payload, ensure_ascii=False)
         try:
             with self._transaction(connection) as connection:
@@ -169,8 +165,7 @@ class RecordStore:
         except sqlite3.Error as exc:
             raise StorageError(f"{self.table}: cannot persist {record_id}: {exc}") from exc
 
-    def get(self, record_id: str,
-            connection: sqlite3.Connection | None = None) -> dict[str, Any] | None:
+    def get(self, record_id: str, connection: sqlite3.Connection | None = None) -> dict[str, Any] | None:
         try:
             if connection is not None:
                 row = connection.execute(
@@ -191,14 +186,10 @@ class RecordStore:
         """Every record in insertion order (matches the JSON list order)."""
         try:
             if connection is not None:
-                rows = connection.execute(
-                    f"SELECT payload FROM {self.table} ORDER BY rowid ASC"
-                ).fetchall()
+                rows = connection.execute(f"SELECT payload FROM {self.table} ORDER BY rowid ASC").fetchall()
             else:
                 with closing(self._connect()) as owned:
-                    rows = owned.execute(
-                        f"SELECT payload FROM {self.table} ORDER BY rowid ASC"
-                    ).fetchall()
+                    rows = owned.execute(f"SELECT payload FROM {self.table} ORDER BY rowid ASC").fetchall()
         except sqlite3.Error as exc:
             raise StorageError(f"{self.table}: cannot list records: {exc}") from exc
         return [json.loads(row["payload"]) for row in rows]
@@ -211,8 +202,7 @@ class RecordStore:
             raise StorageError(f"{self.table}: cannot count records: {exc}") from exc
         return int(row["n"])
 
-    def allocate_sequence(self, name: str,
-                          connection: sqlite3.Connection | None = None) -> int:
+    def allocate_sequence(self, name: str, connection: sqlite3.Connection | None = None) -> int:
         """Atomically reserve the next value of a monotonic counter."""
         try:
             with self._transaction(connection) as connection:
@@ -232,13 +222,10 @@ class RecordStore:
         """Next value without reserving it (display/formatting only)."""
         try:
             with closing(self._connect()) as connection:
-                row = connection.execute(
-                    "SELECT value FROM sequences WHERE name=?", (name,)
-                ).fetchone()
+                row = connection.execute("SELECT value FROM sequences WHERE name=?", (name,)).fetchone()
         except sqlite3.Error as exc:
             raise StorageError(f"{self.table}: cannot read {name}: {exc}") from exc
         return int(row["value"]) + 1 if row is not None else 1
-
 
 
 class HistoryStore:
@@ -291,7 +278,7 @@ class HistoryStore:
             with connection:
                 connection.execute(
                     "INSERT INTO events (event_type, payload_json, created_at) VALUES (?, ?, ?)",
-                    (event_type, json.dumps(payload), datetime.now(timezone.utc).isoformat()),
+                    (event_type, json.dumps(payload), datetime.now(UTC).isoformat()),
                 )
 
     def list_events(self, limit: int = 50) -> list[dict[str, Any]]:
@@ -317,7 +304,7 @@ class HistoryStore:
             "manager_id": manager_id,
             "field_status": "PENDING",
             "confirmed_note": "",
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "confirmed_at": None,
         }
         with closing(self._connect()) as connection:
@@ -326,14 +313,23 @@ class HistoryStore:
                     "INSERT INTO dispatches (id, truck_code, instruction, manager_id, "
                     "field_status, confirmed_note, created_at, confirmed_at) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (dispatch["id"], truck_code, instruction, manager_id, "PENDING",
-                     "", dispatch["created_at"], None),
+                    (
+                        dispatch["id"],
+                        truck_code,
+                        instruction,
+                        manager_id,
+                        "PENDING",
+                        "",
+                        dispatch["created_at"],
+                        None,
+                    ),
                 )
         return dispatch
 
-    def update_dispatch_status(self, dispatch_id: str, status: str, note: str = "",
-                               operation_id: str | None = None) -> dict[str, Any]:
-        confirmed_at = datetime.now(timezone.utc).isoformat()
+    def update_dispatch_status(
+        self, dispatch_id: str, status: str, note: str = "", operation_id: str | None = None
+    ) -> dict[str, Any]:
+        confirmed_at = datetime.now(UTC).isoformat()
         with closing(self._connect()) as connection:
             with connection:
                 self._ensure_confirm_operation_column(connection)
@@ -344,8 +340,12 @@ class HistoryStore:
                 )
                 if cur.rowcount == 0:
                     raise KeyError(f"Dispatch {dispatch_id} was not found.")
-        return {"id": dispatch_id, "field_status": status, "confirmed_note": note,
-                "confirmed_at": confirmed_at}
+        return {
+            "id": dispatch_id,
+            "field_status": status,
+            "confirmed_note": note,
+            "confirmed_at": confirmed_at,
+        }
 
     def get_dispatch_operation(self, dispatch_id: str, operation_id: str) -> dict[str, Any] | None:
         """Return the stored confirmation for a replayed operation_id (#44)."""
@@ -356,8 +356,12 @@ class HistoryStore:
             ).fetchone()
         if row is None:
             return None
-        return {"id": row["id"], "field_status": row["field_status"],
-                "confirmed_note": row["confirmed_note"], "confirmed_at": row["confirmed_at"]}
+        return {
+            "id": row["id"],
+            "field_status": row["field_status"],
+            "confirmed_note": row["confirmed_note"],
+            "confirmed_at": row["confirmed_at"],
+        }
 
     @staticmethod
     def _ensure_confirm_operation_column(connection) -> None:
@@ -368,16 +372,12 @@ class HistoryStore:
 
     def get_dispatch(self, dispatch_id: str) -> dict[str, Any] | None:
         with closing(self._connect()) as connection:
-            row = connection.execute(
-                "SELECT * FROM dispatches WHERE id=?", (dispatch_id,)
-            ).fetchone()
+            row = connection.execute("SELECT * FROM dispatches WHERE id=?", (dispatch_id,)).fetchone()
         return dict(row) if row is not None else None
 
     def list_dispatches(self) -> list[dict[str, Any]]:
         with closing(self._connect()) as connection:
-            rows = connection.execute(
-                "SELECT * FROM dispatches ORDER BY created_at ASC"
-            ).fetchall()
+            rows = connection.execute("SELECT * FROM dispatches ORDER BY created_at ASC").fetchall()
         return [dict(row) for row in rows]
 
     def pending_dispatches(self, truck_code: str) -> list[dict[str, Any]]:

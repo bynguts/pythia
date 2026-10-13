@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 real_data.py — Loads real, government-sourced datasets for Pythia.
 
@@ -13,16 +12,17 @@ All loaders degrade gracefully to empty results if a file is missing, so the
 API never crashes during a demo. Callers should treat an empty return as
 "real data unavailable, use heuristic fallback".
 """
+
 from __future__ import annotations
 
 import csv
 import json
-from datetime import date, datetime, timezone
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from app.paths import RAW_DIR, REAL_DIR
+from app.paths import REAL_DIR
 
 # #38: one taxonomy for every classification in the registry.
 # ACTUAL_DATA_CLASSIFICATIONS is what "actual/observed data" means when
@@ -296,7 +296,13 @@ def load_kecamatan_map() -> list[dict[str, Any]]:
     with base_path.open(encoding="utf-8-sig") as handle:
         for row in csv.DictReader(handle):
             kec = (row.get("kecamatan") or "").strip()
-            city = (row.get("kota_wilayah") or "").replace("KOTA ADM. ", "").replace("KAB. ADM. ", "").strip().title()
+            city = (
+                (row.get("kota_wilayah") or "")
+                .replace("KOTA ADM. ", "")
+                .replace("KAB. ADM. ", "")
+                .strip()
+                .title()
+            )
             c = cap.get(kec.upper(), {})
             coverage = c.get("coverage_ratio")
             if coverage is None:
@@ -313,19 +319,21 @@ def load_kecamatan_map() -> list[dict[str, Any]]:
             # ~-6.x and longitude ~106.x. Assign by value range, not by label.
             if raw_lat is not None and raw_lng is not None and abs(raw_lat) > abs(raw_lng):
                 raw_lat, raw_lng = raw_lng, raw_lat
-            out.append({
-                "kecamatan": kec,
-                "slug": kec.lower().replace(" ", "_"),
-                "city": city,
-                "baseline_tons_per_day": _to_float(row.get("timbulan_ton_per_hari", "")),
-                "lat": raw_lat,
-                "lng": raw_lng,
-                "tps_capacity_ton_per_day": c.get("tps_capacity_ton_per_day"),
-                "facility_gap_ton_per_day": c.get("gap_ton_per_day"),
-                "facility_coverage_ratio": coverage,
-                "facility_readiness": readiness,
-                "source": "SILIKA DLH 2023 (timbulan) + TPS capacity proxy",
-            })
+            out.append(
+                {
+                    "kecamatan": kec,
+                    "slug": kec.lower().replace(" ", "_"),
+                    "city": city,
+                    "baseline_tons_per_day": _to_float(row.get("timbulan_ton_per_hari", "")),
+                    "lat": raw_lat,
+                    "lng": raw_lng,
+                    "tps_capacity_ton_per_day": c.get("tps_capacity_ton_per_day"),
+                    "facility_gap_ton_per_day": c.get("gap_ton_per_day"),
+                    "facility_coverage_ratio": coverage,
+                    "facility_readiness": readiness,
+                    "source": "SILIKA DLH 2023 (timbulan) + TPS capacity proxy",
+                }
+            )
     return out
 
 
@@ -369,16 +377,18 @@ def build_provenance_records() -> list[dict[str, Any]]:
                 row_count = None
         else:
             row_count = None
-        records.append({
-            "name": entry["name"],
-            "source_url": entry["source_url"],
-            "as_of": entry["as_of"],
-            "granularity": entry["granularity"],
-            "classification": entry["classification"],
-            "row_count": row_count,
-            "freshness": _freshness(entry["as_of"]),
-            "limitations": entry["limitations"],
-        })
+        records.append(
+            {
+                "name": entry["name"],
+                "source_url": entry["source_url"],
+                "as_of": entry["as_of"],
+                "granularity": entry["granularity"],
+                "classification": entry["classification"],
+                "row_count": row_count,
+                "freshness": _freshness(entry["as_of"]),
+                "limitations": entry["limitations"],
+            }
+        )
     return records
 
 
@@ -440,9 +450,7 @@ _POP_WEIGHT = 0.8
 _TPS_WEIGHT = 0.2
 
 
-def kelurahan_allocation_weights(
-    kec_norm: str, villages: list[str]
-) -> tuple[dict[str, float], str]:
+def kelurahan_allocation_weights(kec_norm: str, villages: list[str]) -> tuple[dict[str, float], str]:
     """Per-kelurahan allocation weights inside one kecamatan (sum to 1).
 
     weight = 0.8 * population_share + 0.2 * tps_density_share, computed from
@@ -487,8 +495,7 @@ def _unwrap_ring(ring: list) -> list:
     which breaks MapLibre rendering (kelurahan shown wrong at zoom). Unwrap until
     entries are [lng,lat] pairs.
     """
-    while (ring and isinstance(ring[0], list)
-           and ring[0] and isinstance(ring[0][0], list)):
+    while ring and isinstance(ring[0], list) and ring[0] and isinstance(ring[0][0], list):
         ring = ring[0]
     return ring
 
@@ -511,12 +518,14 @@ def load_kelurahan_heatmap(kec_predictions: dict[str, float] | None = None) -> d
             _normalize_geometry(feat.get("geometry", {}))
 
     import copy
+
     fc_val = copy.deepcopy(_geojson_base)
     fc = fc_val if isinstance(fc_val, dict) else {}
 
     if kec_predictions is None:
-        kec_predictions = {k["kecamatan"].strip().upper(): k["baseline_tons_per_day"]
-                           for k in load_kecamatan_map()}
+        kec_predictions = {
+            k["kecamatan"].strip().upper(): k["baseline_tons_per_day"] for k in load_kecamatan_map()
+        }
 
     kec_pred_norm = {_norm_admin_name(k): v for k, v in kec_predictions.items()}
 
@@ -561,8 +570,8 @@ def data_provenance() -> dict[str, Any]:
     # #38: count only ACTUAL datasets — modeled/proxy/derived/synthetic
     # records never inflate the actual-data number.
     real_data_count = sum(
-        1 for r in build_provenance_records()
-        if r["classification"] in ACTUAL_DATA_CLASSIFICATIONS)
+        1 for r in build_provenance_records() if r["classification"] in ACTUAL_DATA_CLASSIFICATIONS
+    )
     return {
         "timbulan_cities_loaded": len(timbulan),
         "timbulan_year": next(iter(timbulan.values()), {}).get("year") if timbulan else None,
@@ -588,13 +597,15 @@ def load_real_tps_coordinates() -> list[dict[str, Any]]:
             if lat is not None and lng is not None:
                 if abs(lat) > abs(lng):
                     lat, lng = lng, lat
-                out.append({
-                    "name": (row.get("nama_tps") or "").strip(),
-                    "kecamatan": (row.get("kecamatan") or "").strip(),
-                    "kelurahan": (row.get("kelurahan") or "").strip(),
-                    "lat": lat,
-                    "lng": lng,
-                })
+                out.append(
+                    {
+                        "name": (row.get("nama_tps") or "").strip(),
+                        "kecamatan": (row.get("kecamatan") or "").strip(),
+                        "kelurahan": (row.get("kelurahan") or "").strip(),
+                        "lat": lat,
+                        "lng": lng,
+                    }
+                )
     return out
 
 
@@ -619,17 +630,19 @@ def load_real_wr_coordinates() -> list[dict[str, Any]]:
                 lat, lng = lng, lat
             if lat == round(lat) or lng == round(lng):
                 continue
-            in_mainland = (-6.55 < lat < -6.05 and 106.65 < lng < 107.05)
-            in_kepulauan = (-6.3 < lat < -5.2 and 106.4 < lng < 107.0)
+            in_mainland = -6.55 < lat < -6.05 and 106.65 < lng < 107.05
+            in_kepulauan = -6.3 < lat < -5.2 and 106.4 < lng < 107.0
             if not (in_mainland or in_kepulauan):
                 continue
-            out.append({
-                "name": (row.get("nama") or "").strip(),
-                "jns": (row.get("jns") or "").strip(),
-                "almt": (row.get("almt") or "").strip(),
-                "kec": (row.get("kec") or "").strip(),
-                "kel": (row.get("kel") or "").strip(),
-                "lat": lat,
-                "lng": lng,
-            })
+            out.append(
+                {
+                    "name": (row.get("nama") or "").strip(),
+                    "jns": (row.get("jns") or "").strip(),
+                    "almt": (row.get("almt") or "").strip(),
+                    "kec": (row.get("kec") or "").strip(),
+                    "kel": (row.get("kel") or "").strip(),
+                    "lat": lat,
+                    "lng": lng,
+                }
+            )
     return out

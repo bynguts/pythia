@@ -10,13 +10,13 @@ from dataclasses import asdict, dataclass
 
 @dataclass
 class AiEvent:
-    event_type: str            # e.g. "auto_reroute", "auto_replay", "forecast_update"
+    event_type: str  # e.g. "auto_reroute", "auto_replay", "forecast_update"
     truck_code: str | None
     title: str
     detail: dict
     confidence: float
-    created_at: str            # ISO 8601
-    status: str = "new"        # "new" | "acknowledged"
+    created_at: str  # ISO 8601
+    status: str = "new"  # "new" | "acknowledged"
 
 
 class EventFeed:

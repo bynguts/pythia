@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Tests for the GPS breadcrumb pipeline (Task 10)."""
+
 import unittest
 
 from app.gps_feed import GpsBreadcrumb, latest_breadcrumbs
@@ -33,13 +33,16 @@ class GpsFeedTests(unittest.TestCase):
         # actual points (those NOT on the assigned corridor), proving it follows
         # the real movement, not the assigned route.
         from app.data import ACTUAL_PATHS, ASSIGNED_PATHS
+
         trail = latest_breadcrumbs("T-047")
         assigned_pts = {(round(la, 3), round(ln, 3)) for la, ln in ASSIGNED_PATHS["T-047"]}
         actual_only = {(round(la, 3), round(ln, 3)) for la, ln in ACTUAL_PATHS["T-047"]} - assigned_pts
         trail_pts = {(round(b.lat, 3), round(b.lng, 3)) for b in trail}
         self.assertTrue(actual_only, "fixture precondition: actual must diverge from assigned")
-        self.assertTrue(trail_pts & actual_only,
-                        "breadcrumbs must include divergent actual-path points, not just assigned")
+        self.assertTrue(
+            trail_pts & actual_only,
+            "breadcrumbs must include divergent actual-path points, not just assigned",
+        )
 
 
 if __name__ == "__main__":

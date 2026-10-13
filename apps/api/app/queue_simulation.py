@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Discrete-event simulation of the Bantargebang weighbridge queue.
 
 Replaces the previous fixed 116->48 minute demo numbers with a seeded
@@ -7,6 +6,7 @@ number of active weighbridges, and service rate. Every result is reproducible
 from a seed and reports mean/P95 wait, max queue, throughput, utilization, and
 a 95% confidence interval across replications.
 """
+
 from __future__ import annotations
 
 import heapq
@@ -17,8 +17,9 @@ from typing import Any
 OPERATING_HOURS = 1.0  # peak arrival window (hours) where queueing forms
 
 
-def _run_single(arrival_count: int, weighbridges: int, service_rate_per_hour: float,
-                rng: random.Random) -> tuple[float, float, int]:
+def _run_single(
+    arrival_count: int, weighbridges: int, service_rate_per_hour: float, rng: random.Random
+) -> tuple[float, float, int]:
     """One replication. Returns (mean_wait_min, p95_wait_min, max_queue)."""
     mean_interarrival_h = OPERATING_HOURS / arrival_count
     mean_service_h = 1.0 / service_rate_per_hour
@@ -53,9 +54,13 @@ def _run_single(arrival_count: int, weighbridges: int, service_rate_per_hour: fl
     return mean_wait, p95, max_queue
 
 
-def simulate_queue(arrival_count: int, weighbridges: int,
-                   service_rate_per_hour: float, seed: int | None = None,
-                   replications: int = 100) -> dict[str, Any]:
+def simulate_queue(
+    arrival_count: int,
+    weighbridges: int,
+    service_rate_per_hour: float,
+    seed: int | None = None,
+    replications: int = 100,
+) -> dict[str, Any]:
     """Seeded discrete-event queue simulation with replication intervals.
 
     Args:
@@ -74,9 +79,13 @@ def simulate_queue(arrival_count: int, weighbridges: int,
 
     if arrival_count == 0:
         return {
-            "mean_wait_minutes": 0.0, "p95_wait_minutes": 0.0, "max_queue": 0,
+            "mean_wait_minutes": 0.0,
+            "p95_wait_minutes": 0.0,
+            "max_queue": 0,
             "throughput_per_hour": weighbridges * service_rate_per_hour,
-            "utilization": 0.0, "wait_ci95": [0.0, 0.0], "recommended_slots": 0,
+            "utilization": 0.0,
+            "wait_ci95": [0.0, 0.0],
+            "recommended_slots": 0,
             "replications": replications,
         }
 
@@ -84,7 +93,9 @@ def simulate_queue(arrival_count: int, weighbridges: int,
     for i in range(replications):
         rng = random.Random((seed if seed is not None else 0) * 100000 + i)
         m, p, q = _run_single(arrival_count, weighbridges, service_rate_per_hour, rng)
-        means.append(m); p95s.append(p); maxqs.append(q)
+        means.append(m)
+        p95s.append(p)
+        maxqs.append(q)
 
     mean_wait = statistics.fmean(means)
     stdev = statistics.pstdev(means)

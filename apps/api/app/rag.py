@@ -10,9 +10,7 @@ from typing import Any
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-
 from app.paths import PROCESSED_DIR, REPO_ROOT, SOURCES_DIR
-
 
 CURATED_KNOWLEDGE = [
     {
@@ -163,7 +161,9 @@ def _read_document(path: Path) -> str:
     return _clean_text(text[:30000])
 
 
-def _chunk_text(source: str, title: str, text: str, max_chars: int = 1400, overlap: int = 220) -> list[RagChunk]:
+def _chunk_text(
+    source: str, title: str, text: str, max_chars: int = 1400, overlap: int = 220
+) -> list[RagChunk]:
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
     chunks: list[RagChunk] = []
     current = ""
@@ -183,15 +183,16 @@ def _chunk_text(source: str, title: str, text: str, max_chars: int = 1400, overl
     prev_tail = ""
     for chunk in chunks:
         text_with_overlap = f"{prev_tail}\n\n{chunk.text}".strip() if prev_tail else chunk.text
-        overlapped.append(RagChunk(source=chunk.source, title=chunk.title, text=text_with_overlap[-max_chars:]))
+        overlapped.append(
+            RagChunk(source=chunk.source, title=chunk.title, text=text_with_overlap[-max_chars:])
+        )
         prev_tail = chunk.text[-overlap:]
     return overlapped
 
 
 def load_rag_chunks() -> list[RagChunk]:
     chunks: list[RagChunk] = [
-        RagChunk(source=item["source"], title=item["title"], text=item["text"])
-        for item in CURATED_KNOWLEDGE
+        RagChunk(source=item["source"], title=item["title"], text=item["text"]) for item in CURATED_KNOWLEDGE
     ]
     for path in DOCUMENT_PATHS:
         if not path.exists():
@@ -218,7 +219,9 @@ def _fit_whitening(vectors: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndar
     return mean.astype(np.float32), vt.astype(np.float32), scale.astype(np.float32)
 
 
-def _apply_whitening(vectors: np.ndarray, mean: np.ndarray, components: np.ndarray, scale: np.ndarray) -> np.ndarray:
+def _apply_whitening(
+    vectors: np.ndarray, mean: np.ndarray, components: np.ndarray, scale: np.ndarray
+) -> np.ndarray:
     projected = (vectors - mean) @ components.T
     whitened = projected * scale
     norm = np.linalg.norm(whitened, axis=1, keepdims=True)
@@ -287,8 +290,6 @@ def retrieve_pythia_context(question: str, top_k: int = 5) -> list[dict[str, Any
 def format_rag_context(question: str, top_k: int = 5, max_chars: int = 5000) -> str:
     parts = []
     for item in retrieve_pythia_context(question, top_k=top_k):
-        parts.append(
-            f"[{item['title']} | {item['source']} | score={item['score']:.3f}]\n{item['text']}"
-        )
+        parts.append(f"[{item['title']} | {item['source']} | score={item['score']:.3f}]\n{item['text']}")
     context = "\n\n---\n\n".join(parts)
     return context[:max_chars]

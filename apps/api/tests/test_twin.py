@@ -1,4 +1,5 @@
 """Pythia Twin scene: per-layer provenance, horizon series and scenario response."""
+
 from datetime import date
 
 import pytest
@@ -28,12 +29,14 @@ def test_hcmc_weekday_allocation_reproduces_citywide_total():
 
 
 def test_hcmc_event_lands_in_nearest_district_only():
-    districts = hcmc_district_forecasts(1, event_attendance=50_000,
-                                        event_lat=10.7769, event_lng=106.7009, start=MONDAY)
+    districts = hcmc_district_forecasts(
+        1, event_attendance=50_000, event_lat=10.7769, event_lng=106.7009, start=MONDAY
+    )
     localized = [d for d in districts if d["event_localized"]]
     assert [d["id"] for d in localized] == ["district_1"]
     assert localized[0]["series"][0]["predicted_tons"] == pytest.approx(
-        localized[0]["baseline_tons"] + 60.0, abs=0.2)
+        localized[0]["baseline_tons"] + 60.0, abs=0.2
+    )
 
 
 def test_jakarta_scene_has_all_districts_and_honest_provenance(api_client):
@@ -44,8 +47,11 @@ def test_jakarta_scene_has_all_districts_and_honest_provenance(api_client):
     assert len(scene["districts"]) == 42
     assert scene["horizon"]["days"] == 3
     assert all(len(d["series"]) == 3 for d in scene["districts"])
-    assert all(row["risk"] in {"normal", "elevated", "high", "critical"}
-               for d in scene["districts"] for row in d["series"])
+    assert all(
+        row["risk"] in {"normal", "elevated", "high", "critical"}
+        for d in scene["districts"]
+        for row in d["series"]
+    )
     assert len(scene["tps"]) > 1000
     assert scene["trucks"] and all(len(t["path"]) >= 2 for t in scene["trucks"])
     assert scene["provenance"]["districts"]["class"] == "MODEL_OUTPUT"

@@ -5,8 +5,8 @@ from __future__ import annotations
 import math
 import threading
 import time
-from datetime import datetime, timezone
-from typing import Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
 
 from app.data import unlicensed_collectors_payload
 from app.real_data import load_real_tps_coordinates, load_real_wr_coordinates
@@ -27,10 +27,15 @@ def _default_observer() -> list[dict]:
 
 
 class StopPatternDetector:
-    def __init__(self, stop_radius_m: float = 50.0, stop_minutes: float = 10.0,
-                 official_site_m: float = 300.0, dedup_hours: float = 6.0,
-                 observer: Callable[[], list[dict]] | None = None,
-                 now_fn: Callable[[], float] = time.time) -> None:
+    def __init__(
+        self,
+        stop_radius_m: float = 50.0,
+        stop_minutes: float = 10.0,
+        official_site_m: float = 300.0,
+        dedup_hours: float = 6.0,
+        observer: Callable[[], list[dict]] | None = None,
+        now_fn: Callable[[], float] = time.time,
+    ) -> None:
         self._stop_radius_m = stop_radius_m
         self._stop_seconds = stop_minutes * 60.0
         self._official_site_m = official_site_m
@@ -50,8 +55,7 @@ class StopPatternDetector:
             if plate is None or lat is None or lng is None:
                 continue
             trail = self._observations.setdefault(plate, [])
-            if trail and _haversine_m(trail[-1][0], trail[-1][1],
-                                      lat, lng) > self._stop_radius_m:
+            if trail and _haversine_m(trail[-1][0], trail[-1][1], lat, lng) > self._stop_radius_m:
                 trail.clear()  # moved — reset stop accumulation
             trail.append((lat, lng, now))
             stopped_seconds = now - trail[0][2]
@@ -64,11 +68,13 @@ class StopPatternDetector:
                 continue
             self._last_flag_at[plate] = now
             duration_min = round(stopped_seconds / 60.0, 1)
-            confidence = round(min(
-                0.95,
-                0.5 + 0.1 * (duration_min / (self._stop_seconds / 60.0) - 1)
-                + 0.2 * (nearest_m / 1000.0),
-            ), 2)
+            confidence = round(
+                min(
+                    0.95,
+                    0.5 + 0.1 * (duration_min / (self._stop_seconds / 60.0) - 1) + 0.2 * (nearest_m / 1000.0),
+                ),
+                2,
+            )
             with self._lock:
                 self._flags[plate] = {
                     "collector_id": plate,
@@ -77,8 +83,7 @@ class StopPatternDetector:
                     "duration_min": duration_min,
                     "nearest_site_m": round(nearest_m, 1),
                     "confidence": confidence,
-                    "first_seen": datetime.fromtimestamp(
-                        trail[0][2], tz=timezone.utc).isoformat(),
+                    "first_seen": datetime.fromtimestamp(trail[0][2], tz=UTC).isoformat(),
                     "classification": "simulated",
                 }
         return self.flags()

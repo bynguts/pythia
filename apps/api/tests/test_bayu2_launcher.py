@@ -5,7 +5,6 @@ silent while /api/ai/* returns empty.
 
 from __future__ import annotations
 
-import os
 import re
 import unittest
 
@@ -17,6 +16,7 @@ from app.paths import REPO_ROOT as REPO
 class HealthEngineStateTests(unittest.TestCase):
     def test_health_reports_configured_and_running_engine_state(self):
         from app.main import app
+
         client = TestClient(app)
         res = client.get("/api/health")
         self.assertEqual(res.status_code, 200)
@@ -35,16 +35,17 @@ class DocumentedLauncherTests(unittest.TestCase):
         # The primary documented backend launch command must explicitly
         # set PYTHIA_AI_ENGINE so following the docs yields a working AI
         # outlook instead of silently empty endpoints.
-        command_blocks = re.findall(
-            r"PYTHIA_AI_ENGINE=(\w+)\s+python\s+-m\s+uvicorn\s+app\.main:app",
-            readme)
+        command_blocks = re.findall(r"PYTHIA_AI_ENGINE=(\w+)\s+python\s+-m\s+uvicorn\s+app\.main:app", readme)
         self.assertTrue(
             command_blocks,
             "README's documented backend command must set PYTHIA_AI_ENGINE "
-            "explicitly (e.g. 'PYTHIA_AI_ENGINE=on python -m uvicorn ...')")
+            "explicitly (e.g. 'PYTHIA_AI_ENGINE=on python -m uvicorn ...')",
+        )
         self.assertEqual(
-            set(command_blocks), {"on"},
-            f"all documented launch commands must set 'on'; found {command_blocks}")
+            set(command_blocks),
+            {"on"},
+            f"all documented launch commands must set 'on'; found {command_blocks}",
+        )
 
     def test_env_example_documents_engine_on(self):
         env_example = (REPO / ".env.example").read_text(encoding="utf-8")

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import math
+import time
 from datetime import date, timedelta
 from typing import Any
 
-from .engine import detect_route_deviation, forecast_waste_risk, recommend_routes
+from .engine import detect_route_deviation, recommend_routes
 from .osrm import fetch_osrm_route
-from .real_data import baseline_tons_for
 from .units import event_tons_for_attendance, resource_requirements
-
 
 ASSIGNED_PATHS = {
     # Road-following demo corridors around Jakarta, ordered west/north/south/east.
@@ -27,9 +27,6 @@ ACTUAL_PATHS = {
     "T-136": [(-6.1800, 106.9130), (-6.1900, 106.9290), (-6.2050, 106.9440)],
 }
 
-import math
-import time
-
 _ACTIVE_T047: dict = {"seq": (), "jam": None, "origin_key": None, "path": []}
 
 
@@ -45,6 +42,7 @@ def _t047_path_from_plan(plan: dict) -> list[tuple[float, float]]:
 def get_road_following_path(truck_code: str) -> list[tuple[float, float]]:
     if truck_code == "T-047":
         from .astar_routing import is_traffic_jam_active, reroute_payload
+
         jam = is_traffic_jam_active()
         if not jam:
             # Normal ops: T-047 drives its short road-following collection loop
@@ -54,6 +52,7 @@ def get_road_following_path(truck_code: str) -> list[tuple[float, float]]:
             try:
                 import json
                 from pathlib import Path
+
                 cache_path = Path(__file__).resolve().parent / "road_geometry_cache.json"
                 if cache_path.exists():
                     cache = json.loads(cache_path.read_text(encoding="utf-8"))
@@ -81,6 +80,7 @@ def get_road_following_path(truck_code: str) -> list[tuple[float, float]]:
     try:
         import json
         from pathlib import Path
+
         cache_path = Path(__file__).resolve().parent / "road_geometry_cache.json"
         if cache_path.exists():
             cache = json.loads(cache_path.read_text(encoding="utf-8"))
@@ -93,10 +93,12 @@ def get_road_following_path(truck_code: str) -> list[tuple[float, float]]:
 
     path = ACTUAL_PATHS[truck_code]
     from .osrm import road_route
+
     r = road_route(path)
     if r.get("geometry"):
         return [(p["lat"], p["lng"]) for p in r["geometry"]]
     return path
+
 
 # Realistic per-truck cruising speed (km/h). Waste collectors in Jakarta crawl
 # (stop-and-go at pickup points); see COMPETITION_CHECKLIST_STATUS.md audits.
@@ -122,7 +124,10 @@ def _haversine_km(a: tuple[float, float], b: tuple[float, float]) -> float:
     radius = 6371.0
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    h = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    h = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    )
     return 2 * radius * math.asin(math.sqrt(h))
 
 
@@ -147,7 +152,9 @@ def _path_sig(path: list[tuple[float, float]]):
     return (len(path), path[0], path[-1], round(mid[0], 4), round(mid[1], 4))
 
 
-def get_dynamic_position_at_time(truck_code: str, t_sec: float, update_state: bool = True) -> tuple[float, float, float]:
+def get_dynamic_position_at_time(
+    truck_code: str, t_sec: float, update_state: bool = True
+) -> tuple[float, float, float]:
     """Continuous forward drive along the truck's route.
 
     Replaces the old ping-pong (which reversed direction mid-route every 90 s
@@ -229,15 +236,19 @@ def get_dynamic_position_at_time(truck_code: str, t_sec: float, update_state: bo
         _SIM_STATE[truck_code] = {"last_t": t_sec, "dist_km": dist_km, "sig": sig, "pos": (lat, lng)}
     return round(lat, 6), round(lng, 6), round(speed, 1)
 
+
 def get_dynamic_position(truck_code: str) -> tuple[float, float, float]:
     return get_dynamic_position_at_time(truck_code, time.time())
+
 
 class DynamicPositionsDict(dict):
     def __getitem__(self, key):
         lat, lng, _ = get_dynamic_position(key)
         return lat, lng
 
+
 LATEST_POSITIONS = DynamicPositionsDict()
+
 
 def _assigned_reference_path(truck_code: str) -> list[tuple[float, float]]:
     """Road-following assigned corridor for deviation measurement.
@@ -248,6 +259,7 @@ def _assigned_reference_path(truck_code: str) -> list[tuple[float, float]]:
     reference; the polyline is only a fallback when the cache is absent.
     """
     from app.spj import active_path_for
+
     spj_path = active_path_for(truck_code)
     if spj_path:
         return spj_path
@@ -274,39 +286,61 @@ def _assigned_reference_path(truck_code: str) -> list[tuple[float, float]]:
     return ASSIGNED_PATHS[truck_code]
 
 
-def _truck(truck_code: str, plate: str, driver: str, zone: str, status: str,
-           damaged: bool, vehicle_type: str = "Compactor Besar") -> dict[str, Any]:
+def _truck(
+    truck_code: str,
+    plate: str,
+    driver: str,
+    zone: str,
+    status: str,
+    damaged: bool,
+    vehicle_type: str = "Compactor Besar",
+) -> dict[str, Any]:
     lat, lng, speed = get_dynamic_position(truck_code)
     deviation = detect_route_deviation(_assigned_reference_path(truck_code), (lat, lng), speed_kmh=speed)
     from app.deviation_state import apply_hysteresis
+
     latched = apply_hysteresis(truck_code, deviation["distance_meters"])
     if latched and not deviation["violated"]:
-        deviation = {**deviation, "violated": True, "severity": "warning",
-                     "rule_flags": [*deviation["rule_flags"], "sustained_deviation"],
-                     "message": "Truck remains off the assigned corridor (sustained-deviation latch, clears under 50 m)."}
+        deviation = {
+            **deviation,
+            "violated": True,
+            "severity": "warning",
+            "rule_flags": [*deviation["rule_flags"], "sustained_deviation"],
+            "message": "Truck remains off the assigned corridor (sustained-deviation latch, clears under 50 m).",
+        }
     curr_status = "deviation" if deviation["violated"] else ("damaged" if damaged else "active")
 
-    from app.fleet_generator import activity_for, damage_status_for, _path_km
     from app.engine import detect_violation_types
+    from app.fleet_generator import _path_km, activity_for, damage_status_for
+
     st = _SIM_STATE.get(truck_code, {})
     total_km = max(_path_km(ACTUAL_PATHS[truck_code]), 1e-9)
     progress = min(1.0, (st.get("dist_km", 0.0) % total_km) / total_km)
     try:
         from app.damage_reports import DAMAGE_STORE
+
         override = DAMAGE_STORE.active_override_for(truck_code)
     except Exception:
         override = None
     if override is not None:
-        damage = {"state": "breakdown",
-                  "note": f"Driver report: {override.component} — {override.note}",
-                  "operational": False}
+        damage = {
+            "state": "breakdown",
+            "note": f"Driver report: {override.component} — {override.note}",
+            "operational": False,
+        }
         damaged = True
     else:
         damage = damage_status_for(truck_code)
         if damaged and damage["state"] == "ok":
-            damage = {"state": "breakdown", "note": "Compactor fault reported by driver", "operational": False}
+            damage = {
+                "state": "breakdown",
+                "note": "Compactor fault reported by driver",
+                "operational": False,
+            }
     activity = activity_for(speed, progress, damaged)
-    violation_types = detect_violation_types(speed, activity["state"], deviation["violated"], deviation["distance_meters"])
+    violation_types = detect_violation_types(
+        speed, activity["state"], deviation["violated"], deviation["distance_meters"]
+    )
     if violation_types:
         deviation["violation_types"] = violation_types
 
@@ -345,6 +379,7 @@ def get_dynamic_trucks() -> list[dict[str, Any]]:
     if _fleet_cache["payload"] is not None and now - _fleet_cache["ts"] < 2.0:
         return _fleet_cache["payload"]
     from app.fleet_generator import get_generated_fleet
+
     curated = [
         _truck("T-001", "B 1234 CD", "Budi Santoso", "Jakarta Utara", "active", False, "Dump Truck Besar"),
         _truck("T-047", "B 5678 EF", "Agus Pratama", "Jakarta Barat", "deviation", False, "Compactor Besar"),
@@ -355,13 +390,17 @@ def get_dynamic_trucks() -> list[dict[str, Any]]:
     _fleet_cache["ts"] = now
     return _fleet_cache["payload"]
 
+
 class DynamicTruckList(list):
     def __iter__(self):
         return iter(get_dynamic_trucks())
+
     def __getitem__(self, index):
         return get_dynamic_trucks()[index]
+
     def __len__(self):
         return len(get_dynamic_trucks())
+
 
 TRUCKS = DynamicTruckList()
 
@@ -372,7 +411,11 @@ ROUTE_OPTIONS = [
         "traffic_level": 0.7,
         "flood_risk": 0.2,
         "permit_compliant": True,
-        "path": [{"lat": -6.1949, "lng": 106.7898}, {"lat": -6.1840, "lng": 106.7940}, {"lat": -6.1753, "lng": 106.7988}],
+        "path": [
+            {"lat": -6.1949, "lng": 106.7898},
+            {"lat": -6.1840, "lng": 106.7940},
+            {"lat": -6.1753, "lng": 106.7988},
+        ],
     },
     {
         "name": "Route B - Daan Mogot Recovery",
@@ -380,7 +423,11 @@ ROUTE_OPTIONS = [
         "traffic_level": 0.35,
         "flood_risk": 0.05,
         "permit_compliant": True,
-        "path": [{"lat": -6.1949, "lng": 106.7898}, {"lat": -6.1880, "lng": 106.8070}, {"lat": -6.1753, "lng": 106.7988}],
+        "path": [
+            {"lat": -6.1949, "lng": 106.7898},
+            {"lat": -6.1880, "lng": 106.8070},
+            {"lat": -6.1753, "lng": 106.7988},
+        ],
     },
     {
         "name": "Route C - Restricted Shortcut",
@@ -388,7 +435,11 @@ ROUTE_OPTIONS = [
         "traffic_level": 0.1,
         "flood_risk": 0.0,
         "permit_compliant": False,
-        "path": [{"lat": -6.1949, "lng": 106.7898}, {"lat": -6.1870, "lng": 106.7720}, {"lat": -6.1753, "lng": 106.7988}],
+        "path": [
+            {"lat": -6.1949, "lng": 106.7898},
+            {"lat": -6.1870, "lng": 106.7720},
+            {"lat": -6.1753, "lng": 106.7988},
+        ],
     },
 ]
 
@@ -398,6 +449,7 @@ ROUTE_OPTIONS = [
 # snapshot would recompute it. 300s is safe: forecasts are daily-resolution
 # data, and startup warms the cache before any browser connects.
 _predictions_cache: dict[str, Any] = {"ts": 0.0, "payload": None}
+
 
 def build_predictions() -> list[dict[str, Any]]:
     cached = _predictions_cache
@@ -410,14 +462,14 @@ def build_predictions() -> list[dict[str, Any]]:
 
 
 def _build_predictions_uncached() -> list[dict[str, Any]]:
-    from .weather import fetch_jakarta_weather_forecast
+    from .engine import _haversine_meters, predict_waste_hybrid
     from .real_data import load_kecamatan_map, load_official_events
-    from .engine import predict_waste_hybrid, _haversine_meters
+    from .weather import fetch_jakarta_weather_forecast
 
     today = date.today()
     weather_data = fetch_jakarta_weather_forecast()
     forecasts = weather_data.get("forecast", [])
-    
+
     weather_map = {}
     for f in forecasts:
         weather_map[f["date"]] = {
@@ -425,25 +477,27 @@ def _build_predictions_uncached() -> list[dict[str, Any]]:
             "temp_max_c": f.get("temperature_max_c", 31.0),
             "wind_max_kmh": f.get("wind_speed_kmh", 10.0),
         }
-        
+
     kecs = load_kecamatan_map()
     events = load_official_events()
-    
+
     predictions = []
     for day in range(1, 8):
         target_date = today + timedelta(days=day)
         target_date_str = target_date.isoformat()
-        
-        w_day = weather_map.get(target_date_str, {"rainfall_mm": 0.0, "temp_max_c": 31.0, "wind_max_kmh": 10.0})
+
+        w_day = weather_map.get(
+            target_date_str, {"rainfall_mm": 0.0, "temp_max_c": 31.0, "wind_max_kmh": 10.0}
+        )
         rainfall_mm = w_day["rainfall_mm"]
         temp_max_c = w_day["temp_max_c"]
         wind_max_kmh = w_day["wind_max_kmh"]
-        
+
         is_weekend = target_date.weekday() >= 5
         is_holiday = False
-        
+
         day_events = [ev for ev in events if ev.get("date_raw") == target_date_str]
-        
+
         target_slugs = {}
         for ev in day_events:
             att = ev.get("expected_attendance") or 0.0
@@ -455,7 +509,7 @@ def _build_predictions_uncached() -> list[dict[str, Any]]:
                     elat, elng = -6.1754, 106.8272
                 elif "hi" in evt_name or "sudirman" in evt_loc:
                     elat, elng = -6.1950, 106.8230
-                
+
                 closest_kec = None
                 min_dist = float("inf")
                 for k in kecs:
@@ -469,7 +523,9 @@ def _build_predictions_uncached() -> list[dict[str, Any]]:
                             min_dist = dist
                             closest_kec = k
                 if not target_slugs and closest_kec:
-                    target_slugs[closest_kec["slug"]] = max(target_slugs.get(closest_kec["slug"], 0), int(att))
+                    target_slugs[closest_kec["slug"]] = max(
+                        target_slugs.get(closest_kec["slug"], 0), int(att)
+                    )
 
         kec_preds = []
         for k in kecs:
@@ -484,16 +540,18 @@ def _build_predictions_uncached() -> list[dict[str, Any]]:
                 event_attendance=k_att,
                 target_date=target_date_str,
             )
-            kec_preds.append({
-                "city": k["city"],
-                "baseline_tons": pred["prophet_baseline_tons"],
-                "predicted_tons": pred["predicted_tons"],
-                "crews_required": pred["crews_required"],
-                "workers_required": pred["workers_required"],
-                "man_hours_required": pred["man_hours_required"],
-                "bins_required": pred["bins_required"],
-            })
-            
+            kec_preds.append(
+                {
+                    "city": k["city"],
+                    "baseline_tons": pred["prophet_baseline_tons"],
+                    "predicted_tons": pred["predicted_tons"],
+                    "crews_required": pred["crews_required"],
+                    "workers_required": pred["workers_required"],
+                    "man_hours_required": pred["man_hours_required"],
+                    "bins_required": pred["bins_required"],
+                }
+            )
+
         cities = ["Jakarta Barat", "Jakarta Utara", "Jakarta Timur", "Jakarta Selatan", "Jakarta Pusat"]
         for city in cities:
             city_kecs = [p for p in kec_preds if p["city"] == city]
@@ -501,9 +559,9 @@ def _build_predictions_uncached() -> list[dict[str, Any]]:
                 continue
             base_tons = sum(p["baseline_tons"] for p in city_kecs)
             pred_tons = sum(p["predicted_tons"] for p in city_kecs)
-            
-            spike_pct = round(((pred_tons - base_tons) / base_tons * 100)) if base_tons > 0 else 0
-            
+
+            spike_pct = round((pred_tons - base_tons) / base_tons * 100) if base_tons > 0 else 0
+
             factors = []
             if rainfall_mm >= 30:
                 factors.append("Heavy rainfall adds flood-related waste and slows collection.")
@@ -513,7 +571,7 @@ def _build_predictions_uncached() -> list[dict[str, Any]]:
                 factors.append("Permitted event increases waste around crowded areas.")
             if is_weekend:
                 factors.append("Weekend activity raises commercial and public-space waste.")
-                
+
             risk_level = "normal"
             if spike_pct >= 30:
                 risk_level = "critical"
@@ -521,27 +579,29 @@ def _build_predictions_uncached() -> list[dict[str, Any]]:
                 risk_level = "high"
             elif spike_pct >= 10:
                 risk_level = "watch"
-                
+
             resources = resource_requirements(pred_tons, baseline_tons=base_tons)
-            predictions.append({
-                "district": city,
-                "date": target_date_str,
-                "baseline_tons": round(base_tons, 1),
-                "predicted_tons": round(pred_tons, 1),
-                "spike_percent": spike_pct,
-                "risk_level": risk_level,
-                "factors": factors or ["No unusual driver detected."],
-                "crews_required": sum(p["crews_required"] for p in city_kecs),
-                "workers_required": sum(p["workers_required"] for p in city_kecs),
-                "man_hours_required": sum(p["man_hours_required"] for p in city_kecs),
-                "bins_required": sum(p["bins_required"] for p in city_kecs),
-                "recommended_extra_trucks": resources["recommended_extra_trucks"],
-                "recommended_extra_crews": resources["recommended_extra_crews"],
-                "recommended_extra_workers": resources["recommended_extra_workers"],
-                "fuel_consumption_liters": round(pred_tons * 1.8, 1),
-                "co2_emissions_kg": round(pred_tons * 1.8 * 2.68, 1),
-            })
-            
+            predictions.append(
+                {
+                    "district": city,
+                    "date": target_date_str,
+                    "baseline_tons": round(base_tons, 1),
+                    "predicted_tons": round(pred_tons, 1),
+                    "spike_percent": spike_pct,
+                    "risk_level": risk_level,
+                    "factors": factors or ["No unusual driver detected."],
+                    "crews_required": sum(p["crews_required"] for p in city_kecs),
+                    "workers_required": sum(p["workers_required"] for p in city_kecs),
+                    "man_hours_required": sum(p["man_hours_required"] for p in city_kecs),
+                    "bins_required": sum(p["bins_required"] for p in city_kecs),
+                    "recommended_extra_trucks": resources["recommended_extra_trucks"],
+                    "recommended_extra_crews": resources["recommended_extra_crews"],
+                    "recommended_extra_workers": resources["recommended_extra_workers"],
+                    "fuel_consumption_liters": round(pred_tons * 1.8, 1),
+                    "co2_emissions_kg": round(pred_tons * 1.8 * 2.68, 1),
+                }
+            )
+
     return predictions
 
 
@@ -583,8 +643,10 @@ def build_alerts() -> list[dict[str, Any]]:
 # pays that cost during a live session.
 _route_b_cache: dict[str, Any] = {"ts": 0.0, "payload": None}
 
+
 def _route_b_osrm() -> dict[str, Any]:
     import time as _t
+
     cached = _route_b_cache
     if cached["payload"] is not None and _t.time() - cached["ts"] < 300.0:
         return cached["payload"]
@@ -597,8 +659,11 @@ def _route_b_osrm() -> dict[str, Any]:
     return cached["payload"]
 
 
-def command_center_snapshot(dispatches: list[dict[str, Any]], weather: dict[str, Any] | None = None) -> dict[str, Any]:
+def command_center_snapshot(
+    dispatches: list[dict[str, Any]], weather: dict[str, Any] | None = None
+) -> dict[str, Any]:
     import time
+
     from .queue_simulation import simulate_queue
 
     predictions = build_predictions()
@@ -622,18 +687,26 @@ def command_center_snapshot(dispatches: list[dict[str, Any]], weather: dict[str,
         else "Green corridor clear. Normal dispatch speed approved."
     )
 
-    peak_pred = max(predictions, key=lambda item: item["predicted_tons"] - item["baseline_tons"], default=None)
+    peak_pred = max(
+        predictions, key=lambda item: item["predicted_tons"] - item["baseline_tons"], default=None
+    )
     if peak_pred:
         peak_district = peak_pred["district"]
         peak_spike = peak_pred["spike_percent"]
-        extra_trucks_needed = sum(item["recommended_extra_trucks"] for item in predictions if item["date"] == peak_pred["date"])
-        extra_crews_needed = sum(item["recommended_extra_crews"] for item in predictions if item["date"] == peak_pred["date"])
-        
+        extra_trucks_needed = sum(
+            item["recommended_extra_trucks"] for item in predictions if item["date"] == peak_pred["date"]
+        )
+        extra_crews_needed = sum(
+            item["recommended_extra_crews"] for item in predictions if item["date"] == peak_pred["date"]
+        )
+
         headline = f"{peak_district} requires immediate capacity reinforcement."
         points = [
             f"Largest forecasted spike is +{peak_spike}% in {peak_district}, driven by weather/event conditions; weather impact peaks at +{weather_peak.get('waste_impact_percent', 16)}%.",
             "T-047 is outside the assigned corridor and should be redirected through Route B.",
-            f"TPA Bantargebang queue is currently {wait_time} mins; dispatch timing should be staggered." if wait_time > 45 else "TPA Bantargebang corridor is clear.",
+            f"TPA Bantargebang queue is currently {wait_time} mins; dispatch timing should be staggered."
+            if wait_time > 45
+            else "TPA Bantargebang corridor is clear.",
             f"Recommended action: add {extra_trucks_needed} trucks and {extra_crews_needed} crews across high-risk districts.",
         ]
     else:
@@ -648,10 +721,14 @@ def command_center_snapshot(dispatches: list[dict[str, Any]], weather: dict[str,
         "generated_at": date.today().isoformat(),
         "kpis": {
             "active_trucks": sum(1 for truck in TRUCKS if truck["status"] in {"active", "deviation"}),
-            "trucks_with_issues": sum(1 for truck in TRUCKS if truck["deviation"]["violated"] or truck["is_damaged"]),
+            "trucks_with_issues": sum(
+                1 for truck in TRUCKS if truck["deviation"]["violated"] or truck["is_damaged"]
+            ),
             "tpa_queue_trucks": base_trucks,
             "tpa_wait_minutes": wait_time,
-            "predicted_spike_percent": max([item["spike_percent"] for item in predictions]) if predictions else 0,
+            "predicted_spike_percent": max([item["spike_percent"] for item in predictions])
+            if predictions
+            else 0,
             "pending_dispatches": sum(1 for item in dispatches if item["field_status"] == "PENDING"),
         },
         "tpa_queue": {
@@ -687,7 +764,6 @@ _FUEL_L_PER_KM = 0.42  # compactor-truck diesel factor (reference constant)
 
 def _curated_trip_record(code: str, driver: str, t_date: str) -> dict[str, Any]:
     """Engine-derived trip record for a curated truck."""
-    assigned = ASSIGNED_PATHS[code]
     actual = ACTUAL_PATHS[code]
     distance_km = round(_path_km(actual), 1)
     speed = TRUCK_SPEEDS_KMH.get(code, 18.0)
@@ -725,6 +801,7 @@ def _curated_trip_record(code: str, driver: str, t_date: str) -> dict[str, Any]:
 def _generated_trip_record(truck: dict[str, Any], t_date: str) -> dict[str, Any]:
     """Trip record for a generated fleet unit, derived from its duty path."""
     from app.fleet_generator import _path_km as _gen_path_km
+
     path = [(p["lat"], p["lng"]) for p in truck.get("actual_path", [])]
     if not path:
         return None
@@ -761,6 +838,7 @@ def fleet_history_payload(truck_code: str | None = None, date: str | None = None
     detection; generated units get duty-path-derived records.
     """
     from datetime import datetime, timedelta
+
     from app.fleet_generator import get_generated_fleet
 
     t_date = date or (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -781,6 +859,7 @@ def fleet_history_payload(truck_code: str | None = None, date: str | None = None
 
 def tpa_queue_status_payload(scenario: str = "live") -> dict[str, Any]:
     import time
+
     from app.queue_simulation import simulate_queue
 
     # Service rate 4.5 trucks/h per weighbridge (~13 min weighbridge+dump cycle)
@@ -796,7 +875,13 @@ def tpa_queue_status_payload(scenario: str = "live") -> dict[str, Any]:
 
     sim = simulate_queue(base_trucks, weighbridges=2, service_rate_per_hour=4.5, seed=42)
     wait_time = sim["mean_wait_minutes"]
-    status_label = "CRITICAL (Antrian Padat)" if wait_time > 60 else "NORMAL (Lancar)" if wait_time < 30 else "WARNING (Padat Merayap)"
+    status_label = (
+        "CRITICAL (Antrian Padat)"
+        if wait_time > 60
+        else "NORMAL (Lancar)"
+        if wait_time < 30
+        else "WARNING (Padat Merayap)"
+    )
 
     return {
         "trucks_in_queue": base_trucks,
@@ -818,7 +903,7 @@ def tpa_queue_status_payload(scenario: str = "live") -> dict[str, Any]:
             {"time": "15:30", "truck": "T-088", "weight_ton": 18.2, "status": "Cleared"},
             {"time": "15:34", "truck": "T-112", "weight_ton": 17.5, "status": "Cleared"},
             {"time": "15:42", "truck": "T-001", "weight_ton": 19.1, "status": "Weighing"},
-        ]
+        ],
     }
 
 

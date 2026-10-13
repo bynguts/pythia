@@ -26,7 +26,7 @@ class OpenWAClient:
     timeout_seconds: float = 8.0
 
     @classmethod
-    def from_env(cls) -> "OpenWAClient":
+    def from_env(cls) -> OpenWAClient:
         return cls(
             base_url=os.getenv("OPENWA_BASE_URL", "http://127.0.0.1:2785/api").rstrip("/"),
             api_key=os.getenv("OPENWA_API_KEY", ""),
@@ -191,9 +191,9 @@ class OpenWAClient:
                 "provider": response_payload.get("provider", "baileys"),
                 "sent": sent,
                 "status_code": response.status,
-                "message": response_payload.get("message") or response_payload.get("error") or (
-                    "WhatsApp message sent." if sent else "WhatsApp gateway rejected the message."
-                ),
+                "message": response_payload.get("message")
+                or response_payload.get("error")
+                or ("WhatsApp message sent." if sent else "WhatsApp gateway rejected the message."),
                 "response": response_payload,
             }
         except HTTPError as error:

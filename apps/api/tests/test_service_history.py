@@ -18,9 +18,15 @@ def _store(name="test_service.json"):
 class ServiceStoreTests(unittest.TestCase):
     def test_create_and_list(self):
         store = _store()
-        store.create("T-088", "2026-09-01", "rem", "Ganti kampas rem",
-                     cost_idr=1500000, technician="Bengkel A",
-                     next_due_date="2026-12-01")
+        store.create(
+            "T-088",
+            "2026-09-01",
+            "rem",
+            "Ganti kampas rem",
+            cost_idr=1500000,
+            technician="Bengkel A",
+            next_due_date="2026-12-01",
+        )
         store.create("T-088", "2026-09-10", "oli", "Ganti oli")
         records = store.list("T-088")
         self.assertEqual(len(records), 2)
@@ -36,12 +42,9 @@ class ServiceStoreTests(unittest.TestCase):
 
     def test_due_soon_windows(self):
         store = _store()
-        store.create("T-088", "2026-09-01", "rem", "x",
-                     next_due_date="2026-09-18")   # 4 hari dari today fake
-        store.create("T-001", "2026-09-01", "oli", "x",
-                     next_due_date="2026-10-10")   # 26 hari
-        store.create("T-047", "2026-09-01", "ban", "x",
-                     next_due_date="2027-01-01")   # jauh
+        store.create("T-088", "2026-09-01", "rem", "x", next_due_date="2026-09-18")  # 4 hari dari today fake
+        store.create("T-001", "2026-09-01", "oli", "x", next_due_date="2026-10-10")  # 26 hari
+        store.create("T-047", "2026-09-01", "ban", "x", next_due_date="2027-01-01")  # jauh
         due7 = store.due_soon(days=7, today="2026-09-14")
         self.assertEqual([d["truck_code"] for d in due7], ["T-088"])
         self.assertEqual(due7[0]["days_left"], 4)
@@ -50,10 +53,8 @@ class ServiceStoreTests(unittest.TestCase):
 
     def test_due_soon_uses_latest_record_per_truck(self):
         store = _store()
-        store.create("T-088", "2026-09-01", "rem", "lama",
-                     next_due_date="2026-09-15")
-        store.create("T-088", "2026-09-13", "rem", "baru",
-                     next_due_date="2027-06-01")  # terbaru -> tidak due
+        store.create("T-088", "2026-09-01", "rem", "lama", next_due_date="2026-09-15")
+        store.create("T-088", "2026-09-13", "rem", "baru", next_due_date="2027-06-01")  # terbaru -> tidak due
         due = store.due_soon(days=30, today="2026-09-14")
         self.assertEqual(due, [])
 
@@ -61,20 +62,28 @@ class ServiceStoreTests(unittest.TestCase):
 class ServiceEndpointTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app, raise_server_exceptions=False)
-        _login = self.client.post("/api/auth/login", json={"username": "administrator", "password": "administrator-demo-pass"})
+        _login = self.client.post(
+            "/api/auth/login", json={"username": "administrator", "password": "administrator-demo-pass"}
+        )
         self.client.headers.update({"Authorization": f"Bearer {_login.json()['token']}"})
 
     def test_create_and_list_endpoint(self):
-        r = self.client.post("/api/service-records", json={
-            "truck_code": "T-250", "service_date": "2026-09-14",
-            "component": "rem", "description": "e2e service",
-            "cost_idr": 500000, "technician": "Bengkel E2E",
-            "next_due_date": "2026-12-14"})
+        r = self.client.post(
+            "/api/service-records",
+            json={
+                "truck_code": "T-250",
+                "service_date": "2026-09-14",
+                "component": "rem",
+                "description": "e2e service",
+                "cost_idr": 500000,
+                "technician": "Bengkel E2E",
+                "next_due_date": "2026-12-14",
+            },
+        )
         self.assertEqual(r.status_code, 201)
         listing = self.client.get("/api/service-records?truck_code=T-250")
         self.assertEqual(listing.status_code, 200)
-        self.assertTrue(any(rec["description"] == "e2e service"
-                            for rec in listing.json()["records"]))
+        self.assertTrue(any(rec["description"] == "e2e service" for rec in listing.json()["records"]))
 
     def test_due_soon_endpoint(self):
         r = self.client.get("/api/service-records/due-soon?days=365")
@@ -83,13 +92,23 @@ class ServiceEndpointTests(unittest.TestCase):
         self.assertIn("count", r.json())
 
     def test_resolve_damage_creates_service_record(self):
-        rep = self.client.post("/api/damage-reports", json={
-            "truck_code": "T-251", "driver_name": "E2E", "component": "rem",
-            "severity": "berat", "note": "rem untuk service hook"}).json()
+        rep = self.client.post(
+            "/api/damage-reports",
+            json={
+                "truck_code": "T-251",
+                "driver_name": "E2E",
+                "component": "rem",
+                "severity": "berat",
+                "note": "rem untuk service hook",
+            },
+        ).json()
         self.client.post(f"/api/damage-reports/{rep['report_id']}/resolve")
         listing = self.client.get("/api/service-records?truck_code=T-251")
-        mine = [rec for rec in listing.json()["records"]
-                if rec["source"] == "damage_resolve" and rec["component"] == "rem"]
+        mine = [
+            rec
+            for rec in listing.json()["records"]
+            if rec["source"] == "damage_resolve" and rec["component"] == "rem"
+        ]
         self.assertTrue(mine)
         self.assertIsNotNone(mine[0]["next_due_date"])  # rem -> +90 hari
 

@@ -1,10 +1,10 @@
-# -*- coding: utf-8 -*-
 """Role-aware authentication and RBAC for Pythia.
 
 Replaces the frontend-only admin/admin123 gate with a backend principal model.
 Passwords are demo credentials sourced from environment when set; this is a
 pilot-grade gate, not production IdP integration (documented as such).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -17,14 +17,30 @@ from app.env import getenv
 ROLES: dict[str, set[str]] = {
     "executive": {"dashboard:read", "reports:read", "history:read"},
     "dispatcher": {"dashboard:read", "operations:plan", "dispatch:create", "history:read"},
-    "supervisor": {"dashboard:read", "dispatch:create", "dispatch:confirm",
-                   "operations:approve", "history:read", "spj:override"},
+    "supervisor": {
+        "dashboard:read",
+        "dispatch:create",
+        "dispatch:confirm",
+        "operations:approve",
+        "history:read",
+        "spj:override",
+    },
     "driver": {"dispatch:confirm"},
     "auditor": {"history:read", "reports:read", "provenance:read"},
-    "administrator": {"dashboard:read", "reports:read", "history:read", "operations:plan",
-                      "operations:approve", "dispatch:create", "dispatch:confirm",
-                      "provenance:read", "admin:manage", "spj:override"},
+    "administrator": {
+        "dashboard:read",
+        "reports:read",
+        "history:read",
+        "operations:plan",
+        "operations:approve",
+        "dispatch:create",
+        "dispatch:confirm",
+        "provenance:read",
+        "admin:manage",
+        "spj:override",
+    },
 }
+
 
 # Demo credentials: password is "<role>-demo-pass" unless overridden by env
 # PYTHIA_PW_<ROLE>. Pilot-grade only.

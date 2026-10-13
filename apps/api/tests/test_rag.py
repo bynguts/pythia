@@ -23,12 +23,16 @@ class RagTests(unittest.TestCase):
     def test_rag_index_contains_decision_logic_knowledge_docs(self):
         index = build_rag_index()
         sources = {chunk.source for chunk in index.chunks}
-        self.assertTrue(any(s.startswith("docs/knowledge/01_") for s in sources), "decision logic doc not indexed")
+        self.assertTrue(
+            any(s.startswith("docs/knowledge/01_") for s in sources), "decision logic doc not indexed"
+        )
 
     def test_rag_retrieves_tpa_threshold_from_knowledge_doc(self):
         results = retrieve_pythia_context("ambang antrian TPA yellow 45 90 red", top_k=3)
         sources = [item["source"] for item in results]
-        self.assertTrue(any(s.startswith("docs/knowledge/01_") for s in sources), "decision logic doc not in top-3")
+        self.assertTrue(
+            any(s.startswith("docs/knowledge/01_") for s in sources), "decision logic doc not in top-3"
+        )
         joined = " ".join(item["text"].lower() for item in results)
         self.assertIn("45", joined)
         self.assertIn("90", joined)
