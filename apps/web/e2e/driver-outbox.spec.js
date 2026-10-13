@@ -32,7 +32,10 @@ async function cancelLeftover(headers) {
   }
 }
 
-test("offline stop submission queues durably, survives reload, and syncs on reconnect", async ({ page, context }) => {
+test("offline stop submission queues durably, survives reload, and syncs on reconnect", async ({
+  page,
+  context,
+}) => {
   const principal = await apiLogin();
   const headers = { Authorization: `Bearer ${principal.token}` };
   await cancelLeftover(headers);
@@ -57,7 +60,13 @@ test("offline stop submission queues durably, survives reload, and syncs on reco
     const stops = await fetch(`${API}/spj/${spj.spj_id}/stops`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...headers },
-      body: JSON.stringify({ name: "TPS Offline E2E", kecamatan: "Cilandak", address: "Jl. E2E", lat: -6.29, lng: 106.79 }),
+      body: JSON.stringify({
+        name: "TPS Offline E2E",
+        kecamatan: "Cilandak",
+        address: "Jl. E2E",
+        lat: -6.29,
+        lng: 106.79,
+      }),
     });
     expect(stops.status).toBe(200);
     const activate = await fetch(`${API}/spj/${spj.spj_id}/activate`, { method: "POST", headers });
@@ -86,7 +95,9 @@ test("offline stop submission queues durably, survives reload, and syncs on reco
       await expect(save).toBeEnabled();
       await save.click();
     }
-    await expect(page.getByRole("heading", { name: /Stop 1: TPS Offline E2E/ })).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole("heading", { name: /Stop 1: TPS Offline E2E/ })).toBeVisible({
+      timeout: 20000,
+    });
 
     const startButton = page.getByRole("button", { name: "Start this stop" });
     if (await startButton.count()) await startButton.click();
@@ -97,19 +108,22 @@ test("offline stop submission queues durably, survives reload, and syncs on reco
 
     // Step-gated form: arrival photo → weighing photo + weight → officer.
     await page.locator('[data-testid="arrival-input"]').setInputFiles({
-      name: "arrival.jpg", mimeType: "image/jpeg",
+      name: "arrival.jpg",
+      mimeType: "image/jpeg",
       buffer: Buffer.from("fake-jpg-data"),
     });
     await expect(page.locator('[data-testid="weigh-input"]')).toBeVisible();
     await page.locator('[data-testid="weigh-input"]').setInputFiles({
-      name: "weighing.jpg", mimeType: "image/jpeg",
+      name: "weighing.jpg",
+      mimeType: "image/jpeg",
       buffer: Buffer.from("fake-weighing"),
     });
     await page.locator('input[id^="weight-"]').fill("1250");
     await page.getByRole("button", { name: /add weighing|tambah timbangan/i }).click();
     await expect(page.locator('[data-testid="officer-input"]')).toBeVisible();
     await page.locator('[data-testid="officer-input"]').setInputFiles({
-      name: "officer.jpg", mimeType: "image/jpeg",
+      name: "officer.jpg",
+      mimeType: "image/jpeg",
       buffer: Buffer.from("fake-officer"),
     });
     await page.locator('input[id^="officer-name-"]').fill("Budi");
@@ -121,7 +135,9 @@ test("offline stop submission queues durably, survives reload, and syncs on reco
     // The queued record survives a full reload.
     await context.setOffline(false);
     await page.reload({ waitUntil: "domcontentloaded" });
-    const entries = await page.evaluate(() => JSON.parse(localStorage.getItem("pythia_driver_outbox") || "[]"));
+    const entries = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("pythia_driver_outbox") || "[]"),
+    );
     // The stop completion must be among the durable records.
     expect(entries.some((e) => e.path.endsWith("/stops/0/complete"))).toBe(true);
 
@@ -133,10 +149,16 @@ test("offline stop submission queues durably, survives reload, and syncs on reco
     }).toPass({ timeout: 30000 });
 
     // Queue drained.
-    await expect.poll(async () => page.evaluate(() => {
-      const raw = localStorage.getItem("pythia_driver_outbox");
-      return raw ? JSON.parse(raw).length : 1;
-    }), { timeout: 20000 }).toBe(0);
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const raw = localStorage.getItem("pythia_driver_outbox");
+            return raw ? JSON.parse(raw).length : 1;
+          }),
+        { timeout: 20000 },
+      )
+      .toBe(0);
   } finally {
     await fetch(`${API}/spj/${spj.spj_id}/cancel`, { method: "POST", headers }).catch(() => {});
   }

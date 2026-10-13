@@ -1,19 +1,18 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { API_URL } from "../config.js";
 import { useLanguage } from "../i18n.jsx";
-import {
-  Leaf,
-} from "lucide-react";
+import { Leaf } from "lucide-react";
 
 export function CarbonPanel() {
   const { lang } = useLanguage();
   const [carbon, setCarbon] = useState(null);
 
   useEffect(() => {
-    const load = () => fetch(`${API_URL}/ai/carbon-live`)
-      .then((r) => r.json())
-      .then(setCarbon)
-      .catch(() => {});
+    const load = () =>
+      fetch(`${API_URL}/ai/carbon-live`)
+        .then((r) => r.json())
+        .then(setCarbon)
+        .catch(() => {});
     load();
     const id = setInterval(load, 60000);
     return () => clearInterval(id);
@@ -25,7 +24,11 @@ export function CarbonPanel() {
         <div className="panel-title">
           <div>
             <h2>{lang === "id" ? "Pelacak Jejak Karbon Armada" : "Carbon Footprint Tracker"}</h2>
-            <p>{lang === "id" ? "Emisi CO2 armada dan penghematan bahan bakar dari telemetri rute." : "Fleet CO2 emissions and fuel savings from route telemetry."}</p>
+            <p>
+              {lang === "id"
+                ? "Emisi CO2 armada dan penghematan bahan bakar dari telemetri rute."
+                : "Fleet CO2 emissions and fuel savings from route telemetry."}
+            </p>
           </div>
           <div className="panel-header-icon-wrap">
             <Leaf size={18} />
@@ -41,7 +44,11 @@ export function CarbonPanel() {
       <div className="panel-title">
         <div>
           <h2>{lang === "id" ? "Pelacak Jejak Karbon Armada" : "Carbon Footprint Tracker"}</h2>
-          <p>{lang === "id" ? "Emisi CO2 armada dan penghematan bahan bakar dari telemetri rute." : "Fleet CO2 emissions and fuel savings from route telemetry."}</p>
+          <p>
+            {lang === "id"
+              ? "Emisi CO2 armada dan penghematan bahan bakar dari telemetri rute."
+              : "Fleet CO2 emissions and fuel savings from route telemetry."}
+          </p>
         </div>
         <div className="panel-header-icon-wrap">
           <Leaf size={18} />
@@ -66,9 +73,7 @@ export function CarbonPanel() {
         </div>
       </div>
       {carbon.classification === "reference" && (
-        <div className="carbon-badge">
-          Reference factors (B35 2.68 kg/L) — bukan telemetri terukur
-        </div>
+        <div className="carbon-badge">Reference factors (B35 2.68 kg/L) — bukan telemetri terukur</div>
       )}
     </section>
   );

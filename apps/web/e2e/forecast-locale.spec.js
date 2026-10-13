@@ -10,12 +10,15 @@ async function signIn(page, lang) {
     data: { username: "dispatcher", password: "dispatcher-demo-pass" },
   });
   const principal = await response.json();
-  await page.evaluate(({ token, role, lang }) => {
-    localStorage.setItem("pythia_auth", "true");
-    localStorage.setItem("pythia_lang", lang);
-    localStorage.setItem("pythia_token", token);
-    localStorage.setItem("pythia_role", role);
-  }, { ...principal, lang });
+  await page.evaluate(
+    ({ token, role, lang }) => {
+      localStorage.setItem("pythia_auth", "true");
+      localStorage.setItem("pythia_lang", lang);
+      localStorage.setItem("pythia_token", token);
+      localStorage.setItem("pythia_role", role);
+    },
+    { ...principal, lang },
+  );
   await page.reload({ waitUntil: "domcontentloaded" });
 }
 
@@ -31,11 +34,15 @@ test("forecast section copy follows the locale", async ({ page }) => {
   await expect(page.locator(".workspace-kicker")).toContainText("Demand intelligence");
   await expect(page.locator(".forecast-horizon-control .control-label")).toContainText("Analysis range");
   await expect(page.locator("#forecast-analysis-title")).toHaveText("Service demand map");
-  await expect(page.locator(".forecast-primary-analysis .section-intro p")).toContainText("Rank districts by predicted load");
+  await expect(page.locator(".forecast-primary-analysis .section-intro p")).toContainText(
+    "Rank districts by predicted load",
+  );
   await expect(page.locator(".forecast-context-rail")).toHaveAccessibleName("Forecast drivers");
   await expect(page.locator(".forecast-context-rail h2").first()).toHaveText("Trigger factors");
   await expect(page.locator("#forecast-evidence-title")).toHaveText("Forecast detail");
-  await expect(page.locator(".forecast-evidence-section .section-intro p")).toContainText("validate districts");
+  await expect(page.locator(".forecast-evidence-section .section-intro p")).toContainText(
+    "validate districts",
+  );
 
   // Horizon control labels localize.
   await expect(page.locator(".forecast-horizon-control button").first()).toContainText("7 days");

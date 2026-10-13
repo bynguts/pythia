@@ -11,12 +11,15 @@ async function signIn(page, lang) {
     data: { username: "dispatcher", password: "dispatcher-demo-pass" },
   });
   const principal = await response.json();
-  await page.evaluate(({ token, role, lang }) => {
-    localStorage.setItem("pythia_auth", "true");
-    localStorage.setItem("pythia_lang", lang);
-    localStorage.setItem("pythia_token", token);
-    localStorage.setItem("pythia_role", role);
-  }, { ...principal, lang });
+  await page.evaluate(
+    ({ token, role, lang }) => {
+      localStorage.setItem("pythia_auth", "true");
+      localStorage.setItem("pythia_lang", lang);
+      localStorage.setItem("pythia_token", token);
+      localStorage.setItem("pythia_role", role);
+    },
+    { ...principal, lang },
+  );
   await page.reload({ waitUntil: "domcontentloaded" });
 }
 
@@ -73,7 +76,9 @@ test("damage report panel follows the locale in both modes", async ({ page }) =>
     await expect(page.locator(".damage-panel").getByText("Severe", { exact: true }).first()).toBeVisible();
     await expect(page.locator(".damage-panel").getByText("NON-OPERATIONAL").first()).toBeVisible();
     await expect(page.locator(".damage-panel").getByText("New", { exact: true }).first()).toBeVisible();
-    await expect(page.locator(".damage-panel").getByRole("button", { name: "Resolve", exact: true }).first()).toBeVisible();
+    await expect(
+      page.locator(".damage-panel").getByRole("button", { name: "Resolve", exact: true }).first(),
+    ).toBeVisible();
     await expect(page.locator(".damage-panel .table-wrap")).toHaveAccessibleName("Damage report list");
 
     await page.getByTestId("lang-switch-id").click();
@@ -84,7 +89,9 @@ test("damage report panel follows the locale in both modes", async ({ page }) =>
     await expect(page.locator(".damage-panel thead")).toContainText("Komponen");
     await expect(page.locator(".damage-panel").getByText("Berat", { exact: true }).first()).toBeVisible();
     await expect(page.locator(".damage-panel").getByText("Baru", { exact: true }).first()).toBeVisible();
-    await expect(page.locator(".damage-panel").getByRole("button", { name: "Selesaikan", exact: true }).first()).toBeVisible();
+    await expect(
+      page.locator(".damage-panel").getByRole("button", { name: "Selesaikan", exact: true }).first(),
+    ).toBeVisible();
     await expect(page.locator(".damage-panel .table-wrap")).toHaveAccessibleName("Daftar laporan kerusakan");
   } finally {
     await cleanupReport(seeded?.report_id);

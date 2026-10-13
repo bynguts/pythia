@@ -43,7 +43,9 @@ test("carbon evidence shows data or an honest placeholder", async ({ page }) => 
 });
 
 test("unlicensed collector surface reads the AI flags endpoint", async ({ page }) => {
-  const responsePromise = page.waitForResponse((res) => res.url().includes("/api/ai/unlicensed-flags"), { timeout: 20000 });
+  const responsePromise = page.waitForResponse((res) => res.url().includes("/api/ai/unlicensed-flags"), {
+    timeout: 20000,
+  });
   await page.locator(".records-doc-link", { hasText: "Kolektor Liar" }).click();
   expect((await responsePromise).ok()).toBeTruthy();
 });

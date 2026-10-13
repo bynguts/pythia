@@ -434,10 +434,18 @@
   line-height: 1.35;
 }
 
-.assistant-formatted-answer h1 { font-size: 16px; }
-.assistant-formatted-answer h2 { font-size: 15px; }
-.assistant-formatted-answer h3 { font-size: 14px; }
-.assistant-formatted-answer h4 { font-size: var(--fs-caption); }
+.assistant-formatted-answer h1 {
+  font-size: 16px;
+}
+.assistant-formatted-answer h2 {
+  font-size: 15px;
+}
+.assistant-formatted-answer h3 {
+  font-size: 14px;
+}
+.assistant-formatted-answer h4 {
+  font-size: var(--fs-caption);
+}
 
 .assistant-formatted-answer strong {
   font-weight: 750;
@@ -578,8 +586,15 @@
 }
 
 @keyframes assistantPulse {
-  0%, 100% { opacity: 0.38; transform: translateY(0); }
-  50% { opacity: 1; transform: translateY(-2px); }
+  0%,
+  100% {
+    opacity: 0.38;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
 }
 
 .assistant-quick-prompts {
@@ -655,7 +670,9 @@
   border-radius: 8px;
   background: var(--ui-surface);
   color: var(--ui-muted);
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .assistant-upload-button:hover {

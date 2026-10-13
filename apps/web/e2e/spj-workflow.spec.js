@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { assertNoLeftoverActiveSpj, cancelSpjIndependently, disposeCleanupContext } from "./lib/spjCleanup.js";
+import {
+  assertNoLeftoverActiveSpj,
+  cancelSpjIndependently,
+  disposeCleanupContext,
+} from "./lib/spjCleanup.js";
 
 const API = "http://127.0.0.1:8001/api";
 const TEST_TRUCK = "T-210";
@@ -103,8 +107,8 @@ test("Fleet SPJ mutations and lifecycle labels follow authorization and ID/EN", 
     await panel.locator(".spj-form select").first().selectOption("T-209");
     await addStop();
     await addStop();
-    const responsePromise = page.waitForResponse((response) =>
-      response.url().endsWith("/api/spj") && response.request().method() === "POST",
+    const responsePromise = page.waitForResponse(
+      (response) => response.url().endsWith("/api/spj") && response.request().method() === "POST",
     );
     await panel.getByRole("button", { name: "Simpan draf" }).click();
     const response = await responsePromise;

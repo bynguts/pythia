@@ -11,12 +11,15 @@ async function signIn(page, lang) {
     data: { username: "dispatcher", password: "dispatcher-demo-pass" },
   });
   const principal = await response.json();
-  await page.evaluate(({ token, role, lang }) => {
-    localStorage.setItem("pythia_auth", "true");
-    localStorage.setItem("pythia_lang", lang);
-    localStorage.setItem("pythia_token", token);
-    localStorage.setItem("pythia_role", role);
-  }, { ...principal, lang });
+  await page.evaluate(
+    ({ token, role, lang }) => {
+      localStorage.setItem("pythia_auth", "true");
+      localStorage.setItem("pythia_lang", lang);
+      localStorage.setItem("pythia_token", token);
+      localStorage.setItem("pythia_role", role);
+    },
+    { ...principal, lang },
+  );
   await page.reload({ waitUntil: "domcontentloaded" });
 }
 
@@ -50,7 +53,10 @@ test("assistant interface follows the locale in both modes", async ({ page }) =>
   await expect(page.locator(".assistant-chat-header p")).toContainText("Tanya status operasional");
   await expect(page.locator(".assistant-message.assistant").first()).toContainText("Halo, saya Ana");
   await expect(page.locator(".assistant-quick-prompts button").first()).toContainText("Status armada");
-  await expect(page.locator("#assistant-question")).toHaveAttribute("placeholder", "Tanya apa saja ke Ana...");
+  await expect(page.locator("#assistant-question")).toHaveAttribute(
+    "placeholder",
+    "Tanya apa saja ke Ana...",
+  );
   await expect(page.locator(".assistant-upload-button")).toHaveAccessibleName("Lampirkan foto atau PDF");
 });
 
@@ -58,7 +64,9 @@ test("assistant gateway error message follows the locale", async ({ page }) => {
   await signIn(page, "en");
   await openAssistant(page);
 
-  await page.route("**/api/assistant/query", (route) => route.fulfill({ status: 502, json: { detail: "AI gateway error: boom" } }));
+  await page.route("**/api/assistant/query", (route) =>
+    route.fulfill({ status: 502, json: { detail: "AI gateway error: boom" } }),
+  );
   await page.locator("#assistant-question").fill("hello");
   await page.locator(".assistant-chat-input .primary-button").click();
   await expect(page.locator(".assistant-message.assistant").last()).toContainText("Ana could not answer");
@@ -81,12 +89,16 @@ test("assistant offline fallback follows the locale", async ({ page }) => {
   await page.route("**/api/assistant/query", (route) => route.abort());
   await page.locator("#assistant-question").fill("hello");
   await page.locator(".assistant-chat-input .primary-button").click();
-  await expect(page.locator(".assistant-message.assistant").last()).toContainText("Ana cannot reach the server");
+  await expect(page.locator(".assistant-message.assistant").last()).toContainText(
+    "Ana cannot reach the server",
+  );
 
   await page.locator(".assistant-close").click();
   await page.getByTestId("lang-switch-id").click();
   await openAssistant(page);
   await page.locator("#assistant-question").fill("halo");
   await page.locator(".assistant-chat-input .primary-button").click();
-  await expect(page.locator(".assistant-message.assistant").last()).toContainText("Ana tidak dapat terhubung ke server");
+  await expect(page.locator(".assistant-message.assistant").last()).toContainText(
+    "Ana tidak dapat terhubung ke server",
+  );
 });

@@ -1,12 +1,6 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { API_URL } from "../config.js";
-import {
-  Activity,
-  RefreshCcw,
-  Send,
-  Users,
-  LogOut,
-} from "lucide-react";
+import { Activity, RefreshCcw, Users, LogOut } from "lucide-react";
 
 export function WhatsAppGateway() {
   const [config, setConfig] = useState({
@@ -14,15 +8,21 @@ export function WhatsAppGateway() {
       "Budi Santoso": "",
       "Agus Pratama": "",
       "Joko Wijaya": "",
-      "Rizky Maulana": ""
+      "Rizky Maulana": "",
     },
     group_jid: "",
     send_to_group: true,
-    send_to_driver: true
+    send_to_driver: true,
   });
   const [logs, setLogs] = useState([]);
   const [followUps, setFollowUps] = useState([]);
-  const [status, setStatus] = useState({ configured: false, connected: false, base_url: "", session_id: "", message: "" });
+  const [status, setStatus] = useState({
+    configured: false,
+    connected: false,
+    base_url: "",
+    session_id: "",
+    message: "",
+  });
   const [qrState, setQrState] = useState({ state: "unknown", qr: null });
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
@@ -131,15 +131,15 @@ export function WhatsAppGateway() {
       const res = await fetch(`${API_URL}/history`);
       const data = await res.json();
       const waAlerts = data
-        .filter(event => event.event_type === "whatsapp_alert")
-        .map(event => {
+        .filter((event) => event.event_type === "whatsapp_alert")
+        .map((event) => {
           const date = new Date(event.created_at);
           const timeStr = date.toTimeString().split(" ")[0];
           return {
             time: timeStr,
             recipient: event.payload.recipient || event.payload.chat_id || "Driver/Group",
             msg: event.payload.msg || `Alert sent for truck ${event.payload.truck_code}`,
-            status: event.payload.sent ? "DELIVERED" : "FAILED"
+            status: event.payload.sent ? "DELIVERED" : "FAILED",
           };
         });
       setLogs(waAlerts);
@@ -181,7 +181,7 @@ export function WhatsAppGateway() {
       const res = await fetch(`${API_URL}/whatsapp/contacts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config)
+        body: JSON.stringify(config),
       });
       if (res.ok) {
         setSaveStatus("success");
@@ -200,33 +200,63 @@ export function WhatsAppGateway() {
   return (
     <div className="wa-workspace">
       <div className="wa-config-stack">
-<section className="panel">
+        <section className="panel">
           <div className="panel-title">
             <div>
               <h2>Connection State</h2>
               <p>WhatsApp Gateway status.</p>
             </div>
-            <button type="button" className="ghost-button" onClick={handleRefresh} title="Refresh status & QR now" disabled={refreshing || busy}>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={handleRefresh}
+              title="Refresh status & QR now"
+              disabled={refreshing || busy}
+            >
               <RefreshCcw size={16} /> Refresh
             </button>
           </div>
           <dl className="approval-evidence-list mt-16">
-            <div><dt>Gateway</dt><dd>Baileys WhatsApp Gateway</dd></div>
+            <div>
+              <dt>Gateway</dt>
+              <dd>Baileys WhatsApp Gateway</dd>
+            </div>
             <div>
               <dt>Status</dt>
               <dd>
                 {status.connected ? (
-                  <span className="wa-live-badge"><span className="wa-live-dot" /> CONNECTED</span>
+                  <span className="wa-live-badge">
+                    <span className="wa-live-dot" /> CONNECTED
+                  </span>
                 ) : (
-                  <span className={`pill ${qrState.state === "qr" ? "success" : qrState.state === "gateway_offline" ? "danger" : "warning"}`}>
-                    {qrState.state === "qr" ? "SCAN QR" : qrState.state === "gateway_offline" ? "GATEWAY OFFLINE" : qrState.state === "starting" ? "CONNECTING..." : "DISCONNECTED"}
+                  <span
+                    className={`pill ${qrState.state === "qr" ? "success" : qrState.state === "gateway_offline" ? "danger" : "warning"}`}
+                  >
+                    {qrState.state === "qr"
+                      ? "SCAN QR"
+                      : qrState.state === "gateway_offline"
+                        ? "GATEWAY OFFLINE"
+                        : qrState.state === "starting"
+                          ? "CONNECTING..."
+                          : "DISCONNECTED"}
                   </span>
                 )}
               </dd>
             </div>
-            <div><dt>Gateway state</dt><dd className="mono">{qrState.state || status.state || "unknown"}</dd></div>
-            <div><dt>Session JID</dt><dd className="mono">{status.session_id || "default"}@c.us</dd></div>
-            {!status.connected && status.message && <div><dt>Reason</dt><dd>{status.message}</dd></div>}
+            <div>
+              <dt>Gateway state</dt>
+              <dd className="mono">{qrState.state || status.state || "unknown"}</dd>
+            </div>
+            <div>
+              <dt>Session JID</dt>
+              <dd className="mono">{status.session_id || "default"}@c.us</dd>
+            </div>
+            {!status.connected && status.message && (
+              <div>
+                <dt>Reason</dt>
+                <dd>{status.message}</dd>
+              </div>
+            )}
           </dl>
 
           {!status.connected && (
@@ -236,9 +266,13 @@ export function WhatsAppGateway() {
                   <img className="wa-qr-image" src={qrState.qr} alt="WhatsApp pairing QR" />
                   <ol className="wa-qr-steps">
                     <li>Open WhatsApp on the operator phone.</li>
-                    <li>Go to <b>Settings → Linked Devices → Link a Device</b>.</li>
+                    <li>
+                      Go to <b>Settings → Linked Devices → Link a Device</b>.
+                    </li>
                     <li>Point the phone at this QR code.</li>
-                    <li>Wait — the status above turns <b>CONNECTED</b> automatically.</li>
+                    <li>
+                      Wait — the status above turns <b>CONNECTED</b> automatically.
+                    </li>
                   </ol>
                 </>
               ) : (
@@ -254,12 +288,34 @@ export function WhatsAppGateway() {
 
           <div className="wa-connection-actions">
             {status.connected ? (
-              <button type="button" className="ghost-button wa-logout-button wa-danger-button" onClick={handleLogout} disabled={busy}>
-                {busy ? "Logging out..." : <><LogOut size={16} /> Disconnect & Unlink</>}
+              <button
+                type="button"
+                className="ghost-button wa-logout-button wa-danger-button"
+                onClick={handleLogout}
+                disabled={busy}
+              >
+                {busy ? (
+                  "Logging out..."
+                ) : (
+                  <>
+                    <LogOut size={16} /> Disconnect & Unlink
+                  </>
+                )}
               </button>
             ) : (
-              <button type="button" className="ghost-button wa-logout-button" onClick={handleLogout} disabled={busy}>
-                {busy ? "Re-creating session..." : <><RefreshCcw size={16} /> Reset & Get New QR</>}
+              <button
+                type="button"
+                className="ghost-button wa-logout-button"
+                onClick={handleLogout}
+                disabled={busy}
+              >
+                {busy ? (
+                  "Re-creating session..."
+                ) : (
+                  <>
+                    <RefreshCcw size={16} /> Reset & Get New QR
+                  </>
+                )}
               </button>
             )}
           </div>
@@ -293,7 +349,7 @@ export function WhatsAppGateway() {
               </label>
             </div>
 
-<div className="wa-field-stack">
+            <div className="wa-field-stack">
               <strong>Driver Phone Numbers:</strong>
               {Object.keys(config.drivers).map((driverName) => (
                 <div key={driverName} className="wa-driver-row">
@@ -320,7 +376,12 @@ export function WhatsAppGateway() {
                 placeholder="08123... atau pilih dari daftar"
               />
               <div className="wa-group-tools">
-                <button type="button" className="ghost-button" onClick={loadGroups} disabled={groupsLoading || status.connected === false}>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={loadGroups}
+                  disabled={groupsLoading || status.connected === false}
+                >
                   {groupsLoading ? "Loading..." : "Load My Groups"}
                 </button>
                 {groups.length > 0 && (
@@ -341,9 +402,15 @@ export function WhatsAppGateway() {
                     >
                       <option value="">Pilih grup WhatsApp...</option>
                       {groups
-                        .filter((g) => !groupsFilter || (g.subject || "").toLowerCase().includes(groupsFilter.toLowerCase()))
+                        .filter(
+                          (g) =>
+                            !groupsFilter ||
+                            (g.subject || "").toLowerCase().includes(groupsFilter.toLowerCase()),
+                        )
                         .map((g) => (
-                          <option key={g.jid} value={g.jid}>{groupLabel(g)}</option>
+                          <option key={g.jid} value={g.jid}>
+                            {groupLabel(g)}
+                          </option>
                         ))}
                     </select>
                   </>
@@ -369,10 +436,14 @@ export function WhatsAppGateway() {
             <p>Real-time log of automated messages dispatched to drivers &amp; groups.</p>
           </div>
           <Activity size={20} />
-<button 
+          <button
             type="button"
-            onClick={() => { fetchLogs(); fetchStatus(); fetchFollowUps(); }} 
-            className="ghost-button" 
+            onClick={() => {
+              fetchLogs();
+              fetchStatus();
+              fetchFollowUps();
+            }}
+            className="ghost-button"
             title="Refresh logs"
           >
             <RefreshCcw size={16} />
@@ -398,9 +469,15 @@ export function WhatsAppGateway() {
               ) : (
                 logs.map((a, idx) => (
                   <tr key={idx}>
-                    <td><span className="mono">{a.time}</span></td>
-                    <td><b className="wa-recipient">{a.recipient}</b></td>
-                    <td><span className="wa-message-cell">{a.msg}</span></td>
+                    <td>
+                      <span className="mono">{a.time}</span>
+                    </td>
+                    <td>
+                      <b className="wa-recipient">{a.recipient}</b>
+                    </td>
+                    <td>
+                      <span className="wa-message-cell">{a.msg}</span>
+                    </td>
                     <td>
                       <span className={`pill ${a.status === "DELIVERED" ? "success" : "danger"}`}>
                         {a.status}
@@ -428,14 +505,25 @@ export function WhatsAppGateway() {
               <tbody>
                 {followUps.map((rec, idx) => {
                   const p = rec.payload || {};
-                  const statusCls = p.status === "RESOLVED" ? "success" : p.status === "DISPATCHED" ? "warning" : "danger";
+                  const statusCls =
+                    p.status === "RESOLVED" ? "success" : p.status === "DISPATCHED" ? "warning" : "danger";
                   return (
                     <tr key={idx}>
-                      <td><span className="mono">{new Date(rec.created_at).toLocaleString()}</span></td>
-                      <td><span className="mono">{p.alert_id}</span></td>
-                      <td><span className={`pill ${statusCls}`}>{p.status}</span></td>
-                      <td><b className="wa-recipient">{p.operator}</b></td>
-                      <td><span className="wa-message-cell">{p.note || "—"}</span></td>
+                      <td>
+                        <span className="mono">{new Date(rec.created_at).toLocaleString()}</span>
+                      </td>
+                      <td>
+                        <span className="mono">{p.alert_id}</span>
+                      </td>
+                      <td>
+                        <span className={`pill ${statusCls}`}>{p.status}</span>
+                      </td>
+                      <td>
+                        <b className="wa-recipient">{p.operator}</b>
+                      </td>
+                      <td>
+                        <span className="wa-message-cell">{p.note || "—"}</span>
+                      </td>
                     </tr>
                   );
                 })}

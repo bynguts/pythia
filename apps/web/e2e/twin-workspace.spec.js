@@ -14,29 +14,34 @@ async function signIn(page, lang = "en") {
   });
   expect(response.ok()).toBeTruthy();
   const principal = await response.json();
-  await page.evaluate(({ token, role, lang }) => {
-    localStorage.setItem("pythia_auth", "true");
-    localStorage.setItem("pythia_lang", lang);
-    localStorage.setItem("pythia_token", token);
-    localStorage.setItem("pythia_role", role);
-  }, { ...principal, lang });
+  await page.evaluate(
+    ({ token, role, lang }) => {
+      localStorage.setItem("pythia_auth", "true");
+      localStorage.setItem("pythia_lang", lang);
+      localStorage.setItem("pythia_token", token);
+      localStorage.setItem("pythia_role", role);
+    },
+    { ...principal, lang },
+  );
   await page.reload({ waitUntil: "domcontentloaded" });
 }
 
 async function waitForTwin(page, predicate = "true") {
-  await page.waitForFunction(
-    `window.__pythiaTwin && window.__pythiaTwin.ready && (${predicate})`,
-    null,
-    { timeout: 45000 },
-  );
+  await page.waitForFunction(`window.__pythiaTwin && window.__pythiaTwin.ready && (${predicate})`, null, {
+    timeout: 45000,
+  });
   return page.evaluate(() => {
-    const { startTour, stopTour, setDay, setCity, setRainfall, setEventPreset, ...state } = window.__pythiaTwin;
+    const { startTour, stopTour, setDay, setCity, setRainfall, setEventPreset, ...state } =
+      window.__pythiaTwin;
     return state;
   });
 }
 
 async function openTwin(page) {
-  await page.getByTestId("workspace-navigation").getByRole("button", { name: "Digital Twin", exact: true }).click();
+  await page
+    .getByTestId("workspace-navigation")
+    .getByRole("button", { name: "Digital Twin", exact: true })
+    .click();
   await expect(page.getByTestId("twin-workspace")).toBeVisible();
 }
 
@@ -44,7 +49,9 @@ test("twin is the first workspace and renders all 42 Jakarta districts with prov
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await signIn(page);
-  await expect(page.getByTestId("workspace-navigation").getByRole("button").first()).toHaveText("Digital Twin");
+  await expect(page.getByTestId("workspace-navigation").getByRole("button").first()).toHaveText(
+    "Digital Twin",
+  );
   await openTwin(page);
   await expect(page.getByRole("heading", { name: "City waste digital twin" })).toBeVisible();
 
@@ -92,7 +99,10 @@ test("rainfall scenario re-forecasts and raises districts at risk", async ({ pag
   for (let i = 0; i < 16; i += 1) await slider.press("ArrowRight");
   await expect(page.getByTestId("twin-rainfall-value")).toHaveText("80 mm");
 
-  const after = await waitForTwin(page, "window.__pythiaTwin.scenario && window.__pythiaTwin.scenario.rainfall_mm === 80");
+  const after = await waitForTwin(
+    page,
+    "window.__pythiaTwin.scenario && window.__pythiaTwin.scenario.rainfall_mm === 80",
+  );
   expect(after.districtCount).toBe(42);
   expect(after.districtsAtRisk).toBeGreaterThan(0);
   expect(after.districtsAtRisk).toBeGreaterThanOrEqual(before.districtsAtRisk);
@@ -125,10 +135,14 @@ test("keyboard users can pin a district from the at-risk list", async ({ page })
   await expect(first).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("twin-detail")).toContainText(name);
   // The list is ordered by risk, then by change against a normal day.
-  const ranks = await items.evaluateAll((buttons) => buttons.map((b) => {
-    const tag = b.querySelector(".twin-risk-tag");
-    return ["risk-normal", "risk-elevated", "risk-high", "risk-critical"].findIndex((c) => tag.classList.contains(c));
-  }));
+  const ranks = await items.evaluateAll((buttons) =>
+    buttons.map((b) => {
+      const tag = b.querySelector(".twin-risk-tag");
+      return ["risk-normal", "risk-elevated", "risk-high", "risk-critical"].findIndex((c) =>
+        tag.classList.contains(c),
+      );
+    }),
+  );
   expect([...ranks].sort((a, b) => b - a)).toEqual(ranks);
 });
 
@@ -216,38 +230,47 @@ test("twin stays touch-friendly with no horizontal overflow at 390 px", async ({
       document.querySelectorAll(selector).forEach((el) => {
         const r = el.getBoundingClientRect();
         const style = getComputedStyle(el);
-        if (r.width === 0 || r.height === 0 || style.display === "none" || style.visibility === "hidden") return;
+        if (r.width === 0 || r.height === 0 || style.display === "none" || style.visibility === "hidden")
+          return;
         if (el.closest(".maplibregl-ctrl-attrib-inner")) return; // attribution text links
-        if (r.width < min || r.height < min) out.push(`${selector} "${(el.textContent || el.getAttribute("aria-label") || "").trim().slice(0, 24)}" ${Math.round(r.width)}x${Math.round(r.height)}`);
+        if (r.width < min || r.height < min)
+          out.push(
+            `${selector} "${(el.textContent || el.getAttribute("aria-label") || "").trim().slice(0, 24)}" ${Math.round(r.width)}x${Math.round(r.height)}`,
+          );
       });
     }
     return out;
   }, 44);
   expect(failures, failures.join(", ")).toEqual([]);
 
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
-for (const width of [360, 320]) test(`day buttons keep 44 px targets at ${width} px without page overflow`, async ({ page }) => {
-  await page.setViewportSize({ width, height: 780 });
-  await signIn(page, "id");
-  await page.locator(".command-mobile-nav").getByRole("button", { name: "Kembaran" }).click();
-  await waitForTwin(page);
-  const days = page.locator(".twin-day");
-  await expect(days).toHaveCount(7);
-  for (const day of await days.all()) {
-    const box = await day.boundingBox();
-    expect(box.width).toBeGreaterThanOrEqual(44);
-    expect(box.height).toBeGreaterThanOrEqual(44);
-  }
-  // The last day is reachable (scrolls inside the timeline if it must).
-  await page.getByTestId("twin-day-0").focus();
-  await page.keyboard.press("End");
-  await expect.poll(() => page.evaluate(() => window.__pythiaTwin.selectedDay)).toBe(6);
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(0);
-});
+for (const width of [360, 320])
+  test(`day buttons keep 44 px targets at ${width} px without page overflow`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 780 });
+    await signIn(page, "id");
+    await page.locator(".command-mobile-nav").getByRole("button", { name: "Kembaran" }).click();
+    await waitForTwin(page);
+    const days = page.locator(".twin-day");
+    await expect(days).toHaveCount(7);
+    for (const day of await days.all()) {
+      const box = await day.boundingBox();
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+    // The last day is reachable (scrolls inside the timeline if it must).
+    await page.getByTestId("twin-day-0").focus();
+    await page.keyboard.press("End");
+    await expect.poll(() => page.evaluate(() => window.__pythiaTwin.selectedDay)).toBe(6);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
 
 test("presentation HUD states that the landfill queue is simulated", async ({ page }) => {
   await signIn(page);
@@ -261,11 +284,17 @@ test("presentation HUD states that the landfill queue is simulated", async ({ pa
 
 test("twin controls meet text contrast requirements", async ({ page }) => {
   await signIn(page, "id");
-  await page.getByTestId("workspace-navigation").getByRole("button", { name: "Kembaran Digital", exact: true }).click();
+  await page
+    .getByTestId("workspace-navigation")
+    .getByRole("button", { name: "Kembaran Digital", exact: true })
+    .click();
   await waitForTwin(page);
   await page.getByTestId("twin-city-hcmc").click();
   await waitForTwin(page, "window.__pythiaTwin.city === 'hcmc'");
-  const results = await new AxeBuilder({ page }).include("[data-testid=twin-workspace]").withRules(["color-contrast"]).analyze();
+  const results = await new AxeBuilder({ page })
+    .include("[data-testid=twin-workspace]")
+    .withRules(["color-contrast"])
+    .analyze();
   expect(results.violations.map(({ nodes }) => nodes.map(({ target }) => target))).toEqual([]);
 
   // No layout-property transitions anywhere in the twin (#43 rule).
@@ -276,7 +305,8 @@ test("twin controls meet text contrast requirements", async ({ page }) => {
       const cs = getComputedStyle(el);
       const durations = cs.transitionDuration.split(", ");
       cs.transitionProperty.split(", ").forEach((prop, i) => {
-        if ((prop === "all" || layout.test(prop)) && durations[i] && durations[i] !== "0s") bad.push(`${el.className} ${prop}`);
+        if ((prop === "all" || layout.test(prop)) && durations[i] && durations[i] !== "0s")
+          bad.push(`${el.className} ${prop}`);
       });
     });
     return bad;

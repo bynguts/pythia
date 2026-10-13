@@ -29,18 +29,21 @@ export function useTwinScene(request, { debounceMs = 450 } = {}) {
   useEffect(() => {
     const controller = new AbortController();
     setState((current) => ({ ...current, loading: true, error: null }));
-    const timer = setTimeout(async () => {
-      try {
-        const response = await fetch(url, { signal: controller.signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const scene = await response.json();
-        hasScene.current = true;
-        setState({ scene, loading: false, error: null, url });
-      } catch (error) {
-        if (error.name === "AbortError") return;
-        setState((current) => ({ ...current, loading: false, error: error.message || String(error) }));
-      }
-    }, hasScene.current ? debounceMs : 0);
+    const timer = setTimeout(
+      async () => {
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const scene = await response.json();
+          hasScene.current = true;
+          setState({ scene, loading: false, error: null, url });
+        } catch (error) {
+          if (error.name === "AbortError") return;
+          setState((current) => ({ ...current, loading: false, error: error.message || String(error) }));
+        }
+      },
+      hasScene.current ? debounceMs : 0,
+    );
     return () => {
       clearTimeout(timer);
       controller.abort();

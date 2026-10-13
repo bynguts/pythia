@@ -133,7 +133,11 @@
 }
 
 /* Crowd Events Panel */
-.events-list { display: flex; flex-direction: column; gap: 10px; }
+.events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
 .event-item-card {
   background: var(--ui-surface);
@@ -155,7 +159,11 @@
   margin-bottom: 4px;
 }
 
-.event-header h3 { font-size: 15px; margin: 0; color: var(--text); }
+.event-header h3 {
+  font-size: 15px;
+  margin: 0;
+  color: var(--text);
+}
 
 .event-header .permit {
   font-size: 10px;
@@ -166,7 +174,11 @@
   font-weight: 700;
 }
 
-.event-item-card .location { font-size: 12px; color: var(--text-muted); margin: 0 0 10px; }
+.event-item-card .location {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
 
 .event-body {
   display: grid;
@@ -181,7 +193,10 @@
   margin-bottom: 2px;
 }
 
-.event-metric strong { font-size: 13px; color: var(--text); }
+.event-metric strong {
+  font-size: 13px;
+  color: var(--text);
+}
 
 .event-permit-marker {
   background: transparent !important;
@@ -257,9 +272,14 @@
   margin-bottom: 8px;
 }
 
-.kec-head strong { font-size: 14px; }
+.kec-head strong {
+  font-size: 14px;
+}
 
-.kec-head span { font-size: 11px; color: var(--muted, #64748b); }
+.kec-head span {
+  font-size: 11px;
+  color: var(--muted, #64748b);
+}
 
 .kec-meta {
   display: flex;
@@ -270,15 +290,26 @@
   font-size: 12px;
 }
 
-.kec-meta b { font-size: 14px; }
+.kec-meta b {
+  font-size: 14px;
+}
 
-.kec-facility { font-weight: 600; font-size: 11px; }
+.kec-facility {
+  font-weight: 600;
+  font-size: 11px;
+}
 
-.kec-note { font-size: 11px; color: var(--muted, #64748b); margin-top: 12px; }
+.kec-note {
+  font-size: 11px;
+  color: var(--muted, #64748b);
+  margin-top: 12px;
+}
 
 .kec-row {
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .kec-row:hover {
@@ -510,7 +541,8 @@
   background: #df765d;
 }
 
-.weather-trend-row b, .weather-trend-row em {
+.weather-trend-row b,
+.weather-trend-row em {
   justify-self: end;
   font-style: normal;
   font-weight: 700;
@@ -565,7 +597,8 @@
   background: var(--ui-surface);
 }
 
-.kec-row:hover, .kec-row.active {
+.kec-row:hover,
+.kec-row.active {
   border-color: var(--ui-border-strong);
   background: #fbfbfa;
 }

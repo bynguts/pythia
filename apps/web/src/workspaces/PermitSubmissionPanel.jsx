@@ -1,17 +1,15 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { API_URL } from "../config.js";
 import { useLanguage } from "../i18n.jsx";
-import {
-  Calendar,
-} from "lucide-react";
+import { Calendar } from "lucide-react";
 
 export const PERMIT_VENUE_PRESETS = [
   { key: "gbk", label: "GBK Senayan", lat: -6.2183, lng: 106.8022 },
   { key: "monas", label: "Kawasan Monas", lat: -6.1754, lng: 106.8272 },
   { key: "jiexpo", label: "JIExpo Kemayoran", lat: -6.1448, lng: 106.8487 },
-  { key: "ancol", label: "Ancol", lat: -6.1260, lng: 106.8450 },
-  { key: "istora", label: "Istora Senayan", lat: -6.2270, lng: 106.7990 },
-  { key: "cfd", label: "Bundaran HI (CFD)", lat: -6.1950, lng: 106.8230 },
+  { key: "ancol", label: "Ancol", lat: -6.126, lng: 106.845 },
+  { key: "istora", label: "Istora Senayan", lat: -6.227, lng: 106.799 },
+  { key: "cfd", label: "Bundaran HI (CFD)", lat: -6.195, lng: 106.823 },
 ];
 
 export function PermitSubmissionPanel({ onPermitSubmitted }) {
@@ -43,8 +41,12 @@ export function PermitSubmissionPanel({ onPermitSubmitted }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name, location_name: locationName, event_date: eventDate,
-          expected_attendance: Number(attendance), lat: Number(lat), lng: Number(lng),
+          name,
+          location_name: locationName,
+          event_date: eventDate,
+          expected_attendance: Number(attendance),
+          lat: Number(lat),
+          lng: Number(lng),
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -52,7 +54,11 @@ export function PermitSubmissionPanel({ onPermitSubmitted }) {
       setResult(json);
       onPermitSubmitted?.(json.permit);
     } catch (err) {
-      setError(lang === "id" ? "Pengajuan gagal — backend offline atau input tidak valid." : "Submission failed — backend offline or invalid input.");
+      setError(
+        lang === "id"
+          ? "Pengajuan gagal — backend offline atau input tidak valid."
+          : "Submission failed — backend offline or invalid input.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -63,7 +69,11 @@ export function PermitSubmissionPanel({ onPermitSubmitted }) {
       <div className="panel-title">
         <div>
           <h2>{lang === "id" ? "Pengajuan Izin Acara Keramaian" : "Event Permit Intake"}</h2>
-          <p>{lang === "id" ? "Ajukan izin acara publik — sistem langsung mengestimasi volume sampah, kebutuhan armada, dan distrik terdampak." : "Submit an event permit — the system estimates waste generation, resources, and affected districts instantly."}</p>
+          <p>
+            {lang === "id"
+              ? "Ajukan izin acara publik — sistem langsung mengestimasi volume sampah, kebutuhan armada, dan distrik terdampak."
+              : "Submit an event permit — the system estimates waste generation, resources, and affected districts instantly."}
+          </p>
         </div>
         <div className="panel-header-icon-wrap">
           <Calendar size={18} />
@@ -71,47 +81,125 @@ export function PermitSubmissionPanel({ onPermitSubmitted }) {
       </div>
 
       <form className="permit-form" onSubmit={submit}>
-        <label>{lang === "id" ? "Nama Acara" : "Event name"}
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} required minLength={3} placeholder={lang === "id" ? "misal: Konser Musik GBK" : "e.g. Konser Musik GBK"} />
+        <label>
+          {lang === "id" ? "Nama Acara" : "Event name"}
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            minLength={3}
+            placeholder={lang === "id" ? "misal: Konser Musik GBK" : "e.g. Konser Musik GBK"}
+          />
         </label>
-        <label>{lang === "id" ? "Pilihan Lokasi Populer" : "Venue preset"}
+        <label>
+          {lang === "id" ? "Pilihan Lokasi Populer" : "Venue preset"}
           <select defaultValue="gbk" onChange={(e) => applyPreset(e.target.value)} aria-label="Venue preset">
-            {PERMIT_VENUE_PRESETS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+            {PERMIT_VENUE_PRESETS.map((p) => (
+              <option key={p.key} value={p.key}>
+                {p.label}
+              </option>
+            ))}
           </select>
         </label>
-        <label>{lang === "id" ? "Nama Lokasi / Area" : "Location"}
-          <input type="text" value={locationName} onChange={(e) => setLocationName(e.target.value)} required minLength={3} placeholder={lang === "id" ? "Nama venue / area acara" : "Venue / area name"} />
+        <label>
+          {lang === "id" ? "Nama Lokasi / Area" : "Location"}
+          <input
+            type="text"
+            value={locationName}
+            onChange={(e) => setLocationName(e.target.value)}
+            required
+            minLength={3}
+            placeholder={lang === "id" ? "Nama venue / area acara" : "Venue / area name"}
+          />
         </label>
-        <label>{lang === "id" ? "Tanggal Acara" : "Event date"}
+        <label>
+          {lang === "id" ? "Tanggal Acara" : "Event date"}
           <input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} required />
         </label>
-        <label>{lang === "id" ? "Estimasi Jumlah Penonton:" : "Expected attendance:"} <b>{Number(attendance).toLocaleString(lang === "id" ? "id-ID" : "en-US")} {lang === "id" ? "orang" : "people"}</b>
-          <input type="range" min="1000" max="200000" step="1000" value={attendance} onChange={(e) => setAttendanceLocal(e.target.value)} />
+        <label>
+          {lang === "id" ? "Estimasi Jumlah Penonton:" : "Expected attendance:"}{" "}
+          <b>
+            {Number(attendance).toLocaleString(lang === "id" ? "id-ID" : "en-US")}{" "}
+            {lang === "id" ? "orang" : "people"}
+          </b>
+          <input
+            type="range"
+            min="1000"
+            max="200000"
+            step="1000"
+            value={attendance}
+            onChange={(e) => setAttendanceLocal(e.target.value)}
+          />
         </label>
         <div className="permit-coords">
-          <label>Lat <input type="number" step="0.0001" value={lat} onChange={(e) => setLat(e.target.value)} required /></label>
-          <label>Lng <input type="number" step="0.0001" value={lng} onChange={(e) => setLng(e.target.value)} required /></label>
+          <label>
+            Lat{" "}
+            <input
+              type="number"
+              step="0.0001"
+              value={lat}
+              onChange={(e) => setLat(e.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Lng{" "}
+            <input
+              type="number"
+              step="0.0001"
+              value={lng}
+              onChange={(e) => setLng(e.target.value)}
+              required
+            />
+          </label>
         </div>
         <button className="primary-button" type="submit" disabled={submitting}>
-          {submitting ? (lang === "id" ? "Mengirim..." : "Submitting…") : (lang === "id" ? "Kirim Izin & Hitung Dampak Sampah" : "Submit permit & estimate impact")}
+          {submitting
+            ? lang === "id"
+              ? "Mengirim..."
+              : "Submitting…"
+            : lang === "id"
+              ? "Kirim Izin & Hitung Dampak Sampah"
+              : "Submit permit & estimate impact"}
         </button>
         {error && <p className="permit-error">{error}</p>}
       </form>
 
       {result && (
         <div className="permit-impact" data-testid="permit-impact">
-          <h3>{lang === "id" ? "Estimasi Dampak Sampah —" : "Estimated impact —"} {result.permit.name}</h3>
+          <h3>
+            {lang === "id" ? "Estimasi Dampak Sampah —" : "Estimated impact —"} {result.permit.name}
+          </h3>
           <div className="facility-summary">
-            <div><b>{result.impact.predicted_waste_tons} t</b><span>{lang === "id" ? "prediksi sampah" : "predicted waste"}</span></div>
-            <div><b>{result.impact.trucks_required}</b><span>{lang === "id" ? "truk cadangan" : "backup trucks"}</span></div>
-            <div><b>{result.impact.crews_required}</b><span>{lang === "id" ? "tim kru lapangan" : "field crew teams"}</span></div>
-            <div><b>{result.impact.man_hours_required}</b><span>{lang === "id" ? "jam-orang" : "person-hours"}</span></div>
-            <div><b>{result.impact.bins_required}</b><span>{lang === "id" ? "tong sampah besar" : "large bins"}</span></div>
+            <div>
+              <b>{result.impact.predicted_waste_tons} t</b>
+              <span>{lang === "id" ? "prediksi sampah" : "predicted waste"}</span>
+            </div>
+            <div>
+              <b>{result.impact.trucks_required}</b>
+              <span>{lang === "id" ? "truk cadangan" : "backup trucks"}</span>
+            </div>
+            <div>
+              <b>{result.impact.crews_required}</b>
+              <span>{lang === "id" ? "tim kru lapangan" : "field crew teams"}</span>
+            </div>
+            <div>
+              <b>{result.impact.man_hours_required}</b>
+              <span>{lang === "id" ? "jam-orang" : "person-hours"}</span>
+            </div>
+            <div>
+              <b>{result.impact.bins_required}</b>
+              <span>{lang === "id" ? "tong sampah besar" : "large bins"}</span>
+            </div>
           </div>
           <p className="permit-affected">
-            {lang === "id" ? "Kecamatan terdampak:" : "Affected districts:"} {result.affected_kecamatan.map((a) => a.kecamatan).join(", ") || "nearest district assigned"}.
+            {lang === "id" ? "Kecamatan terdampak:" : "Affected districts:"}{" "}
+            {result.affected_kecamatan.map((a) => a.kecamatan).join(", ") || "nearest district assigned"}.
           </p>
-          <p className="kec-note">{result.permit.data_note} Basis: {result.impact.resource_basis}.</p>
+          <p className="kec-note">
+            {result.permit.data_note} Basis: {result.impact.resource_basis}.
+          </p>
         </div>
       )}
     </section>

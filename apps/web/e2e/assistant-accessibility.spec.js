@@ -48,7 +48,10 @@ test("assistant keeps keyboard focus inside and restores it after dismissal", as
     await expect(page.locator(selector)).toHaveJSProperty("inert", false);
   }
   await trigger.click();
-  await page.getByRole("dialog", { name: "Asisten operasi" }).getByRole("button", { name: "Tutup asisten" }).click();
+  await page
+    .getByRole("dialog", { name: "Asisten operasi" })
+    .getByRole("button", { name: "Tutup asisten" })
+    .click();
   await expect(trigger).toBeFocused();
 });
 
@@ -68,16 +71,18 @@ test("signed-in operator can query the protected assistant endpoint", async ({ p
     await route.fulfill({
       status: authorized ? 200 : 401,
       contentType: "application/json",
-      body: JSON.stringify(authorized
-        ? { provider: "local", answer: "Data armada Pythia: 1 truk mengalami deviasi rute." }
-        : { detail: "Missing bearer token" }),
+      body: JSON.stringify(
+        authorized
+          ? { provider: "local", answer: "Data armada Pythia: 1 truk mengalami deviasi rute." }
+          : { detail: "Missing bearer token" },
+      ),
     });
   });
   await page.getByRole("button", { name: "Asisten operasi" }).click();
   const dialog = page.getByRole("dialog", { name: "Asisten operasi" });
-  await dialog.getByRole("textbox", { name: "Tanya apa saja ke Ana" })
+  await dialog
+    .getByRole("textbox", { name: "Tanya apa saja ke Ana" })
     .fill("Berapa truk yang mengalami deviasi rute?");
   await dialog.getByRole("button", { name: "Kirim pesan" }).click();
-  await expect(dialog.getByText("Data armada Pythia: 1 truk mengalami deviasi rute."))
-    .toBeVisible();
+  await expect(dialog.getByText("Data armada Pythia: 1 truk mengalami deviasi rute.")).toBeVisible();
 });

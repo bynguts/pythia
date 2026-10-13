@@ -1,10 +1,6 @@
-import React from "react";
 import { API_URL } from "../config.js";
 import { useLanguage } from "../i18n.jsx";
-import {
-  Activity,
-  Download,
-} from "lucide-react";
+import { Download } from "lucide-react";
 
 export function ReportActions() {
   const { t } = useLanguage();
@@ -12,30 +8,39 @@ export function ReportActions() {
     const response = await fetch(`${API_URL}/reports/executive-summary`);
     const data = await response.json();
     const impact = data.queue_impact || {};
-    const impactHtml = impact.baseline_wait_minutes !== undefined
-      ? `
+    const impactHtml =
+      impact.baseline_wait_minutes !== undefined
+        ? `
       <h2>Queue Optimization Impact (Case 1)</h2>
       <p>Baseline (all trucks at peak): <b>${impact.baseline_queue_trucks} trucks, ${impact.baseline_wait_minutes} min wait</b> (p95 ${impact.baseline_p95_minutes} min)</p>
       <p>With staggered dispatch: <b>${impact.optimized_queue_trucks} trucks, ${impact.optimized_wait_minutes} min wait</b> (p95 ${impact.optimized_p95_minutes} min)</p>
       <p>Queue wait reduction: <b>-${impact.queue_reduction_percent}%</b> (${impact.method})</p>
       `
-      : "";
+        : "";
     const hotspots = Array.isArray(data.top_hotspots) ? data.top_hotspots : [];
-    const hotspotRows = hotspots.map((h) => `
+    const hotspotRows = hotspots
+      .map(
+        (h) => `
       <tr>
         <td>${h.kecamatan}</td><td>${h.city}</td>
         <td>${h.predicted_tons} t/day</td><td>${h.trucks_required}</td>
         <td>${h.crews_required}</td><td>${h.man_hours_required}</td>
-      </tr>`).join("");
-    const hotspotsHtml = hotspotRows ? `
+      </tr>`,
+      )
+      .join("");
+    const hotspotsHtml = hotspotRows
+      ? `
       <h2>Predicted Hotspots &amp; Resource Readiness (Case 2)</h2>
       <table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:12px;">
         <thead><tr><th>District</th><th>City</th><th>Forecast</th><th>Trucks</th><th>Crews</th><th>Man-hours</th></tr></thead>
         <tbody>${hotspotRows}</tbody>
-      </table>` : "";
+      </table>`
+      : "";
     const fs = data.fleet_status || {};
     const activityLine = fs.by_activity
-      ? Object.entries(fs.by_activity).map(([k, v]) => `${k.replaceAll("_", " ")}: ${v}`).join(" · ")
+      ? Object.entries(fs.by_activity)
+          .map(([k, v]) => `${k.replaceAll("_", " ")}: ${v}`)
+          .join(" · ")
       : "";
     const fleetHtml = fs.total_trucks
       ? `
@@ -95,10 +100,20 @@ export function ReportActions() {
   }
 
   return (
-    <button 
-      className="primary-button" 
-      onClick={downloadSummaryPdf} 
-      style={{ width: "auto", minHeight: "38px", height: "38px", padding: "0 18px", fontSize: "13px", display: "inline-flex", alignItems: "center", gap: "8px", whiteSpace: "nowrap" }}
+    <button
+      className="primary-button"
+      onClick={downloadSummaryPdf}
+      style={{
+        width: "auto",
+        minHeight: "38px",
+        height: "38px",
+        padding: "0 18px",
+        fontSize: "13px",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "8px",
+        whiteSpace: "nowrap",
+      }}
     >
       <Download size={15} /> {t("btn_export_pdf")}
     </button>

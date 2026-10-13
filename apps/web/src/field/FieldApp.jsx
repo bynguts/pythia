@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, Route, Send, ShieldCheck, Truck, X } from "lucide-react";
 import { API_URL } from "../config.js";
 import { useLanguage } from "../i18n.jsx";
@@ -37,7 +37,8 @@ const copy = {
     reportIssue: "Lapor masalah",
     noInstruction: "Tidak ada instruksi baru",
     continueRoute: "Lanjutkan rute pengangkutan sesuai perintah.",
-    offlineInstructions: "Instruksi tidak tersedia saat luring. Periksa koneksi untuk memuat instruksi terbaru.",
+    offlineInstructions:
+      "Instruksi tidak tersedia saat luring. Periksa koneksi untuk memuat instruksi terbaru.",
     loadError: "Instruksi gagal dimuat. Periksa koneksi atau akses Anda, lalu coba lagi.",
     history: "Riwayat aktivitas",
     readySent: "SIAP terkirim",
@@ -78,7 +79,8 @@ const copy = {
     reportIssue: "Report issue",
     noInstruction: "No new instructions",
     continueRoute: "Continue the collection route as directed.",
-    offlineInstructions: "Instructions are unavailable offline. Check your connection for the latest instructions.",
+    offlineInstructions:
+      "Instructions are unavailable offline. Check your connection for the latest instructions.",
     loadError: "Could not load instructions. Check your connection or access, then try again.",
     history: "Activity history",
     readySent: "READY sent",
@@ -105,10 +107,25 @@ function StatusPill({ tone, children }) {
 
 function isoTimestampMicros(value) {
   if (typeof value !== "string") return null;
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|([+-])(\d{2}):(\d{2}))$/);
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|([+-])(\d{2}):(\d{2}))$/,
+  );
   if (!match || !Number.isFinite(Date.parse(value))) return null;
 
-  const [, year, month, day, hour, minute, second, fraction = "", , offsetSign, offsetHour = "0", offsetMinute = "0"] = match;
+  const [
+    ,
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second,
+    fraction = "",
+    ,
+    offsetSign,
+    offsetHour = "0",
+    offsetMinute = "0",
+  ] = match;
   const localMilliseconds = Date.UTC(
     Number(year),
     Number(month) - 1,
@@ -126,16 +143,18 @@ function isoTimestampMicros(value) {
 function newestPendingDispatch(dispatches) {
   return dispatches
     .map((dispatch) => ({ dispatch, timestamp: isoTimestampMicros(dispatch?.created_at) }))
-    .filter(({ dispatch, timestamp }) => (
-      timestamp !== null
-      && dispatch?.field_status === "PENDING"
-      && typeof dispatch.id === "string"
-      && typeof dispatch.instruction === "string"
-      && dispatch.instruction.trim().length > 0
-    ))
+    .filter(
+      ({ dispatch, timestamp }) =>
+        timestamp !== null &&
+        dispatch?.field_status === "PENDING" &&
+        typeof dispatch.id === "string" &&
+        typeof dispatch.instruction === "string" &&
+        dispatch.instruction.trim().length > 0,
+    )
     .reduce((newest, candidate) => {
       if (!newest) return candidate;
-      if (candidate.timestamp !== newest.timestamp) return candidate.timestamp > newest.timestamp ? candidate : newest;
+      if (candidate.timestamp !== newest.timestamp)
+        return candidate.timestamp > newest.timestamp ? candidate : newest;
       return candidate.dispatch.id.localeCompare(newest.dispatch.id) > 0 ? candidate : newest;
     }, null);
 }
@@ -186,7 +205,7 @@ export default function FieldApp() {
   }
 
   async function confirm(dispatchId, value) {
-    const note = value === "ISSUE" ? (incidentReason || text.reportNote) : text.readyNote;
+    const note = value === "ISSUE" ? incidentReason || text.reportNote : text.readyNote;
     try {
       if (!navigator.onLine) throw new Error("offline");
       const res = await fetch(`${API_URL}/dispatch/${dispatchId}/confirm`, {
@@ -203,9 +222,15 @@ export default function FieldApp() {
       setQueued(n);
       const unavailable = !navigator.onLine;
       setStatus(unavailable ? "queuedStatus" : "queuedStatusOnline");
-      logTimeline(value === "READY"
-        ? (unavailable ? "readyQueued" : "readyQueuedOnline")
-        : (unavailable ? "issueQueued" : "issueQueuedOnline"));
+      logTimeline(
+        value === "READY"
+          ? unavailable
+            ? "readyQueued"
+            : "readyQueuedOnline"
+          : unavailable
+            ? "issueQueued"
+            : "issueQueuedOnline",
+      );
     }
   }
 
@@ -228,7 +253,10 @@ export default function FieldApp() {
   useEffect(() => {
     loadDispatches();
     const timer = setInterval(loadDispatches, 5000);
-    const onOnline = () => { setOnline(true); syncNow(); };
+    const onOnline = () => {
+      setOnline(true);
+      syncNow();
+    };
     const onOffline = () => setOnline(false);
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
@@ -240,30 +268,54 @@ export default function FieldApp() {
   }, [truckCode]);
 
   const activeDispatch = useMemo(() => newestPendingDispatch(dispatches)?.dispatch, [dispatches]);
-  const timeFormatter = useMemo(() => new Intl.DateTimeFormat(lang === "en" ? "en-US" : "id-ID", {
-    hour: "numeric", minute: "2-digit",
-  }), [lang]);
+  const timeFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(lang === "en" ? "en-US" : "id-ID", {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    [lang],
+  );
 
   return (
     <main className="field-shell" data-testid="field-app">
       <header className="field-app-header">
         <a className="field-brand" href="/" aria-label={text.commandCenter}>
-          <span className="field-brand-mark"><Route size={19} /></span>
-          <span><strong>Pythia</strong><small>{text.fieldOperations}</small></span>
+          <span className="field-brand-mark">
+            <Route size={19} />
+          </span>
+          <span>
+            <strong>Pythia</strong>
+            <small>{text.fieldOperations}</small>
+          </span>
         </a>
         <div className="field-header-actions">
           <StatusPill tone={online ? "live" : "warning"}>
             <span data-testid="conn-status">
-              {staleMinutes !== null
-                ? text.staleCache(staleMinutes)
-                : online
-                  ? text.online
-                  : text.offline}
+              {staleMinutes !== null ? text.staleCache(staleMinutes) : online ? text.online : text.offline}
             </span>
           </StatusPill>
           <div className="field-language" role="group" aria-label={text.language}>
-            <button type="button" data-testid="field-lang-id" aria-label="Bahasa Indonesia" aria-pressed={lang === "id"} className={lang === "id" ? "active" : ""} onClick={() => setLang("id")}>ID</button>
-            <button type="button" data-testid="field-lang-en" aria-label="English" aria-pressed={lang === "en"} className={lang === "en" ? "active" : ""} onClick={() => setLang("en")}>EN</button>
+            <button
+              type="button"
+              data-testid="field-lang-id"
+              aria-label="Bahasa Indonesia"
+              aria-pressed={lang === "id"}
+              className={lang === "id" ? "active" : ""}
+              onClick={() => setLang("id")}
+            >
+              ID
+            </button>
+            <button
+              type="button"
+              data-testid="field-lang-en"
+              aria-label="English"
+              aria-pressed={lang === "en"}
+              className={lang === "en" ? "active" : ""}
+              onClick={() => setLang("en")}
+            >
+              EN
+            </button>
           </div>
         </div>
       </header>
@@ -273,16 +325,27 @@ export default function FieldApp() {
             <p className="field-kicker">{text.taskVehicle}</p>
             <h1 id="field-truck-title">{truckCode}</h1>
           </div>
-          <span className="field-duty-label"><Truck size={16} /> {text.onDuty}</span>
+          <span className="field-duty-label">
+            <Truck size={16} /> {text.onDuty}
+          </span>
         </div>
         {queued > 0 && (
           <div className="field-status field-queue-status">
             <span data-testid="queued-count">{text.queued(queued)}</span>
-            <button type="button" className="primary-button" onClick={syncNow} disabled={!online || syncing}>{syncing ? text.syncing : text.syncNow}</button>
+            <button type="button" className="primary-button" onClick={syncNow} disabled={!online || syncing}>
+              {syncing ? text.syncing : text.syncNow}
+            </button>
           </div>
         )}
-        <label className="field-label" htmlFor="truck-code">{text.truckCode}</label>
-        <select id="truck-code" data-testid="truck-select" value={truckCode} onChange={(event) => setTruckCode(event.target.value)}>
+        <label className="field-label" htmlFor="truck-code">
+          {text.truckCode}
+        </label>
+        <select
+          id="truck-code"
+          data-testid="truck-select"
+          value={truckCode}
+          onChange={(event) => setTruckCode(event.target.value)}
+        >
           <option>T-047</option>
           <option>T-001</option>
           <option>T-112</option>
@@ -301,7 +364,9 @@ export default function FieldApp() {
                 <p>{activeDispatch.instruction}</p>
               </div>
             </div>
-            <label className="field-label" htmlFor="incident-reason">{text.incidentReason}</label>
+            <label className="field-label" htmlFor="incident-reason">
+              {text.incidentReason}
+            </label>
             <input
               id="incident-reason"
               className="field-input"
@@ -311,12 +376,30 @@ export default function FieldApp() {
               onChange={(e) => setIncidentReason(e.target.value)}
             />
             <div className="field-actions">
-              <button type="button" className="primary-button" data-testid="btn-ready" onClick={() => confirm(activeDispatch.id, "READY")}><Check size={16} /> {text.ready}</button>
-              <button type="button" className="danger-button" data-testid="btn-issue" onClick={() => confirm(activeDispatch.id, "ISSUE")}><X size={16} /> {text.reportIssue}</button>
+              <button
+                type="button"
+                className="primary-button"
+                data-testid="btn-ready"
+                onClick={() => confirm(activeDispatch.id, "READY")}
+              >
+                <Check size={16} /> {text.ready}
+              </button>
+              <button
+                type="button"
+                className="danger-button"
+                data-testid="btn-issue"
+                onClick={() => confirm(activeDispatch.id, "ISSUE")}
+              >
+                <X size={16} /> {text.reportIssue}
+              </button>
             </div>
           </article>
         ) : (
-          <article className="empty-instruction" data-testid="no-dispatch" role={loadError ? "alert" : undefined}>
+          <article
+            className="empty-instruction"
+            data-testid="no-dispatch"
+            role={loadError ? "alert" : undefined}
+          >
             <ShieldCheck size={24} />
             <strong>{loadError ? text[loadError] : text.noInstruction}</strong>
             {!loadError && <p>{text.continueRoute}</p>}
@@ -328,13 +411,18 @@ export default function FieldApp() {
             <strong>{text.history}</strong>
             <ul>
               {timeline.map((item, i) => (
-                <li key={i}>{timeFormatter.format(item.at)} — {item.event === "synced" ? text.synced(item.count) : text[item.event]}</li>
+                <li key={i}>
+                  {timeFormatter.format(item.at)} —{" "}
+                  {item.event === "synced" ? text.synced(item.count) : text[item.event]}
+                </li>
               ))}
             </ul>
           </div>
         )}
 
-        <a className="back-link" href="/"><ArrowLeft size={16} /> {text.commandCenter}</a>
+        <a className="back-link" href="/">
+          <ArrowLeft size={16} /> {text.commandCenter}
+        </a>
       </section>
     </main>
   );

@@ -1,14 +1,9 @@
-import React, { useState, useRef } from "react";
+import { useState, useRef } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { authenticatedRequest } from "../dispatchApi.js";
 import { useLanguage } from "../i18n.jsx";
-import {
-  Send,
-  X,
-  Bot,
-  Paperclip,
-} from "lucide-react";
+import { Send, X, Bot, Paperclip } from "lucide-react";
 
 // #76: every interface string rides the locale catalog, the file-only
 // fallback question is localized, and the chosen language is sent on the
@@ -23,8 +18,8 @@ export function AssistantPanel() {
   const fileInputRef = useRef(null);
 
   // Resolve the greeting lazily so it follows live locale switches.
-  const greeting = messages[0]?.role === "assistant" && messages[0].text === null
-    ? t("asst_greeting") : messages[0]?.text;
+  const greeting =
+    messages[0]?.role === "assistant" && messages[0].text === null ? t("asst_greeting") : messages[0]?.text;
   const visibleMessages = [{ ...messages[0], text: greeting }, ...messages.slice(1)];
 
   function handleFileSelect(event) {
@@ -42,7 +37,10 @@ export function AssistantPanel() {
     const prompt = (promptOverride || question).trim();
     if ((!prompt && !attachedFile) || loading) return;
     const fileMeta = attachedFile ? ` [${attachedFile.name}]` : "";
-    setMessages((current) => [...current, { role: "user", text: (prompt || t("asst_file_question")) + fileMeta }]);
+    setMessages((current) => [
+      ...current,
+      { role: "user", text: (prompt || t("asst_file_question")) + fileMeta },
+    ]);
     const currentFile = attachedFile;
     setQuestion("");
     setAttachedFile(null);
@@ -51,7 +49,11 @@ export function AssistantPanel() {
       const body = {
         question: prompt || t("asst_file_question"),
         language: lang,
-        history: messages.slice(1).filter((m) => m.provider !== "error" && m.provider !== "offline").slice(-8).map((m) => ({ role: m.role, content: m.text })),
+        history: messages
+          .slice(1)
+          .filter((m) => m.provider !== "error" && m.provider !== "offline")
+          .slice(-8)
+          .map((m) => ({ role: m.role, content: m.text })),
       };
       if (currentFile) {
         body.file_data = currentFile.data;
@@ -145,13 +147,18 @@ export function AssistantPanel() {
               {message.role === "assistant" ? t("asst_avatar_ai") : t("asst_avatar_user")}
             </span>
             <div className="assistant-bubble">
-              <div className="assistant-formatted-answer" dangerouslySetInnerHTML={{ __html: renderAssistantText(message.text) }} />
+              <div
+                className="assistant-formatted-answer"
+                dangerouslySetInnerHTML={{ __html: renderAssistantText(message.text) }}
+              />
             </div>
           </article>
         ))}
         {loading && (
           <article className="assistant-message assistant">
-            <span className="assistant-message-avatar" aria-hidden="true">{t("asst_avatar_ai")}</span>
+            <span className="assistant-message-avatar" aria-hidden="true">
+              {t("asst_avatar_ai")}
+            </span>
             <div className="assistant-bubble assistant-thinking">
               <span />
               <span />
@@ -202,7 +209,9 @@ export function AssistantPanel() {
         >
           <Paperclip size={18} />
         </button>
-        <label className="sr-only" htmlFor="assistant-question">{t("asst_input_label")}</label>
+        <label className="sr-only" htmlFor="assistant-question">
+          {t("asst_input_label")}
+        </label>
         <input
           id="assistant-question"
           value={question}
@@ -210,7 +219,12 @@ export function AssistantPanel() {
           placeholder={attachedFile ? t("asst_placeholder_file") : t("asst_placeholder")}
           autoComplete="off"
         />
-        <button className="primary-button" type="submit" aria-label={t("asst_send")} disabled={loading || (!question.trim() && !attachedFile)}>
+        <button
+          className="primary-button"
+          type="submit"
+          aria-label={t("asst_send")}
+          disabled={loading || (!question.trim() && !attachedFile)}
+        >
           <Send size={16} />
         </button>
       </form>

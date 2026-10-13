@@ -1,14 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import {
-  AlertTriangle,
-  Clock3,
-  FileText,
-  Layers,
-  Radio,
-  Route,
-  Truck,
-  Wrench,
-} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, Clock3, FileText, Layers, Radio, Route, Truck, Wrench } from "lucide-react";
 import { MetricStrip } from "../ui/MetricStrip.jsx";
 import { useLanguage } from "../i18n.jsx";
 
@@ -78,12 +69,18 @@ export function FleetOperations({
   // Problem strip: counts derive from the same snapshot the map renders, so a
   // chip click never promises a filter the map cannot show.
   const deviating = trucks.filter((truck) => truckDeviationMeters(truck) > 500);
-  const worstDeviation = deviating.reduce((worst, truck) => (
-    truckDeviationMeters(truck) > truckDeviationMeters(worst) ? truck : worst
-  ), deviating[0] || null);
+  const worstDeviation = deviating.reduce(
+    (worst, truck) => (truckDeviationMeters(truck) > truckDeviationMeters(worst) ? truck : worst),
+    deviating[0] || null,
+  );
   const damaged = trucks.filter((truck) => {
     const status = String(truck?.status || truck?.operational_status || "").toLowerCase();
-    return status.includes("rusak") || status.includes("damage") || status.includes("maintenance") || status.includes("perawatan");
+    return (
+      status.includes("rusak") ||
+      status.includes("damage") ||
+      status.includes("maintenance") ||
+      status.includes("perawatan")
+    );
   });
   const showQueueChip = queueTrucks > 0 || queueWaitMinutes > 0;
 
@@ -118,7 +115,9 @@ export function FleetOperations({
   const decisionOverlay = worstDeviation ? (
     <div className="deck-decision-body">
       <div className="deck-decision-heading">
-        <span className="deck-decision-kicker"><AlertTriangle size={13} /> {lang === "id" ? "Perlu keputusan" : "Needs a decision"}</span>
+        <span className="deck-decision-kicker">
+          <AlertTriangle size={13} /> {lang === "id" ? "Perlu keputusan" : "Needs a decision"}
+        </span>
         <h2>{lang === "id" ? "Tindakan prioritas" : "Priority action"}</h2>
       </div>
       {actionCard}
@@ -129,16 +128,30 @@ export function FleetOperations({
     <section className="fleet-workspace workspace-page" data-testid="fleet-workspace">
       <header className="workspace-heading">
         <div>
-          <span className="workspace-kicker"><Radio size={14} /> Kendali langsung</span>
+          <span className="workspace-kicker">
+            <Radio size={14} /> Kendali langsung
+          </span>
           <h1>{lang === "id" ? "Operasi armada hari ini" : "Today’s fleet operations"}</h1>
-          <p>{lang === "id" ? "Pantau pergerakan, prioritaskan gangguan, dan kirim keputusan dari satu layar." : "Monitor movement, prioritize disruptions, and dispatch decisions from one screen."}</p>
+          <p>
+            {lang === "id"
+              ? "Pantau pergerakan, prioritaskan gangguan, dan kirim keputusan dari satu layar."
+              : "Monitor movement, prioritize disruptions, and dispatch decisions from one screen."}
+          </p>
         </div>
-        <div className="workspace-freshness"><Clock3 size={16} /><span>Diperbarui otomatis</span><strong>15 dtk</strong></div>
+        <div className="workspace-freshness">
+          <Clock3 size={16} />
+          <span>Diperbarui otomatis</span>
+          <strong>15 dtk</strong>
+        </div>
       </header>
 
       <MetricStrip metrics={metrics} />
 
-      <div className="fleet-problem-strip" role="group" aria-label={lang === "id" ? "Masalah operasional" : "Operational problems"}>
+      <div
+        className="fleet-problem-strip"
+        role="group"
+        aria-label={lang === "id" ? "Masalah operasional" : "Operational problems"}
+      >
         <button
           type="button"
           className="problem-chip"
@@ -149,7 +162,11 @@ export function FleetOperations({
           <Route size={15} />
           <strong>{deviating.length}</strong>
           <span>{lang === "id" ? "deviasi rute" : "route deviations"}</span>
-          {worstDeviation && <em>{worstDeviation.truck_code} · {formatDistance(truckDeviationMeters(worstDeviation), lang)}</em>}
+          {worstDeviation && (
+            <em>
+              {worstDeviation.truck_code} · {formatDistance(truckDeviationMeters(worstDeviation), lang)}
+            </em>
+          )}
         </button>
         <button
           type="button"
@@ -171,7 +188,9 @@ export function FleetOperations({
         >
           <Truck size={15} />
           <strong>{queueWaitMinutes}m</strong>
-          <span>{lang === "id" ? `antrean TPA · ${queueTrucks} truk` : `TPA queue · ${queueTrucks} trucks`}</span>
+          <span>
+            {lang === "id" ? `antrean TPA · ${queueTrucks} truk` : `TPA queue · ${queueTrucks} trucks`}
+          </span>
         </button>
       </div>
 
@@ -203,14 +222,21 @@ export function FleetOperations({
           )}
 
           {decisionOverlay && (
-            <aside className="deck-decision-overlay" data-testid="decision-overlay" aria-label={lang === "id" ? "Keputusan prioritas" : "Priority decision"}>
+            <aside
+              className="deck-decision-overlay"
+              data-testid="decision-overlay"
+              aria-label={lang === "id" ? "Keputusan prioritas" : "Priority decision"}
+            >
               {decisionOverlay}
             </aside>
           )}
         </div>
 
         {decisionOverlay && (
-          <div className={`deck-action-sheet ${sheetExpanded ? "expanded" : ""}`} data-testid="deck-action-sheet">
+          <div
+            className={`deck-action-sheet ${sheetExpanded ? "expanded" : ""}`}
+            data-testid="deck-action-sheet"
+          >
             <button
               type="button"
               className="deck-sheet-handle"
@@ -219,7 +245,8 @@ export function FleetOperations({
             >
               <span className="deck-sheet-grip" />
               <span className="deck-sheet-title">
-                {worstDeviation.truck_code} · {lang === "id" ? "deviasi" : "deviation"} {formatDistance(truckDeviationMeters(worstDeviation), lang)}
+                {worstDeviation.truck_code} · {lang === "id" ? "deviasi" : "deviation"}{" "}
+                {formatDistance(truckDeviationMeters(worstDeviation), lang)}
               </span>
             </button>
             {sheetExpanded && decisionOverlay}
@@ -229,8 +256,14 @@ export function FleetOperations({
 
       <section className="fleet-records-surface">
         <div className="records-heading">
-          <div><span className="surface-kicker">Bukti operasional</span><h2>Detail armada</h2></div>
-          <nav className="records-doc-links" aria-label={lang === "id" ? "Dokumen operasional" : "Operational documents"}>
+          <div>
+            <span className="surface-kicker">Bukti operasional</span>
+            <h2>Detail armada</h2>
+          </div>
+          <nav
+            className="records-doc-links"
+            aria-label={lang === "id" ? "Dokumen operasional" : "Operational documents"}
+          >
             <FileText size={15} />
             {documentTabs.map((tab) => (
               <button
@@ -249,7 +282,9 @@ export function FleetOperations({
             <button
               key={tab.id}
               id={tab.id}
-              ref={(element) => { tabRefs.current[index] = element; }}
+              ref={(element) => {
+                tabRefs.current[index] = element;
+              }}
               className="workspace-tab"
               type="button"
               role="tab"
@@ -263,7 +298,13 @@ export function FleetOperations({
             </button>
           ))}
         </div>
-        <div id={activeTab.surface} className="fleet-detail-surface" role="tabpanel" aria-labelledby={activeTab.id} data-testid={activeTab.surface}>
+        <div
+          id={activeTab.surface}
+          className="fleet-detail-surface"
+          role="tabpanel"
+          aria-labelledby={activeTab.id}
+          data-testid={activeTab.surface}
+        >
           {surfaces[detailTab]}
         </div>
       </section>

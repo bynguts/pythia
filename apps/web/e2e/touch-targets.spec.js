@@ -10,12 +10,15 @@ async function signIn(page, lang = "id") {
     data: { username: "dispatcher", password: "dispatcher-demo-pass" },
   });
   const principal = await response.json();
-  await page.evaluate(({ token, role, lang }) => {
-    localStorage.setItem("pythia_auth", "true");
-    localStorage.setItem("pythia_lang", lang);
-    localStorage.setItem("pythia_token", token);
-    localStorage.setItem("pythia_role", role);
-  }, { ...principal, lang });
+  await page.evaluate(
+    ({ token, role, lang }) => {
+      localStorage.setItem("pythia_auth", "true");
+      localStorage.setItem("pythia_lang", lang);
+      localStorage.setItem("pythia_token", token);
+      localStorage.setItem("pythia_role", role);
+    },
+    { ...principal, lang },
+  );
   await page.reload({ waitUntil: "domcontentloaded" });
 }
 

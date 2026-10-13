@@ -1,9 +1,18 @@
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 html {
   color: var(--ui-ink);
   background: var(--ui-canvas);
-  font-family: "Geist Sans", "Plus Jakarta Sans", Inter, IBM Plex Sans, ui-sans-serif, system-ui, sans-serif;
+  font-family:
+    "Geist Sans",
+    "Plus Jakarta Sans",
+    Inter,
+    IBM Plex Sans,
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
   letter-spacing: 0;
   color-scheme: light;
   font-synthesis: none;
@@ -89,9 +98,19 @@ table td,
   font-feature-settings: "tnum" 1;
 }
 
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
   box-shadow: var(--ui-focus);
 }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

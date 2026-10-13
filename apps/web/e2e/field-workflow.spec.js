@@ -85,12 +85,25 @@ test("same-millisecond dispatches preserve ISO microsecond ordering", async ({ p
 });
 
 // Offline startup, failed sync, and recovery preserve the chosen Field language.
-test("offline confirmation queues, reports sync failure, and recovers in ID and EN", async ({ page, context }) => {
+test("offline confirmation queues, reports sync failure, and recovers in ID and EN", async ({
+  page,
+  context,
+}) => {
   const { api, token } = await authenticatedApi();
   await openAuthorizedField(page, token);
   for (const [lang, copy] of [
-    ["id", { queued: "aksi menunggu sinkronisasi", failed: "Aksi belum tersinkron", synced: "Aksi antrean tersinkron" }],
-    ["en", { queued: "action awaiting sync", failed: "Actions did not sync", synced: "Queued actions synced" }],
+    [
+      "id",
+      {
+        queued: "aksi menunggu sinkronisasi",
+        failed: "Aksi belum tersinkron",
+        synced: "Aksi antrean tersinkron",
+      },
+    ],
+    [
+      "en",
+      { queued: "action awaiting sync", failed: "Actions did not sync", synced: "Queued actions synced" },
+    ],
   ]) {
     const instruction = `E2E ${lang} offline ${Date.now()}`;
     const create = await api.post(`${API}/dispatch`, {
@@ -120,7 +133,9 @@ test("offline confirmation queues, reports sync failure, and recovers in ID and 
   await api.dispose();
 });
 
-test("field app has no mobile overflow and all workflow controls meet minimum touch targets", async ({ page }) => {
+test("field app has no mobile overflow and all workflow controls meet minimum touch targets", async ({
+  page,
+}) => {
   const { api } = await authenticatedApi();
   await api.post(`${API}/dispatch`, {
     data: { truck_code: "T-112", instruction: "E2E mobile touch target", manager_id: "e2e" },
@@ -152,7 +167,9 @@ test("field brand remains a minimum touch target at tablet width", async ({ page
   await expectMinimumTouchTarget(page.locator(".field-brand"));
 });
 
-test("field brand and workflow controls meet minimum touch targets at the 860px boundary", async ({ page }) => {
+test("field brand and workflow controls meet minimum touch targets at the 860px boundary", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 860, height: 1024 });
   await page.goto("/field");
 
@@ -168,7 +185,9 @@ test("field brand and workflow controls meet minimum touch targets at the 860px 
   }
 });
 
-test("secondary alert action authenticates and persists one dispatch despite a double tap", async ({ page }) => {
+test("secondary alert action authenticates and persists one dispatch despite a double tap", async ({
+  page,
+}) => {
   const { api, token } = await authenticatedApi();
   const key = `e2e-secondary-${Date.now()}`;
   const alert = {
@@ -196,29 +215,41 @@ test("secondary alert action authenticates and persists one dispatch despite a d
   const item = page.locator(".alert-item").filter({ hasText: key });
   await expect(item).toBeVisible();
   await page.evaluate((value) => {
-    const item = [...document.querySelectorAll(".alert-item")].find((node) => node.textContent.includes(value));
+    const item = [...document.querySelectorAll(".alert-item")].find((node) =>
+      node.textContent.includes(value),
+    );
     const button = item.querySelector(".primary-button");
     button.click();
     button.click();
   }, key);
   let created;
   try {
-    await expect.poll(async () => {
-      const response = await api.get(`${API}/dispatch/T-210`);
-      expect(response.ok()).toBeTruthy();
-      const matches = (await response.json()).filter((dispatch) => dispatch.instruction.includes(key));
-      created = matches[0];
-      return matches.length;
-    }, { timeout: 15000 }).toBe(1);
+    await expect
+      .poll(
+        async () => {
+          const response = await api.get(`${API}/dispatch/T-210`);
+          expect(response.ok()).toBeTruthy();
+          const matches = (await response.json()).filter((dispatch) => dispatch.instruction.includes(key));
+          created = matches[0];
+          return matches.length;
+        },
+        { timeout: 15000 },
+      )
+      .toBe(1);
     await expect(item).toContainText("DIKIRIM");
     expect(created.manager_id).toBe("dispatcher");
   } finally {
-    if (created) await api.post(`${API}/dispatch/${created.id}/confirm`, { data: { status: "READY", note: "E2E cleanup" } });
+    if (created)
+      await api.post(`${API}/dispatch/${created.id}/confirm`, {
+        data: { status: "READY", note: "E2E cleanup" },
+      });
     await api.dispose();
   }
 });
 
-test("command-center action distinguishes field READY from ISSUE and shows the field note", async ({ page }) => {
+test("command-center action distinguishes field READY from ISSUE and shows the field note", async ({
+  page,
+}) => {
   test.setTimeout(100000);
   const { api, token } = await authenticatedApi();
   await page.goto("/");
@@ -234,11 +265,14 @@ test("command-center action distinguishes field READY from ISSUE and shows the f
       await page.reload();
       // Pin the explicit truck: live priority rankings may change while the
       // acknowledgement is pending, but this card must keep its target.
-      await page.locator('.truck-marker[aria-label^="T-047"]').first().evaluate((marker) => marker.click());
+      await page
+        .locator('.truck-marker[aria-label^="T-047"]')
+        .first()
+        .evaluate((marker) => marker.click());
       const card = page.getByTestId("action-card");
       await expect(card.getByRole("button", { name: "Kirim rute ke sopir" })).toBeVisible({ timeout: 15000 });
-      const responsePromise = page.waitForResponse((response) =>
-        response.url().endsWith("/api/dispatch") && response.request().method() === "POST",
+      const responsePromise = page.waitForResponse(
+        (response) => response.url().endsWith("/api/dispatch") && response.request().method() === "POST",
       );
       await card.getByRole("button", { name: "Kirim rute ke sopir" }).click();
       const response = await responsePromise;

@@ -322,10 +322,23 @@
   transform: translate(-50%, -50%);
 }
 
-.ar-compass-mark.m0 { left: 50%; top: 9%; color: #ffb59c; }
-.ar-compass-mark.m1 { left: 91%; top: 50%; }
-.ar-compass-mark.m2 { left: 50%; top: 91%; }
-.ar-compass-mark.m3 { left: 9%; top: 50%; }
+.ar-compass-mark.m0 {
+  left: 50%;
+  top: 9%;
+  color: #ffb59c;
+}
+.ar-compass-mark.m1 {
+  left: 91%;
+  top: 50%;
+}
+.ar-compass-mark.m2 {
+  left: 50%;
+  top: 91%;
+}
+.ar-compass-mark.m3 {
+  left: 9%;
+  top: 50%;
+}
 
 .ar-compass-arrow {
   position: absolute;

@@ -12,31 +12,48 @@ async function signIn(page, lang = "id") {
   });
   expect(response.ok()).toBeTruthy();
   const principal = await response.json();
-  await page.evaluate(({ token, role, lang }) => {
-    localStorage.setItem("pythia_auth", "true");
-    localStorage.setItem("pythia_lang", lang);
-    localStorage.setItem("pythia_token", token);
-    localStorage.setItem("pythia_role", role);
-  }, { ...principal, lang });
+  await page.evaluate(
+    ({ token, role, lang }) => {
+      localStorage.setItem("pythia_auth", "true");
+      localStorage.setItem("pythia_lang", lang);
+      localStorage.setItem("pythia_token", token);
+      localStorage.setItem("pythia_role", role);
+    },
+    { ...principal, lang },
+  );
   await page.reload({ waitUntil: "domcontentloaded" });
 }
 
 async function assertShellCopy(page, mode) {
   const id = mode === "id";
   // Sidebar: brand subtitle, workspaces label, connectivity, logout.
-  await expect(page.locator(".command-brand small")).toHaveText(id ? "Pusat kendali DLH" : "DLH command center");
+  await expect(page.locator(".command-brand small")).toHaveText(
+    id ? "Pusat kendali DLH" : "DLH command center",
+  );
   await expect(page.locator(".command-nav-label")).toHaveText(id ? "Ruang kerja" : "Workspaces");
-  await expect(page.locator(".system-connection strong")).toHaveText(id ? "Sistem terhubung" : "System connected");
-  await expect(page.locator(".system-connection small")).toHaveText(id ? "Data diperbarui otomatis" : "Data refreshes automatically");
+  await expect(page.locator(".system-connection strong")).toHaveText(
+    id ? "Sistem terhubung" : "System connected",
+  );
+  await expect(page.locator(".system-connection small")).toHaveText(
+    id ? "Data diperbarui otomatis" : "Data refreshes automatically",
+  );
   await expect(page.locator(".command-logout span")).toHaveText(id ? "Keluar" : "Log out");
   // Topbar: context eyebrow, assistant, profile.
-  await expect(page.locator(".command-eyebrow")).toHaveText(id ? "Operasi DKI Jakarta" : "Jakarta operations");
-  await expect(page.locator(".command-assistant span")).toHaveText(id ? "Asisten operasi" : "Operations assistant");
+  await expect(page.locator(".command-eyebrow")).toHaveText(
+    id ? "Operasi DKI Jakarta" : "Jakarta operations",
+  );
+  await expect(page.locator(".command-assistant span")).toHaveText(
+    id ? "Asisten operasi" : "Operations assistant",
+  );
   await expect(page.locator(".command-profile strong")).toHaveText(id ? "Tim Pythia" : "Pythia Team");
   await expect(page.locator(".command-profile small")).toHaveText(id ? "Operator DLH" : "DLH Operator");
   // Accessible labels.
-  await expect(page.locator(".command-sidebar")).toHaveAccessibleName(id ? "Navigasi utama Pythia" : "Pythia main navigation");
-  await expect(page.locator(".command-language")).toHaveAccessibleName(id ? "Pilih bahasa" : "Select language");
+  await expect(page.locator(".command-sidebar")).toHaveAccessibleName(
+    id ? "Navigasi utama Pythia" : "Pythia main navigation",
+  );
+  await expect(page.locator(".command-language")).toHaveAccessibleName(
+    id ? "Pilih bahasa" : "Select language",
+  );
 }
 
 test("shell copy follows the locale in both language modes (desktop)", async ({ page }) => {

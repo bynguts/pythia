@@ -60,8 +60,13 @@
 }
 
 @keyframes pulseMarker {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.08); }
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
 }
 
 .map-popup {
@@ -92,7 +97,21 @@
   color: #526170;
 }
 
-.map-legend{position:absolute;left:12px;top:12px;z-index:2;display:flex;flex-direction:column;gap:8px;padding:8px 12px;border-radius:8px;border:1px solid rgba(203, 213, 223, 0.8);background:rgba(255, 255, 255, 0.95);box-shadow:none;width:240px;}
+.map-legend {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(203, 213, 223, 0.8);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: none;
+  width: 240px;
+}
 
 .map-legend span {
   display: inline-flex;
@@ -134,35 +153,140 @@
   background: #0891b2;
 }
 
-.legend-tag{font-style:normal;font-size:9px;font-weight:700;letter-spacing:.04em;padding:1px 4px;margin-left:4px;border-radius:4px;background:#eef2f6;color:#5b6a78;vertical-align:middle;}
+.legend-tag {
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 4px;
+  margin-left: 4px;
+  border-radius: 4px;
+  background: #eef2f6;
+  color: #5b6a78;
+  vertical-align: middle;
+}
 
-.legend-osrm{display:inline-block;width:14px;height:3px;background:#0891b2;border-radius:2px;vertical-align:middle;}
+.legend-osrm {
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  background: #0891b2;
+  border-radius: 2px;
+  vertical-align: middle;
+}
 
-.tpa-marker{width:26px;height:26px;border-radius:6px;background:var(--ui-accent);border:2px solid #fff;box-shadow:none;cursor:pointer;display:grid;place-items:center;}
+.tpa-marker {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--ui-accent);
+  border: 2px solid #fff;
+  box-shadow: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
 
-.tpa-marker::after{content:'TPA';color:#fff;font-size:8px;font-weight:800;}
+.tpa-marker::after {
+  content: "TPA";
+  color: #fff;
+  font-size: 8px;
+  font-weight: 800;
+}
 
-.popup-src{font-size:10px;color:#5b6a78;margin-top:4px;letter-spacing:.03em;}
+.popup-src {
+  font-size: 10px;
+  color: #5b6a78;
+  margin-top: 4px;
+  letter-spacing: 0.03em;
+}
 
-.popup-dispatch{margin-top:8px;width:100%;padding:6px 10px;border:0;border-radius:6px;background:var(--ui-accent);color:#fff;font-weight:700;font-size:12px;cursor:pointer;}
+.popup-dispatch {
+  margin-top: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--ui-accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
 
-.popup-dispatch:hover{background:var(--ui-primary-hover);}
+.popup-dispatch:hover {
+  background: var(--ui-primary-hover);
+}
 
-.unlicensed-marker{width:24px;height:24px;border-radius:50%;background:#dc2626;border:3px solid #fff;box-shadow:0 2px 8px rgba(220,38,38,.5);cursor:pointer;display:grid;place-items:center;}
+.unlicensed-marker {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #dc2626;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.5);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
 
-.unlicensed-marker::after{content:'!';color:#fff;font-weight:800;font-size:14px;}
+.unlicensed-marker::after {
+  content: "!";
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+}
 
-.map-controls{position:absolute;top:12px;right:12px;z-index:5;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;font-size:12px;box-shadow:none;}
+.map-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  box-shadow: none;
+}
 
-.map-controls label{display:flex;align-items:center;gap:6px;cursor:pointer;}
+.map-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
 
-.map-controls select{font-size:12px;padding:4px;border:1px solid var(--border);border-radius:6px;}
+.map-controls select {
+  font-size: 12px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
 
-.playback-marker{width:18px;height:18px;border-radius:50%;background:#818cf8;border:3px solid #fff;box-shadow:none;}
+.playback-marker {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #818cf8;
+  border: 3px solid #fff;
+  box-shadow: none;
+}
 
-.map-legend summary{cursor:pointer;font-weight:700;font-size:11px;list-style:none;padding:2px 0;}
+.map-legend summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 11px;
+  list-style: none;
+  padding: 2px 0;
+}
 
-.map-legend summary::-webkit-details-marker{display:none;}
+.map-legend summary::-webkit-details-marker {
+  display: none;
+}
 
 .legend-icon-tpa {
   width: 14px;
@@ -285,7 +409,8 @@
    Only declarations no later layer already defined; duplicate selector
    ownership is what made visual fixes order-dependent. ─────────────── */
 
-.truck-marker, .fleet-marker {
+.truck-marker,
+.fleet-marker {
   position: absolute;
   min-width: 48px;
   min-height: var(--tap-min);
@@ -301,7 +426,11 @@
   font-size: var(--fs-caption);
   font-weight: 900;
   line-height: 1;
-  transition: min-width 160ms ease, min-height 160ms ease, padding 160ms ease, font-size 160ms ease;
+  transition:
+    min-width 160ms ease,
+    min-height 160ms ease,
+    padding 160ms ease,
+    font-size 160ms ease;
 }
 
 .map-zoom-low .truck-marker {
@@ -575,7 +704,6 @@
   background: #176b54;
   color: #ffffff;
 }
-
 
 /* #31: MapLibre stock controls measure 29x29; guarantee the 44px product
    minimum on touch viewports without breaking the desktop layout. */

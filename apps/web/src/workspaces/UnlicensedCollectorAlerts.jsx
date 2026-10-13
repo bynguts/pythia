@@ -1,12 +1,8 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { API_URL } from "../config.js";
 import { useLanguage } from "../i18n.jsx";
 import { StatusPill } from "../ui/StatusPill.jsx";
-import {
-  AlertTriangle,
-  Check,
-  ShieldCheck,
-} from "lucide-react";
+import { AlertTriangle, Check, ShieldCheck } from "lucide-react";
 
 export function getDistrictFromCoords(lat, lng) {
   if (lat > -6.18 && lng < 106.78) return "Cengkareng, Jakbar";
@@ -25,10 +21,11 @@ export function UnlicensedCollectorAlerts() {
   const [resolved, setResolved] = useState({});
 
   useEffect(() => {
-    const load = () => fetch(`${API_URL}/ai/unlicensed-flags`)
-      .then((r) => r.json())
-      .then((body) => setFlags(body.flags || []))
-      .catch(() => {});
+    const load = () =>
+      fetch(`${API_URL}/ai/unlicensed-flags`)
+        .then((r) => r.json())
+        .then((body) => setFlags(body.flags || []))
+        .catch(() => {});
     load();
     const id = setInterval(load, 8000);
     return () => clearInterval(id);
@@ -50,7 +47,9 @@ export function UnlicensedCollectorAlerts() {
         </div>
         <div className="ai-feed-empty">
           {flags === null
-            ? (lang === "id" ? "Memuat telemetri deteksi..." : "Loading detection telemetry...")
+            ? lang === "id"
+              ? "Memuat telemetri deteksi..."
+              : "Loading detection telemetry..."
             : "Tidak ada flag aktif — pola stop normal."}
         </div>
       </section>
@@ -77,12 +76,24 @@ export function UnlicensedCollectorAlerts() {
         <table>
           <thead>
             <tr>
-              <th scope="col" style={{ width: "16%" }}>{t("unlicensed_th_plate")}</th>
-              <th scope="col" style={{ width: "22%" }}>{t("unlicensed_th_loc")}</th>
-              <th scope="col" style={{ width: "14%" }}>{lang === "id" ? "Diam" : "Stop"}</th>
-              <th scope="col" style={{ width: "18%" }}>{lang === "id" ? "Situs Terdekat" : "Nearest Site"}</th>
-              <th scope="col" style={{ width: "12%" }}>Confidence</th>
-              <th scope="col" style={{ width: "18%" }}>{t("unlicensed_th_action")}</th>
+              <th scope="col" style={{ width: "16%" }}>
+                {t("unlicensed_th_plate")}
+              </th>
+              <th scope="col" style={{ width: "22%" }}>
+                {t("unlicensed_th_loc")}
+              </th>
+              <th scope="col" style={{ width: "14%" }}>
+                {lang === "id" ? "Diam" : "Stop"}
+              </th>
+              <th scope="col" style={{ width: "18%" }}>
+                {lang === "id" ? "Situs Terdekat" : "Nearest Site"}
+              </th>
+              <th scope="col" style={{ width: "12%" }}>
+                Confidence
+              </th>
+              <th scope="col" style={{ width: "18%" }}>
+                {t("unlicensed_th_action")}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -92,7 +103,9 @@ export function UnlicensedCollectorAlerts() {
               return (
                 <tr key={f.collector_id}>
                   <td>
-                    <span className="plate-badge" style={{ fontSize: "13px" }}>{f.collector_id || "UNKNOWN"}</span>
+                    <span className="plate-badge" style={{ fontSize: "13px" }}>
+                      {f.collector_id || "UNKNOWN"}
+                    </span>
                   </td>
                   <td>
                     <span className="zone-tag">{districtName}</span>
@@ -105,8 +118,12 @@ export function UnlicensedCollectorAlerts() {
                       <span className={`pill ${state === "verified" ? "success" : "text-normal"}`}>
                         <span className={`status-dot ${state === "verified" ? "success" : ""}`} />
                         {state === "verified"
-                          ? (lang === "id" ? "Terverifikasi" : "Verified")
-                          : (lang === "id" ? "Ditandai aman" : "Marked safe")}
+                          ? lang === "id"
+                            ? "Terverifikasi"
+                            : "Verified"
+                          : lang === "id"
+                            ? "Ditandai aman"
+                            : "Marked safe"}
                       </span>
                     ) : (
                       <>
@@ -116,10 +133,7 @@ export function UnlicensedCollectorAlerts() {
                         >
                           <Check size={13} /> {lang === "id" ? "Verifikasi" : "Verify"}
                         </button>
-                        <button
-                          className="compact-enforce-btn"
-                          onClick={() => mark(f.collector_id, "safe")}
-                        >
+                        <button className="compact-enforce-btn" onClick={() => mark(f.collector_id, "safe")}>
                           <ShieldCheck size={13} /> {lang === "id" ? "Tandai Aman" : "Mark Safe"}
                         </button>
                       </>
@@ -133,7 +147,11 @@ export function UnlicensedCollectorAlerts() {
       </div>
       <div className="unlicensed-footer-meta">
         <ShieldCheck size={14} style={{ color: "var(--ui-accent)", flexShrink: 0 }} />
-        <span>{lang === "id" ? "Flag dihasilkan otomatis oleh engine AI dari pola stop telemetri terhadap jarak situs resmi." : "Flags are auto-generated by the AI engine from telemetry stop patterns against official site distance."}</span>
+        <span>
+          {lang === "id"
+            ? "Flag dihasilkan otomatis oleh engine AI dari pola stop telemetri terhadap jarak situs resmi."
+            : "Flags are auto-generated by the AI engine from telemetry stop patterns against official site distance."}
+        </span>
       </div>
     </section>
   );

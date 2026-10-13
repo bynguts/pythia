@@ -71,7 +71,9 @@ test("driver runs full SPJ flow: pretrip, stop evidence, receipt", async ({ page
 
   // ── Gate: pick driver (Slamet Riyadi drives multiple trucks — target T-220) ──
   await page.goto("/driver");
-  const pretripLoaded = page.waitForResponse((response) => response.url().includes(`/pretrip/today/${TEST_TRUCK}`));
+  const pretripLoaded = page.waitForResponse((response) =>
+    response.url().includes(`/pretrip/today/${TEST_TRUCK}`),
+  );
   await page.locator('[data-testid="pick-T-220"]').click();
   await pretripLoaded;
   await expect(page.getByText(TEST_TRUCK, { exact: true }).first()).toBeVisible();
@@ -121,13 +123,12 @@ test("driver runs full SPJ flow: pretrip, stop evidence, receipt", async ({ page
   expect(receipt.weight_source).toBe("manual");
   expect(receipt.has_photo).toBe(true);
   expect(receipt.photo_b64).toBeUndefined();
-  const photo = await page.request.get(`${API}/spj/${spj.spj_id}/receipt/photo`,
-                                       { headers });
+  const photo = await page.request.get(`${API}/spj/${spj.spj_id}/receipt/photo`, { headers });
   expect(photo.ok()).toBeTruthy();
   expect((await photo.json()).photo_b64).toContain("data:image/");
 });
 
-test("driver is offered the newest receipt-pending SPJ, not the oldest", async ({ page, context }) => {
+test("driver is offered the newest receipt-pending SPJ, not the oldest", async ({ page }) => {
   const headers = await signIn(page);
   await cancelLeftoverSpj(page, headers);
 
@@ -136,27 +137,43 @@ test("driver is offered the newest receipt-pending SPJ, not the oldest", async (
   async function completedSpj(truck) {
     const created = await page.request.post(`${API}/spj`, {
       headers,
-      data: { driver_name: "E2E Receipt", truck_code: truck,
-              destination: "TPST Bantargebang", weigh_on_site: true,
-              priority: "normal", note: "e2e receipt order" },
+      data: {
+        driver_name: "E2E Receipt",
+        truck_code: truck,
+        destination: "TPST Bantargebang",
+        weigh_on_site: true,
+        priority: "normal",
+        note: "e2e receipt order",
+      },
     });
     const spj = await created.json();
     await page.request.post(`${API}/spj/${spj.spj_id}/stops`, {
       headers,
-      data: { name: "TPS Receipt", kecamatan: "Cilandak", address: "Jl. Receipt",
-              lat: -6.29, lng: 106.79 },
+      data: { name: "TPS Receipt", kecamatan: "Cilandak", address: "Jl. Receipt", lat: -6.29, lng: 106.79 },
     });
     await page.request.post(`${API}/spj/${spj.spj_id}/activate`, { headers });
     await page.request.post(`${API}/spj/${spj.spj_id}/stops/0/complete`, {
       headers,
-      data: { evidence: {
-        arrival: { photo_name: "a.jpg", photo_b64: "data:image/jpeg;base64,AAA",
-                   lat: -6.29, lng: 106.79, at: "2026-09-14T09:00:00" },
-        weighing: [{ fraction: "Residu", weight_kg: 40.0, photo_name: "t.jpg",
-                     photo_b64: "data:image/jpeg;base64,BBB" }],
-        officer: { photo_name: "p.jpg", photo_b64: "data:image/jpeg;base64,CCC",
-                   name: "Dicky" },
-      } },
+      data: {
+        evidence: {
+          arrival: {
+            photo_name: "a.jpg",
+            photo_b64: "data:image/jpeg;base64,AAA",
+            lat: -6.29,
+            lng: 106.79,
+            at: "2026-09-14T09:00:00",
+          },
+          weighing: [
+            {
+              fraction: "Residu",
+              weight_kg: 40.0,
+              photo_name: "t.jpg",
+              photo_b64: "data:image/jpeg;base64,BBB",
+            },
+          ],
+          officer: { photo_name: "p.jpg", photo_b64: "data:image/jpeg;base64,CCC", name: "Dicky" },
+        },
+      },
     });
     return spj;
   }
@@ -164,8 +181,12 @@ test("driver is offered the newest receipt-pending SPJ, not the oldest", async (
   const older = await completedSpj(TEST_TRUCK);
   await page.request.post(`${API}/spj/${older.spj_id}/receipt`, {
     headers,
-    data: { photo_name: "struk-lama.jpg", photo_b64: "data:image/jpeg;base64,AA",
-            total_weight_kg: 100, weight_source: "manual" },
+    data: {
+      photo_name: "struk-lama.jpg",
+      photo_b64: "data:image/jpeg;base64,AA",
+      total_weight_kg: 100,
+      weight_source: "manual",
+    },
   });
   const newer = await completedSpj(TEST_TRUCK);
 
@@ -215,8 +236,11 @@ test("admin sees damage report and resolves it", async ({ page }) => {
   const create = await page.request.post(`${API}/damage-reports`, {
     headers,
     data: {
-      truck_code: "T-230", driver_name: "E2E Admin", component: "rem",
-      severity: "berat", note: "e2e admin panel note",
+      truck_code: "T-230",
+      driver_name: "E2E Admin",
+      component: "rem",
+      severity: "berat",
+      note: "e2e admin panel note",
     },
   });
   expect(create.status()).toBe(201);
@@ -242,9 +266,12 @@ test("admin sees spj evidence summary after driver flow", async ({ page }) => {
   const create = await page.request.post(`${API}/spj`, {
     headers,
     data: {
-      driver_name: "E2E Evidence", truck_code: "T-231",
-      destination: "TPST Bantargebang", weigh_on_site: true,
-      priority: "normal", note: "e2e evidence",
+      driver_name: "E2E Evidence",
+      truck_code: "T-231",
+      destination: "TPST Bantargebang",
+      weigh_on_site: true,
+      priority: "normal",
+      note: "e2e evidence",
     },
   });
   const spj = await create.json();
@@ -257,12 +284,22 @@ test("admin sees spj evidence summary after driver flow", async ({ page }) => {
     headers,
     data: {
       evidence: {
-        arrival: { photo_name: "a.jpg", photo_b64: "data:image/jpeg;base64,AAA",
-                   lat: -6.29, lng: 106.79, at: "2026-09-14T09:00:00" },
-        weighing: [{ fraction: "Residu", weight_kg: 40.0, photo_name: "t.jpg",
-                     photo_b64: "data:image/jpeg;base64,BBB" }],
-        officer: { photo_name: "p.jpg", photo_b64: "data:image/jpeg;base64,CCC",
-                   name: "Dicky" },
+        arrival: {
+          photo_name: "a.jpg",
+          photo_b64: "data:image/jpeg;base64,AAA",
+          lat: -6.29,
+          lng: 106.79,
+          at: "2026-09-14T09:00:00",
+        },
+        weighing: [
+          {
+            fraction: "Residu",
+            weight_kg: 40.0,
+            photo_name: "t.jpg",
+            photo_b64: "data:image/jpeg;base64,BBB",
+          },
+        ],
+        officer: { photo_name: "p.jpg", photo_b64: "data:image/jpeg;base64,CCC", name: "Dicky" },
       },
     },
   });

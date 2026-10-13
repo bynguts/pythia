@@ -29,7 +29,10 @@ export function sceneBounds(scene) {
     south = Math.min(south, landfill.lat);
     north = Math.max(north, landfill.lat);
   }
-  return [[west, south], [east, north]];
+  return [
+    [west, south],
+    [east, north],
+  ];
 }
 
 /**
@@ -37,7 +40,12 @@ export function sceneBounds(scene) {
  * (respecting its padding), else falls back to the registry centre/zoom.
  */
 export function overviewCamera(scene, map) {
-  const camera = { center: scene.city.center, zoom: scene.city.zoom, pitch: OVERVIEW_PITCH, bearing: OVERVIEW_BEARING };
+  const camera = {
+    center: scene.city.center,
+    zoom: scene.city.zoom,
+    pitch: OVERVIEW_PITCH,
+    bearing: OVERVIEW_BEARING,
+  };
   const bounds = map && sceneBounds(scene);
   const fit = bounds && map.cameraForBounds(bounds, { padding: 40, bearing: OVERVIEW_BEARING });
   if (!fit) return camera;
@@ -52,7 +60,12 @@ export function overviewCamera(scene, map) {
 export function buildTour(scene, day, map) {
   const overview = overviewCamera(scene, map);
   const steps = [
-    { key: "overview", camera: { ...overview, bearing: 12, zoom: overview.zoom + 0.15 }, duration: 5000, hold: 0 },
+    {
+      key: "overview",
+      camera: { ...overview, bearing: 12, zoom: overview.zoom + 0.15 },
+      duration: 5000,
+      hold: 0,
+    },
   ];
   const hot = hottestDistrict(scene, day);
   if (hot) {
@@ -83,13 +96,24 @@ function wait(ms, signal) {
   return new Promise((resolve) => {
     if (signal?.aborted) return resolve();
     const timer = setTimeout(resolve, ms);
-    signal?.addEventListener("abort", () => { clearTimeout(timer); resolve(); }, { once: true });
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
   });
 }
 
 function moveEnd(map, ms, signal) {
   return new Promise((resolve) => {
-    const done = () => { clearTimeout(timer); map.off("moveend", done); resolve(); };
+    const done = () => {
+      clearTimeout(timer);
+      map.off("moveend", done);
+      resolve();
+    };
     const timer = setTimeout(done, ms + 400);
     map.once("moveend", done);
     signal?.addEventListener("abort", done, { once: true });

@@ -74,8 +74,11 @@ const SHOTS = {
     await page.getByTestId("deck-tools-toggle").click();
     await wait(2000);
     await fetch(`${API}/fleet/astar-simulate-jam?active=true`, { method: "POST", headers });
-    await page.getByTestId("deck-tools-panel").locator(".traffic-status-badge")
-      .filter({ hasText: /Jam|Macet|JAM/ }).waitFor({ timeout: 45000 });
+    await page
+      .getByTestId("deck-tools-panel")
+      .locator(".traffic-status-badge")
+      .filter({ hasText: /Jam|Macet|JAM/ })
+      .waitFor({ timeout: 45000 });
     await wait(10000);
     await fetch(`${API}/fleet/astar-simulate-jam?active=false`, { method: "POST", headers });
   },
@@ -88,7 +91,10 @@ const SHOTS = {
   // S8: data provenance and model audit.
   S8: async (page) => {
     await page.goto(`${BASE}/`);
-    await page.getByTestId("workspace-navigation").getByRole("button", { name: /Data & ML Audit/ }).click();
+    await page
+      .getByTestId("workspace-navigation")
+      .getByRole("button", { name: /Data & ML Audit/ })
+      .click();
     await page.getByTestId("audit-workspace").waitFor({ timeout: 30000 });
     await wait(4000);
     await page.mouse.wheel(0, 900);
@@ -101,8 +107,11 @@ const SHOTS = {
     await page.goto(`${BASE}/?present=1`);
     await waitForTwin(page);
     await page.evaluate(() => window.__pythiaTwin.setCity("hcmc"));
-    await page.waitForFunction(() => window.__pythiaTwin?.ready && window.__pythiaTwin.city === "hcmc",
-      null, { timeout: 60000 });
+    await page.waitForFunction(
+      () => window.__pythiaTwin?.ready && window.__pythiaTwin.city === "hcmc",
+      null,
+      { timeout: 60000 },
+    );
     await wait(3000);
     await page.evaluate(() => window.__pythiaTwin.startTour());
     await waitForTourEnd(page);
@@ -125,7 +134,9 @@ async function main() {
   try {
     for (const id of wanted) {
       const context = await browser.newContext({
-        viewport: SIZE, deviceScaleFactor: 1, recordVideo: { dir: OUT, size: SIZE },
+        viewport: SIZE,
+        deviceScaleFactor: 1,
+        recordVideo: { dir: OUT, size: SIZE },
       });
       await context.addInitScript((value) => {
         localStorage.setItem("pythia_token", value);

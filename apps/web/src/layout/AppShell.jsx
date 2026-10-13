@@ -1,7 +1,6 @@
-import React, { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import {
   BarChart3,
-  Bot,
   Building2,
   ChevronDown,
   CircleUserRound,
@@ -31,8 +30,15 @@ const ALIASES = {
   iot: "audit",
 };
 
-export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout, assistant, children,
-  contextKey = "shell_context_eyebrow" }) {
+export function AppShell({
+  activeWorkspace,
+  onWorkspaceChange,
+  online,
+  onLogout,
+  assistant,
+  children,
+  contextKey = "shell_context_eyebrow",
+}) {
   const { lang, setLang, t } = useLanguage();
   const resolvedWorkspace = ALIASES[activeWorkspace] || activeWorkspace;
   const current = items.find((item) => item.id === resolvedWorkspace) || items[0];
@@ -51,11 +57,22 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
       ...Array.from(main.children).filter((element) => !element.contains(dialog)),
     ];
     const previousInert = background.map((element) => element.inert);
-    background.forEach((element) => { element.inert = true; });
+    background.forEach((element) => {
+      element.inert = true;
+    });
 
-    const focusable = () => Array.from(dialog.querySelectorAll(
-      'a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
-    )).filter((element) => element.tabIndex >= 0 && !element.matches(":disabled") && !element.closest("[inert]") && element.getClientRects().length > 0);
+    const focusable = () =>
+      Array.from(
+        dialog.querySelectorAll(
+          'a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter(
+        (element) =>
+          element.tabIndex >= 0 &&
+          !element.matches(":disabled") &&
+          !element.closest("[inert]") &&
+          element.getClientRects().length > 0,
+      );
     const initial = dialog.querySelector("#assistant-question");
     (initial && !initial.disabled ? initial : focusable()[0] || dialog).focus();
 
@@ -74,10 +91,16 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
       }
       const first = controls[0];
       const last = controls[controls.length - 1];
-      if (event.shiftKey && (document.activeElement === first || !controls.includes(document.activeElement))) {
+      if (
+        event.shiftKey &&
+        (document.activeElement === first || !controls.includes(document.activeElement))
+      ) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && (document.activeElement === last || !controls.includes(document.activeElement))) {
+      } else if (
+        !event.shiftKey &&
+        (document.activeElement === last || !controls.includes(document.activeElement))
+      ) {
         event.preventDefault();
         first.focus();
       }
@@ -90,7 +113,9 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
     return () => {
       document.removeEventListener("keydown", onKeyDown, true);
       document.removeEventListener("focusin", onFocusIn, true);
-      background.forEach((element, index) => { element.inert = previousInert[index]; });
+      background.forEach((element, index) => {
+        element.inert = previousInert[index];
+      });
       assistantTriggerRef.current?.focus();
     };
   }, [assistantOpen]);
@@ -102,10 +127,11 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
 
   return (
     <div className="command-shell" ref={shellRef}>
-
       <aside className="command-sidebar" aria-label={t("shell_sidebar_label")}>
         <div className="command-brand">
-          <span className="command-brand-mark" aria-hidden="true">P</span>
+          <span className="command-brand-mark" aria-hidden="true">
+            P
+          </span>
           <div>
             <strong>Pythia</strong>
             <small>{t("shell_brand_sub")}</small>
@@ -155,16 +181,41 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
 
           <div className="command-top-actions">
             <div className="command-language" aria-label={t("shell_lang_label")}>
-              <button type="button" data-testid="lang-switch-id" className={lang === "id" ? "active" : ""} onClick={() => setLang("id")}>ID</button>
-              <button type="button" data-testid="lang-switch-en" className={lang === "en" ? "active" : ""} onClick={() => setLang("en")}>EN</button>
+              <button
+                type="button"
+                data-testid="lang-switch-id"
+                className={lang === "id" ? "active" : ""}
+                onClick={() => setLang("id")}
+              >
+                ID
+              </button>
+              <button
+                type="button"
+                data-testid="lang-switch-en"
+                className={lang === "en" ? "active" : ""}
+                onClick={() => setLang("en")}
+              >
+                EN
+              </button>
             </div>
-            <button className="command-assistant" type="button" ref={assistantTriggerRef} aria-label={t("shell_assistant_label")} onClick={() => setAssistantOpen(true)}>
+            <button
+              className="command-assistant"
+              type="button"
+              ref={assistantTriggerRef}
+              aria-label={t("shell_assistant_label")}
+              onClick={() => setAssistantOpen(true)}
+            >
               <Sparkles size={17} />
               <span>{t("shell_assistant")}</span>
             </button>
             <button className="command-profile" type="button" aria-label={t("shell_profile_label")}>
-              <span className="command-avatar"><CircleUserRound size={19} /></span>
-              <span className="command-profile-copy"><strong>{t("shell_profile_name")}</strong><small>{t("shell_profile_role")}</small></span>
+              <span className="command-avatar">
+                <CircleUserRound size={19} />
+              </span>
+              <span className="command-profile-copy">
+                <strong>{t("shell_profile_name")}</strong>
+                <small>{t("shell_profile_role")}</small>
+              </span>
               <ChevronDown size={15} />
             </button>
           </div>
@@ -188,9 +239,28 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
         </nav>
 
         {assistantOpen && (
-          <div className="assistant-modal-backdrop" role="presentation" onMouseDown={() => setAssistantOpen(false)}>
-            <section className="assistant-modal" ref={assistantDialogRef} role="dialog" aria-modal="true" aria-label={t("shell_assistant_label")} tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
-              <button className="assistant-close" type="button" aria-label={t("shell_close_assistant")} onClick={() => setAssistantOpen(false)}>×</button>
+          <div
+            className="assistant-modal-backdrop"
+            role="presentation"
+            onMouseDown={() => setAssistantOpen(false)}
+          >
+            <section
+              className="assistant-modal"
+              ref={assistantDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label={t("shell_assistant_label")}
+              tabIndex={-1}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button
+                className="assistant-close"
+                type="button"
+                aria-label={t("shell_close_assistant")}
+                onClick={() => setAssistantOpen(false)}
+              >
+                ×
+              </button>
               {assistant}
             </section>
           </div>

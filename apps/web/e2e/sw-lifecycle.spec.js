@@ -35,7 +35,9 @@ test("first install caches the app shell and controls subsequent loads", async (
   await cleanSlate(page);
 
   // Before install: no registration, no caches.
-  const before = await page.evaluate(() => navigator.serviceWorker.getRegistrations().then((r) => r.length === 0));
+  const before = await page.evaluate(() =>
+    navigator.serviceWorker.getRegistrations().then((r) => r.length === 0),
+  );
   expect(before).toBe(true);
 
   await installWorker(page);
@@ -44,7 +46,9 @@ test("first install caches the app shell and controls subsequent loads", async (
   const shellCached = await page.evaluate(async () => {
     const names = await caches.keys();
     const cache = await caches.open(names[0]);
-    return Promise.all(["/", "/field", "/manifest.webmanifest", "/pythia-icon.svg"].map((p) => cache.match(p).then(Boolean)));
+    return Promise.all(
+      ["/", "/field", "/manifest.webmanifest", "/pythia-icon.svg"].map((p) => cache.match(p).then(Boolean)),
+    );
   });
   expect(shellCached).toEqual([true, true, true, true]);
 
@@ -84,7 +88,9 @@ test("a new build version replaces the old cache on activation", async ({ page }
   // Simulate a stale cache version left by a previous build: the activate
   // handler must evict every cache that does not match the current
   // build-stamped CACHE_NAME.
-  await page.evaluate(() => caches.open("pythia-stale-previous-build").then((c) => c.put("/", Response.json({ stale: true }))));
+  await page.evaluate(() =>
+    caches.open("pythia-stale-previous-build").then((c) => c.put("/", Response.json({ stale: true }))),
+  );
   await page.evaluate(() => navigator.serviceWorker.register("/sw.js?v=next-build"));
   await page.waitForFunction(
     async () => {

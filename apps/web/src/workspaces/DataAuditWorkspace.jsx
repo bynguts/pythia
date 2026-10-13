@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckCircle2, Database, ExternalLink, ShieldCheck, Truck } from "lucide-react";
 import { API_URL } from "../config.js";
 import { useLanguage } from "../i18n.jsx";
@@ -10,7 +10,8 @@ const COPY = {
     retry: "Coba lagi",
     kicker: "Transparansi keputusan",
     title: "Audit data & model",
-    description: "Periksa asal, tahun data, keterbatasan, dan kelayakan data yang digunakan dalam keputusan Pythia.",
+    description:
+      "Periksa asal, tahun data, keterbatasan, dan kelayakan data yang digunakan dalam keputusan Pythia.",
     datasets: "Dataset terdaftar",
     documented: "sumber terdokumentasi",
     real: "Dataset berlabel riil",
@@ -41,7 +42,8 @@ const COPY = {
       digest: "Input digest",
       rows: "Baris CSV",
       boundaryTitle: "Batas model: ",
-      boundary: "Hasil Scentinel adalah estimasi simulasi CFD untuk penapisan penempatan sensor — bukan pengukuran sensor kendaraan langsung. Gate validasi eksperimental menunjukkan status verifikasi lapangan saat ini.",
+      boundary:
+        "Hasil Scentinel adalah estimasi simulasi CFD untuk penapisan penempatan sensor — bukan pengukuran sensor kendaraan langsung. Gate validasi eksperimental menunjukkan status verifikasi lapangan saat ini.",
       gates: {
         pipeline_success: "Pipeline sukses",
         numerical_convergence: "Konvergensi numerik",
@@ -61,32 +63,54 @@ const COPY = {
     emptyFleet: "Data komposisi armada belum tersedia.",
     sourcePrefix: "Sumber",
     freshness: { current: "Terkini", recent: "Baru", stale: "Lama", unknown: "Tidak diketahui" },
-    classes: { real: "Riil", proxy: "Proksi", derived: "Turunan", calibrated_synthetic: "Sintetis terkalibrasi" },
+    classes: {
+      real: "Riil",
+      proxy: "Proksi",
+      derived: "Turunan",
+      calibrated_synthetic: "Sintetis terkalibrasi",
+    },
     suitability: { high: "Tinggi", reliable: "Andal", low: "Rendah", not_supported: "Tidak didukung" },
     granularities: {
-      "city-year": "kota/tahun", "landfill-month": "TPA/bulan", "fleet-census": "sensus armada",
-      "tps-location": "lokasi TPS", "kecamatan-year": "kecamatan/tahun",
-      "kelurahan-age-gender": "kelurahan/usia/jenis kelamin", event: "acara",
-      "national-holiday": "libur nasional", "kelurahan-polygon": "poligon kelurahan",
+      "city-year": "kota/tahun",
+      "landfill-month": "TPA/bulan",
+      "fleet-census": "sensus armada",
+      "tps-location": "lokasi TPS",
+      "kecamatan-year": "kecamatan/tahun",
+      "kelurahan-age-gender": "kelurahan/usia/jenis kelamin",
+      event: "acara",
+      "national-holiday": "libur nasional",
+      "kelurahan-polygon": "poligon kelurahan",
       "wr-location": "lokasi wajib retribusi",
     },
     resolutions: {
-      hotspot_rank: "Peringkat titik rawan", city_day: "Kota/hari", district_month: "Kecamatan/bulan",
-      district_week: "Kecamatan/minggu", district_day: "Kecamatan/hari",
+      hotspot_rank: "Peringkat titik rawan",
+      city_day: "Kota/hari",
+      district_month: "Kecamatan/bulan",
+      district_week: "Kecamatan/minggu",
+      district_day: "Kecamatan/hari",
     },
     vehicleTypes: {
-      "Arm Roll Besar": "Arm roll besar", "Arm Roll Kecil": "Arm roll kecil",
-      "Compactor Besar": "Pemadat besar", "Compactor Kecil": "Pemadat kecil",
-      "Dump Truck Besar": "Truk bak besar", "Dump Truck Kecil": "Truk bak kecil",
-      "Gerobak Motor": "Gerobak motor", "Tronton": "Tronton",
-      "Truk Arm Roll Besar": "Truk arm roll besar", "Truk Arm Roll Kecil": "Truk arm roll kecil",
-      "Truk Compactor Besar": "Truk pemadat besar", "Truk Compactor Kecil": "Truk pemadat kecil",
-      "Truk Compactor Listrik Besar": "Truk pemadat listrik besar", "Truk Compactor Listrik Kecil": "Truk pemadat listrik kecil",
-      "Truk Dump Truk Besar": "Truk bak besar", "Truk Dump Truk Kecil": "Truk bak kecil",
+      "Arm Roll Besar": "Arm roll besar",
+      "Arm Roll Kecil": "Arm roll kecil",
+      "Compactor Besar": "Pemadat besar",
+      "Compactor Kecil": "Pemadat kecil",
+      "Dump Truck Besar": "Truk bak besar",
+      "Dump Truck Kecil": "Truk bak kecil",
+      "Gerobak Motor": "Gerobak motor",
+      Tronton: "Tronton",
+      "Truk Arm Roll Besar": "Truk arm roll besar",
+      "Truk Arm Roll Kecil": "Truk arm roll kecil",
+      "Truk Compactor Besar": "Truk pemadat besar",
+      "Truk Compactor Kecil": "Truk pemadat kecil",
+      "Truk Compactor Listrik Besar": "Truk pemadat listrik besar",
+      "Truk Compactor Listrik Kecil": "Truk pemadat listrik kecil",
+      "Truk Dump Truk Besar": "Truk bak besar",
+      "Truk Dump Truk Kecil": "Truk bak kecil",
       "Truk Tronton": "Truk tronton",
     },
     fleetSource: "Sensus truk DKI 2023 (data.go.id)",
-    modelSourceNote: "Resolusi harian per kecamatan menggunakan data sintetis terkalibrasi dan tidak boleh disajikan sebagai akurasi teramati.",
+    modelSourceNote:
+      "Resolusi harian per kecamatan menggunakan data sintetis terkalibrasi dan tidak boleh disajikan sebagai akurasi teramati.",
   },
   en: {
     loading: "Loading data registry…",
@@ -94,7 +118,8 @@ const COPY = {
     retry: "Try again",
     kicker: "Decision transparency",
     title: "Data & model audit",
-    description: "Review the origin, data year, limitations, and suitability of data used in Pythia decisions.",
+    description:
+      "Review the origin, data year, limitations, and suitability of data used in Pythia decisions.",
     datasets: "Registered datasets",
     documented: "documented sources",
     real: "Datasets labeled real",
@@ -125,7 +150,8 @@ const COPY = {
       digest: "Input digest",
       rows: "CSV rows",
       boundaryTitle: "Model boundary: ",
-      boundary: "Scentinel results are CFD screening estimates for sensor placement — not live vehicle sensor measurements. The experimental-validation gate reflects the current field-verification status.",
+      boundary:
+        "Scentinel results are CFD screening estimates for sensor placement — not live vehicle sensor measurements. The experimental-validation gate reflects the current field-verification status.",
       gates: {
         pipeline_success: "Pipeline success",
         numerical_convergence: "Numerical convergence",
@@ -145,50 +171,82 @@ const COPY = {
     emptyFleet: "Fleet composition data is not available yet.",
     sourcePrefix: "Source",
     freshness: { current: "Current", recent: "Recent", stale: "Stale", unknown: "Unknown" },
-    classes: { real: "Real", proxy: "Proxy", derived: "Derived", calibrated_synthetic: "Calibrated synthetic" },
+    classes: {
+      real: "Real",
+      proxy: "Proxy",
+      derived: "Derived",
+      calibrated_synthetic: "Calibrated synthetic",
+    },
     suitability: { high: "High", reliable: "Reliable", low: "Low", not_supported: "Not supported" },
     granularities: {
-      "city-year": "city/year", "landfill-month": "landfill/month", "fleet-census": "fleet census",
-      "tps-location": "TPS location", "kecamatan-year": "district/year",
-      "kelurahan-age-gender": "village/age/gender", event: "event",
-      "national-holiday": "national holiday", "kelurahan-polygon": "village polygon",
+      "city-year": "city/year",
+      "landfill-month": "landfill/month",
+      "fleet-census": "fleet census",
+      "tps-location": "TPS location",
+      "kecamatan-year": "district/year",
+      "kelurahan-age-gender": "village/age/gender",
+      event: "event",
+      "national-holiday": "national holiday",
+      "kelurahan-polygon": "village polygon",
       "wr-location": "retribution payer location",
     },
     resolutions: {
-      hotspot_rank: "Hotspot ranking", city_day: "City/day", district_month: "District/month",
-      district_week: "District/week", district_day: "District/day",
+      hotspot_rank: "Hotspot ranking",
+      city_day: "City/day",
+      district_month: "District/month",
+      district_week: "District/week",
+      district_day: "District/day",
     },
     vehicleTypes: {
-      "Arm Roll Besar": "Large arm roll", "Arm Roll Kecil": "Small arm roll",
-      "Compactor Besar": "Large compactor", "Compactor Kecil": "Small compactor",
-      "Dump Truck Besar": "Large dump truck", "Dump Truck Kecil": "Small dump truck",
-      "Gerobak Motor": "Motorized cart", "Tronton": "Heavy truck",
-      "Truk Arm Roll Besar": "Large arm-roll truck", "Truk Arm Roll Kecil": "Small arm-roll truck",
-      "Truk Compactor Besar": "Large compactor truck", "Truk Compactor Kecil": "Small compactor truck",
-      "Truk Compactor Listrik Besar": "Large electric compactor truck", "Truk Compactor Listrik Kecil": "Small electric compactor truck",
-      "Truk Dump Truk Besar": "Large dump truck", "Truk Dump Truk Kecil": "Small dump truck",
+      "Arm Roll Besar": "Large arm roll",
+      "Arm Roll Kecil": "Small arm roll",
+      "Compactor Besar": "Large compactor",
+      "Compactor Kecil": "Small compactor",
+      "Dump Truck Besar": "Large dump truck",
+      "Dump Truck Kecil": "Small dump truck",
+      "Gerobak Motor": "Motorized cart",
+      Tronton: "Heavy truck",
+      "Truk Arm Roll Besar": "Large arm-roll truck",
+      "Truk Arm Roll Kecil": "Small arm-roll truck",
+      "Truk Compactor Besar": "Large compactor truck",
+      "Truk Compactor Kecil": "Small compactor truck",
+      "Truk Compactor Listrik Besar": "Large electric compactor truck",
+      "Truk Compactor Listrik Kecil": "Small electric compactor truck",
+      "Truk Dump Truk Besar": "Large dump truck",
+      "Truk Dump Truk Kecil": "Small dump truck",
       "Truk Tronton": "Heavy truck",
     },
     fleetSource: "DKI truck census 2023 (data.go.id)",
-    modelSourceNote: "Daily per-district resolution is calibrated-synthetic and must not be presented as observed accuracy.",
+    modelSourceNote:
+      "Daily per-district resolution is calibrated-synthetic and must not be presented as observed accuracy.",
   },
 };
 
 // Translate only exact notes supplied by the provenance endpoint. Unknown wording remains
 // visibly attributed to the source rather than being silently rewritten as a new claim.
 const LIMITATIONS_ID = {
-  "Yearly per-city daily-average timbulan; no daily or per-kecamatan resolution.": "Rata-rata timbulan harian per kota untuk tiap tahun; tidak tersedia resolusi harian atau per kecamatan.",
-  "Monthly landfill intake totals; inconsistent tonase formats normalized on load.": "Total sampah masuk TPA per bulan; format tonase yang tidak konsisten dinormalisasi saat dimuat.",
-  "Vehicle counts per wilayah/type; not live telematics.": "Jumlah kendaraan menurut wilayah dan jenis; bukan telemetri langsung.",
+  "Yearly per-city daily-average timbulan; no daily or per-kecamatan resolution.":
+    "Rata-rata timbulan harian per kota untuk tiap tahun; tidak tersedia resolusi harian atau per kecamatan.",
+  "Monthly landfill intake totals; inconsistent tonase formats normalized on load.":
+    "Total sampah masuk TPA per bulan; format tonase yang tidak konsisten dinormalisasi saat dimuat.",
+  "Vehicle counts per wilayah/type; not live telematics.":
+    "Jumlah kendaraan menurut wilayah dan jenis; bukan telemetri langsung.",
   "TPS registry; no operational throughput capacity.": "Registri TPS; tidak memuat kapasitas operasional.",
-  "Per-kecamatan generation modeled by SILIKA population formula; lat/lng column labels swapped in source.": "Timbulan per kecamatan dimodelkan dengan rumus populasi SILIKA; label kolom lat/lng tertukar pada sumber.",
-  "TPS capacity is a PROXY (not official operational capacity); demand side is real SILIKA.": "Kapasitas TPS adalah PROKSI (bukan kapasitas operasional resmi); sisi kebutuhan berasal dari data riil SILIKA.",
-  "2013 census snapshot; used only as relative population weights.": "Cuplikan sensus 2013; hanya digunakan sebagai bobot populasi relatif.",
-  "Officially-scraped event calendar; attendance present only where published.": "Kalender acara yang diambil dari sumber resmi; jumlah pengunjung hanya tersedia jika diterbitkan.",
-  "2026 holidays; applied by month-day across years for fixed-date approximation.": "Hari libur 2026; tanggal dan bulan diterapkan lintas tahun sebagai pendekatan tanggal tetap.",
-  "267 DKI village polygons; administrative boundaries only.": "267 poligon kelurahan DKI; hanya batas administratif.",
+  "Per-kecamatan generation modeled by SILIKA population formula; lat/lng column labels swapped in source.":
+    "Timbulan per kecamatan dimodelkan dengan rumus populasi SILIKA; label kolom lat/lng tertukar pada sumber.",
+  "TPS capacity is a PROXY (not official operational capacity); demand side is real SILIKA.":
+    "Kapasitas TPS adalah PROKSI (bukan kapasitas operasional resmi); sisi kebutuhan berasal dari data riil SILIKA.",
+  "2013 census snapshot; used only as relative population weights.":
+    "Cuplikan sensus 2013; hanya digunakan sebagai bobot populasi relatif.",
+  "Officially-scraped event calendar; attendance present only where published.":
+    "Kalender acara yang diambil dari sumber resmi; jumlah pengunjung hanya tersedia jika diterbitkan.",
+  "2026 holidays; applied by month-day across years for fixed-date approximation.":
+    "Hari libur 2026; tanggal dan bulan diterapkan lintas tahun sebagai pendekatan tanggal tetap.",
+  "267 DKI village polygons; administrative boundaries only.":
+    "267 poligon kelurahan DKI; hanya batas administratif.",
   "Official SILIKA TPS location coordinate layer.": "Lapisan koordinat lokasi TPS dari SILIKA resmi.",
-  "Official SILIKA Wajib Retribusi commercial waste generator coordinate layer.": "Lapisan koordinat penghasil sampah komersial Wajib Retribusi dari SILIKA resmi.",
+  "Official SILIKA Wajib Retribusi commercial waste generator coordinate layer.":
+    "Lapisan koordinat penghasil sampah komersial Wajib Retribusi dari SILIKA resmi.",
 };
 
 const BACKEND_MODEL_NOTE = COPY.en.modelSourceNote;
@@ -219,15 +277,21 @@ export function DataAuditWorkspace() {
         // failure must never take the audit workspace down.
         fetch(`${API_URL}/scentinel/evidence`, { signal: controller.signal })
           .then((r) => (r.ok ? r.json() : { items: [] }))
-          .then((body) => { if (!controller.signal.aborted) setScentinel(Array.isArray(body.items) ? body.items : []); })
-          .catch(() => { if (!controller.signal.aborted) setScentinel([]); });
+          .then((body) => {
+            if (!controller.signal.aborted) setScentinel(Array.isArray(body.items) ? body.items : []);
+          })
+          .catch(() => {
+            if (!controller.signal.aborted) setScentinel([]);
+          });
         const responses = await Promise.all([
           fetch(`${API_URL}/data/provenance`, { signal: controller.signal }),
           fetch(`${API_URL}/fleet/composition`, { signal: controller.signal }),
           fetch(`${API_URL}/ml/suitability`, { signal: controller.signal }),
         ]);
         if (responses.some((response) => !response.ok)) throw new Error("Audit request failed");
-        const [provenance, fleet, suitability] = await Promise.all(responses.map((response) => response.json()));
+        const [provenance, fleet, suitability] = await Promise.all(
+          responses.map((response) => response.json()),
+        );
         if (!Array.isArray(provenance?.records) || !fleet || !suitability?.resolutions) {
           throw new Error("Incomplete audit response");
         }
@@ -243,57 +307,153 @@ export function DataAuditWorkspace() {
     return () => controller.abort();
   }, [retry]);
 
-  if (!audit && !error) return <div className="workspace-loading" role="status"><span />{copy.loading}</div>;
-  if (error) return (
-    <section className="audit-workspace workspace-page" data-testid="audit-workspace">
-      <div className="workspace-loading" role="alert">{copy.error} <button type="button" className="secondary-button" onClick={() => { setAudit(null); setRetry((count) => count + 1); }}>{copy.retry}</button></div>
-    </section>
-  );
+  if (!audit && !error)
+    return (
+      <div className="workspace-loading" role="status">
+        <span />
+        {copy.loading}
+      </div>
+    );
+  if (error)
+    return (
+      <section className="audit-workspace workspace-page" data-testid="audit-workspace">
+        <div className="workspace-loading" role="alert">
+          {copy.error}{" "}
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => {
+              setAudit(null);
+              setRetry((count) => count + 1);
+            }}
+          >
+            {copy.retry}
+          </button>
+        </div>
+      </section>
+    );
 
   const { provenance, fleet, suitability } = audit;
   const records = provenance.records;
   const fleetTypes = fleet.by_vehicle_type || {};
   const resolutions = suitability.resolutions;
-  const currentRecords = records.filter((record) => record.freshness === "current" || record.freshness === "recent").length;
+  const currentRecords = records.filter(
+    (record) => record.freshness === "current" || record.freshness === "recent",
+  ).length;
   const realRecords = records.filter((record) => record.classification === "real").length;
-  const number = (value) => value == null ? "—" : Number(value).toLocaleString(locale);
+  const number = (value) => (value == null ? "—" : Number(value).toLocaleString(locale));
 
   return (
     <section className="audit-workspace workspace-page" data-testid="audit-workspace">
       <header className="workspace-heading">
         <div>
-          <span className="workspace-kicker"><ShieldCheck size={14} /> {copy.kicker}</span>
+          <span className="workspace-kicker">
+            <ShieldCheck size={14} /> {copy.kicker}
+          </span>
           <h1>{copy.title}</h1>
           <p>{copy.description}</p>
         </div>
       </header>
 
       <div className="audit-summary-strip">
-        <div><span>{copy.datasets}</span><strong>{number(records.length)}</strong><small><Database size={14} /> {copy.documented}</small></div>
-        <div><span>{copy.real}</span><strong>{number(realRecords)}</strong><small><CheckCircle2 size={14} /> {copy.realHint}</small></div>
-        <div><span>{copy.fresh}</span><strong>{number(currentRecords)}</strong><small>{copy.freshHint}</small></div>
-        <div><span>{copy.fleetUnits}</span><strong>{number(fleet.total_units)}</strong><small><Truck size={14} /> {fleet.source === BACKEND_FLEET_SOURCE ? copy.census : fleet.source ? `${copy.sourcePrefix}: ${fleet.source}` : copy.unavailable}</small></div>
+        <div>
+          <span>{copy.datasets}</span>
+          <strong>{number(records.length)}</strong>
+          <small>
+            <Database size={14} /> {copy.documented}
+          </small>
+        </div>
+        <div>
+          <span>{copy.real}</span>
+          <strong>{number(realRecords)}</strong>
+          <small>
+            <CheckCircle2 size={14} /> {copy.realHint}
+          </small>
+        </div>
+        <div>
+          <span>{copy.fresh}</span>
+          <strong>{number(currentRecords)}</strong>
+          <small>{copy.freshHint}</small>
+        </div>
+        <div>
+          <span>{copy.fleetUnits}</span>
+          <strong>{number(fleet.total_units)}</strong>
+          <small>
+            <Truck size={14} />{" "}
+            {fleet.source === BACKEND_FLEET_SOURCE
+              ? copy.census
+              : fleet.source
+                ? `${copy.sourcePrefix}: ${fleet.source}`
+                : copy.unavailable}
+          </small>
+        </div>
       </div>
 
       <div className="audit-layout">
         <section className="audit-registry-surface">
           <div className="section-intro compact">
-            <div><span className="surface-kicker">{copy.sourceRegistry}</span><h2>{copy.provenance}</h2></div>
+            <div>
+              <span className="surface-kicker">{copy.sourceRegistry}</span>
+              <h2>{copy.provenance}</h2>
+            </div>
             <p>{copy.datasetCount(records.length)}</p>
           </div>
           <div className="table-wrap">
             <table className="audit-table" aria-label={copy.sourceRegistry}>
-              <thead><tr><th>{copy.dataset}</th><th>{copy.status}</th><th>{copy.rows}</th><th>{copy.granularity}</th><th>{copy.classification}</th><th>{copy.source}</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>{copy.dataset}</th>
+                  <th>{copy.status}</th>
+                  <th>{copy.rows}</th>
+                  <th>{copy.granularity}</th>
+                  <th>{copy.classification}</th>
+                  <th>{copy.source}</th>
+                </tr>
+              </thead>
               <tbody>
-                {records.length === 0 && <tr><td colSpan={6}>{copy.emptyRegistry}</td></tr>}
+                {records.length === 0 && (
+                  <tr>
+                    <td colSpan={6}>{copy.emptyRegistry}</td>
+                  </tr>
+                )}
                 {records.map((record) => (
                   <tr key={record.name}>
-                    <td><strong>{record.name}</strong><small>{sourceNote(record.limitations, lang, copy)}</small></td>
-                    <td><span className={`freshness-badge ${Object.hasOwn(copy.freshness, record.freshness) ? record.freshness : "unknown"}`}>{copy.freshness[record.freshness] || copy.freshness.unknown}</span></td>
+                    <td>
+                      <strong>{record.name}</strong>
+                      <small>{sourceNote(record.limitations, lang, copy)}</small>
+                    </td>
+                    <td>
+                      <span
+                        className={`freshness-badge ${Object.hasOwn(copy.freshness, record.freshness) ? record.freshness : "unknown"}`}
+                      >
+                        {copy.freshness[record.freshness] || copy.freshness.unknown}
+                      </span>
+                    </td>
                     <td>{number(record.row_count)}</td>
-                    <td><code>{copy.granularities[record.granularity] || copy.unmapped}</code></td>
-                    <td><span className={`classification-badge ${Object.hasOwn(copy.classes, record.classification) ? record.classification : "unknown"}`}>{copy.classes[record.classification] || copy.freshness.unknown}</span></td>
-                    <td>{String(record.source_url || "").startsWith("https://") ? <a href={record.source_url} target="_blank" rel="noreferrer" aria-label={copy.openSource(record.name)}><ExternalLink size={15} /></a> : <span>{copy.internal}</span>}</td>
+                    <td>
+                      <code>{copy.granularities[record.granularity] || copy.unmapped}</code>
+                    </td>
+                    <td>
+                      <span
+                        className={`classification-badge ${Object.hasOwn(copy.classes, record.classification) ? record.classification : "unknown"}`}
+                      >
+                        {copy.classes[record.classification] || copy.freshness.unknown}
+                      </span>
+                    </td>
+                    <td>
+                      {String(record.source_url || "").startsWith("https://") ? (
+                        <a
+                          href={record.source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={copy.openSource(record.name)}
+                        >
+                          <ExternalLink size={15} />
+                        </a>
+                      ) : (
+                        <span>{copy.internal}</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -310,22 +470,36 @@ export function DataAuditWorkspace() {
               <div key={ev.run_id} className="scentinel-run">
                 <div className="scentinel-run-head">
                   <strong>{ev.run_id}</strong>
-                  <span className="classification-badge calibrated_synthetic" data-testid="scentinel-evidence-class">{copy.scentinel.evidenceClass}</span>
+                  <span
+                    className="classification-badge calibrated_synthetic"
+                    data-testid="scentinel-evidence-class"
+                  >
+                    {copy.scentinel.evidenceClass}
+                  </span>
                 </div>
                 <small>
-                  {ev.truck_code ? `${ev.truck_code} · ` : ""}{ev.scenario} · {ev.gas_set.join(", ")}
+                  {ev.truck_code ? `${ev.truck_code} · ` : ""}
+                  {ev.scenario} · {ev.gas_set.join(", ")}
                 </small>
                 <ul className="scentinel-gates" data-testid={`scentinel-gates-${ev.run_id}`}>
                   {Object.entries(ev.quality_gates || {}).map(([gate, ok]) => (
-                    <li key={gate} className={ok ? "good" : "limited"}>{copy.scentinel.gates[gate] || gate}{ok ? " ✓" : " ✗"}</li>
+                    <li key={gate} className={ok ? "good" : "limited"}>
+                      {copy.scentinel.gates[gate] || gate}
+                      {ok ? " ✓" : " ✗"}
+                    </li>
                   ))}
                 </ul>
                 <small className="audit-source">
-                  {copy.scentinel.provenance}: {ev.source_repository}@{ev.source_version} · {copy.scentinel.digest}: <code>{ev.input_digest}</code> · {copy.scentinel.rows}: {number(ev.sensor_csv_rows)}
+                  {copy.scentinel.provenance}: {ev.source_repository}@{ev.source_version} ·{" "}
+                  {copy.scentinel.digest}: <code>{ev.input_digest}</code> · {copy.scentinel.rows}:{" "}
+                  {number(ev.sensor_csv_rows)}
                 </small>
               </div>
             ))}
-            <p className="model-honesty-note"><strong>{copy.scentinel.boundaryTitle}</strong>{copy.scentinel.boundary}</p>
+            <p className="model-honesty-note">
+              <strong>{copy.scentinel.boundaryTitle}</strong>
+              {copy.scentinel.boundary}
+            </p>
           </section>
 
           <section>
@@ -334,10 +508,18 @@ export function DataAuditWorkspace() {
             <div className="suitability-list">
               {Object.keys(resolutions).length === 0 && <p>{copy.emptyResolutions}</p>}
               {Object.entries(resolutions).map(([resolution, status]) => (
-                <div key={resolution}><code>{copy.resolutions[resolution] || copy.unmapped}</code><span className={status === "reliable" || status === "high" ? "good" : "limited"}>{copy.suitability[status] || copy.freshness.unknown}</span></div>
+                <div key={resolution}>
+                  <code>{copy.resolutions[resolution] || copy.unmapped}</code>
+                  <span className={status === "reliable" || status === "high" ? "good" : "limited"}>
+                    {copy.suitability[status] || copy.freshness.unknown}
+                  </span>
+                </div>
               ))}
             </div>
-            <p className="model-honesty-note"><strong>{copy.modelNote}</strong>{sourceNote(suitability.note, lang, copy)}</p>
+            <p className="model-honesty-note">
+              <strong>{copy.modelNote}</strong>
+              {sourceNote(suitability.note, lang, copy)}
+            </p>
           </section>
 
           <section>
@@ -345,9 +527,21 @@ export function DataAuditWorkspace() {
             <h2>{fleet.source === BACKEND_FLEET_SOURCE ? copy.vehicleCensus : copy.fleetComposition}</h2>
             <div className="fleet-composition-list">
               {Object.keys(fleetTypes).length === 0 && <p>{copy.emptyFleet}</p>}
-              {Object.entries(fleetTypes).map(([type, count]) => <div key={type}><span>{copy.vehicleTypes[type] || type}</span><strong>{number(count)}</strong></div>)}
+              {Object.entries(fleetTypes).map(([type, count]) => (
+                <div key={type}>
+                  <span>{copy.vehicleTypes[type] || type}</span>
+                  <strong>{number(count)}</strong>
+                </div>
+              ))}
             </div>
-            <small className="audit-source">{copy.sourcePrefix}: {fleet.source === BACKEND_FLEET_SOURCE ? copy.fleetSource : fleet.source ? `${copy.originalNote}: ${fleet.source}` : "—"}</small>
+            <small className="audit-source">
+              {copy.sourcePrefix}:{" "}
+              {fleet.source === BACKEND_FLEET_SOURCE
+                ? copy.fleetSource
+                : fleet.source
+                  ? `${copy.originalNote}: ${fleet.source}`
+                  : "—"}
+            </small>
           </section>
         </aside>
       </div>

@@ -11,12 +11,15 @@ async function signIn(page, lang = "id") {
     data: { username: "dispatcher", password: "dispatcher-demo-pass" },
   });
   const principal = await response.json();
-  await page.evaluate(({ token, role, lang }) => {
-    localStorage.setItem("pythia_auth", "true");
-    localStorage.setItem("pythia_lang", lang);
-    localStorage.setItem("pythia_token", token);
-    localStorage.setItem("pythia_role", role);
-  }, { ...principal, lang });
+  await page.evaluate(
+    ({ token, role, lang }) => {
+      localStorage.setItem("pythia_auth", "true");
+      localStorage.setItem("pythia_lang", lang);
+      localStorage.setItem("pythia_token", token);
+      localStorage.setItem("pythia_role", role);
+    },
+    { ...principal, lang },
+  );
   await page.reload({ waitUntil: "domcontentloaded" });
 }
 
@@ -25,7 +28,11 @@ test("planning headings follow a contiguous outline and pass axe", async ({ page
   await page.getByRole("button", { name: "Rencana", exact: true }).click();
   await expect(page.getByTestId("planning-workspace")).toBeVisible();
 
-  const headings = await page.locator(".planning-workspace h1, .planning-workspace h2, .planning-workspace h3, .planning-workspace h4, .planning-workspace h5, .planning-workspace h6").all();
+  const headings = await page
+    .locator(
+      ".planning-workspace h1, .planning-workspace h2, .planning-workspace h3, .planning-workspace h4, .planning-workspace h5, .planning-workspace h6",
+    )
+    .all();
   const levels = [];
   for (const heading of headings) {
     levels.push(Number((await heading.evaluate((el) => el.tagName)).slice(1)));
@@ -35,8 +42,9 @@ test("planning headings follow a contiguous outline and pass axe", async ({ page
   // Contiguous outline: first is h1 and each heading steps at most +1.
   expect(levels[0]).toBe(1);
   for (let i = 1; i < levels.length; i++) {
-    expect(levels[i], `heading ${i} jumps from h${levels[i - 1]} to h${levels[i]}`)
-      .toBeLessThanOrEqual(levels[i - 1] + 1);
+    expect(levels[i], `heading ${i} jumps from h${levels[i - 1]} to h${levels[i]}`).toBeLessThanOrEqual(
+      levels[i - 1] + 1,
+    );
   }
 
   const results = await new AxeBuilder({ page })

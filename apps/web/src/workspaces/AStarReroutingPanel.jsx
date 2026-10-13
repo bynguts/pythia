@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { API_URL } from "../config.js";
 
 export function AiNotificationFeed({ events, onAck }) {
@@ -15,9 +15,7 @@ export function AiNotificationFeed({ events, onAck }) {
         <div key={e._index} className={`ai-feed-item ai-feed-${e.event_type}`}>
           <div className="ai-feed-head">
             <span className="ai-feed-badge">{e.event_type}</span>
-            <span className="ai-feed-time">
-              {new Date(e.created_at).toLocaleTimeString("id-ID")}
-            </span>
+            <span className="ai-feed-time">{new Date(e.created_at).toLocaleTimeString("id-ID")}</span>
           </div>
           <div className="ai-feed-title">{e.title}</div>
           {e.status === "new" ? (
@@ -37,10 +35,11 @@ export function AStarReroutingPanel({ jamActive, aiEvents, onAckEvent }) {
   const [info, setInfo] = useState(null);
 
   useEffect(() => {
-    const load = () => fetch(`${API_URL}/fleet/astar-reroute`)
-      .then((res) => res.json())
-      .then(setInfo)
-      .catch(() => {});
+    const load = () =>
+      fetch(`${API_URL}/fleet/astar-reroute`)
+        .then((res) => res.json())
+        .then(setInfo)
+        .catch(() => {});
     load();
     const id = setInterval(load, 8000);
     return () => clearInterval(id);
@@ -48,9 +47,7 @@ export function AStarReroutingPanel({ jamActive, aiEvents, onAckEvent }) {
 
   const rerouteEvents = (aiEvents || [])
     .map((e, serverIndex) => ({ ...e, _serverIndex: serverIndex }))
-    .filter(
-      (e) => e.event_type === "auto_reroute" || e.event_type === "jam_cleared"
-    );
+    .filter((e) => e.event_type === "auto_reroute" || e.event_type === "jam_cleared");
   const diverted = info?.diversion_applied;
   const dist = info?.active_route?.distance_km ?? 12.7;
   const eta = info?.active_route?.eta_minutes ?? 17;

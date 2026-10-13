@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, Clock, Route, Send } from "lucide-react";
 import { useLanguage } from "../i18n.jsx";
 import { authenticatedRequest, createAlertDispatch } from "../dispatchApi.js";
@@ -14,14 +14,18 @@ function localizeIssue(text, lang) {
   if (String(text).trim() === "Move this truck to lower-priority pickups and assign backup capacity.") {
     return "Alihkan kendaraan ini ke pengangkutan prioritas lebih rendah dan tugaskan armada cadangan.";
   }
-  if (String(text).trim() === "Truck remains off the assigned corridor (sustained-deviation latch, clears under 50 m).") {
+  if (
+    String(text).trim() ===
+    "Truck remains off the assigned corridor (sustained-deviation latch, clears under 50 m)."
+  ) {
     return "Kendaraan masih di luar koridor tugas (deviasi berlanjut, pulih saat jarak di bawah 50 m).";
   }
   if (!corridor) return text;
   const meters = Number(corridor[1]);
-  const distance = meters >= 1000
-    ? `${(meters / 1000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} km`
-    : `${Math.round(meters)} m`;
+  const distance =
+    meters >= 1000
+      ? `${(meters / 1000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} km`
+      : `${Math.round(meters)} m`;
   return `Kendaraan berada ${distance} di luar koridor tugas.`;
 }
 
@@ -56,7 +60,9 @@ export function ActionCard({ snapshot, targetTruck = null }) {
   // A map/table click on a truck with no active alert shows that truck as an
   // informational target; the action stays bound to the live alert flow.
   const targetOnly = Boolean(targetTruck) && !targetedAlert;
-  const infoTruck = targetOnly ? (snapshot?.trucks || []).find((item) => item.truck_code === targetTruck) : null;
+  const infoTruck = targetOnly
+    ? (snapshot?.trucks || []).find((item) => item.truck_code === targetTruck)
+    : null;
 
   useEffect(() => {
     return () => {
@@ -87,9 +93,15 @@ export function ActionCard({ snapshot, targetTruck = null }) {
         if (generation !== requestGeneration.current) return;
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
-            setStatusError(response.status === 401
-              ? (lang === "id" ? "Sesi berakhir. Masuk kembali untuk memeriksa respons lapangan." : "Session expired. Sign in again to check the field response.")
-              : (lang === "id" ? "Akses ditolak. Tidak dapat memeriksa respons lapangan." : "Access denied. Cannot check the field response."));
+            setStatusError(
+              response.status === 401
+                ? lang === "id"
+                  ? "Sesi berakhir. Masuk kembali untuk memeriksa respons lapangan."
+                  : "Session expired. Sign in again to check the field response."
+                : lang === "id"
+                  ? "Akses ditolak. Tidak dapat memeriksa respons lapangan."
+                  : "Access denied. Cannot check the field response.",
+            );
             clearInterval(pollRef.current);
             pollRef.current = null;
           }
@@ -104,9 +116,12 @@ export function ActionCard({ snapshot, targetTruck = null }) {
           pollRef.current = null;
           setFieldNote(dispatch.confirmed_note || "");
           if (status === "READY") {
-            setConfirmedAt(new Date(dispatch.confirmed_at || Date.now()).toLocaleTimeString(
-              lang === "id" ? "id-ID" : "en-US", { hour: "2-digit", minute: "2-digit" },
-            ));
+            setConfirmedAt(
+              new Date(dispatch.confirmed_at || Date.now()).toLocaleTimeString(
+                lang === "id" ? "id-ID" : "en-US",
+                { hour: "2-digit", minute: "2-digit" },
+              ),
+            );
             setPhase("confirmed");
           } else {
             setPhase(status === "ISSUE" ? "escalated" : "cancelled");
@@ -121,7 +136,7 @@ export function ActionCard({ snapshot, targetTruck = null }) {
   }
 
   async function handleSend() {
-    if (!alert || inFlightRef.current || phase !== "idle" && phase !== "error") return;
+    if (!alert || inFlightRef.current || (phase !== "idle" && phase !== "error")) return;
     inFlightRef.current = true;
     const generation = requestGeneration.current;
     setPhase("sending");
@@ -131,11 +146,17 @@ export function ActionCard({ snapshot, targetTruck = null }) {
       const dispatchRes = await createAlertDispatch(alert, t, issueText);
       if (generation !== requestGeneration.current) return;
       if (!dispatchRes.ok) {
-        setSendError(dispatchRes.status === 401
-          ? (lang === "id" ? "Sesi berakhir. Masuk kembali untuk mengirim instruksi." : "Session expired. Sign in again to dispatch.")
-          : dispatchRes.status === 403
-            ? (lang === "id" ? "Akses ditolak. Anda tidak dapat mengirim instruksi." : "Access denied. You cannot dispatch this instruction.")
-            : t("ac_send_failed"));
+        setSendError(
+          dispatchRes.status === 401
+            ? lang === "id"
+              ? "Sesi berakhir. Masuk kembali untuk mengirim instruksi."
+              : "Session expired. Sign in again to dispatch."
+            : dispatchRes.status === 403
+              ? lang === "id"
+                ? "Akses ditolak. Anda tidak dapat mengirim instruksi."
+                : "Access denied. You cannot dispatch this instruction."
+              : t("ac_send_failed"),
+        );
         setPhase("error");
         return;
       }
@@ -163,9 +184,15 @@ export function ActionCard({ snapshot, targetTruck = null }) {
         });
         if (generation !== requestGeneration.current) return;
         if (notification.status === 401 || notification.status === 403) {
-          setStatusError(notification.status === 401
-            ? (lang === "id" ? "Instruksi tersimpan, tetapi sesi berakhir sebelum notifikasi WhatsApp dikirim." : "Dispatch saved, but the session expired before WhatsApp notification.")
-            : (lang === "id" ? "Instruksi tersimpan, tetapi akses notifikasi WhatsApp ditolak." : "Dispatch saved, but WhatsApp notification access was denied."));
+          setStatusError(
+            notification.status === 401
+              ? lang === "id"
+                ? "Instruksi tersimpan, tetapi sesi berakhir sebelum notifikasi WhatsApp dikirim."
+                : "Dispatch saved, but the session expired before WhatsApp notification."
+              : lang === "id"
+                ? "Instruksi tersimpan, tetapi akses notifikasi WhatsApp ditolak."
+                : "Dispatch saved, but WhatsApp notification access was denied.",
+          );
         } else if (!notification.ok) {
           setWaConnected(false);
         } else {
@@ -189,7 +216,9 @@ export function ActionCard({ snapshot, targetTruck = null }) {
     return (
       <section className="action-card" data-testid="action-card">
         <div className="action-card-head">
-          <span className="action-card-icon ok"><Check size={22} /></span>
+          <span className="action-card-icon ok">
+            <Check size={22} />
+          </span>
           <h2 className="action-card-title">{t("ac_no_alerts")}</h2>
         </div>
       </section>
@@ -202,14 +231,19 @@ export function ActionCard({ snapshot, targetTruck = null }) {
     return (
       <section className="action-card action-card-info" data-testid="action-card">
         <div className="action-card-head">
-          <span className="action-card-icon ok"><Check size={22} /></span>
+          <span className="action-card-icon ok">
+            <Check size={22} />
+          </span>
           <div>
             <h2 className="action-card-title">
               {infoTruck.truck_code} — {infoTruck.driver_name || t("ac_unknown_driver")}
             </h2>
             <p className="action-card-issue">
-              {(lang === "id" ? "Tidak ada peringatan aktif untuk unit ini." : "No active alert for this unit.")}
-              {zone ? ` ${zone}` : ""}{activity ? ` · ${activity}` : ""}
+              {lang === "id"
+                ? "Tidak ada peringatan aktif untuk unit ini."
+                : "No active alert for this unit."}
+              {zone ? ` ${zone}` : ""}
+              {activity ? ` · ${activity}` : ""}
             </p>
           </div>
         </div>
@@ -220,7 +254,9 @@ export function ActionCard({ snapshot, targetTruck = null }) {
   return (
     <section className="action-card" data-testid="action-card">
       <div className="action-card-head">
-        <span className="action-card-icon"><AlertTriangle size={22} /></span>
+        <span className="action-card-icon">
+          <AlertTriangle size={22} />
+        </span>
         <div>
           <h2 className="action-card-title">
             {truckCode} — {driverName}
@@ -246,7 +282,11 @@ export function ActionCard({ snapshot, targetTruck = null }) {
           {t("ac_wa_offline")}
         </p>
       )}
-      {statusError && <p className="action-card-warning" role="alert">{statusError}</p>}
+      {statusError && (
+        <p className="action-card-warning" role="alert">
+          {statusError}
+        </p>
+      )}
 
       {phase === "sent" && (
         <p className="action-card-issue" role="status" data-testid="action-card-sent">
@@ -260,14 +300,28 @@ export function ActionCard({ snapshot, targetTruck = null }) {
       )}
       {phase === "escalated" && (
         <p className="action-card-warning" role="alert" data-testid="action-card-escalated">
-          {lang === "id" ? "Masalah dilaporkan dari lapangan. Eskalasi ke pengawas." : "Field issue reported. Escalate to the supervisor."}
-          {fieldNote && <> {lang === "id" ? "Catatan:" : "Note:"} {fieldNote}</>}
+          {lang === "id"
+            ? "Masalah dilaporkan dari lapangan. Eskalasi ke pengawas."
+            : "Field issue reported. Escalate to the supervisor."}
+          {fieldNote && (
+            <>
+              {" "}
+              {lang === "id" ? "Catatan:" : "Note:"} {fieldNote}
+            </>
+          )}
         </p>
       )}
       {phase === "cancelled" && (
         <p className="action-card-issue" role="status" data-testid="action-card-cancelled">
-          {lang === "id" ? "Instruksi dibatalkan di lapangan. Tinjau sebelum mengirim ulang." : "Instruction cancelled in the field. Review before dispatching again."}
-          {fieldNote && <> {lang === "id" ? "Catatan:" : "Note:"} {fieldNote}</>}
+          {lang === "id"
+            ? "Instruksi dibatalkan di lapangan. Tinjau sebelum mengirim ulang."
+            : "Instruction cancelled in the field. Review before dispatching again."}
+          {fieldNote && (
+            <>
+              {" "}
+              {lang === "id" ? "Catatan:" : "Note:"} {fieldNote}
+            </>
+          )}
         </p>
       )}
       {phase === "error" && (

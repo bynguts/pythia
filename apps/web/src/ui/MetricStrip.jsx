@@ -1,5 +1,3 @@
-import React from "react";
-
 export function MetricStrip({ metrics }) {
   return (
     <section className="metric-strip" data-testid="metric-strip">

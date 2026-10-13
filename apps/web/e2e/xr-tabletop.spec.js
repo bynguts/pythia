@@ -7,7 +7,11 @@ const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 async function waitForXr(page) {
   // Capability detection (isSessionSupported) settles independently of the
   // first rendered frame; wait for both.
-  await page.waitForFunction(() => window.__pythiaXr && window.__pythiaXr.ready === true && window.__pythiaXr.mode !== "detecting", null, { timeout: 45000 });
+  await page.waitForFunction(
+    () => window.__pythiaXr && window.__pythiaXr.ready === true && window.__pythiaXr.mode !== "detecting",
+    null,
+    { timeout: 45000 },
+  );
   return page.evaluate(() => ({ ...window.__pythiaXr }));
 }
 
@@ -15,7 +19,9 @@ test.describe("XR tabletop twin", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   test("jakarta renders 42 district bars in the orbit viewer with model provenance", async ({ page }) => {
-    const scene = await (await page.request.get(`${API}/twin/scene?city=jakarta&days=7`, { timeout: 45000 })).json();
+    const scene = await (
+      await page.request.get(`${API}/twin/scene?city=jakarta&days=7`, { timeout: 45000 })
+    ).json();
     expect(scene.districts).toHaveLength(42);
 
     await page.goto("/xr?city=jakarta");
@@ -64,15 +70,21 @@ test.describe("XR tabletop twin", () => {
     await expect(prov).toHaveText(/simulated demo city/i);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Ho Chi Minh City");
     // The in-scene label that rides with the model into a VR headset.
-    await expect.poll(() => page.evaluate(() => window.__pythiaXr.sceneLabel)).toMatch(/^Ho Chi Minh City · Simulated demo city \|/);
+    await expect
+      .poll(() => page.evaluate(() => window.__pythiaXr.sceneLabel))
+      .toMatch(/^Ho Chi Minh City · Simulated demo city \|/);
   });
 
   test("the in-scene provenance label follows the language", async ({ page }) => {
     await page.goto("/xr?city=jakarta");
     await waitForXr(page);
-    await expect.poll(() => page.evaluate(() => window.__pythiaXr.sceneLabel)).toMatch(/^Jakarta · Keluaran model \|/);
+    await expect
+      .poll(() => page.evaluate(() => window.__pythiaXr.sceneLabel))
+      .toMatch(/^Jakarta · Keluaran model \|/);
     await page.getByRole("button", { name: "EN", exact: true }).click();
-    await expect.poll(() => page.evaluate(() => window.__pythiaXr.sceneLabel)).toMatch(/^Jakarta · Model output \|/);
+    await expect
+      .poll(() => page.evaluate(() => window.__pythiaXr.sceneLabel))
+      .toMatch(/^Jakarta · Model output \|/);
   });
 
   test("a scenario passed in the URL is stated on screen, never implied", async ({ page }) => {
@@ -85,11 +97,20 @@ test.describe("XR tabletop twin", () => {
 
     // The twin's "Open in AR/XR" link sends the event location too; it must
     // reach the scene request.
-    const sceneRequest = page.waitForRequest((r) => r.url().includes("/twin/scene?") && r.url().includes("event_lat=-6.2183") && r.url().includes("event_lng=106.8022"));
-    await page.goto("/xr?city=jakarta&lang=en&rainfall_mm=20&event_attendance=50000&event_lat=-6.2183&event_lng=106.8022");
+    const sceneRequest = page.waitForRequest(
+      (r) =>
+        r.url().includes("/twin/scene?") &&
+        r.url().includes("event_lat=-6.2183") &&
+        r.url().includes("event_lng=106.8022"),
+    );
+    await page.goto(
+      "/xr?city=jakarta&lang=en&rainfall_mm=20&event_attendance=50000&event_lat=-6.2183&event_lng=106.8022",
+    );
     await sceneRequest;
     await waitForXr(page);
-    await expect(page.getByTestId("xr-scenario")).toHaveText("Scenario applied: rain 20 mm · event 50,000 people");
+    await expect(page.getByTestId("xr-scenario")).toHaveText(
+      "Scenario applied: rain 20 mm · event 50,000 people",
+    );
   });
 
   test("taps on overlay panels never reach the XR session as a select", async ({ page }) => {
@@ -163,7 +184,8 @@ test.describe("XR tabletop twin", () => {
       const small = [];
       document.querySelectorAll(".xr-overlay button, .xr-overlay a, .xr-overlay input").forEach((el) => {
         const r = el.getBoundingClientRect();
-        if (r.width > 0 && (r.width < 44 || r.height < 44)) small.push(`${el.outerHTML.slice(0, 60)} ${r.width}x${r.height}`);
+        if (r.width > 0 && (r.width < 44 || r.height < 44))
+          small.push(`${el.outerHTML.slice(0, 60)} ${r.width}x${r.height}`);
       });
       return { small, overflow: document.documentElement.scrollWidth > window.innerWidth };
     });
