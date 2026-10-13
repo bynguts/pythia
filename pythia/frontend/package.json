@@ -11,6 +11,10 @@
     "budget": "node e2e/lib/bundle-budget.mjs"
   },
   "dependencies": {
+    "@deck.gl/core": "^9.4.0",
+    "@deck.gl/geo-layers": "^9.4.0",
+    "@deck.gl/layers": "^9.4.0",
+    "@deck.gl/mapbox": "^9.4.0",
     "@vitejs/plugin-react": "^4.3.4",
     "dompurify": "^3.4.13",
     "html2pdf.js": "^0.14.0",
@@ -19,6 +23,7 @@
     "marked": "^18.0.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "three": "^0.186.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.7"
   },

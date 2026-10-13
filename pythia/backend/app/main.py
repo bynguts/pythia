@@ -1098,13 +1098,11 @@ def confirm_dispatch(dispatch_id: str, payload: DispatchConfirmRequest, _role: s
             # Replay of an already-recorded operation: return stored state,
             # do not write a second history event (#44).
             return prior
+    try:
         d = history_store.update_dispatch_status(
             dispatch_id, payload.status, payload.note, payload.operation_id)
-    else:
-        try:
-            d = history_store.update_dispatch_status(dispatch_id, payload.status, payload.note)
-        except KeyError as error:
-            raise HTTPException(status_code=404, detail=str(error)) from error
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
     history_store.record_event("dispatch_confirmed", {"dispatch_id": dispatch_id, "status": payload.status})
     return d
 
@@ -2020,9 +2018,10 @@ def complete_spj(spj_id: str, body: SpjCompleteOverrideBody | None = None,
         override = {"actor": _role, "reason": reason}
     result = _spj_or_409(SPJ_STORE.complete, spj_id, override)
     _refresh_fleet_caches()
-    history_store.record_event("spj_completed_by_override", {
-        "spj_id": spj_id, "actor": override["actor"], "reason": override["reason"],
-    })
+    if override is not None:
+        history_store.record_event("spj_completed_by_override", {
+            "spj_id": spj_id, "actor": override["actor"], "reason": override["reason"],
+        })
     return result
 
 
