@@ -5,15 +5,17 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.ai.actions.auto_state import AiEvent, EVENT_FEED
+from app.ai.actions.auto_state import EVENT_FEED, AiEvent
 from app.ai.engine_loop import maybe_start_engine
+from app.main import app
 
 
 class AiEndpointTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app, raise_server_exceptions=False)
-        _login = self.client.post("/api/auth/login", json={"username": "administrator", "password": "administrator-demo-pass"})
+        _login = self.client.post(
+            "/api/auth/login", json={"username": "administrator", "password": "administrator-demo-pass"}
+        )
         self.client.headers.update({"Authorization": f"Bearer {_login.json()['token']}"})
         EVENT_FEED.clear()
 
@@ -26,17 +28,22 @@ class AiEndpointTests(unittest.TestCase):
         self.assertEqual(r.json(), {"events": [], "count": 0})
 
     def test_events_feed_served_and_acknowledged(self):
-        EVENT_FEED.append(AiEvent(event_type="auto_reroute", truck_code="T-001",
-                                  title="t", detail={}, confidence=0.8,
-                                  created_at="2026-09-10T00:00:00"))
+        EVENT_FEED.append(
+            AiEvent(
+                event_type="auto_reroute",
+                truck_code="T-001",
+                title="t",
+                detail={},
+                confidence=0.8,
+                created_at="2026-09-10T00:00:00",
+            )
+        )
         r = self.client.get("/api/ai/events")
         self.assertEqual(r.json()["count"], 1)
         self.assertEqual(r.json()["events"][0]["status"], "new")
         ack = self.client.post("/api/ai/events/0/ack")
         self.assertTrue(ack.json()["ok"])
-        self.assertEqual(
-            self.client.get("/api/ai/events").json()["events"][0]["status"],
-            "acknowledged")
+        self.assertEqual(self.client.get("/api/ai/events").json()["events"][0]["status"], "acknowledged")
         bad = self.client.post("/api/ai/events/99/ack")
         self.assertFalse(bad.json()["ok"])
 
@@ -45,8 +52,7 @@ class AiEndpointTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         body = r.json()
         # engine off di test -> no_data; bila engine pernah jalan -> schema penuh
-        self.assertTrue(body == {"status": "no_data"}
-                        or "predicted_wait_min" in body)
+        self.assertTrue(body == {"status": "no_data"} or "predicted_wait_min" in body)
 
     def test_unlicensed_flags_endpoint(self):
         r = self.client.get("/api/ai/unlicensed-flags")

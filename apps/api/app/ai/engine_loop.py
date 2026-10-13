@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Callable
+from collections.abc import Callable
 
-from app.env import getenv
 from app.ai.base import GpsDataSource, get_gps_source
+from app.env import getenv
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +20,7 @@ ModuleFn = Callable[[GpsDataSource], None]
 
 
 class AiEngine:
-    def __init__(self, tick_seconds: float = 8.0,
-                 source: GpsDataSource | None = None) -> None:
+    def __init__(self, tick_seconds: float = 8.0, source: GpsDataSource | None = None) -> None:
         self._tick_seconds = tick_seconds
         self._source = source or get_gps_source()
         self._modules: list[tuple[str, ModuleFn]] = []
@@ -48,9 +47,7 @@ class AiEngine:
             if self._running:
                 return
             self._running = True
-            self._thread = threading.Thread(
-                target=self._loop, daemon=True, name="pythia-ai-engine"
-            )
+            self._thread = threading.Thread(target=self._loop, daemon=True, name="pythia-ai-engine")
             self._thread.start()
 
     def stop(self) -> None:

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 engine.py — Pythia core logic.
 Includes:
@@ -7,37 +6,70 @@ Includes:
 - Landfill Staggered Dispatch Simulator & OSRM ETA adjustments
 - Crew Man-Hours, fuel, and facility requirements planner
 """
+
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 from math import asin, cos, radians, sin, sqrt
-from pathlib import Path
-from uuid import uuid4
 from typing import Any
+from uuid import uuid4
+
+import joblib
 import numpy as np
 import pandas as pd
-import joblib
 
 from app.paths import MODELS_DIR, REAL_DIR
-
-from functools import lru_cache
-
 from app.units import resource_requirements
 
 # 42 Jakarta kecamatan (matches scripts/train_models.py; models named by slug).
 _KELURAHAN_SLUGS = [
-    "gambir", "sawah_besar", "kemayoran", "senen", "cempaka_putih", "menteng",
-    "tanah_abang", "johar_baru", "penjaringan", "tanjung_priok", "koja",
-    "cilincing", "pademangan", "kelapa_gading", "cengkareng", "grogol_petamburan",
-    "taman_sari", "tambora", "kebon_jeruk", "kali_deres", "palmerah", "kembangan",
-    "tebet", "setiabudi", "mampang_prapatan", "pasar_minggu", "kebayoran_lama",
-    "cilandak", "kebayoran_baru", "pancoran", "jagakarsa", "pesanggrahan",
-    "matraman", "pulo_gadung", "jatinegara", "kramat_jati", "pasar_rebo",
-    "cakung", "duren_sawit", "makasar", "ciracas", "cipayung",
+    "gambir",
+    "sawah_besar",
+    "kemayoran",
+    "senen",
+    "cempaka_putih",
+    "menteng",
+    "tanah_abang",
+    "johar_baru",
+    "penjaringan",
+    "tanjung_priok",
+    "koja",
+    "cilincing",
+    "pademangan",
+    "kelapa_gading",
+    "cengkareng",
+    "grogol_petamburan",
+    "taman_sari",
+    "tambora",
+    "kebon_jeruk",
+    "kali_deres",
+    "palmerah",
+    "kembangan",
+    "tebet",
+    "setiabudi",
+    "mampang_prapatan",
+    "pasar_minggu",
+    "kebayoran_lama",
+    "cilandak",
+    "kebayoran_baru",
+    "pancoran",
+    "jagakarsa",
+    "pesanggrahan",
+    "matraman",
+    "pulo_gadung",
+    "jatinegara",
+    "kramat_jati",
+    "pasar_rebo",
+    "cakung",
+    "duren_sawit",
+    "makasar",
+    "ciracas",
+    "cipayung",
 ]
+
 
 @lru_cache(maxsize=128)
 def _load_hybrid(kelurahan_slug: str) -> tuple[Any, Any] | None:
@@ -51,7 +83,8 @@ def _load_hybrid(kelurahan_slug: str) -> tuple[Any, Any] | None:
         # A silent fallback here made every district predict the flat 150 t
         # heuristic; log so a missing dependency (e.g. pyarrow) is visible.
         logging.getLogger(__name__).exception(
-            "hybrid model for %s exists but failed to load; using fallback heuristic", kelurahan_slug)
+            "hybrid model for %s exists but failed to load; using fallback heuristic", kelurahan_slug
+        )
         return None
 
 
@@ -72,6 +105,7 @@ def hybrid_models_loadable() -> bool:
     """Health probe: True when at least one on-disk hybrid pair unpickles."""
     return _load_hybrid(_KELURAHAN_SLUGS[0]) is not None
 
+
 try:
     _ISOLATION_MODEL = joblib.load(MODELS_DIR / "isolation_forest_fleet.joblib")
 except Exception:
@@ -82,12 +116,13 @@ except Exception:
 # 1. FLEET ROUTING & ANOMALY DETECTION (CASE 1)
 # ═════════════════════════════════════════════════════════════════════
 
+
 def _haversine_meters(a: tuple[float, float], b: tuple[float, float]) -> float:
     R = 6371000.0  # Earth's radius in meters
     lat1, lon1 = radians(a[0]), radians(a[1])
     lat2, lon2 = radians(b[0]), radians(b[1])
     dlat, dlon = lat2 - lat1, lon2 - lon1
-    val = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
+    val = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
     return 2 * R * asin(sqrt(val))
 
 
@@ -122,8 +157,7 @@ def distance_point_to_polyline_m(position, path) -> float:
         return float("inf")
     if len(path) == 1:
         return _haversine_meters(position, path[0])
-    return min(_point_to_segment_m(position, path[i], path[i + 1])
-              for i in range(len(path) - 1))
+    return min(_point_to_segment_m(position, path[i], path[i + 1]) for i in range(len(path) - 1))
 
 
 def detect_route_deviation(
@@ -227,14 +261,16 @@ def recommend_routes(routes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     scored = []
     for route in compliant:
         score = route["eta_minutes"] * 0.55 + route["traffic_level"] * 35 + route["flood_risk"] * 45
-        scored.append({
-            **route,
-            "score": round(score, 2),
-            "reason": (
-                "recommended because it is permit-compliant, has the lowest combined "
-                f"ETA/traffic/flood risk score ({score:.1f})"
-            ),
-        })
+        scored.append(
+            {
+                **route,
+                "score": round(score, 2),
+                "reason": (
+                    "recommended because it is permit-compliant, has the lowest combined "
+                    f"ETA/traffic/flood risk score ({score:.1f})"
+                ),
+            }
+        )
     return sorted(scored, key=lambda item: item["score"])
 
 
@@ -244,30 +280,33 @@ def estimate_tpa_queue_wait(waiting_trucks: int, throughput_per_hour: int = 30) 
     Throughput is standard 30 trucks/hour (2 minutes per truck dump time).
     """
     wait_minutes = round((waiting_trucks / throughput_per_hour) * 60)
-    
+
     status = "green"
     if wait_minutes >= 90:
         status = "red"
     elif wait_minutes >= 45:
         status = "yellow"
-        
-    recommendation = "Delay departures of non-essential trucks by 30-45 minutes to relieve Bantargebang gridlock."
+
+    recommendation = (
+        "Delay departures of non-essential trucks by 30-45 minutes to relieve Bantargebang gridlock."
+    )
     if status == "green":
         recommendation = "Green corridor clear. Normal dispatch speed approved."
     elif status == "yellow":
         recommendation = "Stagger dispatch cycles by 20 minutes to flatten landfill load spike."
-        
+
     return {
         "trucks_waiting": waiting_trucks,
         "estimated_wait_minutes": wait_minutes,
         "throughput_trucks_per_hour": throughput_per_hour,
         "status": status,
-        "recommendation": recommendation
+        "recommendation": recommendation,
     }
 
 
-def simulate_staggered_dispatch(active_trucks: int, weighbridges: int = 2,
-                                service_rate_per_hour: float = 4.5) -> dict[str, Any]:
+def simulate_staggered_dispatch(
+    active_trucks: int, weighbridges: int = 2, service_rate_per_hour: float = 4.5
+) -> dict[str, Any]:
     from app.queue_simulation import simulate_queue
 
     sim_trucks = 47 if active_trucks <= 5 else active_trucks
@@ -280,12 +319,14 @@ def simulate_staggered_dispatch(active_trucks: int, weighbridges: int = 2,
     today = datetime.now()
     for i in range(active_trucks):
         dept_time = (today + timedelta(minutes=i * stagger_intervals_minutes)).strftime("%H:%M")
-        schedule.append({
-            "truck_index": i + 1,
-            "suggested_departure": dept_time,
-            "slot_status": "assigned",
-            "tpa_wait_est_minutes": staggered["mean_wait_minutes"],
-        })
+        schedule.append(
+            {
+                "truck_index": i + 1,
+                "suggested_departure": dept_time,
+                "slot_status": "assigned",
+                "tpa_wait_est_minutes": staggered["mean_wait_minutes"],
+            }
+        )
 
     b_wait = baseline["mean_wait_minutes"]
     s_wait = staggered["mean_wait_minutes"]
@@ -308,6 +349,7 @@ def simulate_staggered_dispatch(active_trucks: int, weighbridges: int = 2,
 # ═════════════════════════════════════════════════════════════════════
 # 2. WASTE FORECAST — HEURISTIC (deterministic, test-validated)
 # ═════════════════════════════════════════════════════════════════════
+
 
 def forecast_waste_risk(
     baseline_tons: float,
@@ -349,8 +391,7 @@ def forecast_waste_risk(
     # Operational requirements in the canonical units (app.units): one truck
     # carries TRUCK_CAPACITY_TONS, one crew rides one truck, man-hours are
     # person-hours. Every producer in the backend shares this block.
-    resources = resource_requirements(predicted_tons,
-                                      baseline_tons=baseline_tons)
+    resources = resource_requirements(predicted_tons, baseline_tons=baseline_tons)
 
     return {
         "baseline_tons": baseline_tons,
@@ -360,13 +401,14 @@ def forecast_waste_risk(
         "factors": factors or ["No unusual driver detected."],
         **resources,
         "fuel_consumption_liters": round(predicted_tons * 1.8, 1),
-        "co2_emissions_kg": round(predicted_tons * 1.8 * 2.68, 1), # 2.68 kg CO2 per liter solar
+        "co2_emissions_kg": round(predicted_tons * 1.8 * 2.68, 1),  # 2.68 kg CO2 per liter solar
     }
 
 
 # ═════════════════════════════════════════════════════════════════════
 # 3. WASTE FORECAST — HYBRID ML (Prophet + XGBoost per kelurahan)
 # ═════════════════════════════════════════════════════════════════════
+
 
 @lru_cache(maxsize=1024)
 def predict_waste_hybrid(
@@ -388,10 +430,10 @@ def predict_waste_hybrid(
         prophet_pred = fallback_baseline * (1.05 if is_weekend else 1.0)
         residual_pred = (rainfall_mm * 1.2) + (event_attendance * 0.0012)
         predicted_tons = max(0.0, round(float(prophet_pred + residual_pred), 1))
-        
+
         # Calculate requirements
         resources = resource_requirements(predicted_tons)
-        
+
         return {
             "kelurahan": kelurahan,
             "model_available": False,
@@ -414,7 +456,9 @@ def predict_waste_hybrid(
                 "is_weekend": int(is_weekend),
                 "is_holiday": int(is_holiday),
                 "event_attendance": event_attendance,
-                "day_of_week": pd.Timestamp(target_date).weekday() if target_date else pd.Timestamp.now().weekday(),
+                "day_of_week": pd.Timestamp(target_date).weekday()
+                if target_date
+                else pd.Timestamp.now().weekday(),
                 "month_of_year": pd.Timestamp(target_date).month if target_date else pd.Timestamp.now().month,
                 "day_of_month": pd.Timestamp(target_date).day if target_date else pd.Timestamp.now().day,
                 "is_payday": 0,
@@ -423,7 +467,7 @@ def predict_waste_hybrid(
             "factors": ["Model files missing; loaded robust statistical fallback heuristics for demo."],
             **resources,
             "fuel_consumption_liters": round(predicted_tons * 1.8, 1),
-            "co2_emissions_kg": round(predicted_tons * 1.8 * 2.68, 1)
+            "co2_emissions_kg": round(predicted_tons * 1.8 * 2.68, 1),
         }
 
     _, xgboost_model = models
@@ -454,8 +498,12 @@ def predict_waste_hybrid(
     # zeroed (leave-one-out on the residual model). This is the visible proof
     # that weather/event/calendar data actually drives the forecast.
     attribution: dict[str, float] = {}
-    for key, label in (("precipitation_mm", "rainfall_tons"), ("event_attendance", "event_tons"),
-                       ("is_weekend", "weekend_tons"), ("is_holiday", "holiday_tons")):
+    for key, label in (
+        ("precipitation_mm", "rainfall_tons"),
+        ("event_attendance", "event_tons"),
+        ("is_weekend", "weekend_tons"),
+        ("is_holiday", "holiday_tons"),
+    ):
         zeroed = dict(feature_row)
         zeroed[key] = 0
         marginal = float(residual_pred - xgboost_model.predict(pd.DataFrame([zeroed]))[0])
@@ -477,7 +525,7 @@ def predict_waste_hybrid(
     if rainfall_mm >= 30:
         factors.append(f"Heavy rainfall (+{round(residual_pred):.0f}t residual correction from XGBoost).")
     elif rainfall_mm >= 10:
-        factors.append(f"Moderate rainfall contributing to wet-waste increase.")
+        factors.append("Moderate rainfall contributing to wet-waste increase.")
     if event_attendance >= 50_000:
         factors.append(f"Major event ({event_attendance:,} attendees) spiking localized volume.")
     elif event_attendance >= 10_000:
@@ -485,7 +533,9 @@ def predict_waste_hybrid(
     if is_weekend:
         factors.append("Weekend cycle activated (Prophet weekly seasonality).")
     if is_holiday:
-        factors.append("National holiday detected — reduced commercial waste, possible spike from public gatherings.")
+        factors.append(
+            "National holiday detected — reduced commercial waste, possible spike from public gatherings."
+        )
 
     # Requirements calculations (canonical units, app.units)
     resources = resource_requirements(predicted_tons)
@@ -508,7 +558,7 @@ def predict_waste_hybrid(
         "factors": factors or ["Prophet baseline trend stable; no exceptional drivers."],
         **resources,
         "fuel_consumption_liters": round(predicted_tons * 1.8, 1),
-        "co2_emissions_kg": round(predicted_tons * 1.8 * 2.68, 1)
+        "co2_emissions_kg": round(predicted_tons * 1.8 * 2.68, 1),
     }
 
 
@@ -520,6 +570,7 @@ def _holiday_dates() -> frozenset[str]:
     the series output labels this window explicitly.
     """
     import json as _json
+
     path = REAL_DIR / "hari_libur_indonesia_2026.json"
     if not path.exists():
         return frozenset()
@@ -559,39 +610,48 @@ def predict_waste_hybrid_series(
     if models is not None:
         _, xgboost_model = models
         yhat = np.array(_prophet_yhat(slug, tuple(d.strftime("%Y-%m-%d") for d in dates)))
-        X = pd.DataFrame([{
-            "precipitation_mm": rainfall_mm,
-            "temp_max_c": temp_max_c,
-            "wind_max_kmh": wind_max_kmh,
-            "is_weekend": int(w),
-            "is_holiday": int(h),
-            "event_attendance": event_attendance,
-            "day_of_week": d.weekday(),
-            "month_of_year": d.month,
-            "day_of_month": d.day,
-            "is_payday": int(d.day in (1, 2, 25, 26, 27, 28)),
-            "rain_3d": round(rainfall_mm * 1.5, 2),
-        } for d, w, h in zip(dates, weekend_flags, holiday_flags)])
+        X = pd.DataFrame(
+            [
+                {
+                    "precipitation_mm": rainfall_mm,
+                    "temp_max_c": temp_max_c,
+                    "wind_max_kmh": wind_max_kmh,
+                    "is_weekend": int(w),
+                    "is_holiday": int(h),
+                    "event_attendance": event_attendance,
+                    "day_of_week": d.weekday(),
+                    "month_of_year": d.month,
+                    "day_of_month": d.day,
+                    "is_payday": int(d.day in (1, 2, 25, 26, 27, 28)),
+                    "rain_3d": round(rainfall_mm * 1.5, 2),
+                }
+                for d, w, h in zip(dates, weekend_flags, holiday_flags, strict=True)
+            ]
+        )
         residuals = xgboost_model.predict(X)
         model_available = True
     else:
         base = 150.0
         yhat = np.array([base] * days, dtype=float)
-        residuals = np.array([
-            (rainfall_mm * 1.2) + (event_attendance * 0.003) + (base * 0.05 if w else 0.0)
-            for w in weekend_flags
-        ])
+        residuals = np.array(
+            [
+                (rainfall_mm * 1.2) + (event_attendance * 0.003) + (base * 0.05 if w else 0.0)
+                for w in weekend_flags
+            ]
+        )
         model_available = False
 
     series = []
-    for d, w, h, yb, res in zip(dates, weekend_flags, holiday_flags, yhat, residuals):
+    for d, w, h, yb, res in zip(dates, weekend_flags, holiday_flags, yhat, residuals, strict=True):
         tons = max(0.0, round(float(yb) + float(res), 1))
-        series.append({
-            "date": d.strftime("%Y-%m-%d"),
-            "predicted_tons": tons,
-            "is_weekend": w,
-            "is_holiday": h,
-        })
+        series.append(
+            {
+                "date": d.strftime("%Y-%m-%d"),
+                "predicted_tons": tons,
+                "is_weekend": w,
+                "is_holiday": h,
+            }
+        )
     peak = max(series, key=lambda r: r["predicted_tons"])
     total = round(sum(r["predicted_tons"] for r in series), 1)
     return {
@@ -616,19 +676,22 @@ def list_hybrid_models() -> list[dict[str, Any]]:
     for slug in _KELURAHAN_SLUGS:
         p_exists = (MODELS_DIR / f"prophet_{slug}.joblib").exists()
         x_exists = (MODELS_DIR / f"xgboost_{slug}.joblib").exists()
-        results.append({
-            "kelurahan": slug.replace("_", " ").title(),
-            "slug": slug,
-            "prophet_available": p_exists,
-            "xgboost_available": x_exists,
-            "hybrid_available": p_exists and x_exists,
-        })
+        results.append(
+            {
+                "kelurahan": slug.replace("_", " ").title(),
+                "slug": slug,
+                "prophet_available": p_exists,
+                "xgboost_available": x_exists,
+                "hybrid_available": p_exists and x_exists,
+            }
+        )
     return results
 
 
 # ═════════════════════════════════════════════════════════════════════
 # 4. DISPATCH CENTER
 # ═════════════════════════════════════════════════════════════════════
+
 
 @dataclass
 class DispatchCenter:
@@ -642,7 +705,7 @@ class DispatchCenter:
             "manager_id": manager_id,
             "field_status": "PENDING",
             "confirmed_note": "",
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "confirmed_at": None,
         }
         self._dispatches.append(dispatch)
@@ -653,14 +716,13 @@ class DispatchCenter:
             if dispatch["id"] == dispatch_id:
                 dispatch["field_status"] = status
                 dispatch["confirmed_note"] = note
-                dispatch["confirmed_at"] = datetime.now(timezone.utc).isoformat()
+                dispatch["confirmed_at"] = datetime.now(UTC).isoformat()
                 return dispatch
         raise KeyError(f"Dispatch {dispatch_id} was not found.")
 
     def pending_for_truck(self, truck_code: str) -> list[dict[str, Any]]:
         return [
-            d for d in self._dispatches
-            if d["truck_code"] == truck_code and d["field_status"] == "PENDING"
+            d for d in self._dispatches if d["truck_code"] == truck_code and d["field_status"] == "PENDING"
         ]
 
     def audit_log(self) -> list[dict[str, Any]]:

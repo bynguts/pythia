@@ -6,9 +6,11 @@ from app.ai.detectors.deviation_trigger import DeviationTrigger
 
 
 def _truck(code, violated, distance=600.0):
-    return {"truck_code": code,
-            "latest_position": {"lat": -6.2, "lng": 106.8, "speed_kmh": 25.0},
-            "deviation": {"violated": violated, "distance_meters": distance}}
+    return {
+        "truck_code": code,
+        "latest_position": {"lat": -6.2, "lng": 106.8, "speed_kmh": 25.0},
+        "deviation": {"violated": violated, "distance_meters": distance},
+    }
 
 
 class FakeSource:

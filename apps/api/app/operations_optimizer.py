@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Integrated operations optimizer: connect Case 2 forecast demand to Case 1 fleet.
 
 Given predicted per-area waste demand and the available fleet (capacity, vehicle
@@ -7,6 +6,7 @@ CP-SAT to assign trucks to demand areas so each area's collected tonnage meets
 demand, respecting per-vehicle capacity and permit rules. Every assignment
 carries evidence (capacity, permit) for auditability.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -50,8 +50,9 @@ class OperationalPlan:
     total_assigned_tons: float = 0.0
 
 
-def build_operational_plan(demands: list[Demand], vehicles: list[Vehicle],
-                           require_permit: bool = True) -> OperationalPlan:
+def build_operational_plan(
+    demands: list[Demand], vehicles: list[Vehicle], require_permit: bool = True
+) -> OperationalPlan:
     """Assign trucks to demand areas with CP-SAT, honoring capacity and permits.
 
     Each truck serves at most one area; an area may need several trucks. The
@@ -104,17 +105,19 @@ def build_operational_plan(demands: list[Demand], vehicles: list[Vehicle],
     for vi, v in enumerate(usable):
         for di, d in enumerate(demands):
             if solver.Value(x[(vi, di)]) == 1:
-                plan.assignments.append(Assignment(
-                    truck_code=v.truck_code,
-                    area=d.area,
-                    assigned_tons=float(v.capacity_tons),
-                    evidence={
-                        "capacity_tons": v.capacity_tons,
-                        "permit_compliant": v.permit_compliant,
-                        "area_demand_tons": d.tons,
-                        "area_priority": d.priority,
-                    },
-                ))
+                plan.assignments.append(
+                    Assignment(
+                        truck_code=v.truck_code,
+                        area=d.area,
+                        assigned_tons=float(v.capacity_tons),
+                        evidence={
+                            "capacity_tons": v.capacity_tons,
+                            "permit_compliant": v.permit_compliant,
+                            "area_demand_tons": d.tons,
+                            "area_priority": d.priority,
+                        },
+                    )
+                )
 
     plan.total_assigned_tons = round(sum(a.assigned_tons for a in plan.assignments), 2)
     for d in demands:

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 fleet_generator.py — scales the demo fleet from the 4 curated narrative trucks
 to a realistic operational fleet (60 units) grounded in real data:
@@ -20,6 +19,7 @@ duty path — loading_at_tps / hauling_to_tpa / dumping_at_tpa / returning —
 plus a deterministic maintenance status for the fleet-damage dashboard
 requirement.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -31,9 +31,21 @@ from app.real_data import load_fleet_composition, load_kelurahan_heatmap
 
 _GENERATED_COUNT = 55  # + 5 curated trucks = 60-unit demo fleet
 _DRIVER_POOL = [
-    "Slamet Riyadi", "Dedi Kurniawan", "Rudi Hartono", "Andi Wijaya", "Fajar Nugroho",
-    "Hendra Gunawan", "Yusuf Maulana", "Bambang Sutrisno", "Eko Purnomo", "Irfan Hakim",
-    "Surya Darma", "Tono Sugiarto", "Wahyu Hidayat", "Asep Saepudin", "Dodi Firmansyah",
+    "Slamet Riyadi",
+    "Dedi Kurniawan",
+    "Rudi Hartono",
+    "Andi Wijaya",
+    "Fajar Nugroho",
+    "Hendra Gunawan",
+    "Yusuf Maulana",
+    "Bambang Sutrisno",
+    "Eko Purnomo",
+    "Irfan Hakim",
+    "Surya Darma",
+    "Tono Sugiarto",
+    "Wahyu Hidayat",
+    "Asep Saepudin",
+    "Dodi Firmansyah",
 ]
 _DAMAGE_NOTES = [
     ("breakdown", "Hydraulic compactor leak — held at depot"),
@@ -70,11 +82,14 @@ def _kelurahan_centroids() -> list[dict[str, Any]]:
             continue
         lng = sum(p[0] for p in ring) / len(ring)
         lat = sum(p[1] for p in ring) / len(ring)
-        out.append({
-            "lat": lat, "lng": lng,
-            "kelurahan": props.get("kelurahan", ""),
-            "city": city,
-        })
+        out.append(
+            {
+                "lat": lat,
+                "lng": lng,
+                "kelurahan": props.get("kelurahan", ""),
+                "city": city,
+            }
+        )
     return out
 
 
@@ -83,11 +98,11 @@ def _duty_path(anchor_lat: float, anchor_lng: float, seed: int) -> list[tuple[fl
     rng = seed
     pts = []
     lat, lng = anchor_lat, anchor_lng
-    for i in range(3):
+    for _ in range(3):
         pts.append((round(lat, 6), round(lng, 6)))
-        rng = (rng * 1103515245 + 12345) % (2 ** 31)
+        rng = (rng * 1103515245 + 12345) % (2**31)
         dlng = ((rng % 1000) / 1000.0 - 0.5) * 0.016
-        rng = (rng * 1103515245 + 12345) % (2 ** 31)
+        rng = (rng * 1103515245 + 12345) % (2**31)
         dlat = ((rng % 1000) / 1000.0 - 0.5) * 0.012
         lat, lng = lat + dlat, lng + dlng
     return pts
@@ -100,7 +115,10 @@ def _path_km(path: list[tuple[float, float]]) -> float:
         lat2, lon2 = path[i]
         dlat = math.radians(lat2 - lat1)
         dlon = math.radians(lon2 - lon1)
-        h = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+        h = (
+            math.sin(dlat / 2) ** 2
+            + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+        )
         total += 2 * 6371.0 * math.asin(math.sqrt(h))
     return max(total, 0.2)
 
@@ -163,13 +181,16 @@ def _generated_truck(code: str, anchor: dict[str, Any], vehicle_type: str, now: 
     speed = max(0.0, min(60.0, round(speed, 1)))
     try:
         from app.damage_reports import DAMAGE_STORE
+
         override = DAMAGE_STORE.active_override_for(code)
     except Exception:  # noqa: BLE001
         override = None
     if override is not None:
-        damage = {"state": "breakdown",
-                  "note": f"Driver report: {override.component} — {override.note}",
-                  "operational": False}
+        damage = {
+            "state": "breakdown",
+            "note": f"Driver report: {override.component} — {override.note}",
+            "operational": False,
+        }
     else:
         damage = damage_status_for(code)
     damaged = not damage["operational"] or damage["state"] != "ok"
@@ -195,9 +216,14 @@ def _generated_truck(code: str, anchor: dict[str, Any], vehicle_type: str, now: 
         "assigned_path": [{"lat": la, "lng": ln} for la, ln in path],
         "actual_path": [{"lat": la, "lng": ln} for la, ln in path],
         "deviation": {
-            "violated": False, "distance_meters": 0.0, "ml_outlier": False,
-            "ml_score": None, "rule_flags": [], "confidence": 0.9,
-            "severity": "normal", "message": "Truck remains inside the assigned corridor.",
+            "violated": False,
+            "distance_meters": 0.0,
+            "ml_outlier": False,
+            "ml_score": None,
+            "rule_flags": [],
+            "confidence": 0.9,
+            "severity": "normal",
+            "message": "Truck remains inside the assigned corridor.",
         },
         "telemetry_class": "SIMULATED — generated fleet unit (not live GPS)",
     }
@@ -219,7 +245,11 @@ def get_generated_fleet() -> list[dict[str, Any]]:
     trucks: list[dict[str, Any]] = []
     for i in range(_GENERATED_COUNT):
         code = f"T-{200 + i}"
-        anchor = anchors[(i * 7) % len(anchors)] if anchors else {"lat": -6.2, "lng": 106.84, "kelurahan": "", "city": "Jakarta"}
+        anchor = (
+            anchors[(i * 7) % len(anchors)]
+            if anchors
+            else {"lat": -6.2, "lng": 106.84, "kelurahan": "", "city": "Jakarta"}
+        )
         vtype = vehicle_types[i % len(vehicle_types)]
         trucks.append(_generated_truck(code, anchor, vtype, now))
 

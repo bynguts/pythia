@@ -6,7 +6,6 @@ from typing import Any
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
-
 JAKARTA_LAT = -6.2088
 JAKARTA_LNG = 106.8456
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
@@ -123,6 +122,7 @@ _WEATHER_CACHE_TIME: float = 0.0
 def fetch_jakarta_weather_forecast(timeout_seconds: float = 5.0) -> dict[str, Any]:
     global _WEATHER_CACHE, _WEATHER_CACHE_TIME
     import time
+
     now = time.time()
     if _WEATHER_CACHE is not None and (now - _WEATHER_CACHE_TIME) < 300:
         return _WEATHER_CACHE

@@ -10,6 +10,7 @@ The docker image has no repository around it (``/app`` holds the service,
 ``/data`` the datasets), so the dataset location can be set with
 ``PYTHIA_DATA_DIR``.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

@@ -6,7 +6,7 @@ import math
 import threading
 import time
 from collections import deque
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.ai.base import GpsDataSource
 from app.astar_routing import NODES
@@ -36,9 +36,15 @@ def _congestion_level(wait_min: float) -> str:
 
 
 class TpaQueuePredictor:
-    def __init__(self, geofence_radius_m: float = 800.0, stopped_kmh: float = 3.0,
-                 eta_window_min: float = 30.0, weighbridges: int = 2,
-                 service_rate_per_hour: float = 30.0, trend_window: int = 20) -> None:
+    def __init__(
+        self,
+        geofence_radius_m: float = 800.0,
+        stopped_kmh: float = 3.0,
+        eta_window_min: float = 30.0,
+        weighbridges: int = 2,
+        service_rate_per_hour: float = 30.0,
+        trend_window: int = 20,
+    ) -> None:
         self._radius_km = geofence_radius_m / 1000.0
         self._stopped_kmh = stopped_kmh
         self._eta_window_min = eta_window_min
@@ -73,7 +79,7 @@ class TpaQueuePredictor:
                 if eta_min <= self._eta_window_min:
                     arriving += 1
 
-        for _ in (inside_now - self._inside_prev):
+        for _ in inside_now - self._inside_prev:
             self._arrivals.append(now)
         self._inside_prev = inside_now
         cutoff = now - 15 * 60
@@ -81,9 +87,11 @@ class TpaQueuePredictor:
             self._arrivals.popleft()
         arrival_rate_per_h = len(self._arrivals) * 4.0
 
-        sim = simulate_queue(arrival_count=in_queue + arriving,
-                             weighbridges=self._weighbridges,
-                             service_rate_per_hour=self._service_rate)
+        sim = simulate_queue(
+            arrival_count=in_queue + arriving,
+            weighbridges=self._weighbridges,
+            service_rate_per_hour=self._service_rate,
+        )
         wait = round(sim["mean_wait_minutes"], 1)
         trend = self._trend()
         self._wait_history.append(wait)
@@ -95,7 +103,7 @@ class TpaQueuePredictor:
             "wait_ci95": sim["wait_ci95"],
             "trend": trend,
             "congestion_level": _congestion_level(wait),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }
         with self._lock:
             self._latest = snap

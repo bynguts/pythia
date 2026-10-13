@@ -16,9 +16,14 @@ class JamSignal:
 
 
 class SpeedAnomalyDetector:
-    def __init__(self, slow_kmh: float = 15.0, clear_kmh: float = 25.0,
-                 slow_ticks: int = 3, clear_ticks: int = 2,
-                 crumb_points: int = 6) -> None:
+    def __init__(
+        self,
+        slow_kmh: float = 15.0,
+        clear_kmh: float = 25.0,
+        slow_ticks: int = 3,
+        clear_ticks: int = 2,
+        crumb_points: int = 6,
+    ) -> None:
         self._slow_kmh = slow_kmh
         self._clear_kmh = clear_kmh
         self._slow_ticks = slow_ticks
@@ -37,8 +42,7 @@ class SpeedAnomalyDetector:
             if not crumbs:
                 continue
             avg_speed = sum(c.speed_kmh for c in crumbs) / len(crumbs)
-            st = self._state.setdefault(
-                code, {"jammed": False, "below": 0, "above": 0})
+            st = self._state.setdefault(code, {"jammed": False, "below": 0, "above": 0})
             if avg_speed < self._slow_kmh:
                 st["below"] += 1
                 st["above"] = 0
@@ -52,8 +56,10 @@ class SpeedAnomalyDetector:
                 st["jammed"] = True
             elif st["jammed"] and st["above"] >= self._clear_ticks:
                 st["jammed"] = False
-            signals[code] = JamSignal(truck_code=code,
-                                      avg_speed_kmh=round(avg_speed, 2),
-                                      jammed=st["jammed"],
-                                      ticks_below=st["below"])
+            signals[code] = JamSignal(
+                truck_code=code,
+                avg_speed_kmh=round(avg_speed, 2),
+                jammed=st["jammed"],
+                ticks_below=st["below"],
+            )
         return signals

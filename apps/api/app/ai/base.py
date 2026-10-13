@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from app.env import getenv
 from app import data as fleet_data
+from app.env import getenv
 from app.gps_feed import GpsBreadcrumb, latest_breadcrumbs
 
 

@@ -4,11 +4,12 @@ Pure assembly — callers pass in forecasts, fleet and facility payloads and get
 one JSON scene back. Every layer carries its provenance so the twin can never
 present modelled or simulated data as live observations.
 """
+
 from __future__ import annotations
 
 import math
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.cities import City
@@ -23,18 +24,26 @@ ELEVATED_RATIO = 1.03
 
 PROVENANCE = {
     "jakarta": {
-        "districts": {"class": "MODEL_OUTPUT",
-                      "source": "Prophet + XGBoost per kecamatan, SILIKA DLH 2023 baseline"},
+        "districts": {
+            "class": "MODEL_OUTPUT",
+            "source": "Prophet + XGBoost per kecamatan, SILIKA DLH 2023 baseline",
+        },
         "tps": {"class": "REAL", "source": "SILIKA DLH — 1,081 TPS with coordinates"},
         "facilities": {"class": "REAL", "source": "OpenStreetMap (ODbL), verified centroids"},
         "trucks": {"class": "SIMULATED", "source": "Pilot fleet telemetry is simulated, not live GPS"},
-        "landfill_queue": {"class": "SIMULATED",
-                           "source": "Seeded discrete-event queue simulation at TPST Bantargebang"},
+        "landfill_queue": {
+            "class": "SIMULATED",
+            "source": "Seeded discrete-event queue simulation at TPST Bantargebang",
+        },
     },
     "hcmc": {
-        "districts": {"class": "SIMULATED_DEMO_CITY",
-                      "source": ("Citywide ~13,000 t/day allocated by 2019 census population; "
-                                 "scenario uplifts are assumptions, no trained model")},
+        "districts": {
+            "class": "SIMULATED_DEMO_CITY",
+            "source": (
+                "Citywide ~13,000 t/day allocated by 2019 census population; "
+                "scenario uplifts are assumptions, no trained model"
+            ),
+        },
         "tps": {"class": "UNAVAILABLE", "source": "No public collection-point dataset loaded"},
         "facilities": {"class": "APPROXIMATE", "source": "Da Phuoc landfill, approximate centroid"},
         "trucks": {"class": "UNAVAILABLE", "source": "No fleet connected in the demo city"},
@@ -63,22 +72,24 @@ def jakarta_districts(kecamatan_payload: dict[str, Any]) -> list[dict[str, Any]]
         if feature.get("lat") is None or feature.get("lng") is None:
             continue
         series = feature.get("daily_series") or [
-            {"date": generated_for, "predicted_tons": feature["predicted_tons"]}]
-        out.append({
-            "id": feature["slug"],
-            "name": feature["kecamatan"].title(),
-            "admin_area": feature.get("city"),
-            "lat": feature["lat"],
-            "lng": feature["lng"],
-            "baseline_tons": feature.get("baseline_tons_per_day"),
-            "series": [{"date": row["date"], "predicted_tons": row["predicted_tons"]}
-                       for row in series],
-            "interval_p10_p90": feature.get("prediction_interval_p10_p90"),
-            "capacity_tons": feature.get("tps_capacity_ton_per_day"),
-            "facility_readiness": feature.get("facility_readiness"),
-            "model_available": feature.get("model_available"),
-            "event_localized": feature["slug"] in targeted,
-        })
+            {"date": generated_for, "predicted_tons": feature["predicted_tons"]}
+        ]
+        out.append(
+            {
+                "id": feature["slug"],
+                "name": feature["kecamatan"].title(),
+                "admin_area": feature.get("city"),
+                "lat": feature["lat"],
+                "lng": feature["lng"],
+                "baseline_tons": feature.get("baseline_tons_per_day"),
+                "series": [{"date": row["date"], "predicted_tons": row["predicted_tons"]} for row in series],
+                "interval_p10_p90": feature.get("prediction_interval_p10_p90"),
+                "capacity_tons": feature.get("tps_capacity_ton_per_day"),
+                "facility_readiness": feature.get("facility_readiness"),
+                "model_available": feature.get("model_available"),
+                "event_localized": feature["slug"] in targeted,
+            }
+        )
     return out
 
 
@@ -86,12 +97,23 @@ def _with_risk(district: dict[str, Any], normal_series: list[float] | None) -> d
     series = []
     for i, row in enumerate(district["series"]):
         normal = normal_series[i] if normal_series else row["predicted_tons"]
-        series.append({**row, "normal_tons": normal,
-                       "risk": classify_risk(row["predicted_tons"], normal),
-                       "trucks_required": math.ceil(row["predicted_tons"] / TRUCK_CAPACITY_TONS)})
+        series.append(
+            {
+                **row,
+                "normal_tons": normal,
+                "risk": classify_risk(row["predicted_tons"], normal),
+                "trucks_required": math.ceil(row["predicted_tons"] / TRUCK_CAPACITY_TONS),
+            }
+        )
     peak = max(series, key=lambda row: row["predicted_tons"])
-    return {**district, "series": series, "today_tons": series[0]["predicted_tons"],
-            "risk": series[0]["risk"], "peak_date": peak["date"], "peak_tons": peak["predicted_tons"]}
+    return {
+        **district,
+        "series": series,
+        "today_tons": series[0]["predicted_tons"],
+        "risk": series[0]["risk"],
+        "peak_date": peak["date"],
+        "peak_tons": peak["predicted_tons"],
+    }
 
 
 def truck_layer(trucks: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -100,16 +122,18 @@ def truck_layer(trucks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         position = truck.get("latest_position") or {}
         if position.get("lat") is None:
             continue
-        out.append({
-            "code": truck["truck_code"],
-            "lat": position["lat"],
-            "lng": position["lng"],
-            "speed_kmh": position.get("speed_kmh"),
-            "status": truck.get("status"),
-            "deviated": bool((truck.get("deviation") or {}).get("violated")),
-            "damaged": bool(truck.get("is_damaged")),
-            "path": [[p["lng"], p["lat"]] for p in truck.get("actual_path") or []],
-        })
+        out.append(
+            {
+                "code": truck["truck_code"],
+                "lat": position["lat"],
+                "lng": position["lng"],
+                "speed_kmh": position.get("speed_kmh"),
+                "status": truck.get("status"),
+                "deviated": bool((truck.get("deviation") or {}).get("violated")),
+                "damaged": bool(truck.get("is_damaged")),
+                "path": [[p["lng"], p["lat"]] for p in truck.get("actual_path") or []],
+            }
+        )
     return out
 
 
@@ -117,26 +141,40 @@ def flow_layer(districts: list[dict[str, Any]], destination: dict[str, Any] | No
     """Today's haul from each district to the landfill (arc width ∝ tonnes)."""
     if destination is None:
         return []
-    return [{"from": [d["lng"], d["lat"]], "to": [destination["lng"], destination["lat"]],
-             "district": d["id"], "tons": d["today_tons"]} for d in districts]
+    return [
+        {
+            "from": [d["lng"], d["lat"]],
+            "to": [destination["lng"], destination["lat"]],
+            "district": d["id"],
+            "tons": d["today_tons"],
+        }
+        for d in districts
+    ]
 
 
-def build_scene(city: City, districts: list[dict[str, Any]], *, scenario: dict[str, Any],
-                facilities: list[dict[str, Any]], normal_days: list[dict[str, Any]] | None = None,
-                trucks: list[dict[str, Any]] | None = None,
-                tps: list[dict[str, Any]] | None = None,
-                landfill_queue: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_scene(
+    city: City,
+    districts: list[dict[str, Any]],
+    *,
+    scenario: dict[str, Any],
+    facilities: list[dict[str, Any]],
+    normal_days: list[dict[str, Any]] | None = None,
+    trucks: list[dict[str, Any]] | None = None,
+    tps: list[dict[str, Any]] | None = None,
+    landfill_queue: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """`normal_days` is the same district list forecast without rain or event."""
     normal = {d["id"]: [row["predicted_tons"] for row in d["series"]] for d in normal_days or []}
     districts = [_with_risk(d, normal.get(d["id"])) for d in districts]
     dates = [row["date"] for row in districts[0]["series"]] if districts else []
-    daily_totals = [round(sum(d["series"][i]["predicted_tons"] for d in districts), 1)
-                    for i in range(len(dates))]
+    daily_totals = [
+        round(sum(d["series"][i]["predicted_tons"] for d in districts), 1) for i in range(len(dates))
+    ]
     peak_index = max(range(len(dates)), key=daily_totals.__getitem__) if dates else 0
     landfill = next((f for f in facilities if f.get("kind") == "landfill"), None)
     return {
         "city": asdict(city),
-        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "horizon": {"days": len(dates), "dates": dates, "daily_total_tons": daily_totals},
         "scenario": scenario,
         "summary": {
@@ -153,6 +191,8 @@ def build_scene(city: City, districts: list[dict[str, Any]], *, scenario: dict[s
         "flows": flow_layer(districts, landfill),
         "landfill_queue": landfill_queue,
         "provenance": PROVENANCE[city.id],
-        "units": {"tons": "metric tonnes per day",
-                  "trucks_required": f"trucks at {TRUCK_CAPACITY_TONS:g} t per shift"},
+        "units": {
+            "tons": "metric tonnes per day",
+            "trucks_required": f"trucks at {TRUCK_CAPACITY_TONS:g} t per shift",
+        },
     }

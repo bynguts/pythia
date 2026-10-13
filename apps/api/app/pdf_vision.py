@@ -1,18 +1,15 @@
-# -*- coding: utf-8 -*-
 """PDF page → image conversion for ANA's multimodal vision pipeline.
 
 The gateway model (ag/gemini-3-flash) supports vision:true but pdf:false.
 This module bridges that gap: render each PDF page to a PNG at 150 DPI and
 return data URLs the model can ingest as image_url content.
 """
+
 from __future__ import annotations
 
 import base64
-import io
-from typing import Any
 
 import pymupdf
-
 
 _MAX_PAGES = 3
 _RENDER_DPI = 100

@@ -1,7 +1,7 @@
 import unittest
 
+from app.main import normalize_group_jid, normalize_phone_number
 from app.whatsapp import OpenWAClient, build_alert_message
-from app.main import normalize_phone_number, normalize_group_jid
 
 
 class WhatsAppTests(unittest.TestCase):
@@ -57,7 +57,9 @@ class WhatsAppTests(unittest.TestCase):
         self.assertEqual(normalize_group_jid("081234567890"), "6281234567890@g.us")
 
     def test_normalize_group_jid_full_jid_unchanged(self):
-        self.assertEqual(normalize_group_jid("6281234567890-1620000000@g.us"), "6281234567890-1620000000@g.us")
+        self.assertEqual(
+            normalize_group_jid("6281234567890-1620000000@g.us"), "6281234567890-1620000000@g.us"
+        )
 
     def test_normalize_phone_number_empty(self):
         self.assertEqual(normalize_phone_number(""), "")

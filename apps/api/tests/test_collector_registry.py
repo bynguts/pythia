@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Tests for unlicensed waste-collector detection (Case 1 illegal activity)."""
+
 import unittest
 
 from app.collector_registry import check_vehicle, scan_observed_vehicles

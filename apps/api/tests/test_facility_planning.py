@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Tests for Case 2 facility gap analysis (need + location of facilities)."""
+
 import unittest
 
 from app.facility_planning import build_facility_gap_analysis
@@ -16,8 +16,9 @@ class FacilityGapTests(unittest.TestCase):
         low_area = next(a for a in low["areas"] if a["kecamatan"].upper() == "CENGKARENG")
         high_area = next(a for a in high["areas"] if a["kecamatan"].upper() == "CENGKARENG")
         self.assertGreater(high_area["gap_ton_per_day"], low_area["gap_ton_per_day"])
-        self.assertGreater(high_area["recommended_extra_trips_per_day"],
-                           low_area["recommended_extra_trips_per_day"])
+        self.assertGreater(
+            high_area["recommended_extra_trips_per_day"], low_area["recommended_extra_trips_per_day"]
+        )
 
     def test_siting_candidates_name_real_kelurahan(self):
         result = build_facility_gap_analysis({"CENGKARENG": 500.0})

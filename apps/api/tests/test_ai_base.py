@@ -41,9 +41,16 @@ class GpsSourceTests(unittest.TestCase):
 class EventFeedTests(unittest.TestCase):
     def test_append_and_snapshot_returns_dicts(self):
         feed = EventFeed(maxlen=5)
-        feed.append(AiEvent(event_type="auto_reroute", truck_code="T-001",
-                            title="Reroute", detail={"km": 1.2}, confidence=0.8,
-                            created_at="2026-09-10T00:00:00"))
+        feed.append(
+            AiEvent(
+                event_type="auto_reroute",
+                truck_code="T-001",
+                title="Reroute",
+                detail={"km": 1.2},
+                confidence=0.8,
+                created_at="2026-09-10T00:00:00",
+            )
+        )
         snap = feed.snapshot()
         self.assertEqual(len(snap), 1)
         self.assertIsInstance(snap[0], dict)
@@ -53,26 +60,47 @@ class EventFeedTests(unittest.TestCase):
     def test_ring_buffer_evicts_oldest(self):
         feed = EventFeed(maxlen=3)
         for i in range(5):
-            feed.append(AiEvent(event_type="x", truck_code=None, title=f"e{i}",
-                                detail={}, confidence=1.0,
-                                created_at="2026-09-10T00:00:00"))
+            feed.append(
+                AiEvent(
+                    event_type="x",
+                    truck_code=None,
+                    title=f"e{i}",
+                    detail={},
+                    confidence=1.0,
+                    created_at="2026-09-10T00:00:00",
+                )
+            )
         titles = [e["title"] for e in feed.snapshot()]
         self.assertEqual(titles, ["e2", "e3", "e4"])
 
     def test_acknowledge_marks_event(self):
         feed = EventFeed(maxlen=5)
-        feed.append(AiEvent(event_type="x", truck_code=None, title="e",
-                            detail={}, confidence=1.0,
-                            created_at="2026-09-10T00:00:00"))
+        feed.append(
+            AiEvent(
+                event_type="x",
+                truck_code=None,
+                title="e",
+                detail={},
+                confidence=1.0,
+                created_at="2026-09-10T00:00:00",
+            )
+        )
         self.assertTrue(feed.acknowledge(0))
         self.assertEqual(feed.snapshot()[0]["status"], "acknowledged")
         self.assertFalse(feed.acknowledge(99))
 
     def test_snapshot_is_immutable_copy(self):
         feed = EventFeed(maxlen=5)
-        feed.append(AiEvent(event_type="x", truck_code=None, title="e",
-                            detail={}, confidence=1.0,
-                            created_at="2026-09-10T00:00:00"))
+        feed.append(
+            AiEvent(
+                event_type="x",
+                truck_code=None,
+                title="e",
+                detail={},
+                confidence=1.0,
+                created_at="2026-09-10T00:00:00",
+            )
+        )
         snap = feed.snapshot()
         snap[0]["status"] = "hacked"
         self.assertEqual(feed.snapshot()[0]["status"], "new")

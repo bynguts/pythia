@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 import os
 import re
+from typing import Any
 from urllib.request import Request, urlopen
 
 from app.rag import format_rag_context
-from app.tools import TOOL_SCHEMAS, execute_tool, run_tools_pass, ToolContext
+from app.tools import TOOL_SCHEMAS, ToolContext, execute_tool, run_tools_pass
 
 _GATEWAY_TIMEOUT = 18
 _IMAGE_GATEWAY_TIMEOUT = 30
@@ -77,13 +78,32 @@ def _knowledge_context(question: str, images: list[str] | None = None) -> str:
     if images or re.search(r"\b(status|saat ini|sekarang|today|now|berapa|jumlah)\b", question.lower()):
         return ""
     q = question.lower().strip()
-    if not any(word in q for word in (
-        "apa itu", "bagaimana", "gimana", "mengapa", "kenapa", "cara ", "alur ",
-        "sumber ", "metode ", "model ", "fitur ", "batasan ", "jelaskan",
-        "how ", "why ", "what is", "explain", "workflow",
-    )):
+    if not any(
+        word in q
+        for word in (
+            "apa itu",
+            "bagaimana",
+            "gimana",
+            "mengapa",
+            "kenapa",
+            "cara ",
+            "alur ",
+            "sumber ",
+            "metode ",
+            "model ",
+            "fitur ",
+            "batasan ",
+            "jelaskan",
+            "how ",
+            "why ",
+            "what is",
+            "explain",
+            "workflow",
+        )
+    ):
         return ""
     return format_rag_context(question, top_k=2, max_chars=1600)
+
 
 def _required_live_tools(question: str) -> set[str]:
     q = question.lower()
@@ -98,15 +118,28 @@ def _required_live_tools(question: str) -> set[str]:
             return {"get_fleet_status"}
         if any(term in q for term in ("berapa", "jumlah", "bermasalah", "how many")):
             return {"get_fleet_status", "get_command_center_snapshot"}
-        return {"get_fleet_status", "get_fleet_history", "get_truck_breadcrumbs",
-                "get_route_options", "simulate_astar_reroute", "get_command_center_snapshot"}
+        return {
+            "get_fleet_status",
+            "get_fleet_history",
+            "get_truck_breadcrumbs",
+            "get_route_options",
+            "simulate_astar_reroute",
+            "get_command_center_snapshot",
+        }
     if any(term in q for term in ("cuaca", "hujan", "weather")):
         return {"get_weather", "get_command_center_snapshot"}
     if "whatsapp" in q or "gateway" in q:
         return {"get_whatsapp_status"}
     if any(term in q for term in ("berapa", "jumlah", "status saat ini", "how many")):
-        return {"get_command_center_snapshot", "get_fleet_status", "get_tpa_queue",
-                "get_predictions", "get_weather", "get_events", "get_data_provenance"}
+        return {
+            "get_command_center_snapshot",
+            "get_fleet_status",
+            "get_tpa_queue",
+            "get_predictions",
+            "get_weather",
+            "get_events",
+            "get_data_provenance",
+        }
     return set()
 
 
@@ -124,12 +157,18 @@ def build_executive_summary(snapshot: dict[str, Any]) -> str:
     )
 
 
-def _answer_locally(question: str, snapshot: dict[str, Any], tool_ctx: ToolContext | None = None,
-                    images: list[str] | None = None) -> dict[str, Any]:
+def _answer_locally(
+    question: str,
+    snapshot: dict[str, Any],
+    tool_ctx: ToolContext | None = None,
+    images: list[str] | None = None,
+) -> dict[str, Any]:
     """No-key fallback: use only data from a tool matching the question."""
     if images:
         return {
-            "provider": "local", "mode": "local", "tools_used": [],
+            "provider": "local",
+            "mode": "local",
+            "tools_used": [],
             "answer": "Mode lokal aktif (asisten LLM tidak dikonfigurasi). Analisis foto/PDF memerlukan layanan AI.",
         }
     q = question.lower()
@@ -175,7 +214,9 @@ def _answer_locally(question: str, snapshot: dict[str, Any], tool_ctx: ToolConte
                         else:
                             label, count = "bermasalah", result["problem_count"]
                             affected = result.get("problem_trucks", [])
-                        answer = f"Data armada Pythia: {count} truk {label} dari {result['total_trucks']} truk."
+                        answer = (
+                            f"Data armada Pythia: {count} truk {label} dari {result['total_trucks']} truk."
+                        )
                         if affected and re.search(r"\b(mana|which|siapa)\b", q):
                             codes = ", ".join(t["truck_code"] for t in affected[:5])
                             answer += f" Truk terkait: {codes}."
@@ -188,14 +229,16 @@ def _answer_locally(question: str, snapshot: dict[str, Any], tool_ctx: ToolConte
                 else:
                     predictions = result.get("predictions_daily_city", [])
                     if predictions:
-                        district = next((p["district"] for p in predictions
-                                         if p.get("district", "").lower() in q), None)
-                        first_date = predictions[0]["date"]
-                        day = [p for p in predictions if p["date"] == first_date
-                               and (district is None or p["district"] == district)]
-                        figures = "; ".join(
-                            f"{p['district']}: {p['predicted_tons']} ton" for p in day
+                        district = next(
+                            (p["district"] for p in predictions if p.get("district", "").lower() in q), None
                         )
+                        first_date = predictions[0]["date"]
+                        day = [
+                            p
+                            for p in predictions
+                            if p["date"] == first_date and (district is None or p["district"] == district)
+                        ]
+                        figures = "; ".join(f"{p['district']}: {p['predicted_tons']} ton" for p in day)
                         answer = f"Prediksi Pythia {first_date} per kota: {figures}."
     if answer is None:
         rag = _knowledge_context(question).strip()
@@ -204,14 +247,16 @@ def _answer_locally(question: str, snapshot: dict[str, Any], tool_ctx: ToolConte
         else:
             answer = "Data yang sesuai pertanyaan belum tersedia dalam mode lokal. Layanan AI diperlukan untuk jawaban lebih rinci."
     return {
-        "provider": "local", "mode": "local",
+        "provider": "local",
+        "mode": "local",
         "answer": f"Mode lokal aktif (asisten LLM tidak dikonfigurasi).\n\n{answer}",
         "tools_used": used,
     }
 
 
-def answer_with_openai_if_configured(question, snapshot, history=None, tool_ctx=None,
-                                     images=None, language="id") -> dict[str, Any]:
+def answer_with_openai_if_configured(
+    question, snapshot, history=None, tool_ctx=None, images=None, language="id"
+) -> dict[str, Any]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return _answer_locally(question, snapshot, tool_ctx, images)
@@ -254,9 +299,12 @@ def answer_with_openai_if_configured(question, snapshot, history=None, tool_ctx=
         payload["tool_choice"] = "auto"
 
     def call_gateway() -> dict[str, Any]:
-        request = Request(url, data=json.dumps(payload).encode("utf-8"),
-                          headers={"Authorization": f"Bearer {api_key}",
-                                   "Content-Type": "application/json"}, method="POST")
+        request = Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            method="POST",
+        )
         with urlopen(request, timeout=_IMAGE_GATEWAY_TIMEOUT if images else _GATEWAY_TIMEOUT) as response:
             return _parse_body(response.read().decode("utf-8"))
 
@@ -283,7 +331,9 @@ def answer_with_openai_if_configured(question, snapshot, history=None, tool_ctx=
             return {"provider": "error", "error": "empty model content", "answer": ""}
         required = _required_live_tools(question)
         if tool_ctx is not None and required and not required.intersection(tools_used):
-            answer = "Saya belum dapat memverifikasi data operasional yang sesuai pertanyaan dari tool Pythia."
+            answer = (
+                "Saya belum dapat memverifikasi data operasional yang sesuai pertanyaan dari tool Pythia."
+            )
         return {"provider": "openai", "model": model, "answer": answer, "tools_used": tools_used}
     except Exception as error:
         return {"provider": "error", "error": str(error), "answer": ""}

@@ -31,11 +31,10 @@ class DamageReportTests(unittest.TestCase):
 
     def test_override_only_for_heavy_unresolved(self):
         store = _store()
-        light = store.create("T-112", "Rizky", "oli", "ringan", "Oli netes")
+        store.create("T-112", "Rizky", "oli", "ringan", "Oli netes")
         self.assertIsNone(store.active_override_for("T-112"))
         heavy = store.create("T-112", "Rizky", "rem", "berat", "Rem blong")
-        self.assertEqual(store.active_override_for("T-112").report_id,
-                         heavy.report_id)
+        self.assertEqual(store.active_override_for("T-112").report_id, heavy.report_id)
         store.resolve(heavy.report_id)
         self.assertIsNone(store.active_override_for("T-112"))
 
@@ -48,17 +47,19 @@ class DamageReportTests(unittest.TestCase):
 
     def test_truck_reads_override(self):
         from app.data import _truck
+
         store = _store("test_damage_override.json")
         old = dmg_module.DAMAGE_STORE
         try:
             dmg_module.DAMAGE_STORE = store
-            truck = _truck("T-001", "B 1234 CD", "Budi Santoso",
-                           "Jakarta Utara", "active", False, "Dump Truck Besar")
+            truck = _truck(
+                "T-001", "B 1234 CD", "Budi Santoso", "Jakarta Utara", "active", False, "Dump Truck Besar"
+            )
             self.assertFalse(truck["is_damaged"])
-            store.create("T-001", "Budi Santoso", "mesin", "berat",
-                         "Mesin overheat")
-            truck = _truck("T-001", "B 1234 CD", "Budi Santoso",
-                           "Jakarta Utara", "active", False, "Dump Truck Besar")
+            store.create("T-001", "Budi Santoso", "mesin", "berat", "Mesin overheat")
+            truck = _truck(
+                "T-001", "B 1234 CD", "Budi Santoso", "Jakarta Utara", "active", False, "Dump Truck Besar"
+            )
             self.assertTrue(truck["is_damaged"])
             self.assertEqual(truck["damage_status"]["state"], "breakdown")
             self.assertFalse(truck["damage_status"]["operational"])
@@ -70,12 +71,17 @@ class DamageReportTests(unittest.TestCase):
         if os.path.exists(path):
             os.remove(path)
         store = DamageReportStore(db_path=path)
-        rep = store.create("T-112", "Rizky", "bak_compactor", "berat",
-                           "Hidrolik bocor", photo_name="foto.jpg",
-                           photo_b64="data:image/jpeg;base64,AAA")
+        rep = store.create(
+            "T-112",
+            "Rizky",
+            "bak_compactor",
+            "berat",
+            "Hidrolik bocor",
+            photo_name="foto.jpg",
+            photo_b64="data:image/jpeg;base64,AAA",
+        )
         store2 = DamageReportStore(db_path=path)
-        self.assertEqual(store2.active_override_for("T-112").report_id,
-                         rep.report_id)
+        self.assertEqual(store2.active_override_for("T-112").report_id, rep.report_id)
 
 
 if __name__ == "__main__":

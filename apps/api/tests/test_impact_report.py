@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Tests for the reproducible impact evaluation harness (Task 9)."""
+
 import unittest
 
 from app.impact import build_impact_report
@@ -18,9 +18,11 @@ class ImpactReportTests(unittest.TestCase):
         report = build_impact_report()
         for m in report["metrics"]:
             # Simulated/derived metrics must be labeled, never "observed_field".
-            self.assertIn(m["classification"],
-                          ("simulated", "derived", "modeled", "reference"),
-                          f"{m['name']} wrongly classified {m['classification']}")
+            self.assertIn(
+                m["classification"],
+                ("simulated", "derived", "modeled", "reference"),
+                f"{m['name']} wrongly classified {m['classification']}",
+            )
 
     def test_queue_metric_reproducible(self):
         a = build_impact_report()

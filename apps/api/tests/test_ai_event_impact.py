@@ -9,17 +9,27 @@ def _weather(days):
 
 
 def _day(date, rain, impact, prob=40):
-    return {"date": date, "rainfall_mm": rain, "precipitation_probability": prob,
-            "risk_level": "watch" if rain > 20 else "normal",
-            "waste_impact_percent": impact,
-            "operational_advice": f"advice-{date}"}
+    return {
+        "date": date,
+        "rainfall_mm": rain,
+        "precipitation_probability": prob,
+        "risk_level": "watch" if rain > 20 else "normal",
+        "waste_impact_percent": impact,
+        "operational_advice": f"advice-{date}",
+    }
 
 
-WEEK = [_day(f"2026-09-{10 + i:02d}", rain=float(i * 5), impact=float(i * 2))
-        for i in range(7)]
+WEEK = [_day(f"2026-09-{10 + i:02d}", rain=float(i * 5), impact=float(i * 2)) for i in range(7)]
 
-EVENTS = [{"date_raw": "2026-09-12", "name": "Konser GBK", "location": "GBK",
-           "time": "19:00", "expected_attendance": 50000}]
+EVENTS = [
+    {
+        "date_raw": "2026-09-12",
+        "name": "Konser GBK",
+        "location": "GBK",
+        "time": "19:00",
+        "expected_attendance": 50000,
+    }
+]
 
 
 class EventImpactTests(unittest.TestCase):
@@ -38,9 +48,18 @@ class EventImpactTests(unittest.TestCase):
         outlook = fc.refresh()
         self.assertEqual(len(outlook), 7)
         day = outlook[0]
-        for key in ["date", "rainfall_mm", "precipitation_probability",
-                    "risk_level", "events", "is_holiday", "volume_delta_pct",
-                    "operational_advice", "source", "stale"]:
+        for key in [
+            "date",
+            "rainfall_mm",
+            "precipitation_probability",
+            "risk_level",
+            "events",
+            "is_holiday",
+            "volume_delta_pct",
+            "operational_advice",
+            "source",
+            "stale",
+        ]:
             self.assertIn(key, day)
         self.assertFalse(day["stale"])
 
@@ -64,8 +83,7 @@ class EventImpactTests(unittest.TestCase):
         fc, feed = self._forecaster()
         fc.refresh()
         self.assertEqual(feed.snapshot(), [])
-        bigger = [_day(d["date"], d["rainfall_mm"],
-                       d["waste_impact_percent"] + 15.0) for d in WEEK]
+        bigger = [_day(d["date"], d["rainfall_mm"], d["waste_impact_percent"] + 15.0) for d in WEEK]
         fc._weather_fn = lambda: _weather(bigger)
         fc.refresh()
         events = [e for e in feed.snapshot() if e["event_type"] == "forecast_update"]
@@ -94,8 +112,7 @@ class EventImpactTests(unittest.TestCase):
         self.assertEqual(fc.latest(), [])
 
     def test_unparseable_event_dates_skipped(self):
-        bad = [{"date_raw": "akhir bulan", "name": "X",
-                "expected_attendance": 99999}]
+        bad = [{"date_raw": "akhir bulan", "name": "X", "expected_attendance": 99999}]
         fc, _ = self._forecaster(events=bad)
         outlook = fc.refresh()
         self.assertTrue(all(d["events"] == [] for d in outlook))

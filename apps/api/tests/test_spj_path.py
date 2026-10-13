@@ -12,19 +12,25 @@ from spj_testutil import fresh_store_path
 class SpjPolylineTests(unittest.TestCase):
     def _road(self, coords):
         """Deterministic road geometry: exact waypoints (no network)."""
-        return {"geometry": [{"lat": la, "lng": ln} for la, ln in coords],
-                "distance_km": 1.0, "duration_min": 2, "source": "LIVE_EXTERNAL"}
+        return {
+            "geometry": [{"lat": la, "lng": ln} for la, ln in coords],
+            "distance_km": 1.0,
+            "duration_min": 2,
+            "source": "LIVE_EXTERNAL",
+        }
 
     def _active_spj(self, store, truck="T-001"):
-        spj = store.create(driver_name="A", truck_code=truck,
-                           destination="TPST Bantargebang", weigh_on_site=False,
-                           priority="normal", note="")
-        store.add_stop(spj.spj_id, name="S1", kecamatan="K", address="A",
-                       lat=-6.20, lng=106.80)
-        store.add_stop(spj.spj_id, name="S2", kecamatan="K", address="B",
-                       lat=-6.25, lng=106.85)
-        with mock.patch("app.spj.road_route",
-                        side_effect=lambda coords: self._road(coords)):
+        spj = store.create(
+            driver_name="A",
+            truck_code=truck,
+            destination="TPST Bantargebang",
+            weigh_on_site=False,
+            priority="normal",
+            note="",
+        )
+        store.add_stop(spj.spj_id, name="S1", kecamatan="K", address="A", lat=-6.20, lng=106.80)
+        store.add_stop(spj.spj_id, name="S2", kecamatan="K", address="B", lat=-6.25, lng=106.85)
+        with mock.patch("app.spj.road_route", side_effect=lambda coords: self._road(coords)):
             return store.activate(spj.spj_id)
 
     def test_polyline_appends_destination(self):
@@ -46,16 +52,22 @@ class SpjPolylineTests(unittest.TestCase):
         active with compliance geometry that cannot be resolved.
         """
         import tempfile
+
         from app.facilities import FACILITIES, provenance_payload
+
         path = os.path.join(tempfile.gettempdir(), "test_spj_unverified.json")
         if os.path.exists(path):
             os.remove(path)
         store = SpjStore(db_path=path)
-        spj = store.create(driver_name="A", truck_code="T-997",
-                           destination="JRC Pesanggrahan", weigh_on_site=False,
-                           priority="normal", note="")
-        store.add_stop(spj.spj_id, name="S1", kecamatan="K", address="A",
-                       lat=-6.20, lng=106.80)
+        spj = store.create(
+            driver_name="A",
+            truck_code="T-997",
+            destination="JRC Pesanggrahan",
+            weigh_on_site=False,
+            priority="normal",
+            note="",
+        )
+        store.add_stop(spj.spj_id, name="S1", kecamatan="K", address="A", lat=-6.20, lng=106.80)
         with self.assertRaises(ValueError) as ctx:
             store.activate(spj.spj_id)
         self.assertIn("no verified ground-truth", str(ctx.exception))
@@ -65,6 +77,7 @@ class SpjPolylineTests(unittest.TestCase):
         self.assertEqual(provenance["verification_status"], "unverified")
         self.assertFalse(provenance["usable_for_routing"])
         self.assertTrue(provenance["source_url"])
+
     def test_active_path_for_truck_with_spj(self):
         store = SpjStore(persist_path=fresh_store_path("test_spj_active.json"))
         self._active_spj(store, truck="T-999")
@@ -82,15 +95,24 @@ class SpjPolylineTests(unittest.TestCase):
         store = SpjStore(persist_path=fresh_store_path("test_spj_degenerate.json"))
         # A degenerate road geometry (single point) must not be promoted
         # as a compliance path: active_path_for returns None.
-        spj = store.create(driver_name="A", truck_code="T-998",
-                           destination="TPST Bantargebang", weigh_on_site=False,
-                           priority="normal", note="")
-        store.add_stop(spj.spj_id, name="S1", kecamatan="K", address="A",
-                       lat=-6.20, lng=106.80)
-        with mock.patch("app.spj.road_route",
-                        return_value={"geometry": [{"lat": -6.20, "lng": 106.80}],
-                                      "distance_km": 0.0, "duration_min": 0,
-                                      "source": "LIVE_EXTERNAL"}):
+        spj = store.create(
+            driver_name="A",
+            truck_code="T-998",
+            destination="TPST Bantargebang",
+            weigh_on_site=False,
+            priority="normal",
+            note="",
+        )
+        store.add_stop(spj.spj_id, name="S1", kecamatan="K", address="A", lat=-6.20, lng=106.80)
+        with mock.patch(
+            "app.spj.road_route",
+            return_value={
+                "geometry": [{"lat": -6.20, "lng": 106.80}],
+                "distance_km": 0.0,
+                "duration_min": 0,
+                "source": "LIVE_EXTERNAL",
+            },
+        ):
             activated = store.activate(spj.spj_id)
         self.assertEqual(len(activated.route_geometry), 1)  # degenerate
         old = spj_module.SPJ_STORE
@@ -102,6 +124,7 @@ class SpjPolylineTests(unittest.TestCase):
 
     def test_reference_path_prefers_spj(self):
         from app.data import _assigned_reference_path
+
         store = SpjStore(persist_path=fresh_store_path("test_spj_ref.json"))
         self._active_spj(store, truck="T-001")
         old = spj_module.SPJ_STORE
@@ -114,6 +137,7 @@ class SpjPolylineTests(unittest.TestCase):
 
     def test_reference_path_fallback_without_spj(self):
         from app.data import _assigned_reference_path
+
         old = spj_module.SPJ_STORE
         try:
             empty = SpjStore(persist_path=fresh_store_path("test_spj_empty.json"))

@@ -41,8 +41,7 @@ class DestinationFacility:
 
     @property
     def is_ground_truth(self) -> bool:
-        return (self.verification_status == "verified"
-                and self.lat is not None and self.lng is not None)
+        return self.verification_status == "verified" and self.lat is not None and self.lng is not None
 
     def payload(self) -> dict:
         return {**asdict(self), "usable_for_routing": self.is_ground_truth}
@@ -58,10 +57,12 @@ FACILITIES: dict[str, DestinationFacility] = {
         source_url="https://www.openstreetmap.org/way/463512088",
         source_record_id="way/463512088",
         as_of="2026-09-23",
-        note=("Landfill polygon centroid (landuse=landfill, name='TPA Bantar Gebang'). "
-              "The A* road node 'TPA_BANTARGEBANG' (-6.331, 106.991) is the weighbridge "
-              "approach on the toll network and sits ~2.2 km outside the facility "
-              "footprint; it stays in the routing graph but is not the destination."),
+        note=(
+            "Landfill polygon centroid (landuse=landfill, name='TPA Bantar Gebang'). "
+            "The A* road node 'TPA_BANTARGEBANG' (-6.331, 106.991) is the weighbridge "
+            "approach on the toll network and sits ~2.2 km outside the facility "
+            "footprint; it stays in the routing graph but is not the destination."
+        ),
     ),
     "JRC Pesanggrahan": DestinationFacility(
         name="JRC Pesanggrahan",
@@ -72,13 +73,15 @@ FACILITIES: dict[str, DestinationFacility] = {
         source_url="https://upstdlh.id/jrc/index",
         source_record_id="SK Kadis LH DKI No. 375/2019 (TPS 3R Pesanggrahan)",
         as_of=RETRIEVED,
-        note=("JRC is the Jakarta Recycle Center programme; its processing site is TPS 3R "
-              "Pesanggrahan on Jl. Bintaro Puspita Raya. Neither OSM, the DLH/Jakarta Satu "
-              "ArcGIS layers, SILIKA, nor the project datasets publish a coordinate for that "
-              "plant, so no coordinate is claimed here. The nearest documented points on that "
-              "street are TPS RW 008 Pesanggrahan (-6.26512321, 106.7562971, DLH ArcGIS) and "
-              "a door-to-door TPS at (-6.265, 106.7544444, SILIKA) — both are collection "
-              "points, not the JRC plant, and must not be used as a routing destination."),
+        note=(
+            "JRC is the Jakarta Recycle Center programme; its processing site is TPS 3R "
+            "Pesanggrahan on Jl. Bintaro Puspita Raya. Neither OSM, the DLH/Jakarta Satu "
+            "ArcGIS layers, SILIKA, nor the project datasets publish a coordinate for that "
+            "plant, so no coordinate is claimed here. The nearest documented points on that "
+            "street are TPS RW 008 Pesanggrahan (-6.26512321, 106.7562971, DLH ArcGIS) and "
+            "a door-to-door TPS at (-6.265, 106.7544444, SILIKA) — both are collection "
+            "points, not the JRC plant, and must not be used as a routing destination."
+        ),
     ),
     "RDF Plant Jakarta": DestinationFacility(
         name="RDF Plant Jakarta",
@@ -89,11 +92,13 @@ FACILITIES: dict[str, DestinationFacility] = {
         source_url="https://www.openstreetmap.org/way/1339442985",
         source_record_id="way/1339442985",
         as_of="2026-09-23",
-        note=("Centroid of the Rorotan plant polygon (name='RDF Jakarta', "
-              "alt_name='RDF Rorotan', landuse=industrial, utility=waste), matching the "
-              "DLH groundbreaking location in Kelurahan Rorotan, Kec. Cilincing. "
-              "Distinct from 'RDF Plant Bantargebang' (way/568896948), which is inside the "
-              "Bantargebang complex ~23 km away."),
+        note=(
+            "Centroid of the Rorotan plant polygon (name='RDF Jakarta', "
+            "alt_name='RDF Rorotan', landuse=industrial, utility=waste), matching the "
+            "DLH groundbreaking location in Kelurahan Rorotan, Kec. Cilincing. "
+            "Distinct from 'RDF Plant Bantargebang' (way/568896948), which is inside the "
+            "Bantargebang complex ~23 km away."
+        ),
     ),
 }
 
@@ -124,7 +129,10 @@ def route_ground_truth(destination: str) -> tuple[float, float] | None:
 def provenance_payload(destination: str) -> dict:
     facility = FACILITIES.get(destination)
     if facility is None:
-        return {"destination": destination, "verification_status": "unknown",
-                "usable_for_routing": False,
-                "note": "destination is not a registered disposal facility"}
+        return {
+            "destination": destination,
+            "verification_status": "unknown",
+            "usable_for_routing": False,
+            "note": "destination is not a registered disposal facility",
+        }
     return facility.payload()

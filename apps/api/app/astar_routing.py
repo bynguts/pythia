@@ -1,14 +1,15 @@
-# -*- coding: utf-8 -*-
 """
 astar_routing.py - Custom A* Pathfinding Engine with Dynamic Traffic Weight.
 Designed for Pythia truck routing under permit-corridor constraint.
 When a road segment becomes congested, A* recomputes an alternative route
 automatically (Google-Maps-style live rerouting for waste trucks).
 """
+
 from __future__ import annotations
 
 import heapq
 from functools import lru_cache
+from itertools import pairwise
 from math import asin, cos, radians, sin, sqrt
 from typing import Any
 
@@ -16,13 +17,16 @@ from app.osrm import fetch_osrm_route
 
 TRAFFIC_JAM_ACTIVE = False
 
+
 def is_traffic_jam_active() -> bool:
     global TRAFFIC_JAM_ACTIVE
     return TRAFFIC_JAM_ACTIVE
 
+
 def set_traffic_jam_active(active: bool) -> None:
     global TRAFFIC_JAM_ACTIVE
     TRAFFIC_JAM_ACTIVE = active
+
 
 # Simplified Jakarta -> Bantargebang road network for real-time truck logistics.
 # Each node is an actual intersection / checkpoint (lat, lng, label).
@@ -177,9 +181,15 @@ def _heuristic_minutes(node: str, goal: str, nodes: dict) -> float:
     return 0.0
 
 
-def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
-                     congested_edges=None, blocked_edges=None,
-                     nodes=None, edges=None, permit_hour=None):
+def find_astar_route(
+    start="ORIGIN",
+    goal="TPA_BANTARGEBANG",
+    congested_edges=None,
+    blocked_edges=None,
+    nodes=None,
+    edges=None,
+    permit_hour=None,
+):
     """A* shortest path with permit gating, traffic weighting, and OSRM geometry.
 
     - blocked_edges (permit): never traversed.
@@ -214,7 +224,7 @@ def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
         return dur_min
 
     adj = {n: [] for n in nodes}
-    for u, v, d in edges:
+    for u, v, _d in edges:
         adj[u].append(v)
         adj[v].append(u)
 
@@ -262,9 +272,9 @@ def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
 DEMO_CONGESTED_EDGES = [("CAWANG", "BEKASI_BARAT")]
 
 
-def find_alternative_routes(start="ORIGIN", goal="TPA_BANTARGEBANG", k=2,
-                            congested_edges=None, blocked_edges=None,
-                            permit_hour=None) -> list[dict[str, Any]]:
+def find_alternative_routes(
+    start="ORIGIN", goal="TPA_BANTARGEBANG", k=2, congested_edges=None, blocked_edges=None, permit_hour=None
+) -> list[dict[str, Any]]:
     """Up to k genuinely different computed routes, ranked by ETA.
 
     Route 1 is the A* optimum. Each next route is found by applying the traffic
@@ -276,10 +286,13 @@ def find_alternative_routes(start="ORIGIN", goal="TPA_BANTARGEBANG", k=2,
     seen_sequences: set[tuple[str, ...]] = set()
     extra_congested: list[tuple[str, str]] = list(congested_edges or [])
     for rank in range(k):
-        r = find_astar_route(start=start, goal=goal,
-                             congested_edges=extra_congested,
-                             blocked_edges=blocked_edges,
-                             permit_hour=permit_hour)
+        r = find_astar_route(
+            start=start,
+            goal=goal,
+            congested_edges=extra_congested,
+            blocked_edges=blocked_edges,
+            permit_hour=permit_hour,
+        )
         if not r.get("success"):
             break
         seq = tuple(r["sequence"])
@@ -290,12 +303,13 @@ def find_alternative_routes(start="ORIGIN", goal="TPA_BANTARGEBANG", k=2,
         r["diversified"] = rank > 0
         r["is_diverted"] = bool(congested_edges)
         routes.append(r)
-        extra_congested.extend(zip(r["sequence"], r["sequence"][1:]))
+        extra_congested.extend(pairwise(r["sequence"]))
     return routes
 
 
 def _haversine_km(a: tuple[float, float], b: tuple[float, float]) -> float:
     import math
+
     lat1, lon1, lat2, lon2 = map(math.radians, [a[0], a[1], b[0], b[1]])
     h = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
     return 2 * 6371.0 * math.asin(math.sqrt(h))
@@ -399,7 +413,7 @@ def reroute_payload(jam_active: bool, congested_edges=None, origin_position=None
         return find_astar_route(congested_edges=cong)
 
     normal = _route([])
-    normal_edges = set(zip(normal["sequence"], normal["sequence"][1:]))
+    normal_edges = set(pairwise(normal["sequence"]))
     normal_edges |= {(v, u) for (u, v) in normal_edges}
 
     # Demo mode without explicit edges: jam the corridor 2-4 km AHEAD of the
@@ -419,8 +433,8 @@ def reroute_payload(jam_active: bool, congested_edges=None, origin_position=None
             "congestion_segments": [],
             "message": (
                 "Lalu lintas normal. Truk mengikuti rute terpendek ke TPA Bantargebang."
-                if not jam_active else
-                "Kemacetan terdeteksi di luar koridor aktif truk. Rute tidak diubah."
+                if not jam_active
+                else "Kemacetan terdeteksi di luar koridor aktif truk. Rute tidak diubah."
             ),
         }
 
@@ -428,19 +442,23 @@ def reroute_payload(jam_active: bool, congested_edges=None, origin_position=None
     jam_points = []
     jam_segments = []
     for u, v in jam_edges:
-        jam_points.append({
-            "lat": round((NODES[u][0] + NODES[v][0]) / 2, 6),
-            "lng": round((NODES[u][1] + NODES[v][1]) / 2, 6),
-            "label": f"Macet total: {NODES[u][2]} -> {NODES[v][2]}",
-        })
+        jam_points.append(
+            {
+                "lat": round((NODES[u][0] + NODES[v][0]) / 2, 6),
+                "lng": round((NODES[u][1] + NODES[v][1]) / 2, 6),
+                "label": f"Macet total: {NODES[u][2]} -> {NODES[v][2]}",
+            }
+        )
         geom, dist_km, _dur, _osrm = _osrm_edge(NODES[u][0], NODES[u][1], NODES[v][0], NODES[v][1])
-        jam_segments.append({
-            "name": f"{NODES[u][2]} -> {NODES[v][2]}",
-            "coordinates": [{"lat": round(la, 6), "lng": round(ln, 6)} for la, ln in geom],
-            "traffic_multiplier": 5.0,
-            "source": "SIMULATED CONGESTION",
-            "distance_km": dist_km,
-        })
+        jam_segments.append(
+            {
+                "name": f"{NODES[u][2]} -> {NODES[v][2]}",
+                "coordinates": [{"lat": round(la, 6), "lng": round(ln, 6)} for la, ln in geom],
+                "traffic_multiplier": 5.0,
+                "source": "SIMULATED CONGESTION",
+                "distance_km": dist_km,
+            }
+        )
     extra_km = round(diverted["distance_km"] - normal["distance_km"], 1)
     return {
         "jam_active": True,
@@ -459,6 +477,7 @@ def reroute_payload(jam_active: bool, congested_edges=None, origin_position=None
 
 if __name__ == "__main__":
     import json
+
     print("=== NORMAL ===")
     print(json.dumps(reroute_payload(False)["active_route"]["sequence"], indent=2))
     print("=== JAM ACTIVE ===")

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Single source of geospatial truth for the Pythia map.
 
 Composes, per truck, the raw GPS, OSRM-snapped GPS, road-following assigned and
@@ -6,12 +5,13 @@ actual routes, meter-based deviation, traffic, permit, and provenance labels.
 The frontend renders this payload verbatim — no client-side geometry guessing.
 Simulated inputs are labeled; nothing here is presented as live telemetry.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, cast
 
-from app.data import ASSIGNED_PATHS, ACTUAL_PATHS
+from app.data import ACTUAL_PATHS, ASSIGNED_PATHS
 from app.engine import distance_point_to_polyline_m
 from app.gps_feed import latest_breadcrumbs
 from app.osrm import road_route, snap_to_road
@@ -29,6 +29,7 @@ def _snapped_for(truck: dict[str, Any]) -> dict[str, Any]:
     # repeated map-truth calls cheap. State-dependent fields (jam_active,
     # deviation) are recomputed fresh every call — only the snap is cached.
     import time
+
     code = truck["truck_code"]
     entry = _snap_cache.get(code)
     now = time.time()
@@ -71,8 +72,18 @@ def build_map_truth(truck: dict[str, Any]) -> dict[str, Any]:
             "raw_gps": raw,
             "snapped_gps": raw,
             "raw_breadcrumbs": [],
-            "assigned_route": {"geometry": truck.get("assigned_path") or [], "distance_km": 0.0, "duration_min": 0.0, "source": "SIMULATED_GEOMETRY"},
-            "actual_route": {"geometry": truck.get("actual_path") or [], "distance_km": 0.0, "duration_min": 0.0, "source": "SIMULATED_GEOMETRY"},
+            "assigned_route": {
+                "geometry": truck.get("assigned_path") or [],
+                "distance_km": 0.0,
+                "duration_min": 0.0,
+                "source": "SIMULATED_GEOMETRY",
+            },
+            "actual_route": {
+                "geometry": truck.get("actual_path") or [],
+                "distance_km": 0.0,
+                "duration_min": 0.0,
+                "source": "SIMULATED_GEOMETRY",
+            },
             "abandoned_route": None,
             "deviation_m": dev.get("distance_meters", 0.0),
             "deviation_segments": ["violation"] if dev.get("violated") else [],
@@ -85,7 +96,7 @@ def build_map_truth(truck: dict[str, Any]) -> dict[str, Any]:
                 "assigned_route": "SIMULATED_GEOMETRY",
                 "actual_route": "SIMULATED_GEOMETRY",
             },
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     snap = _snapped_for(truck)
@@ -96,6 +107,7 @@ def build_map_truth(truck: dict[str, Any]) -> dict[str, Any]:
 
     if code == "T-047":
         from .astar_routing import is_traffic_jam_active, reroute_payload
+
         jam_active = is_traffic_jam_active()
         try:
             # Necessary: origin pinned to the 30s-cached snap so the astar
@@ -115,10 +127,12 @@ def build_map_truth(truck: dict[str, Any]) -> dict[str, Any]:
                 # corridor-split would read every point clean (e2e expects a
                 # standing violation while T-047 runs off-corridor).
                 corridor = ASSIGNED_PATHS.get(code) or []
-                assigned_route = road_route(corridor) if corridor else {"geometry": [], "source": "FALLBACK_DEGRADED"}
+                assigned_route = (
+                    road_route(corridor) if corridor else {"geometry": [], "source": "FALLBACK_DEGRADED"}
+                )
                 actual_route = map_astar_to_osrm_format(active)
                 abandoned_route = None
-        except Exception as exc:
+        except Exception:
             assigned_route = {"geometry": [], "source": "FALLBACK_DEGRADED"}
             actual_route = {"geometry": [], "source": "FALLBACK_DEGRADED"}
             abandoned_route = None
@@ -128,17 +142,34 @@ def build_map_truth(truck: dict[str, Any]) -> dict[str, Any]:
         try:
             import json
             from pathlib import Path
+
             cache_path = Path(__file__).resolve().parent / "road_geometry_cache.json"
             if cache_path.exists():
                 cache = json.loads(cache_path.read_text(encoding="utf-8"))
-                assigned_route = cache.get(f"{code}-assigned") or (road_route(assigned_pts) if assigned_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"})
-                actual_route = cache.get(f"{code}-actual") or (road_route(actual_pts) if actual_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"})
+                assigned_route = cache.get(f"{code}-assigned") or (
+                    road_route(assigned_pts)
+                    if assigned_pts
+                    else {"geometry": [], "source": "FALLBACK_DEGRADED"}
+                )
+                actual_route = cache.get(f"{code}-actual") or (
+                    road_route(actual_pts) if actual_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"}
+                )
             else:
-                assigned_route = road_route(assigned_pts) if assigned_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"}
-                actual_route = road_route(actual_pts) if actual_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"}
+                assigned_route = (
+                    road_route(assigned_pts)
+                    if assigned_pts
+                    else {"geometry": [], "source": "FALLBACK_DEGRADED"}
+                )
+                actual_route = (
+                    road_route(actual_pts) if actual_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"}
+                )
         except Exception:
-            assigned_route = road_route(assigned_pts) if assigned_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"}
-            actual_route = road_route(actual_pts) if actual_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"}
+            assigned_route = (
+                road_route(assigned_pts) if assigned_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"}
+            )
+            actual_route = (
+                road_route(actual_pts) if actual_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"}
+            )
 
     # During an APPLIED diversion the diverted corridor is the approved route;
     # measuring against the abandoned one would false-flag the truck.
@@ -152,6 +183,7 @@ def build_map_truth(truck: dict[str, Any]) -> dict[str, Any]:
         baseline = assigned_route
     if code == "T-047" and not (jam_active and abandoned_route):
         from app.data import _assigned_reference_path
+
         assigned_line = _assigned_reference_path(code)
     else:
         geom = cast(list[dict[str, float]], baseline.get("geometry") or [])
@@ -159,11 +191,15 @@ def build_map_truth(truck: dict[str, Any]) -> dict[str, Any]:
             assigned_line = [(p["lat"], p["lng"]) for p in geom]
         else:
             assigned_line = [(la, ln) for la, ln in assigned_pts]
-    deviation_m = (distance_point_to_polyline_m((snapped["lat"], snapped["lng"]), assigned_line)
-                   if assigned_line else 0.0)
+    deviation_m = (
+        distance_point_to_polyline_m((snapped["lat"], snapped["lng"]), assigned_line)
+        if assigned_line
+        else 0.0
+    )
     violated = deviation_m > DEVIATION_THRESHOLD_M
     if not (code == "T-047" and jam_active and abandoned_route):
         from app.deviation_state import apply_hysteresis
+
         violated = apply_hysteresis(code, deviation_m)
 
     breadcrumbs = latest_breadcrumbs(code)
@@ -186,5 +222,5 @@ def build_map_truth(truck: dict[str, Any]) -> dict[str, Any]:
             "assigned_route": assigned_route["source"],
             "actual_route": actual_route["source"],
         },
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }

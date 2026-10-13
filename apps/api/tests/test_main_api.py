@@ -9,7 +9,9 @@ from app.main import app
 class MainApiTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app, raise_server_exceptions=False)
-        _login = self.client.post("/api/auth/login", json={"username": "administrator", "password": "administrator-demo-pass"})
+        _login = self.client.post(
+            "/api/auth/login", json={"username": "administrator", "password": "administrator-demo-pass"}
+        )
         self.client.headers.update({"Authorization": f"Bearer {_login.json()['token']}"})
 
     def test_ml_predict_rejects_invalid_target_date(self):
@@ -56,8 +58,7 @@ class MainApiTests(unittest.TestCase):
         did = created.json()["id"]
         pending = self.client.get("/api/dispatch/T-047").json()
         self.assertTrue(any(d["id"] == did for d in pending))
-        conf = self.client.post(f"/api/dispatch/{did}/confirm",
-                                json={"status": "SIAP", "note": "ok"})
+        conf = self.client.post(f"/api/dispatch/{did}/confirm", json={"status": "SIAP", "note": "ok"})
         self.assertEqual(conf.status_code, 200)
         self.assertEqual(conf.json()["field_status"], "SIAP")
 
@@ -89,22 +90,40 @@ class MainApiTests(unittest.TestCase):
         r = self.client.get("/api/fleet/route-decision?truck_code=T-047")
         self.assertEqual(r.status_code, 200)
         j = r.json()
-        for key in ("truck_code", "eta_minutes", "physical_distance_km",
-                    "vehicle_status", "tpa_queue", "traffic", "permit", "recommendation"):
+        for key in (
+            "truck_code",
+            "eta_minutes",
+            "physical_distance_km",
+            "vehicle_status",
+            "tpa_queue",
+            "traffic",
+            "permit",
+            "recommendation",
+        ):
             self.assertIn(key, j)
 
     def test_assistant_accepts_history_field(self):
         fake_openai = {"provider": "openai", "model": "guts", "answer": "jawaban", "tools_used": []}
-        with patch("app.main.answer_with_openai_if_configured", return_value=fake_openai) as answer, \
-             patch("app.main.command_center_snapshot", side_effect=AssertionError("eager snapshot")):
+        with (
+            patch("app.main.answer_with_openai_if_configured", return_value=fake_openai) as answer,
+            patch("app.main.command_center_snapshot", side_effect=AssertionError("eager snapshot")),
+        ):
             response = self.client.post(
                 "/api/assistant/query",
-                json={"question": "berapa truk bermasalah?", "history": [{"role": "user", "content": "halo"}, {"role": "assistant", "content": "siap"}]},
+                json={
+                    "question": "berapa truk bermasalah?",
+                    "history": [
+                        {"role": "user", "content": "halo"},
+                        {"role": "assistant", "content": "siap"},
+                    ],
+                },
             )
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertIn("provider", body)
-        self.assertEqual(answer.call_args.args[1], {}, "assistant should retrieve only requested data via tools")
+        self.assertEqual(
+            answer.call_args.args[1], {}, "assistant should retrieve only requested data via tools"
+        )
         self.assertIn("answer", body)
 
     def test_assistant_returns_502_when_gateway_error(self):
@@ -126,13 +145,13 @@ class MainApiTests(unittest.TestCase):
         base_resp = self.client.get("/api/predictions/kecamatan?event_attendance=0")
         self.assertEqual(base_resp.status_code, 200)
         base_kecs = {k["slug"]: k["predicted_tons"] for k in base_resp.json()["kecamatan"]}
-        
+
         event_resp = self.client.get(
             "/api/predictions/kecamatan?event_attendance=50000&event_lat=-6.1754&event_lng=106.8272"
         )
         self.assertEqual(event_resp.status_code, 200)
         event_kecs = {k["slug"]: k["predicted_tons"] for k in event_resp.json()["kecamatan"]}
-        
+
         self.assertGreater(event_kecs["gambir"], base_kecs["gambir"])
         self.assertEqual(event_kecs["cengkareng"], base_kecs["cengkareng"])
 
@@ -140,8 +159,13 @@ class MainApiTests(unittest.TestCase):
         response = self.client.get("/api/reports/executive-summary")
         self.assertEqual(response.status_code, 200)
         impact = response.json().get("queue_impact", {})
-        for key in ("baseline_wait_minutes", "optimized_wait_minutes",
-                    "baseline_queue_trucks", "optimized_queue_trucks", "queue_reduction_percent"):
+        for key in (
+            "baseline_wait_minutes",
+            "optimized_wait_minutes",
+            "baseline_queue_trucks",
+            "optimized_queue_trucks",
+            "queue_reduction_percent",
+        ):
             self.assertIn(key, impact)
         self.assertGreaterEqual(impact["optimized_wait_minutes"], 0)
         self.assertGreaterEqual(impact["queue_reduction_percent"], 0)
@@ -149,7 +173,12 @@ class MainApiTests(unittest.TestCase):
     def test_alert_follow_up_records_and_lists(self):
         post = self.client.post(
             "/api/alert/follow-up",
-            json={"alert_id": "ALERT-42", "status": "RESOLVED", "operator": "supervisor", "note": "handled by TPS"},
+            json={
+                "alert_id": "ALERT-42",
+                "status": "RESOLVED",
+                "operator": "supervisor",
+                "note": "handled by TPS",
+            },
         )
         self.assertEqual(post.status_code, 200)
         self.assertTrue(post.json()["recorded"])

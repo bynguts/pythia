@@ -4,34 +4,36 @@ Each test runs two *processes*, not two threads: the failure mode being
 regression-tested is divergent in-process state, which a thread test cannot
 reproduce because both threads share one dict.
 """
+
 import multiprocessing
-import os
 import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 
-from app.damage_reports import DamageReportStore
 from app.permits import PermitStore
 from app.spj import SpjStore
-from app.storage import RecordStore, StorageError
+from app.storage import StorageError
 
-EVIDENCE = {"arrival": {"photo_name": "a.jpg",
-                        "photo_b64": "data:image/jpeg;base64,AAA",
-                        "lat": -6.2, "lng": 106.8},
-            "weighing": [],
-            "officer": {"photo_name": "p.jpg",
-                        "photo_b64": "data:image/jpeg;base64,CCC",
-                        "name": "X"}}
+EVIDENCE = {
+    "arrival": {"photo_name": "a.jpg", "photo_b64": "data:image/jpeg;base64,AAA", "lat": -6.2, "lng": 106.8},
+    "weighing": [],
+    "officer": {"photo_name": "p.jpg", "photo_b64": "data:image/jpeg;base64,CCC", "name": "X"},
+}
 
 
 def _create_worker(db_path: str, truck: str, created, errors) -> None:
     """Child process: build its own store and create one SPJ."""
     try:
         store = SpjStore(db_path=db_path)
-        spj = store.create(driver_name="Worker", truck_code=truck,
-                           destination="TPST Bantargebang", weigh_on_site=False,
-                           priority="normal", note="")
+        spj = store.create(
+            driver_name="Worker",
+            truck_code=truck,
+            destination="TPST Bantargebang",
+            weigh_on_site=False,
+            priority="normal",
+            note="",
+        )
         created.put((spj.spj_id, spj.spj_number))
     except Exception as exc:  # noqa: BLE001 - reported to the parent
         errors.put(f"{type(exc).__name__}: {exc}")
@@ -40,8 +42,7 @@ def _create_worker(db_path: str, truck: str, created, errors) -> None:
 def _activate_worker(db_path: str, spj_id: str, truck: str, results) -> None:
     try:
         store = SpjStore(db_path=db_path)
-        store.add_stop(spj_id, name="S", kecamatan="K", address="A",
-                       lat=-6.2, lng=106.8)
+        store.add_stop(spj_id, name="S", kecamatan="K", address="A", lat=-6.2, lng=106.8)
         store.activate(spj_id)
         results.put(("ok", truck))
     except ValueError as exc:
@@ -63,8 +64,7 @@ class MultiProcessTests(unittest.TestCase):
         ctx = multiprocessing.get_context("spawn")
         created, errors = ctx.Queue(), ctx.Queue()
         procs = [
-            ctx.Process(target=_create_worker,
-                        args=(self.db, f"T-{i:03d}", created, errors))
+            ctx.Process(target=_create_worker, args=(self.db, f"T-{i:03d}", created, errors))
             for i in range(6)
         ]
         for p in procs:
@@ -72,14 +72,12 @@ class MultiProcessTests(unittest.TestCase):
         for p in procs:
             p.join(60)
 
-        self.assertTrue(errors.empty(),
-                        [errors.get() for _ in range(errors.qsize())])
+        self.assertTrue(errors.empty(), [errors.get() for _ in range(errors.qsize())])
         records = [created.get() for _ in range(created.qsize())]
         self.assertEqual(len(records), 6)
         self.assertEqual(len({spj_id for spj_id, _ in records}), 6)
         numbers = [number for _, number in records]
-        self.assertEqual(len(set(numbers)), 6,
-                         f"daily sequence reused: {sorted(numbers)}")
+        self.assertEqual(len(set(numbers)), 6, f"daily sequence reused: {sorted(numbers)}")
 
         # Every record survived: the file is shared state, not a last-write-wins copy.
         store = SpjStore(db_path=self.db)
@@ -88,18 +86,27 @@ class MultiProcessTests(unittest.TestCase):
     def test_concurrent_activate_keeps_one_active_per_truck(self):
         """Lifecycle invariant survives a cross-process race."""
         store = SpjStore(db_path=self.db)
-        first = store.create(driver_name="A", truck_code="T-500",
-                             destination="TPST Bantargebang", weigh_on_site=False,
-                             priority="normal", note="")
-        second = store.create(driver_name="B", truck_code="T-500",
-                              destination="TPST Bantargebang", weigh_on_site=False,
-                              priority="normal", note="")
+        first = store.create(
+            driver_name="A",
+            truck_code="T-500",
+            destination="TPST Bantargebang",
+            weigh_on_site=False,
+            priority="normal",
+            note="",
+        )
+        second = store.create(
+            driver_name="B",
+            truck_code="T-500",
+            destination="TPST Bantargebang",
+            weigh_on_site=False,
+            priority="normal",
+            note="",
+        )
 
         ctx = multiprocessing.get_context("spawn")
         results = ctx.Queue()
         procs = [
-            ctx.Process(target=_activate_worker,
-                        args=(self.db, spj_id, label, results))
+            ctx.Process(target=_activate_worker, args=(self.db, spj_id, label, results))
             for spj_id, label in ((first.spj_id, "first"), (second.spj_id, "second"))
         ]
         for p in procs:
@@ -108,30 +115,37 @@ class MultiProcessTests(unittest.TestCase):
             p.join(60)
 
         outcomes = [results.get() for _ in range(results.qsize())]
-        self.assertEqual([o[0] for o in outcomes].count("ok"), 1,
-                         f"expected exactly one activation to win: {outcomes}")
+        self.assertEqual(
+            [o[0] for o in outcomes].count("ok"), 1, f"expected exactly one activation to win: {outcomes}"
+        )
         self.assertEqual([o[0] for o in outcomes].count("refused"), 1)
 
         reloaded = SpjStore(db_path=self.db)
-        active = [s for s in reloaded.list(status="aktif")
-                  if s.truck_code == "T-500"]
+        active = [s for s in reloaded.list(status="aktif") if s.truck_code == "T-500"]
         self.assertEqual(len(active), 1)
 
     def test_restart_preserves_every_record(self):
         store = SpjStore(db_path=self.db)
-        created = [store.create(driver_name=f"D{i}", truck_code=f"T-6{i:02d}",
-                                destination="TPST Bantargebang",
-                                weigh_on_site=False, priority="normal",
-                                note="").spj_id
-                   for i in range(5)]
+        created = [
+            store.create(
+                driver_name=f"D{i}",
+                truck_code=f"T-6{i:02d}",
+                destination="TPST Bantargebang",
+                weigh_on_site=False,
+                priority="normal",
+                note="",
+            ).spj_id
+            for i in range(5)
+        ]
         reopened = SpjStore(db_path=self.db)
-        self.assertEqual(sorted(s.spj_id for s in reopened.list()),
-                         sorted(created))
+        self.assertEqual(sorted(s.spj_id for s in reopened.list()), sorted(created))
+
 
 class WriteFailureTests(unittest.TestCase):
     def test_write_failure_raises_instead_of_acknowledging(self):
         """A store that cannot commit must not return a success object."""
         import unittest.mock
+
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         db = Path(tmp.name) / "spj.db"
@@ -140,15 +154,19 @@ class WriteFailureTests(unittest.TestCase):
         # disk-style error. The create must raise, not return a success
         # object for a write that never reached disk.
         with unittest.mock.patch.object(
-                SpjStore, "_connect",
-                side_effect=sqlite3.OperationalError("disk I/O error")):
+            SpjStore, "_connect", side_effect=sqlite3.OperationalError("disk I/O error")
+        ):
             with self.assertRaises((StorageError, sqlite3.OperationalError)):
-                store.create(driver_name="A", truck_code="T-700",
-                             destination="TPST Bantargebang",
-                             weigh_on_site=False, priority="normal", note="")
+                store.create(
+                    driver_name="A",
+                    truck_code="T-700",
+                    destination="TPST Bantargebang",
+                    weigh_on_site=False,
+                    priority="normal",
+                    note="",
+                )
         # The failed create must not have left a record behind.
-        self.assertEqual([s for s in store.list()
-                          if s.truck_code == "T-700"], [])
+        self.assertEqual([s for s in store.list() if s.truck_code == "T-700"], [])
 
 
 class PermitStoreTests(unittest.TestCase):
@@ -163,12 +181,10 @@ class PermitStoreTests(unittest.TestCase):
         store = PermitStore(db_path=self.db)
         first = store.add({"id": store.next_id(), "name": "A"})
         second = store.add({"id": store.next_id(), "name": "B"})
-        self.assertEqual((first["id"], second["id"]),
-                         ("EV-USER-001", "EV-USER-002"))
+        self.assertEqual((first["id"], second["id"]), ("EV-USER-001", "EV-USER-002"))
 
         reopened = PermitStore(db_path=self.db)
-        self.assertEqual([p["id"] for p in reopened.list()],
-                         ["EV-USER-001", "EV-USER-002"])
+        self.assertEqual([p["id"] for p in reopened.list()], ["EV-USER-001", "EV-USER-002"])
         # Deleting the newest must not let its identifier be handed out again.
         third = reopened.add({"id": reopened.next_id(), "name": "C"})
         self.assertEqual(third["id"], "EV-USER-003")
@@ -176,9 +192,10 @@ class PermitStoreTests(unittest.TestCase):
     def test_permit_survives_restart_with_full_payload(self):
         store = PermitStore(db_path=self.db)
         permit = {
-            "id": store.next_id(), "name": "Konser", "expected_attendance": 70000,
-            "affected_kecamatan": [{"kecamatan": "Gambir", "slug": "gambir",
-                                    "distance_m": 120}],
+            "id": store.next_id(),
+            "name": "Konser",
+            "expected_attendance": 70000,
+            "affected_kecamatan": [{"kecamatan": "Gambir", "slug": "gambir", "distance_m": 120}],
             "impact": {"predicted_waste_tons": 84.0, "crews_required": 5},
         }
         store.add(permit)
@@ -195,16 +212,21 @@ class SpjEvidencePersistenceTests(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         db = Path(tmp.name) / "spj.db"
         store = SpjStore(db_path=db)
-        spj = store.create(driver_name="A", truck_code="T-900",
-                           destination="TPST Bantargebang", weigh_on_site=False,
-                           priority="normal", note="")
+        spj = store.create(
+            driver_name="A",
+            truck_code="T-900",
+            destination="TPST Bantargebang",
+            weigh_on_site=False,
+            priority="normal",
+            note="",
+        )
         for name, lat in (("S1", -6.2), ("S2", -6.3)):
-            store.add_stop(spj.spj_id, name=name, kecamatan="K", address="A",
-                           lat=lat, lng=106.8)
+            store.add_stop(spj.spj_id, name=name, kecamatan="K", address="A", lat=lat, lng=106.8)
         store.activate(spj.spj_id)
         store.complete_stop(spj.spj_id, 0, evidence=EVIDENCE)
-        store.complete_stop(spj.spj_id, 1, actor="supervisor",
-                            override={"reason": "Bukti hilang di lapangan"})
+        store.complete_stop(
+            spj.spj_id, 1, actor="supervisor", override={"reason": "Bukti hilang di lapangan"}
+        )
 
         reopened = SpjStore(db_path=db)
         loaded = reopened.get(spj.spj_id)

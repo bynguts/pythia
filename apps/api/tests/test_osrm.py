@@ -36,17 +36,20 @@ class OsrmTests(unittest.TestCase):
 
     def test_live_osrm_route_is_road_following_or_skips(self):
         from app.osrm import fetch_osrm_route
+
         try:
             route = fetch_osrm_route("live", (-6.221, 106.785), (-6.195, 106.802), timeout_seconds=8.0)
         except Exception:
             self.skipTest("OSRM unreachable")
         if route["source"] != "osrm":
             self.skipTest("OSRM returned fallback (network)")
-        self.assertGreater(len(route["path"]), 50,
-                           "road-following OSRM route should have many points, not a straight line")
+        self.assertGreater(
+            len(route["path"]), 50, "road-following OSRM route should have many points, not a straight line"
+        )
 
     def test_snap_to_road_returns_raw_and_snapped(self):
         from app.osrm import snap_to_road
+
         r = snap_to_road(-6.221, 106.785)
         self.assertIn("raw", r)
         self.assertIn("snapped", r)
@@ -54,11 +57,13 @@ class OsrmTests(unittest.TestCase):
         self.assertEqual(r["raw"], {"lat": -6.221, "lng": 106.785})
         if r["source"] == "SNAPPED_OSRM":
             from app.osrm import _haversine_km
+
             d = _haversine_km((-6.221, 106.785), (r["snapped"]["lat"], r["snapped"]["lng"])) * 1000
             self.assertLess(d, 200)
 
     def test_road_route_multi_waypoint_is_road_following(self):
         from app.osrm import road_route
+
         r = road_route([(-6.221, 106.785), (-6.195, 106.802)])
         self.assertIn("geometry", r)
         self.assertIn("source", r)

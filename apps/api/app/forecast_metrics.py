@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Forecasting evaluation metrics and honest per-resolution suitability contract.
 
 Provides WAPE, MAE, MASE, and seasonal-naive baselines so Case 2 forecast
@@ -7,24 +6,34 @@ vacuum. suitability_labels() encodes which resolutions Pythia may claim as
 reliable — daily-district is explicitly NOT supported because that target is
 calibrated-synthetic.
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
 
 
+def _check_same_length(actual: Sequence[float], predicted: Sequence[float]) -> None:
+    if len(actual) != len(predicted):
+        raise ValueError(
+            f"actual and predicted must have the same length ({len(actual)} != {len(predicted)})"
+        )
+
+
 def mae(actual: Sequence[float], predicted: Sequence[float]) -> float:
+    _check_same_length(actual, predicted)
     n = len(actual)
     if n == 0:
         return 0.0
-    return sum(abs(a - p) for a, p in zip(actual, predicted)) / n
+    return sum(abs(a - p) for a, p in zip(actual, predicted, strict=True)) / n
 
 
 def wape(actual: Sequence[float], predicted: Sequence[float]) -> float:
     """Weighted Absolute Percentage Error = sum|error| / sum|actual|."""
+    _check_same_length(actual, predicted)
     denom = sum(abs(a) for a in actual)
     if denom == 0:
         return 0.0
-    return sum(abs(a - p) for a, p in zip(actual, predicted)) / denom
+    return sum(abs(a - p) for a, p in zip(actual, predicted, strict=True)) / denom
 
 
 def seasonal_naive_forecast(series: Sequence[float], seasonal_period: int = 7) -> list[float]:

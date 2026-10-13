@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 facility_planning.py — Case 2 facility-readiness engine.
 
@@ -13,6 +12,7 @@ Capacity values are a PROXY (see data provenance registry), so every output
 carries the proxy label and never presents derived numbers as official DLH
 operational capacity.
 """
+
 from __future__ import annotations
 
 from math import ceil
@@ -20,7 +20,6 @@ from typing import Any
 
 from app.real_data import (
     _norm_admin_name,
-    kelurahan_allocation_weights,
     load_kecamatan_map,
     load_kelurahan_heatmap,
     load_kelurahan_tps_counts,
@@ -76,7 +75,9 @@ def build_facility_gap_analysis(
         extra_trips = max(0, ceil(gap / _TRUCK_CAPACITY_TONS)) if gap and gap > 0 else 0
         # Lever 2 (disposal): new TPS sites absorb only a bounded share of the
         # gap; the remainder is assumed direct-hauled (as today).
-        sites_needed = max(0, ceil(gap * _NEW_SITE_GAP_SHARE / _AVG_TPS_SITE_CAPACITY_TONS)) if gap and gap > 0 else 0
+        sites_needed = (
+            max(0, ceil(gap * _NEW_SITE_GAP_SHARE / _AVG_TPS_SITE_CAPACITY_TONS)) if gap and gap > 0 else 0
+        )
         extra_trucks = extra_trips
 
         kec_kel_tps = tps_counts.get(kec_norm, {})
@@ -84,15 +85,17 @@ def build_facility_gap_analysis(
         ranked = sorted(kel_tons.get(kec_norm, []), key=lambda kv: -kv[1])
         for kel_name, tons in ranked:
             tps_here = kec_kel_tps.get(_norm_admin_name(kel_name), 0)
-            candidates.append({
-                "kelurahan": kel_name,
-                "predicted_tons": round(tons, 1),
-                "existing_tps_sites": tps_here,
-                "reason": (
-                    f"highest predicted demand in {k['kecamatan']} "
-                    f"({tons:.1f} t/day) with {tps_here} existing TPS site(s)"
-                ),
-            })
+            candidates.append(
+                {
+                    "kelurahan": kel_name,
+                    "predicted_tons": round(tons, 1),
+                    "existing_tps_sites": tps_here,
+                    "reason": (
+                        f"highest predicted demand in {k['kecamatan']} "
+                        f"({tons:.1f} t/day) with {tps_here} existing TPS site(s)"
+                    ),
+                }
+            )
             if len(candidates) >= top_kelurahan:
                 break
 
@@ -104,26 +107,30 @@ def build_facility_gap_analysis(
         elif gap > 0:
             severity = "watch"
 
-        areas.append({
-            "kecamatan": k["kecamatan"],
-            "city": k["city"],
-            "slug": k["slug"],
-            "predicted_tons_per_day": round(predicted, 1),
-            "tps_capacity_proxy_ton_per_day": capacity,
-            "gap_ton_per_day": gap,
-            "coverage_ratio_proxy": coverage,
-            "severity": severity,
-            "recommended_extra_trips_per_day": extra_trips,
-            "recommended_new_tps_sites": sites_needed,
-            "recommended_extra_trucks": extra_trucks,
-            "siting_candidates": candidates,
-        })
+        areas.append(
+            {
+                "kecamatan": k["kecamatan"],
+                "city": k["city"],
+                "slug": k["slug"],
+                "predicted_tons_per_day": round(predicted, 1),
+                "tps_capacity_proxy_ton_per_day": capacity,
+                "gap_ton_per_day": gap,
+                "coverage_ratio_proxy": coverage,
+                "severity": severity,
+                "recommended_extra_trips_per_day": extra_trips,
+                "recommended_new_tps_sites": sites_needed,
+                "recommended_extra_trucks": extra_trucks,
+                "siting_candidates": candidates,
+            }
+        )
 
     order = {"critical": 0, "watch": 1, "ok": 2, "unknown": 3}
     areas.sort(key=lambda a: (order.get(a["severity"], 4), -(a["gap_ton_per_day"] or 0)))
     critical = [a for a in areas if a["severity"] == "critical"]
     watch = [a for a in areas if a["severity"] == "watch"]
-    total_capacity = sum(a["tps_capacity_proxy_ton_per_day"] for a in areas if a["tps_capacity_proxy_ton_per_day"])
+    total_capacity = sum(
+        a["tps_capacity_proxy_ton_per_day"] for a in areas if a["tps_capacity_proxy_ton_per_day"]
+    )
     total_demand = sum(a["predicted_tons_per_day"] for a in areas)
     return {
         "areas": areas,
@@ -131,10 +138,14 @@ def build_facility_gap_analysis(
             "kecamatan_total": len(areas),
             "critical_count": len(critical),
             "watch_count": len(watch),
-            "total_gap_ton_per_day": round(sum(a["gap_ton_per_day"] for a in areas if (a["gap_ton_per_day"] or 0) > 0), 1),
+            "total_gap_ton_per_day": round(
+                sum(a["gap_ton_per_day"] for a in areas if (a["gap_ton_per_day"] or 0) > 0), 1
+            ),
             "total_new_tps_sites_needed": sum(a["recommended_new_tps_sites"] for a in areas),
             "total_extra_trucks_needed": sum(a["recommended_extra_trucks"] for a in areas),
-            "citywide_proxy_coverage_ratio": round(total_capacity / total_demand, 3) if total_demand else None,
+            "citywide_proxy_coverage_ratio": round(total_capacity / total_demand, 3)
+            if total_demand
+            else None,
         },
         "assumptions": {
             "avg_tps_site_capacity_tons": _AVG_TPS_SITE_CAPACITY_TONS,

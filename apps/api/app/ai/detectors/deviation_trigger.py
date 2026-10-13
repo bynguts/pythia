@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.ai.actions.auto_state import AiEvent, EventFeed
 from app.ai.base import GpsDataSource
@@ -31,15 +31,17 @@ class DeviationTrigger:
                 continue
             self._last_emit[code] = now
             fired.append(code)
-            self._feed.append(AiEvent(
-                event_type="auto_replay",
-                truck_code=code,
-                title=f"Replay otomatis: {code} menyimpang dari koridor",
-                detail={
-                    "distance_meters": deviation.get("distance_meters"),
-                    "severity": deviation.get("severity"),
-                },
-                confidence=0.9,
-                created_at=datetime.now(timezone.utc).isoformat(),
-            ))
+            self._feed.append(
+                AiEvent(
+                    event_type="auto_replay",
+                    truck_code=code,
+                    title=f"Replay otomatis: {code} menyimpang dari koridor",
+                    detail={
+                        "distance_meters": deviation.get("distance_meters"),
+                        "severity": deviation.get("severity"),
+                    },
+                    confidence=0.9,
+                    created_at=datetime.now(UTC).isoformat(),
+                )
+            )
         return fired

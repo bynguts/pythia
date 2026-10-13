@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """Tests for A* routing with OSRM geometry + permit constraints (Task 8)."""
+
 import unittest
+from itertools import pairwise
 
 from app.astar_routing import find_astar_route
 
@@ -27,14 +28,15 @@ class AstarPermitTests(unittest.TestCase):
         r = find_astar_route(blocked_edges=[("ORIGIN", "SLIPI")])
         self.assertTrue(r["success"])
         seq = r["sequence"]
-        pairs = list(zip(seq, seq[1:]))
+        pairs = list(pairwise(seq))
         self.assertNotIn(("ORIGIN", "SLIPI"), pairs)
         self.assertNotIn(("SLIPI", "ORIGIN"), pairs)
 
 
 class AstarGpsAnchorTests(unittest.TestCase):
     def test_origin_snaps_within_50m_of_truck_gps(self):
-        from app.astar_routing import route_from_truck, haversine_distance
+        from app.astar_routing import haversine_distance, route_from_truck
+
         pos = {"lat": -6.221, "lng": 106.785}
         r = route_from_truck(pos)
         self.assertTrue(r["success"])
@@ -43,7 +45,8 @@ class AstarGpsAnchorTests(unittest.TestCase):
         self.assertLess(dist_m, 50, f"route origin {dist_m:.0f}m from truck GPS")
 
     def test_route_from_truck_does_not_mutate_global_graph(self):
-        from app.astar_routing import route_from_truck, NODES, EDGES
+        from app.astar_routing import EDGES, NODES, route_from_truck
+
         nodes_before = dict(NODES)
         edges_before = list(EDGES)
         route_from_truck({"lat": -6.20, "lng": 106.80})
@@ -55,6 +58,7 @@ class AstarGpsAnchorTests(unittest.TestCase):
         # A GPS-anchored graph must expose exactly one ORIGIN edge: the fresh
         # connector to the nearest node, with no inherited fixed-node edges.
         from app.astar_routing import build_gps_graph, nearest_node
+
         pos = {"lat": -6.126, "lng": 106.843}
         snap = nearest_node(pos["lat"], pos["lng"])
         nodes, edges = build_gps_graph(pos)
@@ -64,26 +68,30 @@ class AstarGpsAnchorTests(unittest.TestCase):
 
     def test_metrics_use_osrm_distance_not_manual_weights(self):
         from app.astar_routing import find_astar_route
+
         r = find_astar_route()
         # physical_distance_km must be derived from OSRM geometry length, so it
         # should match the drawn path length, not the manual EDGES weight sum.
         self.assertIn("physical_distance_km", r)
         self.assertIn("eta_minutes", r)
-        self.assertGreater(r["physical_distance_km"], 40,
-                           "OSRM road distance should exceed the manual straight-line sum")
+        self.assertGreater(
+            r["physical_distance_km"], 40, "OSRM road distance should exceed the manual straight-line sum"
+        )
 
     def test_astar_cost_matches_directed_dijkstra(self):
         # A* with a zero heuristic must equal directed Dijkstra's optimal cost,
         # never worse, across jam/permit scenarios (admissible by construction).
         import heapq as _hq
-        from app.astar_routing import find_astar_route, NODES, EDGES, _edge_meta, _osrm_edge
+
+        from app.astar_routing import EDGES, NODES, _edge_meta, _osrm_edge, find_astar_route
 
         def dijkstra(congested, blocked):
             cset = set(congested) | {(v, u) for (u, v) in congested}
             bset = set(blocked) | {(v, u) for (u, v) in blocked}
             adj = {n: [] for n in NODES}
             for u, v, _d in EDGES:
-                adj[u].append(v); adj[v].append(u)
+                adj[u].append(v)
+                adj[v].append(u)
             pq = [(0.0, "ORIGIN")]
             best = {"ORIGIN": 0.0}
             while pq:
@@ -108,20 +116,23 @@ class AstarGpsAnchorTests(unittest.TestCase):
             astar = find_astar_route(congested_edges=cong, blocked_edges=blk)
             ref = dijkstra(cong, blk)
             self.assertIsNotNone(ref)
-            self.assertAlmostEqual(astar["optimization_cost"], ref, delta=0.5,
-                                   msg=f"A* not optimal for cong={cong} blk={blk}")
+            self.assertAlmostEqual(
+                astar["optimization_cost"], ref, delta=0.5, msg=f"A* not optimal for cong={cong} blk={blk}"
+            )
 
     def test_astar_heuristic_is_admissible(self):
         # Admissibility: h(node) must never exceed the true optimal duration cost
         # from that node to goal. A straight-line-km/45 heuristic can overestimate
         # when roads are faster than 45km/h; a zero heuristic is always admissible.
         import heapq as _hq
-        from app.astar_routing import NODES, EDGES, _edge_meta, _osrm_edge, _heuristic_minutes
+
+        from app.astar_routing import EDGES, NODES, _edge_meta, _heuristic_minutes, _osrm_edge
 
         def true_cost_to_goal(start):
             adj = {n: [] for n in NODES}
             for u, v, _d in EDGES:
-                adj[u].append(v); adj[v].append(u)
+                adj[u].append(v)
+                adj[v].append(u)
             pq = [(0.0, start)]
             best = {start: 0.0}
             while pq:
@@ -147,11 +158,13 @@ class AstarGpsAnchorTests(unittest.TestCase):
             if true_cost is None:
                 continue
             h = _heuristic_minutes(node, "TPA_BANTARGEBANG", NODES)
-            self.assertLessEqual(h, true_cost + 0.01,
-                                 f"heuristic inadmissible at {node}: h={h:.1f} > true={true_cost:.1f}")
+            self.assertLessEqual(
+                h, true_cost + 0.01, f"heuristic inadmissible at {node}: h={h:.1f} > true={true_cost:.1f}"
+            )
 
     def test_warm_edge_cache_populates_all_edges(self):
-        from app.astar_routing import warm_edge_cache, EDGES
+        from app.astar_routing import EDGES, warm_edge_cache
+
         count = warm_edge_cache()
         # Every graph edge geometry is cached so the first demo request is warm.
         self.assertGreaterEqual(count, len(EDGES))
@@ -160,34 +173,46 @@ class AstarGpsAnchorTests(unittest.TestCase):
         # With OSRM live and no congestion, the search cost equals summed OSRM
         # durations, so optimization_cost tracks eta_minutes (not the km weights).
         from app.astar_routing import find_astar_route
+
         r = find_astar_route()
         if r.get("geometry_source") != "osrm":
             self.skipTest("OSRM unreachable")
-        self.assertAlmostEqual(r["optimization_cost"], r["eta_minutes"], delta=2,
-                               msg="A* objective is not OSRM duration")
+        self.assertAlmostEqual(
+            r["optimization_cost"], r["eta_minutes"], delta=2, msg="A* objective is not OSRM duration"
+        )
 
     def test_jam_off_route_does_not_divert(self):
         from app.astar_routing import reroute_payload
+
         # A jam on an edge that is NOT on the normal active route must not change it.
         normal = reroute_payload(False)["active_route"]["sequence"]
         # Force a jam on an off-route edge (Bekasi Timur spur, rarely on the path).
         result = reroute_payload(True, congested_edges=[("BEKASI_TIMUR", "TPA_BANTARGEBANG")])
-        if not set(zip(normal, normal[1:])) & {("BEKASI_TIMUR", "TPA_BANTARGEBANG"), ("TPA_BANTARGEBANG", "BEKASI_TIMUR")}:
+        if not set(pairwise(normal)) & {
+            ("BEKASI_TIMUR", "TPA_BANTARGEBANG"),
+            ("TPA_BANTARGEBANG", "BEKASI_TIMUR"),
+        }:
             self.assertEqual(result["active_route"]["sequence"], normal)
 
 
 class AstarAlternativeRouteTests(unittest.TestCase):
     def test_two_computed_alternatives_differ(self):
         from app.astar_routing import find_alternative_routes
+
         routes = find_alternative_routes(k=2)
         self.assertGreaterEqual(len(routes), 2, "expanded corridor graph must yield >=2 alternatives")
-        self.assertNotEqual(tuple(routes[0]["sequence"]), tuple(routes[1]["sequence"]),
-                            "alternative must be a genuinely different computed path")
-        self.assertGreaterEqual(routes[1]["eta_minutes"], routes[0]["eta_minutes"] - 1,
-                                "alternatives ranked by ETA")
+        self.assertNotEqual(
+            tuple(routes[0]["sequence"]),
+            tuple(routes[1]["sequence"]),
+            "alternative must be a genuinely different computed path",
+        )
+        self.assertGreaterEqual(
+            routes[1]["eta_minutes"], routes[0]["eta_minutes"] - 1, "alternatives ranked by ETA"
+        )
 
     def test_alternatives_have_real_eta_and_geometry(self):
         from app.astar_routing import find_alternative_routes
+
         for r in find_alternative_routes(k=2):
             self.assertIn("physical_distance_km", r)
             self.assertIn("eta_minutes", r)
@@ -195,18 +220,24 @@ class AstarAlternativeRouteTests(unittest.TestCase):
 
     def test_permit_hour_window_blocks_inner_toll(self):
         from app.astar_routing import find_astar_route
-        open_route = find_astar_route(permit_hour=2)   # 02:00 — window closed
+
+        open_route = find_astar_route(permit_hour=2)  # 02:00 — window closed
         shut_route = find_astar_route(permit_hour=12)  # 12:00 — window active
-        open_pairs = set(zip(open_route["sequence"], open_route["sequence"][1:]))
-        shut_pairs = set(zip(shut_route["sequence"], shut_route["sequence"][1:]))
-        restricted = {("TOMANG", "SEMANGGI"), ("SEMANGGI", "TOMANG"),
-                      ("SEMANGGI", "CAWANG"), ("CAWANG", "SEMANGGI")}
-        self.assertFalse(shut_pairs & restricted,
-                         "during the truck-hour window the inner toll must not be selected")
+        shut_pairs = set(pairwise(shut_route["sequence"]))
+        restricted = {
+            ("TOMANG", "SEMANGGI"),
+            ("SEMANGGI", "TOMANG"),
+            ("SEMANGGI", "CAWANG"),
+            ("CAWANG", "SEMANGGI"),
+        }
+        self.assertFalse(
+            shut_pairs & restricted, "during the truck-hour window the inner toll must not be selected"
+        )
         self.assertTrue(open_route["success"] and shut_route["success"])
 
     def test_expanded_graph_offers_jorr_corridor(self):
-        from app.astar_routing import NODES, EDGES
+        from app.astar_routing import EDGES, NODES
+
         self.assertIn("KAMPUNG_RAMBUTAN", NODES)
         self.assertIn("JATIWARNA", NODES)
         self.assertGreaterEqual(len(EDGES), 25)

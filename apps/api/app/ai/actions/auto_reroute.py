@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.ai.actions.auto_state import AiEvent, EventFeed
 from app.ai.base import GpsDataSource
@@ -39,7 +39,7 @@ def manual_override_active() -> bool:
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class AutoRerouter:
@@ -55,9 +55,13 @@ class AutoRerouter:
         cleared = False
 
         if manual_override_active():
-            return {"jammed_trucks": jammed, "jam_active": jam_active,
-                    "rerouted": rerouted, "cleared": cleared,
-                    "manual_override": True}
+            return {
+                "jammed_trucks": jammed,
+                "jam_active": jam_active,
+                "rerouted": rerouted,
+                "cleared": cleared,
+                "manual_override": True,
+            }
 
         if jammed and not jam_active:
             set_traffic_jam_active(True)
@@ -73,32 +77,35 @@ class AutoRerouter:
                     route = {"success": False, "message": str(exc)}
                 if route.get("success"):
                     rerouted.append(code)
-                self._feed.append(AiEvent(
-                    event_type="auto_reroute",
-                    truck_code=code,
-                    title=f"Kemacetan terdeteksi — {code} dialihkan otomatis",
-                    detail={
-                        "avg_speed_kmh": signals[code].avg_speed_kmh,
-                        "reroute_success": bool(route.get("success")),
-                        "new_distance_km": route.get("distance_km"),
-                        "new_eta_minutes": route.get("eta_minutes"),
-                        "reason": "avg speed below 15 km/h for 3 consecutive ticks",
-                    },
-                    confidence=0.85,
-                    created_at=_utc_now(),
-                ))
+                self._feed.append(
+                    AiEvent(
+                        event_type="auto_reroute",
+                        truck_code=code,
+                        title=f"Kemacetan terdeteksi — {code} dialihkan otomatis",
+                        detail={
+                            "avg_speed_kmh": signals[code].avg_speed_kmh,
+                            "reroute_success": bool(route.get("success")),
+                            "new_distance_km": route.get("distance_km"),
+                            "new_eta_minutes": route.get("eta_minutes"),
+                            "reason": "avg speed below 15 km/h for 3 consecutive ticks",
+                        },
+                        confidence=0.85,
+                        created_at=_utc_now(),
+                    )
+                )
         elif not jammed and jam_active:
             set_traffic_jam_active(False)
             jam_active = False
             cleared = True
-            self._feed.append(AiEvent(
-                event_type="jam_cleared",
-                truck_code=None,
-                title="Kemacetan teratasi — koridor kembali normal",
-                detail={"reason": "speed above 25 km/h for 2 consecutive ticks"},
-                confidence=0.85,
-                created_at=_utc_now(),
-            ))
+            self._feed.append(
+                AiEvent(
+                    event_type="jam_cleared",
+                    truck_code=None,
+                    title="Kemacetan teratasi — koridor kembali normal",
+                    detail={"reason": "speed above 25 km/h for 2 consecutive ticks"},
+                    confidence=0.85,
+                    created_at=_utc_now(),
+                )
+            )
 
-        return {"jammed_trucks": jammed, "jam_active": jam_active,
-                "rerouted": rerouted, "cleared": cleared}
+        return {"jammed_trucks": jammed, "jam_active": jam_active, "rerouted": rerouted, "cleared": cleared}

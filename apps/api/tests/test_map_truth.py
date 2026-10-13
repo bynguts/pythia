@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Tests for the single map-truth geospatial payload (Task 2)."""
+
 import unittest
 
 from app.data import TRUCKS
@@ -12,13 +12,25 @@ class MapTruthTests(unittest.TestCase):
         self.payload = build_map_truth(self.truck)
 
     def test_payload_has_all_geospatial_keys(self):
-        for key in ("truck_code", "raw_gps", "snapped_gps", "assigned_route",
-                    "actual_route", "deviation_m", "deviation_segments",
-                    "recommendation", "traffic", "permit", "provenance", "timestamp"):
+        for key in (
+            "truck_code",
+            "raw_gps",
+            "snapped_gps",
+            "assigned_route",
+            "actual_route",
+            "deviation_m",
+            "deviation_segments",
+            "recommendation",
+            "traffic",
+            "permit",
+            "provenance",
+            "timestamp",
+        ):
             self.assertIn(key, self.payload)
 
     def test_snapped_gps_near_raw(self):
         from app.osrm import _haversine_km
+
         raw = self.payload["raw_gps"]
         snap = self.payload["snapped_gps"]
         d = _haversine_km((raw["lat"], raw["lng"]), (snap["lat"], snap["lng"])) * 1000

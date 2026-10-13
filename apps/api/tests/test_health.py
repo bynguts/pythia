@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Tests for dependency-aware health endpoint (Task 8)."""
+
 import unittest
 
 from fastapi.testclient import TestClient

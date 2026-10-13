@@ -6,7 +6,6 @@ from math import asin, cos, radians, sin, sqrt
 from typing import Any
 from urllib.request import Request, urlopen
 
-
 OSRM_BASE_URL = "https://router.project-osrm.org"
 
 
@@ -43,7 +42,9 @@ def parse_osrm_route(name: str, payload: dict[str, Any], index: int = 0) -> dict
     }
 
 
-def fallback_route(name: str, origin: tuple[float, float], destination: tuple[float, float]) -> dict[str, Any]:
+def fallback_route(
+    name: str, origin: tuple[float, float], destination: tuple[float, float]
+) -> dict[str, Any]:
     origin_lat, origin_lng = origin
     dest_lat, dest_lng = destination
     mid = {
@@ -105,8 +106,12 @@ def road_route(coords: list[tuple[float, float]], timeout_seconds: float = 2.5) 
 @lru_cache(maxsize=256)
 def _road_route_cached(coords: tuple, timeout_seconds: float) -> dict[str, Any]:
     if len(coords) < 2:
-        return {"geometry": tuple({"lat": c[0], "lng": c[1]} for c in coords),
-                "distance_km": 0.0, "duration_min": 0.0, "source": "FALLBACK_DEGRADED"}
+        return {
+            "geometry": tuple({"lat": c[0], "lng": c[1]} for c in coords),
+            "distance_km": 0.0,
+            "duration_min": 0.0,
+            "source": "FALLBACK_DEGRADED",
+        }
     pts = ";".join(f"{lng},{lat}" for lat, lng in coords)
     url = f"{OSRM_BASE_URL}/route/v1/driving/{pts}?overview=full&geometries=geojson&steps=false"
     try:
@@ -116,14 +121,21 @@ def _road_route_cached(coords: tuple, timeout_seconds: float) -> dict[str, Any]:
         if payload.get("code") == "Ok" and payload.get("routes"):
             route = payload["routes"][0]
             geom = tuple({"lat": la, "lng": ln} for ln, la in route["geometry"]["coordinates"])
-            return {"geometry": geom, "distance_km": round(route["distance"] / 1000, 1),
-                    "duration_min": round(route["duration"] / 60), "source": "LIVE_EXTERNAL"}
+            return {
+                "geometry": geom,
+                "distance_km": round(route["distance"] / 1000, 1),
+                "duration_min": round(route["duration"] / 60),
+                "source": "LIVE_EXTERNAL",
+            }
     except Exception:
         pass
     km = sum(_haversine_km(coords[i], coords[i + 1]) for i in range(len(coords) - 1))
-    return {"geometry": tuple({"lat": c[0], "lng": c[1]} for c in coords),
-            "distance_km": round(km, 1), "duration_min": round(km / 45 * 60),
-            "source": "FALLBACK_DEGRADED"}
+    return {
+        "geometry": tuple({"lat": c[0], "lng": c[1]} for c in coords),
+        "distance_km": round(km, 1),
+        "duration_min": round(km / 45 * 60),
+        "source": "FALLBACK_DEGRADED",
+    }
 
 
 def fetch_osrm_route(

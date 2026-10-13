@@ -5,9 +5,9 @@ from app.gps_feed import GpsBreadcrumb
 
 
 def _crumb(code, lat, lng, speed, sec):
-    return GpsBreadcrumb(truck_code=code, lat=lat, lng=lng,
-                         timestamp=f"2026-09-10T00:00:{sec:02d}",
-                         speed_kmh=speed)
+    return GpsBreadcrumb(
+        truck_code=code, lat=lat, lng=lng, timestamp=f"2026-09-10T00:00:{sec:02d}", speed_kmh=speed
+    )
 
 
 class FakeSource:
@@ -23,29 +23,24 @@ class FakeSource:
 
 class TripFuelFormulaTests(unittest.TestCase):
     def test_full_load_no_idle(self):
-        fuel = CarbonCalculator.trip_fuel_l(100.0, load_ratio=1.0,
-                                            idle_h=0.0, stopgo_km=0.0)
+        fuel = CarbonCalculator.trip_fuel_l(100.0, load_ratio=1.0, idle_h=0.0, stopgo_km=0.0)
         self.assertAlmostEqual(fuel, 55.0)
 
     def test_empty_load(self):
-        fuel = CarbonCalculator.trip_fuel_l(100.0, load_ratio=0.0,
-                                            idle_h=0.0, stopgo_km=0.0)
+        fuel = CarbonCalculator.trip_fuel_l(100.0, load_ratio=0.0, idle_h=0.0, stopgo_km=0.0)
         self.assertAlmostEqual(fuel, 35.0)
 
     def test_stopgo_penalty_applies(self):
         # 80 km cruise + 20 km stop-go at full load
-        fuel = CarbonCalculator.trip_fuel_l(100.0, load_ratio=1.0,
-                                            idle_h=0.0, stopgo_km=20.0)
+        fuel = CarbonCalculator.trip_fuel_l(100.0, load_ratio=1.0, idle_h=0.0, stopgo_km=20.0)
         self.assertAlmostEqual(fuel, 44.0 + 12.65, places=2)
 
     def test_idle_rate_applies(self):
-        fuel = CarbonCalculator.trip_fuel_l(0.0, load_ratio=0.5,
-                                            idle_h=2.0, stopgo_km=0.0)
+        fuel = CarbonCalculator.trip_fuel_l(0.0, load_ratio=0.5, idle_h=2.0, stopgo_km=0.0)
         self.assertAlmostEqual(fuel, 2.4)
 
     def test_load_ratio_clamped(self):
-        fuel = CarbonCalculator.trip_fuel_l(100.0, load_ratio=5.0,
-                                            idle_h=0.0, stopgo_km=0.0)
+        fuel = CarbonCalculator.trip_fuel_l(100.0, load_ratio=5.0, idle_h=0.0, stopgo_km=0.0)
         self.assertAlmostEqual(fuel, 55.0)
 
 
@@ -57,13 +52,17 @@ class CarbonCalculatorUpdateTests(unittest.TestCase):
     def test_update_aggregates_fleet(self):
         trails = {
             # T-001: 2 segmen ~111m each, cepat
-            "T-001": [_crumb("T-001", -6.2000, 106.8000, 40.0, 0),
-                      _crumb("T-001", -6.2010, 106.8000, 40.0, 6),
-                      _crumb("T-001", -6.2020, 106.8000, 40.0, 12)],
+            "T-001": [
+                _crumb("T-001", -6.2000, 106.8000, 40.0, 0),
+                _crumb("T-001", -6.2010, 106.8000, 40.0, 6),
+                _crumb("T-001", -6.2020, 106.8000, 40.0, 12),
+            ],
             # T-002: diam -> idle
-            "T-002": [_crumb("T-002", -6.3000, 106.9000, 0.0, 0),
-                      _crumb("T-002", -6.3000, 106.9000, 0.0, 6),
-                      _crumb("T-002", -6.3000, 106.9000, 0.0, 12)],
+            "T-002": [
+                _crumb("T-002", -6.3000, 106.9000, 0.0, 0),
+                _crumb("T-002", -6.3000, 106.9000, 0.0, 6),
+                _crumb("T-002", -6.3000, 106.9000, 0.0, 12),
+            ],
         }
         calc = CarbonCalculator()
         snap = calc.update(FakeSource(trails))
@@ -73,8 +72,7 @@ class CarbonCalculatorUpdateTests(unittest.TestCase):
         self.assertGreater(per["T-001"]["fuel_l"], 0.0)
         # T-002: 2 interval idle * 6s = 12s = 0.00333h -> ~0.004 L
         self.assertAlmostEqual(per["T-002"]["fuel_l"], 0.004, places=3)
-        self.assertAlmostEqual(snap["co2_kg"],
-                               round(snap["fuel_l"] * 2.68, 2), places=2)
+        self.assertAlmostEqual(snap["co2_kg"], round(snap["fuel_l"] * 2.68, 2), places=2)
         self.assertEqual(snap["classification"], "reference")
         self.assertGreater(snap["baseline_fuel_l"], 0.0)
 

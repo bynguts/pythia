@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 main.py — FastAPI application routing.
 Includes advanced DLH Case 1 & Case 2 features:
@@ -8,6 +7,7 @@ Includes advanced DLH Case 1 & Case 2 features:
 - WhatsApp Alerts Hook
 - Export Summary Report
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,7 +23,9 @@ import os
 key = os.getenv("OPENAI_API_KEY", "")
 logging.getLogger(__name__).info(
     "startup cwd=%s openai_configured=%s base_url=%s",
-    os.getcwd(), bool(key), os.getenv("OPENAI_BASE_URL"),
+    os.getcwd(),
+    bool(key),
+    os.getenv("OPENAI_BASE_URL"),
 )
 
 import json
@@ -31,42 +33,18 @@ import math
 import re
 import threading
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import asdict as _asdict
 from datetime import date
-from pathlib import Path
-from typing import Any, AsyncIterator, Literal
-from fastapi import FastAPI, HTTPException, Query, Header, Depends, Response
+from itertools import pairwise
+from typing import Any, Literal
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app.data import build_predictions, build_alerts, command_center_snapshot, TRUCKS, ROUTE_OPTIONS, fleet_history_payload, tpa_queue_status_payload, events_permits_payload, unlicensed_collectors_payload, _route_b_osrm
-from app.engine import (
-    predict_waste_hybrid,
-    predict_waste_hybrid_series,
-    list_hybrid_models,
-    hybrid_models_loadable,
-    estimate_tpa_queue_wait,
-    simulate_staggered_dispatch,
-    forecast_waste_risk,
-    DispatchCenter
-)
-from app.astar_routing import reroute_payload
-from app.gps_feed import latest_breadcrumbs
-from app.cv_surveillance import surveillance_status
-from app.map_truth import build_map_truth, _snapped_for
-from app.queue_simulation import simulate_queue
-from app.operations_optimizer import Demand, Vehicle, build_operational_plan
-from app.forecast_metrics import suitability_labels, suitability_details
-from app.auth import ROLES, authenticate, has_permission, token_for, role_for_token
-from app.impact import build_impact_report
-from app.osrm import fetch_osrm_route
-from app.weather import fetch_jakarta_weather_forecast
-from app.assistant import answer_with_openai_if_configured, build_executive_summary
-from app.storage import HistoryStore, StorageError
-from app.whatsapp import OpenWAClient, build_alert_message
-from app.real_data import data_provenance, load_official_events, load_city_timbulan, load_fleet_composition, load_kecamatan_map, build_provenance_records, load_kelurahan_heatmap, load_real_tps_coordinates, load_real_wr_coordinates
-from app.astar_routing import is_traffic_jam_active, set_traffic_jam_active
 from app.ai.actions.auto_reroute import AutoRerouter, note_manual_override
 from app.ai.actions.auto_state import EVENT_FEED
 from app.ai.detectors.deviation_trigger import DeviationTrigger
@@ -76,18 +54,65 @@ from app.ai.engine_loop import maybe_start_engine
 from app.ai.forecasters.event_impact import EventImpactForecaster
 from app.ai.forecasters.fuel_model import CarbonCalculator
 from app.ai.forecasters.queue_predictor import TpaQueuePredictor
-from app.spj import SPJ_STORE, active_path_for as spj_active_path, \
-    spj_summary_payload, MAX_STOP_WEIGHT_KG as MAX_RECEIPT_WEIGHT_KG, \
-    destination_provenance
-from app.facilities import DESTINATIONS, FACILITIES
+from app.assistant import answer_with_openai_if_configured, build_executive_summary
+from app.astar_routing import is_traffic_jam_active, reroute_payload, set_traffic_jam_active
+from app.auth import ROLES, authenticate, has_permission, role_for_token, token_for
 from app.cities import HCMC_LANDFILL, get_city, hcmc_district_forecasts
-from app.twin import build_scene as build_twin_scene, jakarta_districts as twin_jakarta_districts
+from app.cv_surveillance import surveillance_status
+from app.data import (
+    TRUCKS,
+    _route_b_osrm,
+    build_predictions,
+    command_center_snapshot,
+    events_permits_payload,
+    fleet_history_payload,
+    tpa_queue_status_payload,
+    unlicensed_collectors_payload,
+)
+from app.engine import (
+    DispatchCenter,
+    forecast_waste_risk,
+    hybrid_models_loadable,
+    list_hybrid_models,
+    predict_waste_hybrid,
+    predict_waste_hybrid_series,
+    simulate_staggered_dispatch,
+)
+from app.facilities import DESTINATIONS, FACILITIES
+from app.forecast_metrics import suitability_details, suitability_labels
+from app.gps_feed import latest_breadcrumbs
+from app.impact import build_impact_report
+from app.map_truth import _snapped_for, build_map_truth
+from app.operations_optimizer import Demand, Vehicle, build_operational_plan
+from app.osrm import fetch_osrm_route
 from app.permits import PERMIT_STORE
-from app.units import (TRUCK_CAPACITY_TONS, UNIT_GLOSSARY,
-                       event_tons_for_attendance, resource_basis,
-                       resource_requirements)
+from app.real_data import (
+    build_provenance_records,
+    data_provenance,
+    load_city_timbulan,
+    load_fleet_composition,
+    load_kecamatan_map,
+    load_kelurahan_heatmap,
+    load_official_events,
+    load_real_tps_coordinates,
+    load_real_wr_coordinates,
+)
 from app.service_history import SERVICE_STORE, due_date_for
-from dataclasses import asdict as _asdict
+from app.spj import MAX_STOP_WEIGHT_KG as MAX_RECEIPT_WEIGHT_KG
+from app.spj import SPJ_STORE, destination_provenance, spj_summary_payload
+from app.spj import active_path_for as spj_active_path
+from app.storage import HistoryStore, StorageError
+from app.twin import build_scene as build_twin_scene
+from app.twin import jakarta_districts as twin_jakarta_districts
+from app.units import (
+    TRUCK_CAPACITY_TONS,
+    UNIT_GLOSSARY,
+    event_tons_for_attendance,
+    resource_basis,
+    resource_requirements,
+)
+from app.weather import fetch_jakarta_weather_forecast
+from app.whatsapp import OpenWAClient, build_alert_message
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +138,7 @@ def _warm_route_cache() -> None:
     print("Warming predictions on main thread...")
     try:
         from app.data import build_predictions
+
         build_predictions()
         print("Predictions warmed successfully.")
     except Exception as e:
@@ -126,6 +152,7 @@ def _warm_route_cache() -> None:
     try:
         from app.engine import predict_waste_hybrid
         from app.real_data import load_kecamatan_map
+
         for k in load_kecamatan_map():
             predict_waste_hybrid(kelurahan=k["slug"], rainfall_mm=0.0, event_attendance=0, is_weekend=False)
         print("Kecamatan predictions warmed.")
@@ -134,6 +161,7 @@ def _warm_route_cache() -> None:
 
     try:
         from app.rag import build_rag_index
+
         build_rag_index()
         print("RAG index warmed.")
     except Exception as e:
@@ -167,13 +195,15 @@ def _warm_route_cache() -> None:
     # cold start (~90 s); warming the shared Prophet cache here (main thread,
     # same xgboost constraint as above) keeps scenario changes at ~1 s.
     try:
-        twin_scene(city="jakarta", days=7, rainfall_mm=0.0, event_attendance=0,
-                   event_lat=None, event_lng=None)
+        twin_scene(
+            city="jakarta", days=7, rainfall_mm=0.0, event_attendance=0, event_lat=None, event_lng=None
+        )
         print("Twin scene warmed.")
     except Exception as e:
         print("Twin scene warmup failed:", e)
 
     import threading
+
     from app.astar_routing import warm_edge_cache
 
     def _warm():
@@ -184,6 +214,7 @@ def _warm_route_cache() -> None:
         except Exception as e:
             print("Route B warmup failed:", e)
         from concurrent.futures import ThreadPoolExecutor
+
         try:
             with ThreadPoolExecutor(max_workers=8) as ex:
                 list(ex.map(build_map_truth, TRUCKS))
@@ -201,13 +232,17 @@ def _warm_route_cache() -> None:
     # is safe in a daemon thread (no joblib/xgboost involved).
     def _snap_refresher():
         import time as _time
+
         from app.data import ASSIGNED_PATHS as _CURATED
+
         curated_codes = list(_CURATED.keys())
         idx = 0
         while True:
             _time.sleep(15)
             try:
-                truck = next((t for t in TRUCKS if t["truck_code"] == curated_codes[idx % len(curated_codes)]), None)
+                truck = next(
+                    (t for t in TRUCKS if t["truck_code"] == curated_codes[idx % len(curated_codes)]), None
+                )
                 if truck is not None:
                     _snapped_for(truck)
             except Exception:
@@ -215,6 +250,7 @@ def _warm_route_cache() -> None:
             idx += 1
 
     threading.Thread(target=_snap_refresher, daemon=True).start()
+
 
 import os
 
@@ -235,6 +271,7 @@ app.add_middleware(
 
 # ── Request Models ───────────────────────────────────────────────────
 
+
 class AssistantRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     history: list[dict] = Field(default_factory=list, max_length=8)
@@ -244,16 +281,19 @@ class AssistantRequest(BaseModel):
     # user's selected mode for the whole conversation.
     language: str = Field(default="id", pattern="^(id|en)$")
 
+
 class WhatsAppAlertRequest(BaseModel):
     truck_code: str = Field(min_length=1, max_length=20)
     issue: str = Field(min_length=1, max_length=500)
     recommendation: str = Field(min_length=1, max_length=500)
-    chat_id: str = "6281234567890@c.us" # User direct chat ID
+    chat_id: str = "6281234567890@c.us"  # User direct chat ID
+
 
 class DispatchRequest(BaseModel):
     truck_code: str = Field(min_length=1, max_length=20)
     instruction: str = Field(min_length=1, max_length=500)
     manager_id: str = Field(default="manager_central", min_length=1, max_length=50)
+
 
 class DispatchConfirmRequest(BaseModel):
     # #24: documented field-status enum. PENDING is the initial DB state,
@@ -268,6 +308,7 @@ class DispatchConfirmRequest(BaseModel):
     # retries keep exactly-once observable behavior.
     operation_id: str | None = Field(default=None, min_length=8, max_length=80)
 
+
 class HybridPredictRequest(BaseModel):
     kelurahan: str = Field(min_length=1, max_length=50)
     precipitation_mm: float = Field(default=0.0, ge=0, le=1000)
@@ -278,6 +319,7 @@ class HybridPredictRequest(BaseModel):
     event_attendance: int = Field(default=0, ge=0, le=5_000_000)
     target_date: date | None = None
 
+
 class EventPermitRequest(BaseModel):
     name: str = Field(min_length=3, max_length=120)
     location_name: str = Field(min_length=3, max_length=160)
@@ -287,7 +329,9 @@ class EventPermitRequest(BaseModel):
     lng: float = Field(ge=105.5, le=108.0)
     organizer: str | None = Field(default=None, max_length=120)
 
+
 # ── Existing Endpoints ───────────────────────────────────────────────
+
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
@@ -301,6 +345,7 @@ def health() -> dict[str, Any]:
         "ai_engine_running": _AI_ENGINE_STATE["running"],
     }
 
+
 @app.get("/api/health/detailed")
 def health_detailed() -> dict[str, Any]:
     """Dependency-aware health: database, models, source files, weather, OSRM."""
@@ -308,7 +353,9 @@ def health_detailed() -> dict[str, Any]:
     prophet_n = len(list(models_dir.glob("prophet_*.joblib"))) if models_dir.exists() else 0
     xgb_n = len(list(models_dir.glob("xgboost_*.joblib"))) if models_dir.exists() else 0
     real_dir = REAL_DIR
-    source_files = len(list(real_dir.glob("*.csv"))) + len(list(real_dir.glob("*.geojson"))) if real_dir.exists() else 0
+    source_files = (
+        len(list(real_dir.glob("*.csv"))) + len(list(real_dir.glob("*.geojson"))) if real_dir.exists() else 0
+    )
     models_loadable = hybrid_models_loadable()
     db_ok = True
     try:
@@ -330,9 +377,11 @@ def health_detailed() -> dict[str, Any]:
     degraded = (not db_ok) or prophet_n != 42 or xgb_n != 42 or not models_loadable or source_files < 8
     return {"status": "degraded" if degraded else "healthy", "components": components}
 
+
 class LoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=50)
     password: str = Field(min_length=1, max_length=200)
+
 
 @app.post("/api/auth/login")
 def auth_login(payload: LoginRequest) -> dict[str, Any]:
@@ -350,6 +399,7 @@ def auth_login(payload: LoginRequest) -> dict[str, Any]:
 
 def require_any_permission(*permissions: str):
     """FastAPI dependency: 401 if no valid token, 403 if the role holds none of the permissions."""
+
     def _dep(authorization: str | None = Header(default=None)) -> str:
         if not authorization or not authorization.lower().startswith("bearer "):
             raise HTTPException(status_code=401, detail="Missing bearer token.")
@@ -360,6 +410,7 @@ def require_any_permission(*permissions: str):
         if not any(has_permission(role, p) for p in permissions):
             raise HTTPException(status_code=403, detail=f"Role '{role}' lacks all of {permissions}.")
         return role
+
     return _dep
 
 
@@ -380,6 +431,7 @@ def _principal_actor(authorization: str | None = Header(default=None)) -> str:
             return role
     return "unknown"
 
+
 @app.get("/api/data/provenance")
 def data_provenance_endpoint() -> dict[str, Any]:
     """Transparency: which real government datasets are currently loaded."""
@@ -389,7 +441,9 @@ def data_provenance_endpoint() -> dict[str, Any]:
         "city_timbulan": load_city_timbulan(),
     }
 
+
 _kecamatan_cache: dict[str, Any] = {"key": None, "ts": 0.0, "payload": None}
+
 
 @app.get("/api/predictions/kecamatan")
 def predictions_kecamatan(
@@ -411,22 +465,34 @@ def predictions_kecamatan(
     series (weekday/holiday drivers vary per day) plus horizon aggregates.
     """
     from fastapi.params import Query as FastAPIQuery
+
     if isinstance(horizon_days, FastAPIQuery):
         horizon_days = None
-    cache_key = (rainfall_mm, event_attendance, is_weekend, is_holiday, target_date, event_lat, event_lng, horizon_days)
+    cache_key = (
+        rainfall_mm,
+        event_attendance,
+        is_weekend,
+        is_holiday,
+        target_date,
+        event_lat,
+        event_lng,
+        horizon_days,
+    )
     now = time.time()
     if _kecamatan_cache["key"] == cache_key and now - _kecamatan_cache["ts"] < 60.0:
         return _kecamatan_cache["payload"]
 
     kecs = load_kecamatan_map()
-    
+
     target_slugs = set()
     if event_attendance > 0:
         from fastapi.params import Query as FastAPIQuery
+
         elat = -6.2183 if (isinstance(event_lat, FastAPIQuery) or event_lat is None) else event_lat
         elng = 106.8022 if (isinstance(event_lng, FastAPIQuery) or event_lng is None) else event_lng
-        
+
         from app.engine import _haversine_meters
+
         closest_kec = None
         min_dist = float("inf")
         for k in kecs:
@@ -472,26 +538,28 @@ def predictions_kecamatan(
                 "horizon_peak_tons": series["peak_tons"],
                 "daily_series": series["series"],
             }
-        features.append({
-            **k,
-            "predicted_tons": tons,
-            **horizon_block,
-            "model_available": pred["model_available"],
-            "crews_required": pred["crews_required"],
-            "workers_required": pred["workers_required"],
-            "man_hours_required": pred["man_hours_required"],
-            "bins_required": pred["bins_required"],
-            "trucks_required": pred.get("trucks_required") or max(1, math.ceil(tons / 18)),
-            "facility_over_capacity": facility_alert,
-            "prophet_baseline_tons": pred.get("prophet_baseline_tons"),
-            "xgboost_residual": pred.get("xgboost_residual"),
-            "factor_attribution": pred.get("factor_attribution"),
-            "factors": pred.get("factors"),
-            "prediction_interval_p10_p90": pred.get("prediction_interval_p10_p90"),
-            "co2_emissions_kg": pred.get("co2_emissions_kg"),
-            "fuel_consumption_liters": pred.get("fuel_consumption_liters"),
-            "daily_district_suitability": pred.get("daily_district_suitability"),
-        })
+        features.append(
+            {
+                **k,
+                "predicted_tons": tons,
+                **horizon_block,
+                "model_available": pred["model_available"],
+                "crews_required": pred["crews_required"],
+                "workers_required": pred["workers_required"],
+                "man_hours_required": pred["man_hours_required"],
+                "bins_required": pred["bins_required"],
+                "trucks_required": pred.get("trucks_required") or max(1, math.ceil(tons / 18)),
+                "facility_over_capacity": facility_alert,
+                "prophet_baseline_tons": pred.get("prophet_baseline_tons"),
+                "xgboost_residual": pred.get("xgboost_residual"),
+                "factor_attribution": pred.get("factor_attribution"),
+                "factors": pred.get("factors"),
+                "prediction_interval_p10_p90": pred.get("prediction_interval_p10_p90"),
+                "co2_emissions_kg": pred.get("co2_emissions_kg"),
+                "fuel_consumption_liters": pred.get("fuel_consumption_liters"),
+                "daily_district_suitability": pred.get("daily_district_suitability"),
+            }
+        )
     features.sort(key=lambda f: f["predicted_tons"], reverse=True)
     total = sum(f["predicted_tons"] for f in features)
     # Necessary: each uncached build runs 42 model predicts (~1-3s), and 4
@@ -503,9 +571,12 @@ def predictions_kecamatan(
         "generated_for": (target_date.isoformat() if target_date else date.today().isoformat()),
         "horizon_days": horizon_days or 1,
         "scenario": {
-            "rainfall_mm": rainfall_mm, "event_attendance": event_attendance,
-            "is_weekend": is_weekend, "is_holiday": is_holiday,
-            "event_lat": event_lat, "event_lng": event_lng,
+            "rainfall_mm": rainfall_mm,
+            "event_attendance": event_attendance,
+            "is_weekend": is_weekend,
+            "is_holiday": is_holiday,
+            "event_lat": event_lat,
+            "event_lng": event_lng,
             # Which kecamatan the event attendance was localized to. Empty when
             # no attendance was supplied, so a bare location cannot look like
             # demand.
@@ -520,15 +591,18 @@ def predictions_kecamatan(
     }
     return _kecamatan_cache["payload"]
 
+
 @app.get("/api/fleet/composition")
 def fleet_composition() -> dict[str, Any]:
     """Real DKI waste-truck fleet census (Case 1 grounding)."""
     return load_fleet_composition()
 
+
 @app.get("/api/events/official")
 def official_events() -> list[dict[str, Any]]:
     """Real, officially-scraped Jakarta events (attendance may be unknown)."""
     return load_official_events()
+
 
 # Necessary: the snapshot costs ~3.2s (42 models + per-truck OSRM reroutes), so
 # parallel dashboard clients (e.g. the 4 Playwright workers) would each recompute
@@ -536,6 +610,7 @@ def official_events() -> list[dict[str, Any]]:
 # (position liveness comes from /api/map-truth and the feed, not this snapshot).
 _command_center_lock = threading.Lock()
 _command_center_cache: dict[str, Any] = {"ts": 0.0, "payload": None}
+
 
 @app.get("/api/command-center")
 def command_center() -> dict:
@@ -546,13 +621,17 @@ def command_center() -> dict:
             now = time.time()
             if cached["payload"] is None or now - cached["ts"] > 8.0:
                 dispatches = dispatch_center.audit_log()
-                cached["payload"] = command_center_snapshot(dispatches, weather=fetch_jakarta_weather_forecast())
+                cached["payload"] = command_center_snapshot(
+                    dispatches, weather=fetch_jakarta_weather_forecast()
+                )
                 cached["ts"] = time.time()
     return cached["payload"]
+
 
 @app.get("/api/fleet")
 def fleet() -> list[dict]:
     from app.data import get_dynamic_trucks
+
     return get_dynamic_trucks()
 
 
@@ -569,9 +648,7 @@ def fleet_driver_analytics() -> dict[str, Any]:
     """
     snapshot = command_center()
     return {
-        "sampled_at": time.strftime(
-            "%Y-%m-%dT%H:%M:%SZ", time.gmtime(_command_center_cache["ts"])
-        ),
+        "sampled_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(_command_center_cache["ts"])),
         "source": "command-center.trucks",
         "provenance": {
             "id": (
@@ -592,12 +669,8 @@ def fleet_driver_analytics() -> dict[str, Any]:
                 "assigned_zone": truck.get("assigned_zone"),
                 "status": truck.get("status"),
                 "is_damaged": bool(truck.get("is_damaged")),
-                "deviation_violated": bool(
-                    (truck.get("deviation") or {}).get("violated")
-                ),
-                "deviation_meters": (truck.get("deviation") or {}).get(
-                    "distance_meters"
-                ),
+                "deviation_violated": bool((truck.get("deviation") or {}).get("violated")),
+                "deviation_meters": (truck.get("deviation") or {}).get("distance_meters"),
             }
             for truck in snapshot["trucks"]
         ],
@@ -609,6 +682,7 @@ def fleet_status_overview() -> dict[str, Any]:
     """Case 1 'position AND activity' + fleet damage status: fleet-wide roll-up
     of operational activity states and maintenance condition."""
     from app.data import get_dynamic_trucks
+
     trucks = get_dynamic_trucks()
     by_activity: dict[str, int] = {}
     for t in trucks:
@@ -632,20 +706,23 @@ def fleet_status_overview() -> dict[str, Any]:
         "telemetry_class": "SIMULATED fleet telemetry on real census mix; not live AVL",
     }
 
+
 @app.get("/api/predictions")
 def predictions(
     date: str | None = Query(None, description="Filter predictions by date (YYYY-MM-DD)"),
-    event_scale: float | None = Query(None, ge=0.5, le=3.0, description="Simulate an event multiplier (0.5x - 3.0x)")
+    event_scale: float | None = Query(
+        None, ge=0.5, le=3.0, description="Simulate an event multiplier (0.5x - 3.0x)"
+    ),
 ) -> list[dict]:
     """
     Enhanced waste prediction endpoint supporting dynamic simulation and filtering.
     """
     preds = build_predictions()
-    
+
     # Apply dynamic parameters
     if date:
         preds = [p for p in preds if p["date"] == date]
-        
+
     if event_scale is not None:
         for p in preds:
             # Recalculate baseline waste under custom simulated event load
@@ -654,11 +731,12 @@ def predictions(
                 baseline_tons=p["baseline_tons"],
                 rainfall_mm=42.0 if event_scale > 1.5 else 5.0,
                 expected_attendance=new_attendance,
-                is_weekend=p["date"] == date
+                is_weekend=p["date"] == date,
             )
             p.update(risk)
-            
+
     return preds
+
 
 @app.get("/api/routes/osrm")
 def osrm_route() -> dict:
@@ -667,6 +745,7 @@ def osrm_route() -> dict:
         origin=(-6.221, 106.785),
         destination=(-6.195, 106.802),
     )
+
 
 @app.get("/api/geo/kelurahan-heatmap")
 def kelurahan_heatmap(
@@ -693,7 +772,10 @@ def kelurahan_heatmap(
         fallback = RAW_DIR / "jakarta_kelurahan_heatmap.geojson"
         if fallback.exists():
             return JSONResponse(json.loads(fallback.read_text(encoding="utf-8")))
-        raise HTTPException(status_code=404, detail="Kelurahan heatmap GeoJSON has not been generated.")
+        raise HTTPException(
+            status_code=404, detail="Kelurahan heatmap GeoJSON has not been generated."
+        ) from None
+
 
 @app.get("/api/facilities/gap-analysis")
 def facility_gap_analysis(
@@ -705,6 +787,7 @@ def facility_gap_analysis(
     kecamatan, with concrete new-site counts, extra trucks, and kelurahan
     siting candidates. Capacity is a labeled proxy, never official capacity."""
     from app.facility_planning import build_facility_gap_analysis
+
     preds = predictions_kecamatan(
         rainfall_mm=rainfall_mm,
         event_attendance=event_attendance,
@@ -719,24 +802,34 @@ def facility_gap_analysis(
     }
     return result
 
+
 @app.get("/api/weather")
 def weather() -> dict:
     return fetch_jakarta_weather_forecast()
 
+
 @app.post("/api/assistant/query")
-def assistant_query(payload: AssistantRequest, _role: str = Depends(require_permission("dashboard:read"))) -> dict:
+def assistant_query(
+    payload: AssistantRequest, _role: str = Depends(require_permission("dashboard:read"))
+) -> dict:
     # FastAPI executes sync endpoints in a worker; gateway latency must not block the event loop.
     try:
         from app.tools import ToolContext
+
         tool_ctx = ToolContext(dispatch_center=dispatch_center, history_store=history_store)
         snapshot = {}
         images = None
         if payload.file_data and payload.file_type:
             from app.pdf_vision import resolve_file_to_images
+
             images = resolve_file_to_images(payload.file_data, payload.file_type)
         result = answer_with_openai_if_configured(
-            payload.question, snapshot, history=payload.history, tool_ctx=tool_ctx,
-            images=images, language=payload.language
+            payload.question,
+            snapshot,
+            history=payload.history,
+            tool_ctx=tool_ctx,
+            images=images,
+            language=payload.language,
         )
     except Exception as e:
         logger.exception("assistant query failed")
@@ -746,17 +839,18 @@ def assistant_query(payload: AssistantRequest, _role: str = Depends(require_perm
         raise HTTPException(status_code=502, detail=f"AI gateway error: {result.get('error', 'unknown')}")
 
     history_store.record_event(
-        "assistant_query",
-        {"question": payload.question, "provider": result["provider"]}
+        "assistant_query", {"question": payload.question, "provider": result["provider"]}
     )
     return result
+
 
 @app.get("/api/reports/executive-summary")
 def executive_summary() -> dict:
     snapshot = command_center_snapshot(dispatch_center.audit_log(), weather=fetch_jakarta_weather_forecast())
     summary = build_executive_summary(snapshot)
-    
+
     from app.assistant import _top_prediction
+
     top = _top_prediction(snapshot)
     # Numbers must come from the live snapshot — a literal default here once
     # shipped "41% / Jakarta Barat / 28 trucks" while the KPI card said +4%.
@@ -770,7 +864,9 @@ def executive_summary() -> dict:
             f"didorong curah hujan/event, "
             + (f"yang membutuhkan {extra_trucks} armada truk tambahan. " if extra_trucks else "")
         )
-        crew_clause = f" dan pengerahan {extra_crews} tim kru tambahan ke kelurahan terdampak" if extra_crews else ""
+        crew_clause = (
+            f" dan pengerahan {extra_crews} tim kru tambahan ke kelurahan terdampak" if extra_crews else ""
+        )
     else:
         spike_clause = "Tidak ada lonjakan volume signifikan pada horizon 7 hari. "
         crew_clause = ""
@@ -780,7 +876,7 @@ def executive_summary() -> dict:
         + f"Antrian di Bantargebang saat ini mencapai {tpa_wait} menit. Direkomendasikan implementasi staggered dispatch "
         + f"untuk mereduksi beban TPA{crew_clause}."
     )
-    
+
     history_store.record_event("executive_summary", {"summary": summary})
     impact = simulate_staggered_dispatch(int(snapshot["kpis"]["active_trucks"]))
 
@@ -800,6 +896,7 @@ def executive_summary() -> dict:
         for h in preds["top_hotspots"][:5]
     ]
     from app.facility_planning import build_facility_gap_analysis
+
     gap = build_facility_gap_analysis({k["kecamatan"]: k["predicted_tons"] for k in preds["kecamatan"]})
     fleet_status = fleet_status_overview()
     return {
@@ -820,22 +917,27 @@ def executive_summary() -> dict:
         ),
     }
 
+
 @app.get("/api/history")
 def history() -> list[dict]:
     return history_store.list_events()
 
+
 FOLLOW_UP_STATUSES = {"OPEN", "DISPATCHED", "RESOLVED"}
+
 
 @app.get("/api/alert/follow-ups")
 def alert_follow_ups() -> list[dict]:
     """Audit trail of alert follow-ups (OPEN -> DISPATCHED -> RESOLVED)."""
     return [
-        event for event in history_store.list_events(limit=200)
-        if event["event_type"] == "alert_followup"
+        event for event in history_store.list_events(limit=200) if event["event_type"] == "alert_followup"
     ]
 
+
 @app.post("/api/alert/follow-up")
-def alert_follow_up(payload: dict[str, Any], _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
+def alert_follow_up(
+    payload: dict[str, Any], _role: str = Depends(require_permission("dispatch:create"))
+) -> dict[str, Any]:
     """Record a supervisor follow-up action (status + operator + note)."""
     alert_id = str(payload.get("alert_id", "")).strip()
     status = str(payload.get("status", "OPEN")).upper()
@@ -852,18 +954,20 @@ def alert_follow_up(payload: dict[str, Any], _role: str = Depends(require_permis
     history_store.record_event("alert_followup", record)
     return {"recorded": True, **record}
 
+
 CONTACTS_FILE = "driver_contacts.json"
 DEFAULT_CONTACTS = {
     "drivers": {
         "Budi Santoso": "6281234567890@c.us",
         "Agus Pratama": "6281234567890@c.us",
         "Joko Wijaya": "6281234567890@c.us",
-        "Rizky Maulana": "6281234567890@c.us"
+        "Rizky Maulana": "6281234567890@c.us",
     },
     "group_jid": "6281234567890-1620000000@g.us",
     "send_to_group": True,
-    "send_to_driver": True
+    "send_to_driver": True,
 }
+
 
 def normalize_phone_number(raw: str) -> str:
     """Normalize operator input: '08xx', '+62xx', '628xx' -> '628xx@c.us'."""
@@ -895,13 +999,14 @@ def normalize_group_jid(raw: str) -> str:
         digits += "@g.us"
     return digits
 
+
 def load_contacts():
     if not os.path.exists(CONTACTS_FILE):
         with open(CONTACTS_FILE, "w") as f:
             json.dump(DEFAULT_CONTACTS, f, indent=4)
         return DEFAULT_CONTACTS
     try:
-        with open(CONTACTS_FILE, "r") as f:
+        with open(CONTACTS_FILE) as f:
             data = json.load(f)
         if isinstance(data.get("drivers"), dict):
             data["drivers"] = {name: normalize_phone_number(num) for name, num in data["drivers"].items()}
@@ -910,6 +1015,7 @@ def load_contacts():
     except Exception:
         return DEFAULT_CONTACTS
 
+
 def save_contacts(data):
     # An unauthenticated {"drivers": {}} probe once wiped every contact. Never
     # let a POST reduce the stored driver set to fewer entries than before
@@ -917,32 +1023,38 @@ def save_contacts(data):
     existing = load_contacts()
     new_drivers = dict(data).get("drivers")
     if isinstance(new_drivers, dict) and len(new_drivers) < len(existing.get("drivers", {})):
-        raise HTTPException(status_code=409, detail="Refusing to shrink the driver contact list; send the full list.")
+        raise HTTPException(
+            status_code=409, detail="Refusing to shrink the driver contact list; send the full list."
+        )
     normalized = dict(data)
     if isinstance(normalized.get("drivers"), dict):
-        normalized["drivers"] = {name: normalize_phone_number(num) for name, num in normalized["drivers"].items()}
+        normalized["drivers"] = {
+            name: normalize_phone_number(num) for name, num in normalized["drivers"].items()
+        }
     normalized["group_jid"] = normalize_group_jid(normalized.get("group_jid", ""))
     with open(CONTACTS_FILE, "w") as f:
         json.dump(normalized, f, indent=4)
 
+
 def get_truck_info(truck_code: str) -> dict:
     from app.data import get_dynamic_trucks
+
     for t in get_dynamic_trucks():
         if t["truck_code"] == truck_code:
             return t
-    return {
-        "driver_name": "Supir Pythia",
-        "plate_number": "B 1234 CD"
-    }
+    return {"driver_name": "Supir Pythia", "plate_number": "B 1234 CD"}
+
 
 @app.get("/api/whatsapp/contacts")
 def get_whatsapp_contacts():
     return load_contacts()
 
+
 @app.post("/api/whatsapp/contacts")
 def post_whatsapp_contacts(payload: dict, _role: str = Depends(require_permission("admin:manage"))):
     save_contacts(payload)
     return {"status": "success"}
+
 
 @app.get("/api/whatsapp/status")
 def whatsapp_status() -> dict:
@@ -958,30 +1070,36 @@ def whatsapp_status() -> dict:
         "session_id": client.session_id,
     }
 
+
 @app.get("/api/whatsapp/qr")
 def whatsapp_qr() -> dict:
     return OpenWAClient.from_env().qr()
+
 
 @app.get("/api/whatsapp/groups")
 def whatsapp_groups() -> dict:
     return OpenWAClient.from_env().groups()
 
+
 @app.post("/api/whatsapp/logout")
 def whatsapp_logout(_role: str = Depends(require_permission("admin:manage"))) -> dict:
     return OpenWAClient.from_env().logout()
 
+
 @app.post("/api/whatsapp/alert")
-def whatsapp_alert(payload: WhatsAppAlertRequest, _role: str = Depends(require_permission("dispatch:create"))) -> dict:
+def whatsapp_alert(
+    payload: WhatsAppAlertRequest, _role: str = Depends(require_permission("dispatch:create"))
+) -> dict:
     client = OpenWAClient.from_env()
     config = load_contacts()
     info = get_truck_info(payload.truck_code)
-    
+
     driver_name = info.get("driver_name", "Supir Pythia")
     plate_number = info.get("plate_number", "B 1234 CD")
-    
+
     responses = {}
     attempted = []
-    
+
     # 1. Send to Driver
     if config.get("send_to_driver", True):
         driver_jid = config.get("drivers", {}).get(driver_name, "6281234567890@c.us")
@@ -994,14 +1112,17 @@ def whatsapp_alert(payload: WhatsAppAlertRequest, _role: str = Depends(require_p
         res_driver = client.send_text(driver_jid, driver_msg)
         responses["driver"] = res_driver
         attempted.append(("driver", res_driver))
-        history_store.record_event("whatsapp_alert", {
-            "recipient": f"Driver: {driver_name} ({driver_jid})",
-            "truck_code": payload.truck_code,
-            "sent": res_driver.get("sent", False),
-            "message": res_driver.get("message", ""),
-            "msg": driver_msg
-        })
-        
+        history_store.record_event(
+            "whatsapp_alert",
+            {
+                "recipient": f"Driver: {driver_name} ({driver_jid})",
+                "truck_code": payload.truck_code,
+                "sent": res_driver.get("sent", False),
+                "message": res_driver.get("message", ""),
+                "msg": driver_msg,
+            },
+        )
+
     # 2. Send to Group
     if config.get("send_to_group", True):
         group_jid = config.get("group_jid", "6281234567890-1620000000@g.us")
@@ -1014,14 +1135,17 @@ def whatsapp_alert(payload: WhatsAppAlertRequest, _role: str = Depends(require_p
         res_group = client.send_text(group_jid, group_msg)
         responses["group"] = res_group
         attempted.append(("group", res_group))
-        history_store.record_event("whatsapp_alert", {
-            "recipient": f"Group: {group_jid}",
-            "truck_code": payload.truck_code,
-            "sent": res_group.get("sent", False),
-            "message": res_group.get("message", ""),
-            "msg": group_msg
-        })
-        
+        history_store.record_event(
+            "whatsapp_alert",
+            {
+                "recipient": f"Group: {group_jid}",
+                "truck_code": payload.truck_code,
+                "sent": res_group.get("sent", False),
+                "message": res_group.get("message", ""),
+                "msg": group_msg,
+            },
+        )
+
     if not attempted:
         return {
             "status": "skipped",
@@ -1031,12 +1155,18 @@ def whatsapp_alert(payload: WhatsAppAlertRequest, _role: str = Depends(require_p
         }
 
     delivered = [name for name, result in attempted if result.get("sent")]
-    failed = [f"{name}: {result.get('message', 'send failed')}" for name, result in attempted if not result.get("sent")]
+    failed = [
+        f"{name}: {result.get('message', 'send failed')}"
+        for name, result in attempted
+        if not result.get("sent")
+    ]
     all_sent = len(delivered) == len(attempted)
     if all_sent:
         message = "WhatsApp alert delivered to " + ", ".join(delivered) + "."
     elif delivered:
-        message = "WhatsApp alert partially delivered to " + ", ".join(delivered) + "; failed " + "; ".join(failed)
+        message = (
+            "WhatsApp alert partially delivered to " + ", ".join(delivered) + "; failed " + "; ".join(failed)
+        )
     else:
         message = "WhatsApp alert failed: " + "; ".join(failed)
 
@@ -1050,7 +1180,9 @@ def whatsapp_alert(payload: WhatsAppAlertRequest, _role: str = Depends(require_p
 
 
 @app.post("/api/whatsapp/alert/simulate")
-def whatsapp_alert_simulate(payload: WhatsAppAlertRequest, _role: str = Depends(require_permission("dispatch:create"))) -> dict:
+def whatsapp_alert_simulate(
+    payload: WhatsAppAlertRequest, _role: str = Depends(require_permission("dispatch:create"))
+) -> dict:
     """Explicit demo-only simulation of a WhatsApp alert (clearly not a real send)."""
     msg = build_alert_message(payload.truck_code, payload.issue, payload.recommendation)
     return {
@@ -1061,26 +1193,38 @@ def whatsapp_alert_simulate(payload: WhatsAppAlertRequest, _role: str = Depends(
         "payload": {"recipient": payload.chat_id, "body": msg},
     }
 
+
 @app.post("/api/dispatch")
-def create_dispatch(payload: DispatchRequest, _role: str = Depends(require_permission("dispatch:create"))) -> dict:
+def create_dispatch(
+    payload: DispatchRequest, _role: str = Depends(require_permission("dispatch:create"))
+) -> dict:
     d = history_store.save_dispatch(payload.truck_code, payload.instruction, payload.manager_id)
     dispatch_center._dispatches.append(d)
     history_store.record_event("dispatch_created", {"truck_code": payload.truck_code, "dispatch_id": d["id"]})
     return d
 
+
 @app.get("/api/dispatch/{truck_code}")
 def pending_dispatches(truck_code: str) -> list[dict]:
     return history_store.pending_dispatches(truck_code)
 
+
 @app.get("/api/dispatch/{dispatch_id}/status")
-def dispatch_status(dispatch_id: str, _role: str = Depends(require_any_permission("dispatch:create", "dispatch:confirm"))) -> dict:
+def dispatch_status(
+    dispatch_id: str, _role: str = Depends(require_any_permission("dispatch:create", "dispatch:confirm"))
+) -> dict:
     dispatch = history_store.get_dispatch(dispatch_id)
     if dispatch is None:
         raise HTTPException(status_code=404, detail="Dispatch not found")
     return dispatch
 
+
 @app.post("/api/dispatch/{dispatch_id}/confirm")
-def confirm_dispatch(dispatch_id: str, payload: DispatchConfirmRequest, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict:
+def confirm_dispatch(
+    dispatch_id: str,
+    payload: DispatchConfirmRequest,
+    _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create")),
+) -> dict:
     # #44: operation_id replay detection. A confirmation carrying an
     # operation_id already recorded for this dispatch returns the stored
     # state without writing a second history event, so outbox flush retries
@@ -1093,16 +1237,19 @@ def confirm_dispatch(dispatch_id: str, payload: DispatchConfirmRequest, _role: s
             return prior
     try:
         d = history_store.update_dispatch_status(
-            dispatch_id, payload.status, payload.note, payload.operation_id)
+            dispatch_id, payload.status, payload.note, payload.operation_id
+        )
     except KeyError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     history_store.record_event("dispatch_confirmed", {"dispatch_id": dispatch_id, "status": payload.status})
     return d
 
+
 # ── New Hybrid ML Endpoints ──────────────────────────────────────────
 @app.get("/api/ml/models")
 def ml_models_status() -> list[dict[str, Any]]:
     return list_hybrid_models()
+
 
 @app.get("/api/ml/suitability")
 def ml_suitability() -> dict[str, Any]:
@@ -1119,10 +1266,12 @@ def ml_suitability() -> dict[str, Any]:
         "note": "Daily per-district resolution is calibrated-synthetic and must not be presented as observed accuracy.",
     }
 
+
 @app.get("/api/impact")
 def impact_report() -> dict[str, Any]:
     """Reproducible impact metrics with per-metric provenance and honest labels."""
     return build_impact_report()
+
 
 @app.post("/api/ml/predict")
 def ml_predict_district(payload: HybridPredictRequest) -> dict[str, Any]:
@@ -1137,6 +1286,7 @@ def ml_predict_district(payload: HybridPredictRequest) -> dict[str, Any]:
         target_date=payload.target_date.isoformat() if payload.target_date else None,
     )
     return res
+
 
 @app.post("/api/ml/predict-all")
 def ml_predict_all(
@@ -1164,9 +1314,11 @@ def ml_predict_all(
         results.append(res)
     return results
 
+
 # ── Integrated Operations Optimizer (Case 2 -> Case 1 bridge) ────────
 
 from app.operations_plans import OperationsPlanStore
+
 _OPERATIONS_PLAN_STORE = OperationsPlanStore()
 
 
@@ -1181,10 +1333,12 @@ def create_operations_plan(
     event_attendance: int = 0,
     is_weekend: bool = False,
     top_n: int = 5,
-    event_lat: float | None = Query(None, ge=-90, le=90,
-                                    description="Event latitude; localizes attendance demand"),
-    event_lng: float | None = Query(None, ge=-180, le=180,
-                                    description="Event longitude; localizes attendance demand"),
+    event_lat: float | None = Query(
+        None, ge=-90, le=90, description="Event latitude; localizes attendance demand"
+    ),
+    event_lng: float | None = Query(
+        None, ge=-180, le=180, description="Event longitude; localizes attendance demand"
+    ),
     _role: str = Depends(require_permission("operations:plan")),
 ) -> dict[str, Any]:
     """Build a dispatch plan from forecast hotspots + real fleet via CP-SAT.
@@ -1194,20 +1348,31 @@ def create_operations_plan(
     localizes the demand, so two different event sites no longer produce an
     identical plan.
     """
-    preds = predictions_kecamatan(rainfall_mm=rainfall_mm, event_attendance=event_attendance,
-                                  is_weekend=is_weekend,
-                                  event_lat=event_lat, event_lng=event_lng)
+    preds = predictions_kecamatan(
+        rainfall_mm=rainfall_mm,
+        event_attendance=event_attendance,
+        is_weekend=is_weekend,
+        event_lat=event_lat,
+        event_lng=event_lng,
+    )
     hotspots = preds["top_hotspots"][:top_n]
     demands = [
-        Demand(area=h["slug"], tons=float(h["predicted_tons"]),
-               lat=float(h.get("lat") or 0.0), lng=float(h.get("lng") or 0.0),
-               priority=rank)
+        Demand(
+            area=h["slug"],
+            tons=float(h["predicted_tons"]),
+            lat=float(h.get("lat") or 0.0),
+            lng=float(h.get("lng") or 0.0),
+            priority=rank,
+        )
         for rank, h in enumerate(reversed(hotspots), start=1)
     ]
     vehicles = [
-        Vehicle(truck_code=t["truck_code"], capacity_tons=TRUCK_CAPACITY_TONS,
-                available=not t["is_damaged"],
-                permit_compliant=not t["deviation"]["violated"])
+        Vehicle(
+            truck_code=t["truck_code"],
+            capacity_tons=TRUCK_CAPACITY_TONS,
+            available=not t["is_damaged"],
+            permit_compliant=not t["deviation"]["violated"],
+        )
         for t in TRUCKS
     ]
     plan = build_operational_plan(demands, vehicles)
@@ -1229,8 +1394,12 @@ def create_operations_plan(
         "plan_id": plan.plan_id,
         "status": "proposed",
         "assignments": [
-            {"truck_code": a.truck_code, "area": a.area,
-             "assigned_tons": a.assigned_tons, "evidence": a.evidence}
+            {
+                "truck_code": a.truck_code,
+                "area": a.area,
+                "assigned_tons": a.assigned_tons,
+                "evidence": a.evidence,
+            }
             for a in plan.assignments
         ],
         "unmet_reasons": plan.unmet_reasons,
@@ -1239,32 +1408,36 @@ def create_operations_plan(
         "scenario": scenario,
     }
     payload = _OPERATIONS_PLAN_STORE.save_proposed(plan.plan_id, payload)
-    history_store.record_event("operations_plan_created", {
-        "plan_id": plan.plan_id, "scenario": scenario})
+    history_store.record_event("operations_plan_created", {"plan_id": plan.plan_id, "scenario": scenario})
     return payload
 
 
 @app.post("/api/operations/{plan_id}/approve")
-def approve_operations_plan(plan_id: str, _role: str = Depends(require_permission("operations:approve"))) -> dict[str, Any]:
+def approve_operations_plan(
+    plan_id: str, _role: str = Depends(require_permission("operations:approve"))
+) -> dict[str, Any]:
     """Approve a plan and push each assignment through the dispatch contract.
 
     Approval is at-most-once (#17): the status transition and dispatch
     ids commit in one transaction; a retried or concurrent approval
     returns the already-committed result without creating new dispatches.
     """
+
     def _create_dispatch(assignment):
         return history_store.save_dispatch(
             truck_code=assignment["truck_code"],
-            instruction=(f"Collect {assignment['assigned_tons']:.0f}t at "
-                         f"{assignment['area']} (plan {plan_id})"),
+            instruction=(
+                f"Collect {assignment['assigned_tons']:.0f}t at {assignment['area']} (plan {plan_id})"
+            ),
             manager_id="operations_optimizer",
         )
 
     try:
         plan, created_now = _OPERATIONS_PLAN_STORE.approve(
-            plan_id, approved_by=_role, create_dispatch=_create_dispatch)
+            plan_id, approved_by=_role, create_dispatch=_create_dispatch
+        )
     except KeyError:
-        raise HTTPException(status_code=404, detail=f"Plan {plan_id} not found.")
+        raise HTTPException(status_code=404, detail=f"Plan {plan_id} not found.") from None
     if created_now:
         # Mirror the durable dispatch rows into the in-memory dispatch
         # center only AFTER the approval transaction committed.
@@ -1273,11 +1446,13 @@ def approve_operations_plan(plan_id: str, _role: str = Depends(require_permissio
             if dispatch["id"] in dispatch_ids:
                 dispatch_center._dispatches.append(dispatch)
         history_store.record_event(
-            "operations_plan_approved",
-            {"plan_id": plan_id, "dispatches": len(dispatch_ids)})
+            "operations_plan_approved", {"plan_id": plan_id, "dispatches": len(dispatch_ids)}
+        )
     return plan
 
+
 # ── Advanced Fleet Intelligence Endpoints (New) ──────────────────────
+
 
 @app.get("/api/fleet/history")
 def fleet_history(
@@ -1286,19 +1461,23 @@ def fleet_history(
 ) -> list[dict[str, Any]]:
     return fleet_history_payload(truck_code=truck_code, date=date)
 
+
 @app.get("/api/fleet/carbon")
 def fleet_carbon() -> dict[str, Any]:
     return {
         "co2_factor_kg_per_km": 0.95,
         "total_fleet_distance_km": 216.9,
         "total_co2_emitted_kg": round(216.9 * 0.95, 1),
-        "carbon_saved_today_kg": 17.6, # Saving achieved by route optimization on T-047 (Route B instead of deviant A)
+        "carbon_saved_today_kg": 17.6,  # Saving achieved by route optimization on T-047 (Route B instead of deviant A)
         "fuel_saved_equivalent_liters": round(17.6 / 2.68, 1),
-        "compliance_rate_percent": 80.0
+        "compliance_rate_percent": 80.0,
     }
 
+
 @app.post("/api/simulator/stagger")
-def post_stagger_simulation(active_trucks: int = 5, _role: str = Depends(require_permission("operations:plan"))) -> dict[str, Any]:
+def post_stagger_simulation(
+    active_trucks: int = 5, _role: str = Depends(require_permission("operations:plan"))
+) -> dict[str, Any]:
     return simulate_staggered_dispatch(active_trucks)
 
 
@@ -1310,6 +1489,7 @@ def post_stagger_simulation(active_trucks: int = 5, _role: str = Depends(require
 # Necessary: the TPA payload is deterministic per 5s; caching it keeps the
 # map marker render (one-shot, no retry) from vanishing on a slow first fetch.
 _tpa_cache: dict[str, Any] = {}
+
 
 @app.get("/api/tpa/queue-status")
 def get_tpa_queue_status(scenario: str = Query("live", pattern="^(live|peak)$")) -> dict[str, Any]:
@@ -1336,29 +1516,57 @@ def twin_scene(
     endpoint), the simulated pilot fleet and the real SILIKA TPS points. Ho Chi
     Minh City is a labelled demo city (population-share allocation, no model).
     """
-    scenario = {"rainfall_mm": rainfall_mm, "event_attendance": event_attendance,
-                "event_lat": event_lat, "event_lng": event_lng}
+    scenario = {
+        "rainfall_mm": rainfall_mm,
+        "event_attendance": event_attendance,
+        "event_lat": event_lat,
+        "event_lng": event_lng,
+    }
     if city == "hcmc":
         districts = hcmc_district_forecasts(days, rainfall_mm, event_attendance, event_lat, event_lng)
         landfill = {**HCMC_LANDFILL, "kind": "landfill"}
-        return build_twin_scene(get_city("hcmc"), districts, scenario=scenario, facilities=[landfill],
-                                normal_days=hcmc_district_forecasts(days))
+        return build_twin_scene(
+            get_city("hcmc"),
+            districts,
+            scenario=scenario,
+            facilities=[landfill],
+            normal_days=hcmc_district_forecasts(days),
+        )
 
     def kecamatan_forecast(rain: float, attendance: int) -> list[dict[str, Any]]:
-        return twin_jakarta_districts(predictions_kecamatan(
-            rainfall_mm=rain, event_attendance=attendance, is_weekend=False, is_holiday=False,
-            target_date=None, event_lat=event_lat, event_lng=event_lng, horizon_days=days))
+        return twin_jakarta_districts(
+            predictions_kecamatan(
+                rainfall_mm=rain,
+                event_attendance=attendance,
+                is_weekend=False,
+                is_holiday=False,
+                target_date=None,
+                event_lat=event_lat,
+                event_lng=event_lng,
+                horizon_days=days,
+            )
+        )
+
     facilities = [
-        {"name": facility.name, "lat": facility.lat, "lng": facility.lng,
-         "kind": "landfill" if facility.name == "TPST Bantargebang" else "processing"}
-        for facility in FACILITIES.values() if facility.is_ground_truth
+        {
+            "name": facility.name,
+            "lat": facility.lat,
+            "lng": facility.lng,
+            "kind": "landfill" if facility.name == "TPST Bantargebang" else "processing",
+        }
+        for facility in FACILITIES.values()
+        if facility.is_ground_truth
     ]
     return build_twin_scene(
-        get_city("jakarta"), kecamatan_forecast(rainfall_mm, event_attendance), scenario=scenario,
-        facilities=facilities, normal_days=kecamatan_forecast(0.0, 0),
+        get_city("jakarta"),
+        kecamatan_forecast(rainfall_mm, event_attendance),
+        scenario=scenario,
+        facilities=facilities,
+        normal_days=kecamatan_forecast(0.0, 0),
         trucks=command_center()["trucks"],
         tps=load_real_tps_coordinates(),
-        landfill_queue=get_tpa_queue_status(scenario="live"))
+        landfill_queue=get_tpa_queue_status(scenario="live"),
+    )
 
 
 @app.get("/api/events/permits")
@@ -1367,7 +1575,9 @@ def get_events_permits() -> list[dict[str, Any]]:
 
 
 @app.post("/api/events/permits", status_code=201)
-def submit_event_permit(payload: EventPermitRequest, _role: str = Depends(require_permission("operations:plan"))) -> dict[str, Any]:
+def submit_event_permit(
+    payload: EventPermitRequest, _role: str = Depends(require_permission("operations:plan"))
+) -> dict[str, Any]:
     """Case 2 crowd-permit intake: a permit submitted to the authority becomes a
     live scenario — the system estimates waste generation, resource needs, and
     the affected kecamatan, and the permit joins the map's event layer."""
@@ -1401,10 +1611,15 @@ def submit_event_permit(payload: EventPermitRequest, _role: str = Depends(requir
             default=None,
         )
         if nearest:
-            affected.append({
-                "kecamatan": nearest["kecamatan"], "slug": nearest["slug"],
-                "distance_m": round(_haversine_meters((payload.lat, payload.lng), (nearest["lat"], nearest["lng"]))),
-            })
+            affected.append(
+                {
+                    "kecamatan": nearest["kecamatan"],
+                    "slug": nearest["slug"],
+                    "distance_m": round(
+                        _haversine_meters((payload.lat, payload.lng), (nearest["lat"], nearest["lng"]))
+                    ),
+                }
+            )
     affected.sort(key=lambda a: a["distance_m"])
 
     permit = {
@@ -1424,12 +1639,17 @@ def submit_event_permit(payload: EventPermitRequest, _role: str = Depends(requir
         "affected_kecamatan": affected,
     }
     PERMIT_STORE.add(permit)
-    history_store.record_event("event_permit_submitted", {
-        "id": permit["id"], "name": permit["name"],
-        "expected_attendance": permit["expected_attendance"],
-        "affected_kecamatan": [a["slug"] for a in affected],
-    })
+    history_store.record_event(
+        "event_permit_submitted",
+        {
+            "id": permit["id"],
+            "name": permit["name"],
+            "expected_attendance": permit["expected_attendance"],
+            "affected_kecamatan": [a["slug"] for a in affected],
+        },
+    )
     return {"permit": permit, "impact": impact, "affected_kecamatan": affected}
+
 
 @app.get("/api/fleet/astar-reroute")
 def get_astar_reroute(truck_code: str = "T-047") -> dict[str, Any]:
@@ -1445,11 +1665,14 @@ def get_astar_reroute(truck_code: str = "T-047") -> dict[str, Any]:
 
 
 @app.get("/api/fleet/route-alternatives")
-def get_route_alternatives(truck_code: str = "T-047", permit_hour: int | None = Query(None, ge=0, le=23)) -> dict[str, Any]:
+def get_route_alternatives(
+    truck_code: str = "T-047", permit_hour: int | None = Query(None, ge=0, le=23)
+) -> dict[str, Any]:
     """Case 1: >=2 computed permit-compliant route alternatives with real OSRM
     ETAs. Route 1 is optimal; route 2 is penalty-diversified (recomputed, not
     canned). permit_hour applies the simulated truck-hour restriction windows."""
-    from app.astar_routing import find_alternative_routes, build_gps_graph, DEMO_CONGESTED_EDGES
+    from app.astar_routing import DEMO_CONGESTED_EDGES, build_gps_graph, find_alternative_routes
+
     truck = next((t for t in TRUCKS if t["truck_code"] == truck_code), None)
     if truck is None:
         raise HTTPException(status_code=404, detail=f"Truck {truck_code} not found.")
@@ -1459,16 +1682,19 @@ def get_route_alternatives(truck_code: str = "T-047", permit_hour: int | None = 
         origin = _snapped_for(truck)["snapped"]
         nodes, edges = build_gps_graph(origin)
         from app.astar_routing import find_astar_route
+
         routes = []
-        first = find_astar_route(start="ORIGIN", nodes=nodes, edges=edges,
-                                 congested_edges=congested, permit_hour=permit_hour)
+        first = find_astar_route(
+            start="ORIGIN", nodes=nodes, edges=edges, congested_edges=congested, permit_hour=permit_hour
+        )
         if first.get("success"):
             first["rank"] = 1
             first["diversified"] = False
             routes.append(first)
-            diversified = list(congested) + list(zip(first["sequence"], first["sequence"][1:]))
-            second = find_astar_route(start="ORIGIN", nodes=nodes, edges=edges,
-                                      congested_edges=diversified, permit_hour=permit_hour)
+            diversified = list(congested) + list(pairwise(first["sequence"]))
+            second = find_astar_route(
+                start="ORIGIN", nodes=nodes, edges=edges, congested_edges=diversified, permit_hour=permit_hour
+            )
             if second.get("success") and tuple(second["sequence"]) != tuple(first["sequence"]):
                 second["rank"] = 2
                 second["diversified"] = True
@@ -1483,6 +1709,8 @@ def get_route_alternatives(truck_code: str = "T-047", permit_hour: int | None = 
         "routes": routes,
         "permit_source": "SIMULATED PERMIT CONSTRAINT (not official DLH permit dataset)",
     }
+
+
 @app.get("/api/fleet/route-decision")
 def route_decision(truck_code: str = "T-047") -> dict[str, Any]:
     """One payload unifying every Case-1 route signal for a truck: OSRM ETA/
@@ -1506,7 +1734,9 @@ def route_decision(truck_code: str = "T-047") -> dict[str, Any]:
         "mean_wait_minutes": queue_payload["avg_wait_minutes"],
         "p95_wait_minutes": queue_payload["p95_wait_minutes"],
     }
-    vehicle_status = "DAMAGED" if truck.get("is_damaged") else ("DEVIATION" if truck["deviation"]["violated"] else "OK")
+    vehicle_status = (
+        "DAMAGED" if truck.get("is_damaged") else ("DEVIATION" if truck["deviation"]["violated"] else "OK")
+    )
     recs = []
     if truck.get("is_damaged"):
         recs.append("Vehicle damaged — assign backup capacity.")
@@ -1522,12 +1752,16 @@ def route_decision(truck_code: str = "T-047") -> dict[str, Any]:
         "physical_distance_km": active["physical_distance_km"],
         "optimization_cost": active["optimization_cost"],
         "vehicle_status": vehicle_status,
-        "tpa_queue": {"wait_minutes": queue["mean_wait_minutes"], "p95": queue["p95_wait_minutes"],
-                      "source": "MODEL OUTPUT"},
+        "tpa_queue": {
+            "wait_minutes": queue["mean_wait_minutes"],
+            "p95": queue["p95_wait_minutes"],
+            "source": "MODEL OUTPUT",
+        },
         "traffic": {"jam_active": jam_active, "source": "SIMULATED CONGESTION"},
         "permit": {"source": active.get("permit_source", "SIMULATED PERMIT CONSTRAINT")},
         "recommendation": recs or ["Normal operation; no intervention needed."],
     }
+
 
 # Necessary: each build_map_truth costs 1-4.5s (per-truck snap + T-047 reroute
 # hit OSRM). With 4 Playwright workers polling every 8s, uncached recomputes
@@ -1535,6 +1769,7 @@ def route_decision(truck_code: str = "T-047") -> dict[str, Any]:
 # one recompute across all clients while GPS freshness stays within 4s.
 _map_truth_lock = threading.Lock()
 _map_truth_cache: dict[str, Any] = {"ts": 0.0, "payload": None}
+
 
 @app.get("/api/fleet/map-truth")
 def fleet_map_truth() -> dict[str, Any]:
@@ -1549,15 +1784,18 @@ def fleet_map_truth() -> dict[str, Any]:
                 cached["ts"] = time.time()
     return cached["payload"]
 
+
 @app.get("/api/fleet/unlicensed-collectors")
 def unlicensed_collectors() -> dict[str, Any]:
     return unlicensed_collectors_payload()
+
 
 @app.get("/api/cv/surveillance-feed")
 def cv_surveillance_feed() -> dict[str, Any]:
     """Computer-vision gate feed (Case 1): plate reads verified against the DLH
     whitelist. Simulated feed from a demo clip, pilot-ready ANPR contract."""
     return surveillance_status()
+
 
 @app.get("/api/fleet/{truck_code}/breadcrumbs")
 def fleet_breadcrumbs(truck_code: str) -> dict[str, Any]:
@@ -1568,14 +1806,22 @@ def fleet_breadcrumbs(truck_code: str) -> dict[str, Any]:
         "source": "simulated",
         "note": "Simulated breadcrumb feed; swap to DLH AVL at pilot with no contract change.",
         "breadcrumbs": [
-            {"lat": b.lat, "lng": b.lng, "timestamp": b.timestamp,
-             "speed_kmh": b.speed_kmh, "source": b.source}
+            {
+                "lat": b.lat,
+                "lng": b.lng,
+                "timestamp": b.timestamp,
+                "speed_kmh": b.speed_kmh,
+                "source": b.source,
+            }
             for b in trail
         ],
     }
 
+
 @app.post("/api/fleet/astar-simulate-jam")
-def post_astar_simulate_jam(active: bool, _role: str = Depends(require_permission("operations:plan"))) -> dict[str, Any]:
+def post_astar_simulate_jam(
+    active: bool, _role: str = Depends(require_permission("operations:plan"))
+) -> dict[str, Any]:
     set_traffic_jam_active(active)
     note_manual_override()
     # Necessary: the toggled jam state feeds map-truth (jam_active, abandoned
@@ -1585,8 +1831,9 @@ def post_astar_simulate_jam(active: bool, _role: str = Depends(require_permissio
     return {
         "status": "success",
         "traffic_jam_active": is_traffic_jam_active(),
-        "message": "Traffic jam state toggled successfully."
+        "message": "Traffic jam state toggled successfully.",
     }
+
 
 @app.get("/api/fleet/summary")
 def get_fleet_executive_report() -> JSONResponse:
@@ -1598,10 +1845,16 @@ def get_fleet_executive_report() -> JSONResponse:
     # Case 2 numbers computed live from the 42-kecamatan hybrid model under a
     # heavy-rain weekend scenario, so the report matches the actual model output.
     scenario_kecs = predictions_kecamatan(
-        rainfall_mm=42.0, event_attendance=0, is_weekend=True, is_holiday=False,
+        rainfall_mm=42.0,
+        event_attendance=0,
+        is_weekend=True,
+        is_holiday=False,
     )
     baseline_kecs = predictions_kecamatan(
-        rainfall_mm=0.0, event_attendance=0, is_weekend=False, is_holiday=False,
+        rainfall_mm=0.0,
+        event_attendance=0,
+        is_weekend=False,
+        is_holiday=False,
     )
     top = scenario_kecs["top_hotspots"][0]
     base_lookup = {k["slug"]: k["predicted_tons"] for k in baseline_kecs["kecamatan"]}
@@ -1621,14 +1874,14 @@ Sistem: Pythia
 
 ## 1. PENILAIAN DAMPAK OPERASIONAL (CASE 1)
 Sistem optimalisasi logistik Pythia meningkatkan efisiensi armada (angka dari simulasi discrete-event, bukan estimasi tetap):
-- **Reduksi Waktu Antri TPA (simulasi):** waktu tunggu puncak turun **{stagger['queue_reduction_percent']}%** (dari {stagger['baseline_wait_minutes']} menjadi {stagger['optimized_wait_minutes']} menit) via Staggered Dispatch. Sumber: simulasi antrian ter-seed, bukan pengukuran lapangan.
+- **Reduksi Waktu Antri TPA (simulasi):** waktu tunggu puncak turun **{stagger["queue_reduction_percent"]}%** (dari {stagger["baseline_wait_minutes"]} menjadi {stagger["optimized_wait_minutes"]} menit) via Staggered Dispatch. Sumber: simulasi antrian ter-seed, bukan pengukuran lapangan.
 - **Faktor Emisi (referensi):** estimasi bahan bakar 1.8 L/ton adalah faktor rujukan teknik, bukan penghematan terukur. Penghematan nyata butuh pilot lapangan.
 - **Kepatuhan Koridor Rute:** deteksi deviasi berbasis point-to-polyline (T-047 terdeteksi menyimpang 2.373 m).
 
 ## 2. PREDIKSI VOLUME & KEBUTUHAN SUMBER DAYA (CASE 2)
-Hasil prediksi spasial-temporal model Hybrid Prophet + XGBoost untuk {scenario_kecs['kecamatan_count']} kecamatan Jakarta (skenario hujan ekstrim 42mm + akhir pekan):
-- **Puncak Prediksi Volume:** Kecamatan {top['kecamatan']} ({top['city']}) diproyeksikan mengalami volume sampah tertinggi sebesar **{top['predicted_tons']:.1f} ton/hari** (**+{spike_pct}%** vs kondisi normal).
-- **Total Volume Kota:** Estimasi total {scenario_kecs['kecamatan_count']} kecamatan mencapai **{scenario_kecs['total_predicted_tons']:.1f} ton/hari** pada skenario ini.
+Hasil prediksi spasial-temporal model Hybrid Prophet + XGBoost untuk {scenario_kecs["kecamatan_count"]} kecamatan Jakarta (skenario hujan ekstrim 42mm + akhir pekan):
+- **Puncak Prediksi Volume:** Kecamatan {top["kecamatan"]} ({top["city"]}) diproyeksikan mengalami volume sampah tertinggi sebesar **{top["predicted_tons"]:.1f} ton/hari** (**+{spike_pct}%** vs kondisi normal).
+- **Total Volume Kota:** Estimasi total {scenario_kecs["kecamatan_count"]} kecamatan mencapai **{scenario_kecs["total_predicted_tons"]:.1f} ton/hari** pada skenario ini.
 - **Kebutuhan Manpower (5 hotspot teratas):** Dibutuhkan **{extra_crews} tim kru** (**{extra_workers} orang**) dengan alokasi total **{extra_manhours} person-hours**.
 - **Kesiapan Armada & Fasilitas (5 hotspot teratas):** Merekomendasikan pengerahan **{extra_trucks} unit armada** dan penempatan **{extra_bins} unit tempat penampungan sampah besar**.
 
@@ -1646,23 +1899,18 @@ def get_tps_coordinates() -> dict[str, Any]:
     tps_list = load_real_tps_coordinates()
     features = []
     for t in tps_list:
-        features.append({
-            "type": "Feature",
-            "geometry": {
-                "type": "Point",
-                "coordinates": [t["lng"], t["lat"]]
-            },
-            "properties": {
-                "name": t["name"],
-                "kecamatan": t["kecamatan"],
-                "kelurahan": t["kelurahan"]
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [t["lng"], t["lat"]]},
+                "properties": {"name": t["name"], "kecamatan": t["kecamatan"], "kelurahan": t["kelurahan"]},
             }
-        })
+        )
     return {
         "type": "FeatureCollection",
         "features": features,
         "source": "Official SILIKA 2023 coordinates",
-        "total": len(features)
+        "total": len(features),
     }
 
 
@@ -1672,25 +1920,24 @@ def get_wr_coordinates() -> dict[str, Any]:
     wr_list = load_real_wr_coordinates()
     features = []
     for w in wr_list:
-        features.append({
-            "type": "Feature",
-            "geometry": {
-                "type": "Point",
-                "coordinates": [w["lng"], w["lat"]]
-            },
-            "properties": {
-                "name": w["name"],
-                "type": w["jns"],
-                "address": w["almt"],
-                "kecamatan": w["kec"],
-                "kelurahan": w["kel"]
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [w["lng"], w["lat"]]},
+                "properties": {
+                    "name": w["name"],
+                    "type": w["jns"],
+                    "address": w["almt"],
+                    "kecamatan": w["kec"],
+                    "kelurahan": w["kel"],
+                },
             }
-        })
+        )
     return {
         "type": "FeatureCollection",
         "features": features,
         "source": "Official SILIKA Wajib Retribusi 2023 coordinates",
-        "total": len(features)
+        "total": len(features),
     }
 
 
@@ -1725,8 +1972,7 @@ def _start_ai_engine() -> None:
                 logging.getLogger(__name__).exception("event forecast refresh failed")
             threading.Event().wait(3600)
 
-    threading.Thread(target=_forecast_loop, daemon=True,
-                     name="pythia-ai-forecast").start()
+    threading.Thread(target=_forecast_loop, daemon=True, name="pythia-ai-forecast").start()
 
 
 @app.get("/api/ai/events")
@@ -1764,6 +2010,7 @@ def ai_event_forecast() -> dict[str, Any]:
 
 # ── SPJ (Surat Perintah Jalan) ───────────────────────────────────────────────
 
+
 def _receipt_payload(receipt) -> dict[str, Any] | None:
     """Receipt projection: metadata plus a retrieval reference, never the bytes.
 
@@ -1797,13 +2044,14 @@ def _spj_or_409(fn, *args, **kwargs):
     try:
         return _spj_payload(fn(*args, **kwargs))
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except StorageError as exc:
         # A mutation that never reached the durable store must not look like
         # success — the caller has to know the write did not commit.
         logger.error("SPJ persistence failure: %s", exc)
-        raise HTTPException(status_code=503,
-                            detail="SPJ storage is unavailable; the change was not saved.")
+        raise HTTPException(
+            status_code=503, detail="SPJ storage is unavailable; the change was not saved."
+        ) from exc
 
 
 class SpjStopBody(BaseModel):
@@ -1830,6 +2078,7 @@ class SpjCreateBody(BaseModel):
 
 class SpjOverrideBody(BaseModel):
     """PR #90 (#63): a supervisor override names a substantive reason."""
+
     reason: str = Field(min_length=10, max_length=500)
     documents: str | None = Field(default=None, max_length=500)
 
@@ -1844,7 +2093,6 @@ class SpjCompleteOverrideBody(BaseModel):
     reason: str = ""
 
 
-
 class SpjReceiptBody(BaseModel):
     photo_name: str
     photo_b64: str = Field(default="", max_length=7_000_000)
@@ -1852,8 +2100,12 @@ class SpjReceiptBody(BaseModel):
     # Absent (None) is allowed — not all handovers are weighed; when
     # present the value must be finite and 0 < w <= 60,000 kg.
     total_weight_kg: float | None = Field(
-        default=None, gt=0, le=MAX_RECEIPT_WEIGHT_KG, allow_inf_nan=False,
-        description="Receipt total weight in kg; omit when unweighed.")
+        default=None,
+        gt=0,
+        le=MAX_RECEIPT_WEIGHT_KG,
+        allow_inf_nan=False,
+        description="Receipt total weight in kg; omit when unweighed.",
+    )
     # Provenance of the number above. Callers that do not state one are not
     # guessed at: "unspecified" keeps an unlabelled submission from being
     # recorded as if a human had typed it.
@@ -1898,8 +2150,7 @@ def spj_active_path_endpoint(truck_code: str) -> dict[str, Any]:
         "has_active_spj": spj is not None,
         "has_reference_path": path is not None,
         "destination": spj.destination if spj is not None else None,
-        "destination_provenance": (
-            destination_provenance(spj.destination) if spj is not None else None),
+        "destination_provenance": (destination_provenance(spj.destination) if spj is not None else None),
         "path": [{"lat": lat, "lng": lng} for lat, lng in (path or [])],
     }
 
@@ -1924,27 +2175,52 @@ def get_spj(spj_id: str) -> dict[str, Any]:
 
 
 @app.post("/api/spj", status_code=201)
-def create_spj(body: SpjCreateBody, _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
+def create_spj(
+    body: SpjCreateBody, _role: str = Depends(require_permission("dispatch:create"))
+) -> dict[str, Any]:
     if body.stops is None:
-        return _spj_or_409(SPJ_STORE.create, body.driver_name, body.truck_code,
-                           body.destination, body.weigh_on_site, body.priority,
-                           body.note)
+        return _spj_or_409(
+            SPJ_STORE.create,
+            body.driver_name,
+            body.truck_code,
+            body.destination,
+            body.weigh_on_site,
+            body.priority,
+            body.note,
+        )
     # #60: atomic composed create — SPJ + all stops in one transaction.
     return _spj_or_409(
-        SPJ_STORE.create_with_stops, body.driver_name, body.truck_code,
-        body.destination, body.weigh_on_site, body.priority, body.note,
-        [s.model_dump() for s in body.stops])
+        SPJ_STORE.create_with_stops,
+        body.driver_name,
+        body.truck_code,
+        body.destination,
+        body.weigh_on_site,
+        body.priority,
+        body.note,
+        [s.model_dump() for s in body.stops],
+    )
 
 
 @app.post("/api/spj/{spj_id}/stops")
-def add_spj_stop(spj_id: str, body: SpjStopBody, _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
-    return _spj_or_409(SPJ_STORE.add_stop, spj_id, body.name, body.kecamatan,
-                       body.address, body.lat, body.lng, body.location_type)
+def add_spj_stop(
+    spj_id: str, body: SpjStopBody, _role: str = Depends(require_permission("dispatch:create"))
+) -> dict[str, Any]:
+    return _spj_or_409(
+        SPJ_STORE.add_stop,
+        spj_id,
+        body.name,
+        body.kecamatan,
+        body.address,
+        body.lat,
+        body.lng,
+        body.location_type,
+    )
 
 
 def _refresh_fleet_caches() -> None:
     from app.data import _fleet_cache
     from app.fleet_generator import _gen_cache
+
     _fleet_cache["ts"] = 0.0
     _gen_cache["ts"] = 0.0
     _map_truth_cache["ts"] = 0.0
@@ -1955,8 +2231,7 @@ def require_supervisor_override(authorization: str | None = Header(default=None)
     return require_any_permission("dispatch:override")(authorization)
 
 
-def _override_payload(body: "SpjCompleteBody | None", actor: str,
-                      required: bool = False) -> dict | None:
+def _override_payload(body: SpjCompleteBody | None, actor: str, required: bool = False) -> dict | None:
     """Normalize the optional override block; None when the caller sent none."""
     override = getattr(body, "override", None)
     if override is None:
@@ -1964,10 +2239,10 @@ def _override_payload(body: "SpjCompleteBody | None", actor: str,
             raise HTTPException(
                 status_code=409,
                 detail="completing an order without field evidence requires a "
-                       "supervisor override with a reason")
+                "supervisor override with a reason",
+            )
         return None
-    return {"reason": override.reason, "documents": override.documents,
-            "actor": actor}
+    return {"reason": override.reason, "documents": override.documents, "actor": actor}
 
 
 @app.post("/api/spj/{spj_id}/activate")
@@ -1978,20 +2253,27 @@ def activate_spj(spj_id: str, _role: str = Depends(require_permission("dispatch:
 
 
 @app.post("/api/spj/{spj_id}/stops/{index}/complete")
-def complete_spj_stop(spj_id: str, index: int,
-                      body: SpjCompleteBody | None = None,
-                      _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
+def complete_spj_stop(
+    spj_id: str,
+    index: int,
+    body: SpjCompleteBody | None = None,
+    _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create")),
+) -> dict[str, Any]:
     """Close one stop. Requires field evidence, or an explicit supervisor override."""
     override = _override_payload(body, _role)
-    result = _spj_or_409(SPJ_STORE.complete_stop, spj_id, index,
-                         (body.evidence if body else None), override, _role)
+    result = _spj_or_409(
+        SPJ_STORE.complete_stop, spj_id, index, (body.evidence if body else None), override, _role
+    )
     _refresh_fleet_caches()
     return result
 
 
 @app.post("/api/spj/{spj_id}/complete")
-def complete_spj(spj_id: str, body: SpjCompleteOverrideBody | None = None,
-                 _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
+def complete_spj(
+    spj_id: str,
+    body: SpjCompleteOverrideBody | None = None,
+    _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create")),
+) -> dict[str, Any]:
     """Close an SPJ. Normal completion needs full field evidence; an
     override requires the spj:override permission and a reason, and is
     written to the SPJ audit trail."""
@@ -2000,33 +2282,37 @@ def complete_spj(spj_id: str, body: SpjCompleteOverrideBody | None = None,
     if body.override:
         # Re-gate the request: only supervisor/administrator may override.
         if not has_permission(_role, "spj:override"):
-            raise HTTPException(
-                status_code=403,
-                detail=f"Role '{_role}' lacks spj:override permission.")
+            raise HTTPException(status_code=403, detail=f"Role '{_role}' lacks spj:override permission.")
         reason = body.reason.strip()
         if len(reason) < 10:
             raise HTTPException(
-                status_code=409,
-                detail="override requires a reason of at least 10 characters")
+                status_code=409, detail="override requires a reason of at least 10 characters"
+            )
         override = {"actor": _role, "reason": reason}
     result = _spj_or_409(SPJ_STORE.complete, spj_id, override)
     _refresh_fleet_caches()
     if override is not None:
-        history_store.record_event("spj_completed_by_override", {
-            "spj_id": spj_id, "actor": override["actor"], "reason": override["reason"],
-        })
+        history_store.record_event(
+            "spj_completed_by_override",
+            {
+                "spj_id": spj_id,
+                "actor": override["actor"],
+                "reason": override["reason"],
+            },
+        )
     return result
 
 
 @app.get("/api/spj/{spj_id}/audit")
-def spj_audit(spj_id: str, _role: str = Depends(require_any_permission(
-        "dispatch:confirm", "dispatch:create", "history:read"))) -> dict[str, Any]:
+def spj_audit(
+    spj_id: str,
+    _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create", "history:read")),
+) -> dict[str, Any]:
     """Audit trail for one SPJ: lifecycle actions and supervisor overrides."""
     spj = SPJ_STORE.get(spj_id)
     if spj is None:
         raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
     return {"spj_id": spj_id, "audit": SPJ_STORE.audit_log(spj_id)}
-
 
 
 @app.post("/api/spj/{spj_id}/cancel")
@@ -2038,11 +2324,10 @@ def cancel_spj(spj_id: str, _role: str = Depends(require_permission("dispatch:cr
 
 # ── SPJ evidence / receipt + Driver PWA (pretrip, damage reports) ────────────
 
-from app.pretrip import PRETRIP_STORE
 from app.damage_reports import DAMAGE_STORE
+from app.pretrip import PRETRIP_STORE
 
 # ── Scentinel sensor-placement evidence (#23) ────────────────────────────────
-
 from app.scentinel import (
     ScentinelImportError,
     evidence_to_payload,
@@ -2060,13 +2345,16 @@ class ScentinelImportBody(BaseModel):
 
 
 @app.post("/api/scentinel/evidence", status_code=201)
-def scentinel_import(body: ScentinelImportBody, _role: str = Depends(require_any_permission("dispatch:create", "dispatch:confirm"))) -> dict[str, Any]:
+def scentinel_import(
+    body: ScentinelImportBody,
+    _role: str = Depends(require_any_permission("dispatch:create", "dispatch:confirm")),
+) -> dict[str, Any]:
     """Import one immutable Scentinel run manifest + sensor CSV as external
     screening evidence. The solver itself is never executed here."""
     try:
         ev = import_scentinel_evidence(body.manifest, body.sensor_csv, body.truck_code)
     except ScentinelImportError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     payload = evidence_to_payload(ev)
     SCENTINEL_STORE.write(ev.run_id, payload)
     return payload
@@ -2090,25 +2378,34 @@ def spj_evidence_summary(spj_id: str) -> dict[str, Any]:
         fractions: dict[str, float] = {}
         for w in weighing:
             key = w.get("fraction") or "Lainnya"
-            fractions[key] = round(fractions.get(key, 0.0)
-                                   + float(w.get("weight_kg") or 0), 1)
-        stops.append({
-            "index": i, "name": stop.name, "status": stop.status,
-            "has_arrival": bool((ev.get("arrival") or {}).get("photo_name")),
-            "weighing_count": len(weighing),
-            "total_weight_kg": total,
-            "fractions": fractions,
-            "officer_name": (ev.get("officer") or {}).get("name"),
-            "override": stop.override,
-        })
-    return {"spj_id": spj_id, "stops": stops,
-            "receipt": _receipt_payload(spj.receipt) if spj.receipt else None,
-            "complete": all(s["has_arrival"] for s in stops) and len(stops) > 0}
+            fractions[key] = round(fractions.get(key, 0.0) + float(w.get("weight_kg") or 0), 1)
+        stops.append(
+            {
+                "index": i,
+                "name": stop.name,
+                "status": stop.status,
+                "has_arrival": bool((ev.get("arrival") or {}).get("photo_name")),
+                "weighing_count": len(weighing),
+                "total_weight_kg": total,
+                "fractions": fractions,
+                "officer_name": (ev.get("officer") or {}).get("name"),
+                "override": stop.override,
+            }
+        )
+    return {
+        "spj_id": spj_id,
+        "stops": stops,
+        "receipt": _receipt_payload(spj.receipt) if spj.receipt else None,
+        "complete": all(s["has_arrival"] for s in stops) and len(stops) > 0,
+    }
 
 
 @app.post("/api/spj/{spj_id}/receipt", status_code=201)
-def submit_spj_receipt(spj_id: str, body: SpjReceiptBody,
-                       _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
+def submit_spj_receipt(
+    spj_id: str,
+    body: SpjReceiptBody,
+    _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create")),
+) -> dict[str, Any]:
     """Record the weighbridge receipt once (#52 + PR #90 #56).
 
     Replaying the same operation_id is a no-op retry (still 201 — the
@@ -2120,21 +2417,36 @@ def submit_spj_receipt(spj_id: str, body: SpjReceiptBody,
     if spj is None:
         raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
     already_recorded = spj.receipt is not None
-    _spj_or_409(SPJ_STORE.record_receipt, spj_id, body.photo_name,
-                body.photo_b64, body.total_weight_kg, body.weight_source,
-                _role, body.operation_id)
+    _spj_or_409(
+        SPJ_STORE.record_receipt,
+        spj_id,
+        body.photo_name,
+        body.photo_b64,
+        body.total_weight_kg,
+        body.weight_source,
+        _role,
+        body.operation_id,
+    )
     if not already_recorded:  # a replayed operation_id is not a second event
-        history_store.record_event("spj_receipt_submitted", {
-            "spj_id": spj_id, "spj_number": spj.spj_number,
-            "photo_name": body.photo_name, "total_weight_kg": body.total_weight_kg,
-            "weight_source": body.weight_source, "submitted_by": _role,
-        })
+        history_store.record_event(
+            "spj_receipt_submitted",
+            {
+                "spj_id": spj_id,
+                "spj_number": spj.spj_number,
+                "photo_name": body.photo_name,
+                "total_weight_kg": body.total_weight_kg,
+                "weight_source": body.weight_source,
+                "submitted_by": _role,
+            },
+        )
     return {"status": "recorded", "spj_id": spj_id}
 
 
 @app.get("/api/spj/{spj_id}/receipt/photo")
-def spj_receipt_photo(spj_id: str, _role: str = Depends(require_any_permission(
-        "dispatch:confirm", "dispatch:create", "history:read"))) -> dict[str, Any]:
+def spj_receipt_photo(
+    spj_id: str,
+    _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create", "history:read")),
+) -> dict[str, Any]:
     """Retrieval path for the stored receipt image (kept out of detail reads)."""
     spj = SPJ_STORE.get(spj_id)
     if spj is None:
@@ -2146,12 +2458,13 @@ def spj_receipt_photo(spj_id: str, _role: str = Depends(require_any_permission(
 
 
 @app.post("/api/pretrip", status_code=201)
-def submit_pretrip(body: PretripBody, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
+def submit_pretrip(
+    body: PretripBody, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))
+) -> dict[str, Any]:
     try:
-        rec = PRETRIP_STORE.submit(body.truck_code, body.driver_name,
-                                   body.items, body.note)
+        rec = PRETRIP_STORE.submit(body.truck_code, body.driver_name, body.items, body.note)
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return _asdict(rec)
 
 
@@ -2162,18 +2475,33 @@ def pretrip_today(truck_code: str) -> dict[str, Any]:
 
 
 @app.post("/api/damage-reports", status_code=201)
-def create_damage_report(body: DamageReportBody, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
+def create_damage_report(
+    body: DamageReportBody,
+    _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create")),
+) -> dict[str, Any]:
     try:
-        rep = DAMAGE_STORE.create(body.truck_code, body.driver_name,
-                                  body.component, body.severity, body.note,
-                                  body.photo_name, body.photo_b64, body.source)
+        rep = DAMAGE_STORE.create(
+            body.truck_code,
+            body.driver_name,
+            body.component,
+            body.severity,
+            body.note,
+            body.photo_name,
+            body.photo_b64,
+            body.source,
+        )
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
-    history_store.record_event("damage_reported", {
-        "report_id": rep.report_id, "truck_code": rep.truck_code,
-        "component": rep.component, "severity": rep.severity,
-        "source": rep.source,
-    })
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    history_store.record_event(
+        "damage_reported",
+        {
+            "report_id": rep.report_id,
+            "truck_code": rep.truck_code,
+            "component": rep.component,
+            "severity": rep.severity,
+            "source": rep.source,
+        },
+    )
     _refresh_fleet_caches()
     return _asdict(rep)
 
@@ -2185,18 +2513,22 @@ def list_damage_reports(status: str | None = None) -> dict[str, Any]:
 
 
 @app.post("/api/damage-reports/{report_id}/resolve")
-def resolve_damage_report(report_id: str, _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
+def resolve_damage_report(
+    report_id: str, _role: str = Depends(require_permission("dispatch:create"))
+) -> dict[str, Any]:
     try:
         rep = DAMAGE_STORE.resolve(report_id)
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     try:  # hook must never break resolve
         SERVICE_STORE.create(
-            rep.truck_code, service_date=date.today().isoformat(),
+            rep.truck_code,
+            service_date=date.today().isoformat(),
             component=rep.component,
             description=f"Resolve laporan: {rep.note}",
             source="damage_resolve",
-            next_due_date=due_date_for(rep.component, date.today()))
+            next_due_date=due_date_for(rep.component, date.today()),
+        )
     except Exception:  # noqa: BLE001
         logger.exception("service-record hook failed for report %s", report_id)
     _refresh_fleet_caches()
@@ -2215,12 +2547,19 @@ class ServiceRecordBody(BaseModel):
 
 
 @app.post("/api/service-records", status_code=201)
-def create_service_record(body: ServiceRecordBody, _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
+def create_service_record(
+    body: ServiceRecordBody, _role: str = Depends(require_permission("dispatch:create"))
+) -> dict[str, Any]:
     rec = SERVICE_STORE.create(
-        body.truck_code, body.service_date, body.component,
-        body.description, cost_idr=body.cost_idr,
-        odometer_km=body.odometer_km, technician=body.technician,
-        next_due_date=body.next_due_date)
+        body.truck_code,
+        body.service_date,
+        body.component,
+        body.description,
+        cost_idr=body.cost_idr,
+        odometer_km=body.odometer_km,
+        technician=body.technician,
+        next_due_date=body.next_due_date,
+    )
     return _asdict(rec)
 
 
@@ -2274,8 +2613,7 @@ def compliance_driver_detail(driver_name: str) -> dict[str, Any]:
     for entry in _compliance_payload()["drivers"]:
         if entry["driver_name"] == driver_name:
             return entry
-    raise HTTPException(status_code=404,
-                        detail=f"driver {driver_name} not found in fleet")
+    raise HTTPException(status_code=404, detail=f"driver {driver_name} not found in fleet")
 
 
 class OcrBody(BaseModel):
@@ -2283,6 +2621,9 @@ class OcrBody(BaseModel):
 
 
 @app.post("/api/ocr/timbangan")
-def ocr_timbangan(body: OcrBody, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
+def ocr_timbangan(
+    body: OcrBody, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))
+) -> dict[str, Any]:
     from app.timbangan_ocr import read_weight_from_photo
+
     return read_weight_from_photo(body.photo_b64)

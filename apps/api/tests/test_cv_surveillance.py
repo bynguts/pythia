@@ -1,22 +1,21 @@
-# -*- coding: utf-8 -*-
 """Tests for the CV gate-surveillance pipeline (Case 1 illegal activity).
 
 The YOLO/EasyOCR engine is mocked so tests run offline with no model or GPU.
 Only the pure pipeline logic — detection wiring, whitelist verification, event
 dedup, history ordering, and status payload — is exercised.
 """
+
 import unittest
 from unittest.mock import patch
 
 import numpy as np
 
+from app.collector_registry import check_vehicle
 from app.cv_surveillance import (
     SurveillanceEngine,
-    SurveillanceEvent,
     _discover_demo_video,
     is_plate_like,
 )
-from app.collector_registry import check_vehicle
 
 
 def _dummy_frame(h=720, w=1280):
@@ -74,8 +73,7 @@ class CvSurveillancePipelineTests(unittest.TestCase):
         for i, plate in enumerate(plates):
             sv.read_plate = lambda frame, bbox, p=plate: (p, 0.9)
             # reset dedup window per plate by faking time forward
-            with patch("app.cv_surveillance.time.time",
-                       return_value=10_000.0 + i * 60):
+            with patch("app.cv_surveillance.time.time", return_value=10_000.0 + i * 60):
                 sv.process_frame(_dummy_frame())
         events = sv.events(limit=10)
         self.assertEqual(len(events), 3)

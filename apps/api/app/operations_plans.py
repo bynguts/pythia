@@ -17,7 +17,7 @@ import sqlite3
 import tempfile
 import threading
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.env import getenv
@@ -43,8 +43,7 @@ class OperationsPlanStore:
         self._init_schema()
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.db_path,
-                                     timeout=self._BUSY_TIMEOUT_MS / 1000)
+        connection = sqlite3.connect(self.db_path, timeout=self._BUSY_TIMEOUT_MS / 1000)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute(f"PRAGMA busy_timeout={self._BUSY_TIMEOUT_MS}")
@@ -77,16 +76,13 @@ class OperationsPlanStore:
                     "INSERT OR REPLACE INTO operations_plans "
                     "(plan_id, payload, status, dispatch_ids, approved_at, approved_by, created_at) "
                     "VALUES (?,?,?,NULL,NULL,NULL,?)",
-                    (plan_id, json.dumps(payload), "proposed",
-                     datetime.now(timezone.utc).isoformat()),
+                    (plan_id, json.dumps(payload), "proposed", datetime.now(UTC).isoformat()),
                 )
         return self.get(plan_id) or payload
 
     def get(self, plan_id: str) -> dict[str, Any] | None:
         with closing(self._connect()) as connection:
-            row = connection.execute(
-                "SELECT * FROM operations_plans WHERE plan_id=?", (plan_id,)
-            ).fetchone()
+            row = connection.execute("SELECT * FROM operations_plans WHERE plan_id=?", (plan_id,)).fetchone()
         if row is None:
             return None
         payload = json.loads(row["payload"])
@@ -95,8 +91,7 @@ class OperationsPlanStore:
             payload["dispatch_ids"] = json.loads(row["dispatch_ids"])
         return payload
 
-    def approve(self, plan_id: str, approved_by: str,
-                create_dispatch) -> tuple[dict[str, Any], bool]:
+    def approve(self, plan_id: str, approved_by: str, create_dispatch) -> tuple[dict[str, Any], bool]:
         """Approve a plan at-most-once.
 
         create_dispatch(assignment) -> dispatch dict is called for every
@@ -115,8 +110,8 @@ class OperationsPlanStore:
                     connection.execute("BEGIN IMMEDIATE")
                     try:
                         row = connection.execute(
-                            "SELECT * FROM operations_plans WHERE plan_id=?",
-                            (plan_id,)).fetchone()
+                            "SELECT * FROM operations_plans WHERE plan_id=?", (plan_id,)
+                        ).fetchone()
                         if row is None:
                             raise KeyError(f"Plan {plan_id} not found")
                         if row["status"] == "approved":
@@ -127,7 +122,7 @@ class OperationsPlanStore:
                         for assignment in payload["assignments"]:
                             dispatch = create_dispatch(assignment)
                             dispatch_ids.append(dispatch["id"])
-                        now = datetime.now(timezone.utc).isoformat()
+                        now = datetime.now(UTC).isoformat()
                         connection.execute(
                             "UPDATE operations_plans SET status='approved', "
                             "dispatch_ids=?, approved_at=?, approved_by=? "
