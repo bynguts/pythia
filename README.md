@@ -90,13 +90,13 @@ Every workflow is an auditable loop — `detect → dispatch → acknowledge →
 
 | Login (operator gate) | Armada — ActionCard + 5-item nav |
 |---|---|
-| ![Login](pythia/docs/audit/screenshots/01-login.png) | ![Armada](pythia/docs/audit/screenshots/02-fleet-actioncard-nav5.png) |
+| ![Login](docs/audit/screenshots/01-login.png) | ![Armada](docs/audit/screenshots/02-fleet-actioncard-nav5.png) |
 
 | Prediksi Timbulan Sampah | Field App (driver, Indonesian) | Pengawas (mobile) |
 |---|---|---|
-| ![Prediksi](pythia/docs/audit/screenshots/03-forecast.png) | ![Field](pythia/docs/audit/screenshots/04-field-indonesian.png) | ![Pengawas](pythia/docs/audit/screenshots/05-pengawas-mobile.png) |
+| ![Prediksi](docs/audit/screenshots/03-forecast.png) | ![Field](docs/audit/screenshots/04-field-indonesian.png) | ![Pengawas](docs/audit/screenshots/05-pengawas-mobile.png) |
 
-Older-operator readability pass: body ≥ 14 px captions, ≥ 44 px tap targets, 9.4:1 muted-text contrast, one decision (ActionCard) above the fold, full-Indonesian field app, and a single-screen `/pengawas` mobile view. See `pythia/docs/audit/2026-09-22-runtime-ux-audit.md` for the measured baseline and `pythia/docs/audit/2026-09-22-fix-plan.md` for the file-by-file plan.
+Older-operator readability pass: body ≥ 14 px captions, ≥ 44 px tap targets, 9.4:1 muted-text contrast, one decision (ActionCard) above the fold, full-Indonesian field app, and a single-screen `/pengawas` mobile view. See `docs/audit/2026-09-22-runtime-ux-audit.md` for the measured baseline and `docs/audit/2026-09-22-fix-plan.md` for the file-by-file plan.
 
 ## Architecture
 
@@ -128,62 +128,61 @@ Older-operator readability pass: body ≥ 14 px captions, ≥ 44 px tap targets,
 
 ```text
 pythia/
-├── README.md
-├── START_PYTHIA.bat            # One-click launcher (Windows)
-├── TASK_retrain_models.md    # Model retraining notes
-└── pythia/
-    ├── backend/
-    │   ├── app/              # FastAPI routes (routing, RAG, forecast, WA)
-    │   ├── wa-gateway/       # WhatsApp Baileys gateway (Express)
-    │   ├── data/             # Datasets, models, provenance
-    │   └── tests/            # Backend test-suite
-    ├── frontend/
-    │   ├── src/              # React component code & workspaces
-    │   └── e2e/              # Playwright end-to-end tests
-    ├── PRODUCT.md            # Product specification
-    └── .env.example          # Environment template (no real secrets)
+├── apps/
+│   ├── api/            # FastAPI service: app/ (routes, forecasting, routing, RAG), tests/, data/models/
+│   ├── web/            # React + Vite command center, field & driver PWAs, 3D twin, XR (src/, e2e/)
+│   ├── wa-gateway/     # WhatsApp gateway (Express + Baileys)
+│   └── landing/        # Static landing page
+├── ml/
+│   ├── data/           # real/ raw/ processed/ sources/ — datasets with provenance manifests
+│   └── scripts/        # reproducible training + data acquisition pipelines
+├── docs/               # product, architecture, audits, RAG knowledge, competition material
+├── deploy/             # docker compose stack (api, web, wa-gateway)
+├── scripts/            # dev.ps1 / dev.sh — run everything locally
+└── .env.example        # environment template (copy to .env; never commit secrets)
 ```
 
 ---
 
 ## Getting Started
 
-> Prerequisites: Python 3.10+, Node.js 18+, npm.
+> Prerequisites: Python 3.12+, Node.js 20+, npm.
 
-### 1. Backend API (FastAPI)
+Copy the environment template once: `cp .env.example .env` (PowerShell:
+`Copy-Item .env.example .env`). Every setting is optional for a local demo.
+
+### One command
 
 ```powershell
-cd "pythia/backend"
-pip install -r requirements.txt
-
-# Copy the template (then fill in your real values)
-Copy-Item ..\.env.example .env
-
-python -m uvicorn app.main:app --port 8001
+.\scripts\dev.ps1 -Install      # Windows; add -WhatsApp for the gateway
+./scripts/dev.sh --install        # Linux / macOS; add --whatsapp
 ```
 
-> On startup the backend warms every Prophet + XGBoost forecast cache (± 20–25 s) so dashboard responses are instant.
+It starts the API on **:8001**, the web app on **http://localhost:5175** and
+opens the browser once the API is healthy (the first start loads the 42
+forecast models, ~1–2 min).
 
-### 2. WhatsApp Gateway (Baileys)
+### Each service by hand
 
-```powershell
-cd "pythia/backend/wa-gateway"
+```bash
+# API (FastAPI) — the AI engine runs only when enabled
+cd apps/api
+pip install -r requirements.txt
+PYTHIA_AI_ENGINE=on python -m uvicorn app.main:app --port 8001
+
+# Web app (React + Vite)
+cd apps/web
+npm install
+npm run dev -- --port 5175
+
+# WhatsApp gateway (optional) — scan the QR code it prints
+cd apps/wa-gateway
 npm install
 node server.js
 ```
 
-> A QR code is printed in the terminal; scan it with a driver's WhatsApp (e.g. `6281234567890`). Session files under `baileys_auth_info/` are regenerated at runtime and **never committed** (see Security below).
-
-### 3. Frontend Web App
-
-```powershell
-cd "pythia/frontend"
-npm install
-npm run build
-npm run preview -- --port 5175
-```
-
-Open **http://localhost:5175** — or use `START_PYTHIA.bat` at the repo root to launch everything at once.
+Session files under `apps/wa-gateway/baileys_auth_info/` are created at runtime
+and **never committed** (see Security below).
 
 ---
 
@@ -208,16 +207,17 @@ Open **http://localhost:5175** — or use `START_PYTHIA.bat` at the repo root to
 
 ## Testing
 
-```powershell
-cd "pythia/frontend"
-npx playwright test --workers 1
+```bash
+cd apps/api && python -m pytest tests -q              # backend
+cd apps/web && npm run build && npx playwright test --workers 1   # end-to-end
 ```
 
-E2E suite (Playwright, headless). The suite grows with every fixed issue, so
-test counts are not tracked in this file — run the command above for the
-current total, or check the CI run attached to each commit/PR for pass/fail
-status. Hygiene gate: `node pythia/frontend/e2e/lib/readme-hygiene.mjs` (fails
-if this README hardcodes a stale count).
+The end-to-end suite needs the API on :8001 and the built web app on :5175
+(`npm run preview -- --port 5175`). The suite grows with every fixed issue, so
+test counts are not tracked in this file — run the commands above, or check the
+CI run attached to each commit/PR. Hygiene gate:
+`node apps/web/e2e/lib/readme-hygiene.mjs` (fails if this README hardcodes a
+stale count).
 
 ---
 
@@ -225,8 +225,8 @@ if this README hardcodes a stale count).
 
 The repository is **public** — handle sensitive material with care:
 
-- **`.env` files are `gitignore`d and must never be committed.** Use `.env.example` as the template; values live only on the runne machine.
-- **WhatsApp session store** (`pythia/backend/wa-gateway/baileys_auth_info/`) contains real session credentials — it is ignored/untracked and regenerated on every QR scan.
+- **`.env` files are `gitignore`d and must never be committed.** Use `.env.example` as the template; values live only on the running machine.
+- **WhatsApp session store** (`apps/wa-gateway/baileys_auth_info/`) contains real session credentials — it is ignored/untracked and regenerated on every QR scan.
 - **Runtime logs** (`*.log`) are ignored & untracked.
 - ⚠️ **If a secret was ever pushed to public history, rotate it at the provider immediately.** History rewrites require force push and should be avoided in forked repos.
 

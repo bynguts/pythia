@@ -1,2 +1,5 @@
 # cmd.exe mis-resolves goto labels in LF-only batch files.
 *.bat text eol=crlf
+*.ps1 text eol=crlf
+# Shell scripts must keep LF to run on Linux/macOS.
+*.sh text eol=lf

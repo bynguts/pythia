@@ -49,7 +49,9 @@ pythia_operations.db*
 *.log
 
 # WhatsApp (Baileys) session credentials — regenerated at runtime via QR scan
-pythia/backend/wa-gateway/baileys_auth_info/
+apps/wa-gateway/baileys_auth_info/
+# Browser-automation cache from the old WhatsApp client library
+apps/wa-gateway/.node-persist/
 
 
 # --- Internal working documents (not part of the shipped product) ---
@@ -70,3 +72,14 @@ final_*.png
 verify_*.png
 
 map_verify.png
+
+# Python packaging, editors, local overrides
+*.egg-info/
+build/
+*.local
+.idea/
+.vscode/
+
+# Local tool state
+.omc/
+.codegraph/

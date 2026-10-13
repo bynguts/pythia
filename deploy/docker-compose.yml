@@ -14,8 +14,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       additional_contexts:
-        app: ../pythia/backend
-        dataset: ../pythia/data
+        app: ../apps/api
+        dataset: ../ml/data
     restart: unless-stopped
     environment:
       PYTHIA_ALLOWED_ORIGINS: "${PYTHIA_ALLOWED_ORIGINS:-http://localhost}"
@@ -40,7 +40,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       additional_contexts:
-        app: ../pythia/frontend
+        app: ../apps/web
     restart: unless-stopped
     depends_on:
       backend:
@@ -55,19 +55,22 @@ services:
       context: ./wa-gateway
       dockerfile: Dockerfile
       additional_contexts:
-        app: ../pythia/backend/wa-gateway
+        app: ../apps/wa-gateway
     restart: unless-stopped
     volumes:
       - wa-auth:/app/baileys_auth_info
     mem_limit: 384m
     cpus: 0.3
 
+  # Optional: the Scentinel solver lives in its own repository. Enable with
+  #   SCENTINEL_SRC=/path/to/scentinel docker compose --profile scentinel up
   scentinel:
+    profiles: ["scentinel"]
     build:
       context: ./scentinel
       dockerfile: Dockerfile
       additional_contexts:
-        app: D:/ai open presu lomba/scentinel
+        app: ${SCENTINEL_SRC:-../../scentinel}
     restart: unless-stopped
     environment:
       SCENTINEL_HOME: /data/scentinel-home
