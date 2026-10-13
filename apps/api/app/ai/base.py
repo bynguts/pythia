@@ -1,6 +1,6 @@
 """Data source adapters for Pythia AI modules.
 
-Detectors/forecasters never import app.gps_feed or app.data directly for
+Detectors/forecasters never import app.fleet.gps_feed or app.fleet.data directly for
 positions — they receive a GpsDataSource via constructor. Migrating to live
 DLH GPS is an env var change, not a code change.
 """
@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from app import data as fleet_data
-from app.env import getenv
-from app.gps_feed import GpsBreadcrumb, latest_breadcrumbs
+from app.core.env import getenv
+from app.fleet import data as fleet_data
+from app.fleet.gps_feed import GpsBreadcrumb, latest_breadcrumbs
 
 
 class GpsDataSource(Protocol):

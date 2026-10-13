@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from app.ai.actions.auto_state import AiEvent, EventFeed
 from app.ai.base import GpsDataSource
 from app.ai.detectors.speed_anomaly import SpeedAnomalyDetector
-from app.astar_routing import (
+from app.fleet.astar_routing import (
     is_traffic_jam_active,
     route_from_truck,
     set_traffic_jam_active,
