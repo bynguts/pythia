@@ -1,6 +1,7 @@
 """Tests for the single map-truth geospatial payload (Task 2)."""
 
 import unittest
+from unittest import mock
 
 from app.fleet.data import TRUCKS
 from app.fleet.map_truth import build_map_truth
@@ -53,6 +54,40 @@ class MapTruthTests(unittest.TestCase):
         self.assertIn("raw_gps", prov)
         self.assertIn("snapped_gps", prov)
         self.assertEqual(prov["raw_gps"], "RAW_GPS_SIMULATED")
+
+
+class SnapCacheTests(unittest.TestCase):
+    """The cached snap must not lag a moving truck (it once trailed raw GPS by ~400 m)."""
+
+    def setUp(self):
+        from app.fleet import map_truth
+
+        self.map_truth = map_truth
+        map_truth._snap_cache.pop("T-TEST", None)
+        self.calls = []
+
+        def fake_snap(lat, lng):
+            self.calls.append((lat, lng))
+            return {"lat": lat, "lng": lng, "source": "LIVE_EXTERNAL"}
+
+        patcher = mock.patch.object(map_truth, "snap_to_road", side_effect=fake_snap)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(map_truth._snap_cache.pop, "T-TEST", None)
+
+    def _truck(self, lat, lng):
+        return {"truck_code": "T-TEST", "latest_position": {"lat": lat, "lng": lng}}
+
+    def test_reuses_snap_while_truck_is_close(self):
+        self.map_truth._snapped_for(self._truck(-6.2000, 106.8000))
+        self.map_truth._snapped_for(self._truck(-6.2002, 106.8000))  # ~22 m
+        self.assertEqual(len(self.calls), 1)
+
+    def test_resnaps_after_truck_moves_away(self):
+        self.map_truth._snapped_for(self._truck(-6.2000, 106.8000))
+        snap = self.map_truth._snapped_for(self._truck(-6.2040, 106.8000))  # ~445 m
+        self.assertEqual(len(self.calls), 2)
+        self.assertEqual((snap["lat"], snap["lng"]), (-6.2040, 106.8000))
 
 
 if __name__ == "__main__":
