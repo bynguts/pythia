@@ -24,6 +24,22 @@ judged online on Problem Recognition, Solution, Growth Strategy, Presentation
 4. **Presentation** — cinematic video built on real product footage; deck that
    reads like an early-stage startup (market, model, traction, team, ask).
 
+## Status (2026-10-14)
+
+| Workstream | State | Evidence |
+|---|---|---|
+| WS-A Twin | ☑ done | `/api/twin/scene`, TwinWorkspace, `e2e/twin-workspace.spec.js` |
+| WS-B AR + XR | ☑ done (browser) · ☐ real-device test | `e2e/driver-ar.spec.js`, `e2e/xr-tabletop.spec.js`; WebXR AR/VR never run on a device |
+| WS-C Reliability | ☑ done | `tests/test_gsc_reliability.py`, `e2e/field-outbox-operation-id.spec.js` |
+| WS-D Second city | ☑ done | HCMC demo city in twin + XR (`app/cities.py`) |
+| WS-E CI / stack | ☑ CI added · ☐ CI result unchecked (gh not logged in) | `.github/workflows/ci.yml` |
+| WS-F Pitch | ☑ business model, video script, recording script, deck · ☐ team details, video recording | `BUSINESS_MODEL.md`, `VIDEO_SCRIPT.md`, `npm run record:demo`, Slides artifact |
+| WS-G Live demo | ☐ needs a server/domain from the team | — |
+
+Open for the team: team names/roles/universities (deck slide "ask"), contact
+email, AI Open Innovation Challenge final result (traction line), record S6/S7
+on real phones, decide on a public demo URL, then submit by 28 Oct 23:59 KST.
+
 ## Workstreams
 
 Status: ☐ todo · ◐ in progress · ☑ done (with evidence)
