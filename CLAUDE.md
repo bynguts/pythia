@@ -13,33 +13,29 @@ AI Open Innovation Challenge 2026 (case provider: DLH DKI Jakarta).
 - **Case 2:** waste-volume forecasting for 42 kecamatan (Prophet + XGBoost residual),
   resource planning (trucks/crews/man-hours/bins), OR-Tools CP-SAT weekly plan.
 
-Product principles live in `pythia/PRODUCT.md`; visual rules in `pythia/frontend/DESIGN.md`.
+Product principles live in `docs/product/PRODUCT.md`; visual rules in `apps/web/DESIGN.md`.
 
 ## Layout
 
 ```
-README.md, START_PYTHIA.bat
-deploy/                 docker-compose (backend uvicorn :8000, nginx frontend :80, wa-gateway, scentinel)
-pythia/
-  backend/app/          FastAPI — ALL routes are in main.py (no APIRouters)
-  backend/app/ai/       background AI engine (detectors, forecasters, actions)
-  backend/tests/        pytest suite (mostly unittest.TestCase style) + conftest.py
-  backend/data/models/  42× prophet_<slug>.joblib + 42× xgboost_<slug>.joblib + isolation_forest_fleet.joblib
-                        (_synthetic_backup/ = superseded models, not loaded)
-  backend/wa-gateway/   Node/Express + Baileys WhatsApp gateway (:2785)
-  frontend/src/         React 19 + Vite 6 + MapLibre (plain JS/JSX, plain CSS)
-  frontend/e2e/         Playwright specs (+ lib/readme-hygiene.mjs, lib/bundle-budget.mjs)
-  data/real|raw|processed|sources/   datasets; data/real/manifest.json holds provenance
-  scripts/              train_models.py (Case 2), train_fleet_model.py (Case 1), data acquisition
-  docs/                 audit reports, RAG knowledge base (docs/knowledge), pilot plan, evidence dossier
+apps/api/        FastAPI service — app/ (all routes in main.py for now), tests/, data/models/
+apps/web/        React 19 + Vite 6 + MapLibre + deck.gl + three.js — src/, e2e/ (Playwright)
+apps/wa-gateway/ Node/Express + Baileys WhatsApp gateway (:2785)
+apps/landing/    static landing page
+ml/data/         real/ raw/ processed/ sources/ datasets (real/manifest.json = provenance)
+ml/scripts/      train_models.py (Case 2), train_fleet_model.py (Case 1), data acquisition
+docs/            product/, architecture.md, audit/, knowledge/ (RAG), pilot/, evidence/,
+                 aoic-2026/ (AI Open Innovation Challenge), gsc-2026/ (Global Startup Competition)
+deploy/          docker compose stack;  scripts/  dev.ps1 / dev.sh launchers
 ```
+File locations used by the API are defined once in `apps/api/app/paths.py`.
 
 ## Commands
 
 Backend (Python 3.12; `pip install -r requirements.txt` — also needs `python-dotenv`, which is not listed):
 
 ```bash
-cd pythia/backend
+cd apps/api
 PYTHIA_AI_ENGINE=on python -m uvicorn app.main:app --port 8001   # startup warms all 42 models (~20–25 s)
 python -m pytest tests -q                                       # full backend suite (~4 min)
 python -m pytest tests/test_spj_endpoints.py -q                 # single file
@@ -55,7 +51,7 @@ python -m pytest tests/test_spj_endpoints.py -q                 # single file
 Frontend:
 
 ```bash
-cd pythia/frontend
+cd apps/web
 npm install
 npm run dev                       # Vite dev :5173 by default; launchers use --port 5175
 npm run build && npm run preview -- --port 5175
@@ -68,7 +64,7 @@ node e2e/lib/readme-hygiene.mjs   # fails if root README hardcodes a test count
   running against `preview` — a stale build causes false failures.
 - E2E talks to the **real** backend at `http://127.0.0.1:8001/api` with only a few `page.route` stubs.
 
-WhatsApp gateway: `cd pythia/backend/wa-gateway && npm install && node server.js` (scan QR).
+WhatsApp gateway: `cd apps/wa-gateway && npm install && node server.js` (scan QR).
 
 There is **no CI** in this repo. Run the relevant suites locally before claiming done.
 
@@ -82,7 +78,7 @@ There is **no CI** in this repo. Run the relevant suites locally before claiming
   The SPJ override permission is `spj:override` (supervisor, administrator).
 - **Persistence** (`app/storage.py`, `app/spj.py`, `app/operations_plans.py`): SQLite files
   next to `PYTHIA_DB_PATH` (default: system temp dir, deliberately, so `uvicorn --reload` —
-  used by `run-dev.ps1` — doesn't restart on every DB write). `RecordStore` uses WAL + `BEGIN IMMEDIATE`; `StorageError` → HTTP 503,
+  used by `scripts/dev.ps1` — doesn't restart on every DB write). `RecordStore` uses WAL + `BEGIN IMMEDIATE`; `StorageError` → HTTP 503,
   store `ValueError` → 409 (`_spj_or_409`).
 - **Forecast** (`app/engine.py`): Prophet yhat + XGBoost residual (11 features) + event
   overlay; falls back to a *labelled* heuristic if models fail to load. Keep feature order in
@@ -127,13 +123,13 @@ There is **no CI** in this repo. Run the relevant suites locally before claiming
   accent colour, no gradients, no card-in-card, flat metric strip (see `DESIGN.md`).
   Components are `PascalCase.jsx` with named exports, relative imports with explicit
   extensions, icons from `lucide-react`, `data-testid` in kebab-case.
-- **Tests**: every fix ships with a test. Backend → `pythia/backend/tests/test_*.py`;
-  UI behaviour → `pythia/frontend/e2e/*.spec.js` headed with `// #NN:` issue reference.
+- **Tests**: every fix ships with a test. Backend → `apps/api/tests/test_*.py`;
+  UI behaviour → `apps/web/e2e/*.spec.js` headed with `// #NN:` issue reference.
 - **Git**: conventional commits with scope — `fix(spj): …`, `feat(pwa): …`, `test(e2e): …`,
   `docs(readme): …` — ending with `(Fixes #NN)` or `(#NN)`. Work is batched per branch
   (`fix/<owner>-<scope>`, `feat/<topic>`) and merged via PR into `main`.
 - **Secrets**: the repo is public. Never commit `.env`, `wa-gateway/baileys_auth_info/`,
-  `*.db`, or logs. Template is `pythia/.env.example`.
+  `*.db`, or logs. Template is `.env.example`.
 - **Settings**: read backend settings through `app/env.py` `getenv("NAME")` (env var
   `PYTHIA_NAME`), not `os.getenv("PYTHIA_…")`.
 
@@ -144,15 +140,14 @@ There is **no CI** in this repo. Run the relevant suites locally before claiming
   `.env.example` value only allows 5175, so a plain `npm run dev` on 5173 hits CORS errors
   unless you add that origin or set `VITE_API_URL=/api` to go through the Vite proxy.
 
-- Launchers (`START_PYTHIA.bat`, `pythia/run-dev.ps1`, `pythia/launch_all.bat`,
-  `pythia/backend/launch_backend.bat`) hardcode user-specific Python paths, and some use stale
-  ports or paths. `START_PYTHIA.bat` prints `admin/admin123`, which is not a valid login.
+- Run everything locally with `scripts/dev.ps1` (Windows) or `scripts/dev.sh`; they use
+  `python`/`npm` from PATH.
 - `deploy/docker-compose.yml`'s `scentinel` service builds from an absolute path outside the repo.
 - Without `PYTHIA_DB_PATH`, every checkout/worktree shares one set of store files in the
   system temp dir — isolate e2e/dev runs with `PYTHIA_DB_PATH`.
-- `pythia/frontend/FRONTEND_DOCS.md` and parts of `DESIGN.md` (accent hex, fonts) drift from
+- Parts of `apps/web/DESIGN.md` (accent hex, fonts) drift from
   the code; `src/styles/tokens.css` is the source of truth. `redesign.css` loads last and
   overrides earlier stylesheets.
-- `pythia/.env.example` omits several vars the code reads: `OPENAI_BASE_URL`,
+- `.env.example` omits several vars the code reads: `OPENAI_BASE_URL`,
   `OPENAI_MODEL`, `PYTHIA_DB_PATH`, `PYTHIA_SPJ_SEED`, `PYTHIA_SPJ_STRAIGHT_FALLBACK`,
   `PYTHIA_GPS_SOURCE`, `OPENWA_TIMEOUT_SECONDS`.

@@ -21,13 +21,14 @@ RUN pip install --retries 10 --timeout 120 -r requirements.txt
 
 COPY --from=app app ./app
 
-# real_data.py resolves datasets at parents[2]/data = pythia/data (real/raw
-# government datasets + kelurahan GeoJSON), one level ABOVE backend/.
-# Layout inside the image mirrors that: /app = backend, /data = pythia/data.
+# /app = apps/api (with data/models), /data = ml/data (real/raw government
+# datasets + kelurahan GeoJSON). The image has no repo around it, so
+# app/paths.py is told where the datasets are.
 COPY --from=app data ./data
 COPY --from=dataset . /data/
 
-ENV PYTHIA_ALLOWED_ORIGINS="http://localhost"
+ENV PYTHIA_ALLOWED_ORIGINS="http://localhost" \
+    PYTHIA_DATA_DIR=/data
 
 EXPOSE 8000
 
