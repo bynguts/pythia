@@ -21,13 +21,13 @@ RUN pip install --retries 10 --timeout 120 -r requirements.txt
 
 COPY --from=app app ./app
 
-# real_data.py resolves datasets at parents[2]/data = jwis/data (real/raw
+# real_data.py resolves datasets at parents[2]/data = pythia/data (real/raw
 # government datasets + kelurahan GeoJSON), one level ABOVE backend/.
-# Layout inside the image mirrors that: /app = backend, /data = jwis/data.
+# Layout inside the image mirrors that: /app = backend, /data = pythia/data.
 COPY --from=app data ./data
 COPY --from=dataset . /data/
 
-ENV JWIS_ALLOWED_ORIGINS="http://localhost"
+ENV PYTHIA_ALLOWED_ORIGINS="http://localhost"
 
 EXPOSE 8000
 

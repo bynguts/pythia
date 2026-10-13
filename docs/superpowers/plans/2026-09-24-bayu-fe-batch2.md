@@ -1,13 +1,13 @@
 # Bayu Frontend Issues Batch 2 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-> Impeccable constraint: this is REFINEMENT of the existing JWIS design world — preserve tokens, layout, visual identity, and behavior. No new visual world. All copy changes ride the existing i18n catalog in `src/i18n.jsx`.
+> Impeccable constraint: this is REFINEMENT of the existing Pythia design world — preserve tokens, layout, visual identity, and behavior. No new visual world. All copy changes ride the existing i18n catalog in `src/i18n.jsx`.
 
 ## Worktree
 `/tmp/jwis-bayu-fe2` branch `fix/bayu-fe-batch2` from `origin/main` (2275f42).
 
 ## Test infrastructure
-- Backend: `/tmp/jwis-bayu-fe2/jwis/backend/.venv-pr91/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8002` (fresh DB at `/tmp/jwis-fe2-e2e/jwis.db`, JWIS_SPJ_SEED=off)
+- Backend: `/tmp/jwis-bayu-fe2/jwis/backend/.venv-pr91/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8002` (fresh DB at `/tmp/jwis-fe2-e2e/jwis.db`, PYTHIA_SPJ_SEED=off)
 - Frontend: `vite build && vite preview --port 5176` (production build — SW registration requires prod)
 - Playwright: `node_modules/.bin/playwright test` (copy node_modules from bayu-nonfe worktree or npm install)
 

@@ -1,8 +1,8 @@
-# JWIS — Jakarta Waste Intelligence System
+# Pythia
 
 **AI Command Center for Smart Waste Management** — solution built for the **AI Open Innovation Challenge 2026**, with the Jakarta Environmental Agency (DLH DKI Jakarta) as Case Provider.
 
-JWIS (Jakarta Waste Intelligence System) is an end-to-end AI command center prototype that addresses **both cases** issued by DLH Jakarta in a single, integrated platform:
+Pythia is an end-to-end AI command center prototype that addresses **both cases** issued by DLH Jakarta in a single, integrated platform:
 
 - **Case 1 — AI-Based Waste Transportation Monitoring & Supervision System:** fleet tracking (simulated positioning today; live GPS is planned once a reachable runtime path exists), violation detection, and route/schedule optimization.
 - **Case 2 — Waste Volume Prediction System Based on Historical Data & Events**: predictive (not reactive) estimation of waste generation and required resources in crowded areas.
@@ -22,6 +22,7 @@ JWIS (Jakarta Waste Intelligence System) is an end-to-end AI command center prot
 - [End-to-End Demo Flow](#end-to-end-demo-flow)
 - [Testing](#testing)
 - [Security & Credentials](#security--credentials)
+- [Upgrading from JWIS](#upgrading-from-jwis)
 
 ---
 
@@ -54,7 +55,7 @@ JWIS (Jakarta Waste Intelligence System) is an end-to-end AI command center prot
 
 ## Solution Overview
 
-JWIS is one integrated command center covering both cases — from live operations through AI forecasting to actionable alerts:
+Pythia is one integrated command center covering both cases — from live operations through AI forecasting to actionable alerts:
 
 | Layer | Stack | Purpose |
 |---|---|---|
@@ -90,13 +91,13 @@ Every workflow is an auditable loop — `detect → dispatch → acknowledge →
 
 | Login (operator gate) | Armada — ActionCard + 5-item nav |
 |---|---|
-| ![Login](jwis/docs/audit/screenshots/01-login.png) | ![Armada](jwis/docs/audit/screenshots/02-fleet-actioncard-nav5.png) |
+| ![Login](pythia/docs/audit/screenshots/01-login.png) | ![Armada](pythia/docs/audit/screenshots/02-fleet-actioncard-nav5.png) |
 
 | Prediksi Timbulan Sampah | Field App (driver, Indonesian) | Pengawas (mobile) |
 |---|---|---|
-| ![Prediksi](jwis/docs/audit/screenshots/03-forecast.png) | ![Field](jwis/docs/audit/screenshots/04-field-indonesian.png) | ![Pengawas](jwis/docs/audit/screenshots/05-pengawas-mobile.png) |
+| ![Prediksi](pythia/docs/audit/screenshots/03-forecast.png) | ![Field](pythia/docs/audit/screenshots/04-field-indonesian.png) | ![Pengawas](pythia/docs/audit/screenshots/05-pengawas-mobile.png) |
 
-Older-operator readability pass: body ≥ 14 px captions, ≥ 44 px tap targets, 9.4:1 muted-text contrast, one decision (ActionCard) above the fold, full-Indonesian field app, and a single-screen `/pengawas` mobile view. See `jwis/docs/audit/2026-09-22-runtime-ux-audit.md` for the measured baseline and `jwis/docs/audit/2026-09-22-fix-plan.md` for the file-by-file plan.
+Older-operator readability pass: body ≥ 14 px captions, ≥ 44 px tap targets, 9.4:1 muted-text contrast, one decision (ActionCard) above the fold, full-Indonesian field app, and a single-screen `/pengawas` mobile view. See `pythia/docs/audit/2026-09-22-runtime-ux-audit.md` for the measured baseline and `pythia/docs/audit/2026-09-22-fix-plan.md` for the file-by-file plan.
 
 ## Architecture
 
@@ -127,11 +128,11 @@ Older-operator readability pass: body ≥ 14 px captions, ≥ 44 px tap targets,
 ## Repository Structure
 
 ```text
-jwis-system/
+pythia/
 ├── README.md
-├── START_JWIS.bat            # One-click launcher (Windows)
+├── START_PYTHIA.bat            # One-click launcher (Windows)
 ├── TASK_retrain_models.md    # Model retraining notes
-└── jwis/
+└── pythia/
     ├── backend/
     │   ├── app/              # FastAPI routes (routing, RAG, forecast, WA)
     │   ├── wa-gateway/       # WhatsApp Baileys gateway (Express)
@@ -153,7 +154,7 @@ jwis-system/
 ### 1. Backend API (FastAPI)
 
 ```powershell
-cd "jwis/backend"
+cd "pythia/backend"
 pip install -r requirements.txt
 
 # Copy the template (then fill in your real values)
@@ -167,7 +168,7 @@ python -m uvicorn app.main:app --port 8001
 ### 2. WhatsApp Gateway (Baileys)
 
 ```powershell
-cd "jwis/backend/wa-gateway"
+cd "pythia/backend/wa-gateway"
 npm install
 node server.js
 ```
@@ -177,13 +178,13 @@ node server.js
 ### 3. Frontend Web App
 
 ```powershell
-cd "jwis/frontend"
+cd "pythia/frontend"
 npm install
 npm run build
 npm run preview -- --port 5175
 ```
 
-Open **http://localhost:5175** — or use `START_JWIS.bat` at the repo root to launch everything at once.
+Open **http://localhost:5175** — or use `START_PYTHIA.bat` at the repo root to launch everything at once.
 
 ---
 
@@ -209,14 +210,14 @@ Open **http://localhost:5175** — or use `START_JWIS.bat` at the repo root to l
 ## Testing
 
 ```powershell
-cd "jwis/frontend"
+cd "pythia/frontend"
 npx playwright test --workers 1
 ```
 
 E2E suite (Playwright, headless). The suite grows with every fixed issue, so
 test counts are not tracked in this file — run the command above for the
 current total, or check the CI run attached to each commit/PR for pass/fail
-status. Hygiene gate: `node jwis/frontend/e2e/lib/readme-hygiene.mjs` (fails
+status. Hygiene gate: `node pythia/frontend/e2e/lib/readme-hygiene.mjs` (fails
 if this README hardcodes a stale count).
 
 ---
@@ -226,9 +227,33 @@ if this README hardcodes a stale count).
 The repository is **public** — handle sensitive material with care:
 
 - **`.env` files are `gitignore`d and must never be committed.** Use `.env.example` as the template; values live only on the runne machine.
-- **WhatsApp session store** (`jwis/backend/wa-gateway/baileys_auth_info/`) contains real session credentials — it is ignored/untracked and regenerated on every QR scan.
+- **WhatsApp session store** (`pythia/backend/wa-gateway/baileys_auth_info/`) contains real session credentials — it is ignored/untracked and regenerated on every QR scan.
 - **Runtime logs** (`*.log`) are ignored & untracked.
 - ⚠️ **If a secret was ever pushed to public history, rotate it at the provider immediately.** History rewrites require force push and should be avoided in forked repos.
+
+---
+
+## Upgrading from JWIS
+
+The project was previously named **JWIS**. Existing installs keep working:
+
+- **Source folder:** `jwis/` is now `pythia/`. In an existing checkout, untracked
+  files stay behind in `jwis/` (ignored by git) — move `jwis/.env` to `pythia/.env`
+  and `jwis/backend/wa-gateway/baileys_auth_info/` to the same path under `pythia/`
+  to keep the paired WhatsApp session, then re-run `npm install`.
+- **Settings:** every `JWIS_*` variable is still read when its `PYTHIA_*` name is
+  unset (`PYTHIA_` wins when both are set). Rename them at your convenience.
+- **Records:** on first start each store copies its `jwis_*.db` file to the new
+  `pythia_*.db` name; the old file is left untouched as a rollback copy.
+- **Browsers:** saved login, language, and offline field/driver queues stored under
+  `jwis_*` keys move to `pythia_*` on first load — queued submissions are kept.
+- **Docker:** the compose project is now `pythia-stack`, but its volumes keep their
+  `jwis-stack_*` names so the paired WhatsApp session survives the upgrade. Stop the
+  old stack first — `docker compose -p jwis-stack down` (no `-v`) — or two gateways
+  will share one WhatsApp session. (The backend container keeps its records in its
+  own temp dir, not on the history volume, so they never survived a rebuild.)
+- **`.env` left in `jwis/`:** until you move it, the backend still loads
+  `jwis/backend/.env` or `jwis/.env` and logs a warning.
 
 ---
 
@@ -236,4 +261,4 @@ The repository is **public** — handle sensitive material with care:
 
 - **Competition:** AI Open Innovation Challenge 2026 — [ai-open.president.ac.id](https://ai-open.president.ac.id)
 - **Case Provider:** DLH DKI Jakarta
-- **Team:** JWIS
+- **Team:** Pythia (registered for the competition as JWIS)

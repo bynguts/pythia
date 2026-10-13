@@ -1,4 +1,4 @@
-﻿name: jwis-stack
+﻿name: pythia-stack
 
 # Memory budget for a 2 vCPU / 4 GB server (OS itself takes ~0.5 GB):
 #   backend     1.2 GB   42 Prophet/XGBoost models, ~600 MB warmup peak
@@ -14,16 +14,17 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       additional_contexts:
-        app: ../jwis/backend
-        dataset: ../jwis/data
+        app: ../pythia/backend
+        dataset: ../pythia/data
     restart: unless-stopped
+    # Host vars may still use the pre-rebrand JWIS_ names; PYTHIA_ wins.
     environment:
-      JWIS_ALLOWED_ORIGINS: "${JWIS_ALLOWED_ORIGINS:-http://localhost}"
+      PYTHIA_ALLOWED_ORIGINS: "${PYTHIA_ALLOWED_ORIGINS:-${JWIS_ALLOWED_ORIGINS:-http://localhost}}"
       OPENWA_BASE_URL: "http://wa-gateway:2785"
-      JWIS_OPENAI_BASE_URL: "${JWIS_OPENAI_BASE_URL:-}"
-      JWIS_OPENAI_API_KEY: "${JWIS_OPENAI_API_KEY:-}"
+      PYTHIA_OPENAI_BASE_URL: "${PYTHIA_OPENAI_BASE_URL:-${JWIS_OPENAI_BASE_URL:-}}"
+      PYTHIA_OPENAI_API_KEY: "${PYTHIA_OPENAI_API_KEY:-${JWIS_OPENAI_API_KEY:-}}"
     volumes:
-      - jwis-history:/app/data/history
+      - pythia-history:/app/data/history
     mem_limit: 1200m
     cpus: 1.5
     healthcheck:
@@ -38,7 +39,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       additional_contexts:
-        app: ../jwis/frontend
+        app: ../pythia/frontend
     restart: unless-stopped
     depends_on:
       backend:
@@ -53,7 +54,7 @@ services:
       context: ./wa-gateway
       dockerfile: Dockerfile
       additional_contexts:
-        app: ../jwis/backend/wa-gateway
+        app: ../pythia/backend/wa-gateway
     restart: unless-stopped
     volumes:
       - wa-auth:/app/baileys_auth_info
@@ -77,7 +78,14 @@ services:
     ports:
       - "8090:8090"
 
+# Volumes keep the names they were created with under the pre-rebrand
+# "jwis-stack" project, so an upgraded server keeps its paired WhatsApp session
+# and scentinel data instead of starting on empty volumes. Stop the old project
+# first (`docker compose -p jwis-stack down`, no -v) so two stacks don't share them.
 volumes:
-  jwis-history:
+  pythia-history:
+    name: jwis-stack_jwis-history
   wa-auth:
+    name: jwis-stack_wa-auth
   scentinel-data:
+    name: jwis-stack_scentinel-data

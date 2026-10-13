@@ -1,7 +1,7 @@
-# TASK: Retrain JWIS waste-prediction models on REAL data (reproducible pipeline)
+# TASK: Retrain Pythia waste-prediction models on REAL data (reproducible pipeline)
 
-You are working on the JWIS project (AI Open Innovation Challenge 2026, DLH DKI Jakarta).
-Project root: `D:\ai open presu lomba\jwis system\jwis`
+You are working on the Pythia project (AI Open Innovation Challenge 2026, DLH DKI Jakarta).
+Project root: `D:\ai open presu lomba\jwis system\pythia`
 Backend app: `backend/app/` — FastAPI. Models are loaded from `backend/data/models/*.joblib`.
 
 ## CONTEXT (read this fully before coding)
@@ -32,7 +32,7 @@ Map each kelurahan to its city (for SIPSN calibration):
 - tanjung_priok, koja → Jakarta Utara
 - pulogadung, kramat_jati → Jakarta Timur
 
-## INPUT FILES (all already present, paths relative to project root `jwis/`)
+## INPUT FILES (all already present, paths relative to project root `pythia/`)
 
 | File | What it is | Key columns / notes |
 |---|---|---|
@@ -47,7 +47,7 @@ Map each kelurahan to its city (for SIPSN calibration):
 
 1. **`scripts/train_models.py`** — single reproducible script. Running it regenerates
    all models and reports from the input files above. Must be runnable as:
-   `python scripts/train_models.py` from the `jwis/` directory.
+   `python scripts/train_models.py` from the `pythia/` directory.
    Use the same Python that runs the backend (Python 3.12).
 
 2. **Retrained models** into `backend/data/models/` (overwrite existing, but FIRST
@@ -127,13 +127,13 @@ like this — your saved models MUST be compatible:
   SIPSN city totals and real Bantargebang monthly totals.
 
 ## VERIFICATION (must pass before you say you're done)
-1. `python scripts/train_models.py` runs end-to-end with no error from the `jwis/` dir.
+1. `python scripts/train_models.py` runs end-to-end with no error from the `pythia/` dir.
 2. Exactly 10 `prophet_*.joblib` and 10 `xgboost_*.joblib` written to `backend/data/models/`.
 3. Old models backed up in `backend/data/models/_synthetic_backup/`.
-4. Backend still loads them: from `jwis/backend/` run
+4. Backend still loads them: from `pythia/backend/` run
    `python -c "from app.engine import predict_waste_hybrid; print(predict_waste_hybrid('kebon_jeruk', rainfall_mm=42, event_attendance=85000, is_weekend=True))"`
    → must return `model_available: True` and a numeric `predicted_tons`.
-5. Backend tests still pass: from `jwis/backend/` run `python -m unittest discover -s tests`.
+5. Backend tests still pass: from `pythia/backend/` run `python -m unittest discover -s tests`.
 6. Both new files exist: `data/processed/hybrid_forecaster_evaluation.md` and
    `data/processed/training_dataset_kelurahan.csv`.
 
