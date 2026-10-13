@@ -14,16 +14,9 @@ import logging
 
 from dotenv import load_dotenv
 
-from app.env import getenv, legacy_dotenv_files
+from app.env import getenv
 
-if not load_dotenv():
-    # A checkout from before the jwis/ -> pythia/ rename keeps its settings in
-    # the now-ignored jwis/ folder; without this the role passwords would
-    # silently fall back to the public demo defaults.
-    for _legacy_env in legacy_dotenv_files():
-        load_dotenv(_legacy_env)
-        logging.getLogger(__name__).warning(
-            "loaded settings from pre-rebrand %s; move it into pythia/", _legacy_env)
+load_dotenv()
 import os
 
 key = os.getenv("OPENAI_API_KEY", "")

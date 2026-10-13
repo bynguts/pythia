@@ -162,10 +162,8 @@ export default function FieldApp() {
       if (!response.ok) throw new Error("no api");
       // #46: a stale (cache-served) response still parses, but its metadata
       // marks it as not-live so operators never confuse it with fresh data.
-      // X-Jwis-*: sent by a pre-rebrand service worker until the new one activates.
-      const staleAt = response.headers.get("X-Pythia-Cached-At") || response.headers.get("X-Jwis-Cached-At");
-      const staleFlag = response.headers.get("X-Pythia-Stale") || response.headers.get("X-Jwis-Stale");
-      const isStale = staleFlag === "1" && staleAt;
+      const staleAt = response.headers.get("X-Pythia-Cached-At");
+      const isStale = response.headers.get("X-Pythia-Stale") === "1" && staleAt;
       if (isStale) {
         const ageMin = Math.max(0, Math.round((Date.now() - Date.parse(staleAt)) / 60000));
         setStaleMinutes(ageMin);

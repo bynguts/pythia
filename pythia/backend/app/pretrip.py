@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 PRETRIP_ITEMS = ("rem", "mesin", "ban", "bbm", "oli", "bak_compactor", "lampu")
 
 TABLE = "pythia_pretrip"
-LEGACY_JSON = "jwis_pretrip.json"
 
 
 @dataclass
@@ -42,9 +41,6 @@ class PreTripStore:
 
     def __init__(self, db_path: Path | str | None = None) -> None:
         self._records = RecordStore(TABLE, db_path)
-        if db_path is None:
-            self._records.migrate_legacy_json(
-                self._records.db_path.parent / LEGACY_JSON, "record_id")
 
     def submit(self, truck_code: str, driver_name: str,
                items: dict[str, bool], note: str = "") -> PreTripRecord:

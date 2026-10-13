@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 HEAVY_COMPONENTS = {"rem", "mesin", "ban"}
 
 TABLE = "pythia_service_history"
-LEGACY_JSON = "jwis_service_history.json"
 
 
 @dataclass
@@ -47,9 +46,6 @@ class ServiceStore:
 
     def __init__(self, db_path: Path | str | None = None) -> None:
         self._records = RecordStore(TABLE, db_path)
-        if db_path is None:
-            self._records.migrate_legacy_json(
-                self._records.db_path.parent / LEGACY_JSON, "record_id")
 
     def create(self, truck_code: str, service_date: str, component: str,
                description: str, cost_idr: int | None = None,

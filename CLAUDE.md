@@ -18,7 +18,7 @@ Product principles live in `pythia/PRODUCT.md`; visual rules in `pythia/frontend
 ## Layout
 
 ```
-README.md, START_PYTHIA.bat, TASK_retrain_models.md (stale — see Gotchas)
+README.md, START_PYTHIA.bat
 deploy/                 docker-compose (backend uvicorn :8000, nginx frontend :80, wa-gateway, scentinel)
 pythia/
   backend/app/          FastAPI — ALL routes are in main.py (no APIRouters)
@@ -83,7 +83,7 @@ There is **no CI** in this repo. Run the relevant suites locally before claiming
 - **Persistence** (`app/storage.py`, `app/spj.py`, `app/operations_plans.py`): SQLite files
   next to `PYTHIA_DB_PATH` (default: system temp dir, deliberately, so `uvicorn --reload` —
   used by `run-dev.ps1` — doesn't restart on every DB write). `RecordStore` uses WAL + `BEGIN IMMEDIATE`; `StorageError` → HTTP 503,
-  store `ValueError` → 409 (`_spj_or_409`). Pre-SQLite `jwis_*.json` files are imported once then renamed `*.migrated`.
+  store `ValueError` → 409 (`_spj_or_409`).
 - **Forecast** (`app/engine.py`): Prophet yhat + XGBoost residual (11 features) + event
   overlay; falls back to a *labelled* heuristic if models fail to load. Keep feature order in
   sync with `scripts/train_models.py`.
@@ -134,14 +134,8 @@ There is **no CI** in this repo. Run the relevant suites locally before claiming
   (`fix/<owner>-<scope>`, `feat/<topic>`) and merged via PR into `main`.
 - **Secrets**: the repo is public. Never commit `.env`, `wa-gateway/baileys_auth_info/`,
   `*.db`, or logs. Template is `pythia/.env.example`.
-- **Rebrand compatibility (JWIS → Pythia)**: the project was called JWIS and lived in `jwis/`.
-  Remaining `jwis` mentions are deliberate fallbacks — don't "clean them up":
-  read new backend settings through `app/env.py` `getenv("NAME")` (`PYTHIA_NAME`, falling
-  back to `JWIS_NAME`), never `os.getenv("PYTHIA_…")`; `storage.adopt_legacy_db` copies
-  `jwis_*.db` to `pythia_*.db` on first open; `src/legacyStorage.js` (imported first in
-  `main.jsx`) moves `jwis_*` localStorage keys; `FieldApp` still accepts `X-Jwis-*` SW
-  headers; compose volumes keep their `jwis-stack_*` names. Covered by
-  `tests/test_rebrand_compat.py` and `e2e/rebrand-storage.spec.js`.
+- **Settings**: read backend settings through `app/env.py` `getenv("NAME")` (env var
+  `PYTHIA_NAME`), not `os.getenv("PYTHIA_…")`.
 
 ## Gotchas
 
@@ -150,18 +144,12 @@ There is **no CI** in this repo. Run the relevant suites locally before claiming
   `.env.example` value only allows 5175, so a plain `npm run dev` on 5173 hits CORS errors
   unless you add that origin or set `VITE_API_URL=/api` to go through the Vite proxy.
 
-- `TASK_retrain_models.md` is **outdated** (old machine path, 10 kelurahan, 6 features,
-  `unittest discover`). The real pipeline is `pythia/scripts/train_models.py` (42 kecamatan, 11 features).
 - Launchers (`START_PYTHIA.bat`, `pythia/run-dev.ps1`, `pythia/launch_all.bat`,
   `pythia/backend/launch_backend.bat`) hardcode user-specific Python paths, and some use stale
   ports or paths. `START_PYTHIA.bat` prints `admin/admin123`, which is not a valid login.
 - `deploy/docker-compose.yml`'s `scentinel` service builds from an absolute path outside the repo.
-  Its backend sets no `PYTHIA_DB_PATH`, so container records live in `/tmp`, not the
-  `pythia-history` volume; and its `PYTHIA_OPENAI_*` vars are unused (code reads `OPENAI_*`).
 - Without `PYTHIA_DB_PATH`, every checkout/worktree shares one set of store files in the
-  system temp dir. A pre-rebrand backend keeps writing `jwis_*.db` there after a new one
-  has adopted them into `pythia_*.db`, so the two drift — isolate e2e/dev runs with
-  `PYTHIA_DB_PATH`.
+  system temp dir — isolate e2e/dev runs with `PYTHIA_DB_PATH`.
 - `pythia/frontend/FRONTEND_DOCS.md` and parts of `DESIGN.md` (accent hex, fonts) drift from
   the code; `src/styles/tokens.css` is the source of truth. `redesign.css` loads last and
   overrides earlier stylesheets.

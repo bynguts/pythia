@@ -5,15 +5,13 @@
     <script>
       // #49/#85: install metadata follows the app language. ID is the
       // default (matches documentElement.lang below), EN is opt-in via the
-      // language switch persisted as pythia_lang (jwis_lang before the
-      // rebrand; src/legacyStorage.js migrates it). The href is built from a
+      // language switch persisted as pythia_lang. The href is built from a
       // fixed allowlist (no user input reaches the DOM write), and
       // document.createElement is used instead of document.write/innerHTML.
       (function () {
         var lang = "id";
         try {
-          var saved = localStorage.getItem("pythia_lang") || localStorage.getItem("jwis_lang");
-          lang = saved === "en" ? "en" : "id";
+          lang = localStorage.getItem("pythia_lang") === "en" ? "en" : "id";
         } catch (e) {
           lang = "id";
         }

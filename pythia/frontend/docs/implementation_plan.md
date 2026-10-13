@@ -24,22 +24,22 @@ Plan ini mencakup:
 
 ### Phase 1 — Quick Wins (non-breaking)
 
-#### [MODIFY] [tokens.css](file:///home/alertxist/Projects/jwis-system/jwis/frontend/src/styles/tokens.css)
+#### [MODIFY] [tokens.css](../src/styles/tokens.css)
 - Ganti `--ui-primary` dan `--ui-accent` dari `#6366e8` (AI purple) ke `#0F766E` (teal).
 - Derive semua shade dari hue yang sama: `--ui-accent-soft`, `--ui-accent-foreground`, focus ring.
 
-#### [MODIFY] [base.css](file:///home/alertxist/Projects/jwis-system/jwis/frontend/src/styles/base.css)
+#### [MODIFY] [base.css](../src/styles/base.css)
 - Hapus `outline: none` global (L36-41) — ini A11y fix WCAG 2.4.7.
 - Fix font family: tetapkan `"Geist Sans"` sebagai primary.
 
-#### [MODIFY] [shell.css](file:///home/alertxist/Projects/jwis-system/jwis/frontend/src/styles/shell.css)
+#### [MODIFY] [shell.css](../src/styles/shell.css)
 - Ganti hardcoded `#e5e6ff` dan `#f4f4ff` di `.nav-tab-btn` ke CSS variables yang derived dari accent baru.
 - Ganti magic number `gap: 14px` → `gap: 12px`.
 
-#### [MODIFY] [components.css](file:///home/alertxist/Projects/jwis-system/jwis/frontend/src/styles/components.css)
+#### [MODIFY] [components.css](../src/styles/components.css)
 - Fix `.icon-button` background dari `var(--ui-ink)` ke subtle variant yang lebih wajar.
 
-#### [MODIFY] [AppShell.jsx](file:///home/alertxist/Projects/jwis-system/jwis/frontend/src/layout/AppShell.jsx)
+#### [MODIFY] [AppShell.jsx](../src/layout/AppShell.jsx)
 - Fix `"weighbridge Logs"` → `"Weighbridge Logs"`.
 - Hapus duplikasi StatusBadge di sidebar.
 - Baca `localStorage.getItem("pythia_role")` untuk menampilkan role yang benar.
@@ -48,12 +48,12 @@ Plan ini mencakup:
 
 ### Phase 2 — Functional Fixes
 
-#### [MODIFY] [main.jsx](file:///home/alertxist/Projects/jwis-system/jwis/frontend/src/main.jsx) — `LoginPage` component
+#### [MODIFY] [main.jsx](../src/main.jsx) — `LoginPage` component
 - Tambah `isSubmitting` state di `LoginPage`.
 - Disable tombol + tampilkan loading spinner saat submit.
 - Cegah double-submit.
 
-#### [MODIFY] [shell.css](file:///home/alertxist/Projects/jwis-system/jwis/frontend/src/styles/shell.css)
+#### [MODIFY] [shell.css](../src/styles/shell.css)
 - Tambahkan keyboard shortcut handler `Ctrl+K` untuk memfokuskan search input.
 
 ---

@@ -4,7 +4,6 @@ Each test runs two *processes*, not two threads: the failure mode being
 regression-tested is divergent in-process state, which a thread test cannot
 reproduce because both threads share one dict.
 """
-import json
 import multiprocessing
 import os
 import sqlite3
@@ -150,38 +149,6 @@ class WriteFailureTests(unittest.TestCase):
         # The failed create must not have left a record behind.
         self.assertEqual([s for s in store.list()
                           if s.truck_code == "T-700"], [])
-
-    def test_unreadable_legacy_file_does_not_break_startup(self):
-        """A corrupt pre-migration JSON store must not stop the service booting."""
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        legacy = Path(tmp.name) / "pythia_damage_reports.json"
-        legacy.write_text("{not json", encoding="utf-8")
-        db = Path(tmp.name) / "pythia_damage_reports.db"
-        store = DamageReportStore(db_path=db)
-        self.assertEqual(store.list(), [])
-
-    def test_legacy_json_is_imported_once_then_retired(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        legacy = Path(tmp.name) / "pythia_spj.json"
-        legacy.write_text(json.dumps([{
-            "spj_id": "legacy000001", "spj_number": "DLH-DKI/SPJ/01-01-2026/000007",
-            "date": "2026-01-01", "driver_name": "Legacy", "truck_code": "T-800",
-            "destination": "TPST Bantargebang", "weigh_on_site": False,
-            "priority": "normal", "note": "", "stops": [], "status": "draft",
-            "created_by": "admin", "created_at": "2026-01-01T00:00:00+00:00",
-        }]), encoding="utf-8")
-        records = RecordStore("pythia_spj", Path(tmp.name) / "pythia_spj.db")
-        imported = records.migrate_legacy_json(legacy, "spj_id")
-        self.assertEqual(imported, 1)
-        self.assertEqual(len(records.all()), 1)
-        self.assertFalse(legacy.exists())
-        self.assertTrue(legacy.with_suffix(".json.migrated").exists())
-        # A second call must not duplicate or resurrect anything.
-        self.assertEqual(records.migrate_legacy_json(
-            legacy.with_suffix(".json.migrated"), "spj_id"), 0)
-        self.assertEqual(len(records.all()), 1)
 
 
 class PermitStoreTests(unittest.TestCase):

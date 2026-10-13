@@ -1,4 +1,3 @@
-import "./legacyStorage.js"; // must stay first: moves pre-rebrand jwis_* state before anything reads it
 import React, { Fragment, useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { marked } from "marked";

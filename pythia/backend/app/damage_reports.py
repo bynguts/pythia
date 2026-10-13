@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 SEVERITIES = ("ringan", "berat")
 
 TABLE = "pythia_damage_reports"
-LEGACY_JSON = "jwis_damage_reports.json"
 
 
 @dataclass
@@ -43,9 +42,6 @@ class DamageReportStore:
 
     def __init__(self, db_path: Path | str | None = None) -> None:
         self._records = RecordStore(TABLE, db_path)
-        if db_path is None:
-            self._records.migrate_legacy_json(
-                self._records.db_path.parent / LEGACY_JSON, "report_id")
 
     def create(self, truck_code: str, driver_name: str, component: str,
                severity: str, note: str, photo_name: str | None = None,

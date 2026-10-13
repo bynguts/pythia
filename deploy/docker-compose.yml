@@ -17,12 +17,13 @@ services:
         app: ../pythia/backend
         dataset: ../pythia/data
     restart: unless-stopped
-    # Host vars may still use the pre-rebrand JWIS_ names; PYTHIA_ wins.
     environment:
-      PYTHIA_ALLOWED_ORIGINS: "${PYTHIA_ALLOWED_ORIGINS:-${JWIS_ALLOWED_ORIGINS:-http://localhost}}"
+      PYTHIA_ALLOWED_ORIGINS: "${PYTHIA_ALLOWED_ORIGINS:-http://localhost}"
+      # Durable stores live on the history volume, not the container's /tmp.
+      PYTHIA_DB_PATH: /app/data/history/pythia_history.db
       OPENWA_BASE_URL: "http://wa-gateway:2785"
-      PYTHIA_OPENAI_BASE_URL: "${PYTHIA_OPENAI_BASE_URL:-${JWIS_OPENAI_BASE_URL:-}}"
-      PYTHIA_OPENAI_API_KEY: "${PYTHIA_OPENAI_API_KEY:-${JWIS_OPENAI_API_KEY:-}}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
     volumes:
       - pythia-history:/app/data/history
     mem_limit: 1200m
@@ -78,14 +79,7 @@ services:
     ports:
       - "8090:8090"
 
-# Volumes keep the names they were created with under the pre-rebrand
-# "jwis-stack" project, so an upgraded server keeps its paired WhatsApp session
-# and scentinel data instead of starting on empty volumes. Stop the old project
-# first (`docker compose -p jwis-stack down`, no -v) so two stacks don't share them.
 volumes:
   pythia-history:
-    name: jwis-stack_jwis-history
   wa-auth:
-    name: jwis-stack_wa-auth
   scentinel-data:
-    name: jwis-stack_scentinel-data
