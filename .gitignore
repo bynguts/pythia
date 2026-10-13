@@ -13,6 +13,7 @@ env/
 node_modules/
 dist/
 dist-*/
+recordings/
 .vite/
 npm-debug.log*
 yarn-debug.log*

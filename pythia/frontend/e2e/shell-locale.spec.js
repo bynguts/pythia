@@ -54,7 +54,8 @@ test("mobile navigation and active workspace description follow the locale", asy
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, "en");
   await expect(page.locator(".command-mobile-nav")).toHaveAccessibleName("Mobile workspace navigation");
-  await expect(page.locator(".command-mobile-nav button").first()).toContainText("Fleet");
+  // GSC-2026 WS-A: the Digital Twin is the first workspace.
+  await expect(page.locator(".command-mobile-nav button").first()).toContainText("Twin");
 
   // Workspace description next to the title follows the locale too.
   await expect(page.locator(".command-title-row span")).toHaveText("Monitor and act on today's operations");

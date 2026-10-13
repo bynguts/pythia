@@ -373,7 +373,7 @@ button { color: inherit; }
   .command-topbar { padding: 0 18px; }
   .command-profile-copy, .command-profile > svg { display: none; }
   .command-canvas { width: calc(100% - 32px); padding: 24px 0 92px; }
-  .command-mobile-nav { position: fixed; z-index: 40; inset: auto 10px 10px; height: 62px; padding: 5px; display: grid; grid-template-columns: repeat(5,1fr); border: 1px solid rgba(255,255,255,.12); border-radius: 14px; background: rgba(19,33,29,.96); box-shadow: 0 14px 40px rgba(19,33,29,.25); backdrop-filter: blur(16px); }
+  .command-mobile-nav { position: fixed; z-index: 40; inset: auto 10px 10px; height: 62px; padding: 5px; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0,1fr); border: 1px solid rgba(255,255,255,.12); border-radius: 14px; background: rgba(19,33,29,.96); box-shadow: 0 14px 40px rgba(19,33,29,.25); backdrop-filter: blur(16px); }
   .command-mobile-nav button { min-width: 0; display: grid; place-items: center; align-content: center; gap: 3px; border: 0; border-radius: 9px; color: #a4b8ae; background: transparent; font-size: 9px; cursor: pointer; }
   .command-mobile-nav button.active { color: #fff; background: rgba(255,255,255,.1); }
   .workspace-heading { align-items: flex-start; }

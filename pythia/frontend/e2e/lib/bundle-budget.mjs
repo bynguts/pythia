@@ -23,6 +23,12 @@ const BUDGETS = {
   // never downloads it twice across deploys.
   maplibre: 1100 * KB,
   LiveFleetMap: 300 * KB,
+  // GSC-2026 WS-A: the Twin bundles deck.gl and loads only when the Twin
+  // mounts. (A separate deck.gl vendor chunk would pull Vite's preload helper
+  // into it and onto the startup path.)
+  TwinWorkspace: 1100 * KB,
+  // GSC-2026 WS-B: the /xr tabletop bundles three.js; it loads only on /xr.
+  XrTabletop: 700 * KB,
   // PDF tooling: loaded on demand from ReportActions only.
   html2pdf: 1100 * KB,
   // Any other lazy chunk.
@@ -33,6 +39,8 @@ const BUDGETS = {
 
 function budgetFor(name) {
   if (name.startsWith("maplibre")) return BUDGETS.maplibre;
+  if (name.startsWith("TwinWorkspace") && name.endsWith(".js")) return BUDGETS.TwinWorkspace;
+  if (name.startsWith("XrTabletop") && name.endsWith(".js")) return BUDGETS.XrTabletop;
   if (name.startsWith("LiveFleetMap")) return name.endsWith(".js") ? BUDGETS.LiveFleetMap : BUDGETS.default;
   if (name.startsWith("html2pdf")) return BUDGETS.html2pdf;
   if (name.startsWith("index-") && name.endsWith(".js")) return BUDGETS.main;

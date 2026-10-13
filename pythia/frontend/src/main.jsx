@@ -91,6 +91,13 @@ import {
 } from "lucide-react";
 import { lazy, Suspense } from "react";
 const LiveFleetMap = lazy(() => import("./LiveFleetMap.jsx").then((m) => ({ default: m.LiveFleetMap })));
+// GSC-2026 WS-A: deck.gl + the twin stay in their own lazy chunk, off the startup path.
+const TwinWorkspace = lazy(() => import("./workspaces/TwinWorkspace.jsx").then((m) => ({ default: m.TwinWorkspace })));
+// ?workspace=twin (and ?present=1 footage mode) open the command center on the twin.
+const INITIAL_WORKSPACE = (() => {
+  const query = new URLSearchParams(window.location.search);
+  return query.get("workspace") === "twin" || query.get("present") === "1" ? "twin" : "fleet";
+})();
 import "./styles.css";
 
 import { API_URL } from "./config.js";
@@ -213,7 +220,8 @@ function CommandCenter({ onLogout }) {
   const { snapshot, online, refresh } = useSnapshot();
   const [toast, setToast] = useState("");
   const [filterTruck, setFilterTruck] = useState("ALL");
-  const [activeWorkspace, setActiveWorkspace] = useState("fleet");
+  const [activeWorkspace, setActiveWorkspace] = useState(INITIAL_WORKSPACE);
+  const [twinCity, setTwinCity] = useState("jakarta");
   const [fleetDetailTab, setFleetDetailTab] = useState("fleet");
   const [historyScrollRequest, setHistoryScrollRequest] = useState(0);
   const [selectedMapTruck, setSelectedMapTruck] = useState(null);
@@ -344,7 +352,8 @@ function CommandCenter({ onLogout }) {
   }
 
   return (
-    <AppShell activeWorkspace={activeWorkspace} onWorkspaceChange={setActiveWorkspace} online={online} onRefresh={refresh} onLogout={onLogout} assistant={<AssistantPanel />}>
+    <AppShell activeWorkspace={activeWorkspace} onWorkspaceChange={setActiveWorkspace} online={online} onRefresh={refresh} onLogout={onLogout} assistant={<AssistantPanel />}
+      contextKey={activeWorkspace === "twin" && twinCity === "hcmc" ? "shell_context_eyebrow_hcmc" : undefined}>
       {activeWorkspace === "fleet" && (
         <ErrorBoundary name="fleet">
         <FleetOperations
@@ -439,7 +448,15 @@ function CommandCenter({ onLogout }) {
         </ErrorBoundary>
       )}
 
-      {activeWorkspace !== "fleet" && (
+      {activeWorkspace === "twin" && (
+        <ErrorBoundary name="twin">
+          <Suspense fallback={<div className="map-loading-fallback" role="status">{t("twin_loading")}</div>}>
+            <TwinWorkspace onCityChange={setTwinCity} />
+          </Suspense>
+        </ErrorBoundary>
+      )}
+
+      {activeWorkspace !== "fleet" && activeWorkspace !== "twin" && (
         <section className="main-grid">
         {activeWorkspace === "forecast" && (
         <ErrorBoundary name="forecast">
@@ -528,14 +545,26 @@ function CommandCenter({ onLogout }) {
   );
 }
 
+// GSC-2026 WS-B: read-only XR tabletop twin, no login; three.js stays in this lazy chunk.
+const XrTabletop = lazy(() => import("./xr/XrTabletop.jsx").then((m) => ({ default: m.XrTabletop })));
+
 function App() {
+  const { t } = useLanguage();
   const [authenticated, setAuthenticated] = useState(() => localStorage.getItem("pythia_auth") === "true");
+  const isXr = useMemo(() => /^\/xr(\/|$)/.test(window.location.pathname), []);
   const isField = useMemo(() => window.location.pathname.startsWith("/field"), []);
   const isDriver = useMemo(() => window.location.pathname.startsWith("/driver"), []);
   const isSupervisor = useMemo(() => window.location.pathname.startsWith("/pengawas"), []);
   function logout() {
     localStorage.removeItem("pythia_auth");
     setAuthenticated(false);
+  }
+  if (isXr) {
+    return (
+      <Suspense fallback={<main className="xr-boot" role="status">{t("xr_boot")}</main>}>
+        <XrTabletop />
+      </Suspense>
+    );
   }
   if (isField) return <FieldApp />;
   if (isDriver) return <DriverApp />;

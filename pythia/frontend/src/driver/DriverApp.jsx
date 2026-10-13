@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Camera,
@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   MapPin,
+  Navigation,
   PackageCheck,
   Route,
   Scale,
@@ -19,6 +20,22 @@ import "./driver.css";
 import { useLanguage } from "../i18n.jsx";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api";
+
+// GSC-2026 WS-B: the AR navigator is its own chunk; drivers who never open it
+// do not download it.
+const ArNavigator = lazy(() => import("./ArNavigator.jsx").then((m) => ({ default: m.ArNavigator })));
+
+// iOS Safari only exposes compass events after a permission prompt, and the
+// prompt must come from the tap that opens AR. Other browsers need none.
+async function requestOrientationPermission() {
+  const Orientation = typeof window !== "undefined" ? window.DeviceOrientationEvent : undefined;
+  if (!Orientation || typeof Orientation.requestPermission !== "function") return "not-required";
+  try {
+    return await Orientation.requestPermission();
+  } catch {
+    return "denied";
+  }
+}
 
 const PRETRIP_ITEMS = ["rem", "mesin", "ban", "bbm", "oli", "bak_compactor", "lampu"];
 const FRACTIONS = ["Residu", "Organik", "Anorganik"];
@@ -194,6 +211,14 @@ function PreTripForm({ driver, done, onDone, say }) {
     }
   };
 
+  if (done === null) {
+    return (
+      <section className="driver-card" data-testid="pretrip-loading" aria-busy="true">
+        <p className="driver-muted" role="status">{t("drv_pretrip_checking")}</p>
+      </section>
+    );
+  }
+
   if (done) {
     return (
       <section className="driver-card" data-testid="pretrip-done">
@@ -301,6 +326,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
   const [officerPhoto, setOfficerPhoto] = useState(null);
   const [officerName, setOfficerName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [ar, setAr] = useState(null);
 
   const completed = stop.status === "completed";
 
@@ -317,6 +343,43 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
     } catch (err) {
       say(err.message);
     }
+  };
+
+  // The AR dialog hands focus back to the button that opened it.
+  const arOpenerRef = useRef(null);
+  const openAr = async (event) => {
+    arOpenerRef.current = event?.currentTarget || null;
+    const orientationPermission = await requestOrientationPermission();
+    setAr({ orientationPermission });
+  };
+
+  const closeAr = useCallback(() => setAr(null), []);
+
+  useEffect(() => {
+    if (ar || !arOpenerRef.current) return;
+    const opener = arOpenerRef.current;
+    arOpenerRef.current = null;
+    if (opener.isConnected) opener.focus();
+  }, [ar]);
+
+  // GSC-2026 WS-B: an AR capture enters the same arrival step as a picked
+  // photo (same size check via readPhoto); its GPS fix rides along so the
+  // evidence records where the frame was actually taken.
+  const captureFromAr = async (file, fix) => {
+    setAr(null);
+    setOpen(true);
+    try {
+      const photo = await readPhoto(file);
+      setArrival({ ...photo, fix });
+      say(t("drv_ar_captured"));
+    } catch (err) {
+      say(err.message);
+    }
+  };
+
+  const openFormFromAr = () => {
+    setAr(null);
+    setOpen(true);
   };
 
   const addWeighing = () => {
@@ -342,7 +405,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
     // #45: evidence is hoisted so the offline catch can queue it durably.
     let evidence = null;
     try {
-      const pos = await getPosition(stop);
+      const pos = arrival.fix || await getPosition(stop);
       evidence = {
         arrival: {
           photo_name: arrival.name,
@@ -350,6 +413,9 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
           lat: pos.lat,
           lng: pos.lng,
           approx: Boolean(pos.approx),
+          ...(arrival.fix
+            ? { source: "ar", accuracy_m: arrival.fix.accuracy_m, at: arrival.fix.at, fix_at: arrival.fix.fix_at }
+            : {}),
         },
         weighing,
         officer: { name: officerName.trim(), photo_name: officerPhoto.name, photo_b64: officerPhoto.b64 },
@@ -413,7 +479,30 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
           <button type="button" className="driver-btn primary" onClick={() => setOpen(true)}>
             <Camera size={16} /> {t("drv_stop_start")}
           </button>
+          <button
+            type="button"
+            className="driver-btn ghost"
+            data-testid="ar-nav-open"
+            aria-label={t("drv_ar_open_aria").replace("{name}", stop.name)}
+            onClick={openAr}
+          >
+            <Navigation size={16} /> {t("drv_ar_open")}
+          </button>
         </div>
+      )}
+
+      {ar && (
+        <Suspense fallback={null}>
+          <ArNavigator
+            spj={spj}
+            stop={stop}
+            index={index}
+            orientationPermission={ar.orientationPermission}
+            onClose={closeAr}
+            onCapture={captureFromAr}
+            onUseForm={openFormFromAr}
+          />
+        </Suspense>
       )}
 
       {current && !completed && open && (
@@ -430,7 +519,20 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
             ))}
           </ol>
 
-          {/* Step 1: arrival photo */}
+          {/* Step 1: arrival photo (from the picker or the AR navigator) */}
+          {!arrival && (
+            <div className="driver-actions">
+              <button
+                type="button"
+                className="driver-btn ghost"
+                data-testid="ar-nav-open"
+                aria-label={t("drv_ar_open_aria").replace("{name}", stop.name)}
+                onClick={openAr}
+              >
+                <Navigation size={16} /> {t("drv_ar_open")}
+              </button>
+            </div>
+          )}
           <label className="driver-label" htmlFor={`arrival-${index}`}>
             {t("drv_arrival_label")}
           </label>
@@ -444,6 +546,14 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
             onChange={(e) => handlePhoto(e.target.files?.[0], setArrival)}
           />
           {arrival && <p className="driver-muted">{t("drv_photo_attached").replace("{name}", arrival.name)}</p>}
+          {arrival?.fix && (
+            <figure className="arrival-ar" data-testid="arrival-ar-evidence">
+              <img src={arrival.b64} alt={t("drv_ar_photo_alt")} />
+              <figcaption>
+                {t("drv_ar_photo_from_ar").replace("{n}", arrival.fix.accuracy_m ?? "?")}
+              </figcaption>
+            </figure>
+          )}
 
           {/* Step 2: weighing */}
           {step >= 2 && (
@@ -788,7 +898,9 @@ export default function DriverApp() {
   const [fleet, setFleet] = useState([]);
   const [spjAktif, setSpjAktif] = useState(null);
   const [history, setHistory] = useState([]);
-  const [pretripDone, setPretripDone] = useState(false);
+  // null = today's inspection status not known yet: show neither the form nor
+  // the done card, so the form never flashes up for a truck already inspected.
+  const [pretripDone, setPretripDone] = useState(null);
   const [screen, setScreen] = useState("gate");
   const [toast, setToast] = useState("");
   const [online, setOnline] = useState(navigator.onLine);
@@ -852,10 +964,12 @@ export default function DriverApp() {
 
   useEffect(() => {
     if (!driver) return;
+    setPretripDone(null);
     fetch(`${API_URL}/pretrip/today/${driver.truck_code}`)
       .then((r) => r.json())
       .then((body) => setPretripDone(Boolean(body.done)))
-      .catch(() => {});
+      // Offline or unreachable: show the form; a submission queues in the outbox.
+      .catch(() => setPretripDone(false));
   }, [driver]);
 
   useEffect(() => {

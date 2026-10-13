@@ -31,23 +31,23 @@ Model dilatih ulang secara reproducible via `scripts/train_models.py` pada **42 
 
 | Tahun Uji | Hari | MAE (t) | R² |
 |---|--:|--:|--:|
-| 2022 | 15,330 | 16.18 | 0.939 |
-| 2023 | 15,330 | 16.01 | 0.940 |
-| 2024 | 15,372 | 20.27 | 0.912 |
-| 2025 | 15,330 | 17.30 | 0.942 |
-| 2026 | 6,258 | 19.33 | 0.926 |
-| **RATA-RATA** | — | **17.82** | **0.932** |
+| 2022 | 15,330 | 10.56 | 0.974 |
+| 2023 | 15,330 | 12.37 | 0.965 |
+| 2024 | 15,372 | 18.48 | 0.930 |
+| 2025 | 15,330 | 14.92 | 0.958 |
+| 2026 | 6,258 | 16.26 | 0.947 |
+| **RATA-RATA** | — | **14.52** | **0.955** |
 
-**B. Per-kecamatan single-split (variasi harian intra-kecamatan)** — rata-rata MAE **19.01 t**, R² **-0.15**.
+**B. Per-kecamatan single-split (variasi harian intra-kecamatan)** — rata-rata MAE **14.80 t**, R² **-0.03**.
 
 **C. Kinerja per-resolusi keputusan** (held-out 20% akhir tiap kecamatan) — resolusi yang benar-benar dipakai DLH untuk perencanaan:
 
 | Resolusi Keputusan | Metrik | Nilai |
 |---|---|--:|
 | Peringkat hotspot spasial | Spearman ρ | **0.998** |
-| Level volume spasial | R² | **0.980** |
-| Bulanan per-kecamatan | R² | **0.966** |
-| Mingguan per-kecamatan | R² | **0.954** |
-| Harian level-kota | R² | **0.893** |
+| Level volume spasial | R² | **0.984** |
+| Bulanan per-kecamatan | R² | **0.971** |
+| Mingguan per-kecamatan | R² | **0.963** |
+| Harian level-kota | R² | **0.915** |
 
-*Kesimpulan jujur:* R² per-kecamatan harian negatif — model belum bisa memprediksi fluktuasi **harian** di dalam satu kecamatan, karena resolusi itu bersifat calibrated-synthetic (data harian per-kecamatan riil tidak tersedia publik) dengan noise ~8% yang sengaja ditambahkan agar metrik tidak menipu diri. Namun pada resolusi yang **relevan untuk keputusan operasional** (peringkat hotspot spasial 0.998, bulanan 0.966, mingguan 0.954), model sangat kuat. DLH tidak butuh menebak sampah satu kecamatan di hari Selasa; DLH butuh tahu **kecamatan mana yang jadi hotspot & kapan** — di situ model unggul.
+*Kesimpulan jujur:* R² per-kecamatan harian negatif — model belum bisa memprediksi fluktuasi **harian** di dalam satu kecamatan, karena resolusi itu bersifat calibrated-synthetic (data harian per-kecamatan riil tidak tersedia publik) dengan noise ~8% yang sengaja ditambahkan agar metrik tidak menipu diri. Namun pada resolusi yang **relevan untuk keputusan operasional** (peringkat hotspot spasial 0.998, bulanan 0.971, mingguan 0.963), model sangat kuat. DLH tidak butuh menebak sampah satu kecamatan di hari Selasa; DLH butuh tahu **kecamatan mana yang jadi hotspot & kapan** — di situ model unggul.
