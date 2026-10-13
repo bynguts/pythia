@@ -28,7 +28,9 @@ growth.
 ## Problem (pitch hooks)
 
 - **Bantargebang collapse, 8 Mar 2026**: part of the landfill slid after heavy
-  rain *while trucks were queuing to unload* — 5 dead, 7 trucks swept away; a
+  rain *while trucks were queuing to unload* — 7 trucks swept away; deaths
+  reported as 5 confirmed (ANN, 11 Mar) to 7 (GeoEngineer, 9 Mar), so the deck
+  says **"at least five people killed"**; a
   January 2026 slide had already dragged 3 trucks into a riverbed. Site takes
   ~7,500–7,800 t/day from 1,200+ trucks.
   [GeoEngineer](https://geoengineer.org/news/indonesias-waste-and-mining-slopes-under-pressure-deadly-landfill-collapse-in-bekasi-and-industrial-landslide-in-morowali) ·
