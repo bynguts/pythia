@@ -2,11 +2,11 @@
 """
 train_models.py — Reproducible training pipeline for Pythia Case 2 waste models.
 
-Run from the `pythia/` directory:
-    python scripts/train_models.py
+Run from the repository root:
+    python ml/scripts/train_models.py
 
 Regenerates a per-KECAMATAN Prophet + XGBoost hybrid (42 Jakarta kecamatan) in
-`backend/data/models/`, plus an honest evaluation report and the assembled
+`apps/api/data/models/`, plus an honest evaluation report and the assembled
 training dataset.
 
 DATA PROVENANCE (honest):
@@ -61,7 +61,7 @@ EVENTS_CSV = DATA_REAL / "jakarta_events_2021_2026.csv"
 DATASET_OUT = DATA_PROCESSED / "training_dataset_kecamatan.csv"
 REPORT_OUT = DATA_PROCESSED / "hybrid_forecaster_evaluation.md"
 
-# Backend feature contract (order MUST match backend/app/engine.py).
+# Backend feature contract (order MUST match apps/api/app/forecast/engine.py).
 FEATURE_ORDER = [
     "precipitation_mm", "temp_max_c", "wind_max_kmh",
     "is_weekend", "is_holiday", "event_attendance",
@@ -545,8 +545,8 @@ def write_report(results, anchor, date_range, n_rows, kec, wf_folds, multires=No
     L.append(f"| **AVERAGE** | — | **{avg_mae:.2f}** | **{avg_r2:.3f}** | — | — |\n")
     L.append("## Reproducibility\n")
     L.append(f"- Training window: **{date_range[0]} .. {date_range[1]}** ({n_rows:,} kecamatan-day rows).\n"
-             "- Command: `python scripts/train_models.py` from `pythia/`.\n"
-             f"- Outputs: {len(kec)}× prophet + {len(kec)}× xgboost in `backend/data/models/` "
+             "- Command: `python ml/scripts/train_models.py` from the repository root.\n"
+             f"- Outputs: {len(kec)}× prophet + {len(kec)}× xgboost in `apps/api/data/models/` "
              "(old models backed up to `_synthetic_backup/`), this report, and "
              "`data/processed/training_dataset_kecamatan.csv`.\n")
     REPORT_OUT.write_text("\n".join(L), encoding="utf-8")

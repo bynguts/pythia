@@ -97,5 +97,5 @@ For each test year Y: train on all days before Y, predict all of Y (pooled acros
 ## Reproducibility
 
 - Training window: **2021-01-01 .. 2026-05-29** (82,950 kecamatan-day rows).
-- Command: `python scripts/train_models.py` from `pythia/`.
-- Outputs: 42× prophet + 42× xgboost in `backend/data/models/` (old models backed up to `_synthetic_backup/`), this report, and `data/processed/training_dataset_kecamatan.csv`.
+- Command: `python ml/scripts/train_models.py` from the repository root.
+- Outputs: 42× prophet + 42× xgboost in `apps/api/data/models/` (old models backed up to `_synthetic_backup/`), this report, and `data/processed/training_dataset_kecamatan.csv`.

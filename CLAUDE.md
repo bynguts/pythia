@@ -4,117 +4,167 @@ Guidance for Claude Code (and other agents) working in this repository.
 
 ## What this is
 
-**Pythia.** AI command-center prototype for the
-AI Open Innovation Challenge 2026 (case provider: DLH DKI Jakarta).
+**Pythia.** AI command-center prototype for municipal waste operations, built for the
+AI Open Innovation Challenge 2026 (case provider: DLH DKI Jakarta) and entered in the
+CAU Global Startup Competition 2026 (`docs/gsc-2026/`).
 
 - **Case 1:** fleet supervision — simulated fleet map, route-deviation detection,
   A* reroute, TPA Bantargebang queue, staggered dispatch, SPJ (surat jalan) work orders,
-  driver PWA, WhatsApp alerts.
+  driver PWA (with AR navigation), WhatsApp alerts.
 - **Case 2:** waste-volume forecasting for 42 kecamatan (Prophet + XGBoost residual),
   resource planning (trucks/crews/man-hours/bins), OR-Tools CP-SAT weekly plan.
+- **City twin:** 3D twin workspace (deck.gl), WebXR tabletop (`/xr`), Jakarta + a
+  simulated Ho Chi Minh City demo city (`app/forecast/cities.py`).
 
 Product principles live in `docs/product/PRODUCT.md`; visual rules in `apps/web/DESIGN.md`.
 
 ## Layout
 
 ```
-apps/api/        FastAPI service — app/ (all routes in main.py for now), tests/, data/models/
-apps/web/        React 19 + Vite 6 + MapLibre + deck.gl + three.js — src/, e2e/ (Playwright)
-apps/wa-gateway/ Node/Express + Baileys WhatsApp gateway (:2785)
-apps/landing/    static landing page
-ml/data/         real/ raw/ processed/ sources/ datasets (real/manifest.json = provenance)
-ml/scripts/      train_models.py (Case 2), train_fleet_model.py (Case 1), data acquisition
-docs/            product/, architecture.md, audit/, knowledge/ (RAG), pilot/, evidence/,
-                 aoic-2026/ (AI Open Innovation Challenge), gsc-2026/ (Global Startup Competition)
-deploy/          docker compose stack;  scripts/  dev.ps1 / dev.sh launchers
+apps/api/         FastAPI service (Python 3.12)
+  app/main.py       create_app(): settings, CORS, lifespan, router wiring
+  app/api/          routers/ (one module per area), deps.py (permission deps),
+                    schemas.py, state.py (shared singletons/caches), warmup.py
+  app/core/         env.py (settings), paths.py (every file location), auth.py,
+                    storage.py (SQLite RecordStore), units.py (resource constants)
+  app/forecast/     engine.py (Prophet+XGBoost), weather, real_data, impact,
+                    facility_planning, forecast_metrics, cities, twin
+  app/fleet/        fleet data/generator, GPS feed, deviation, A*/OSRM routing, TPA queue,
+                    operations optimizer + plans, facilities, collector registry, CV
+  app/field/        spj.py (work orders), permits, pretrip, damage reports, compliance,
+                    service history, timbangan (weighbridge) OCR
+  app/assistant/    assistant "Ana", tools, rag.py, pdf_vision
+  app/integrations/ whatsapp.py (OpenWA), scentinel.py
+  app/ai/           background AI engine: detectors/, forecasters/, actions/, engine_loop
+  tests/<area>/     pytest, mirrors app/ (conftest.py + spj_testutil.py at tests/)
+  data/models/      trained Prophet/XGBoost artifacts;  data/assets/ road cache, YOLO weights
+apps/web/         React 19 + Vite 6 + react-router 7 + MapLibre + deck.gl + three.js
+  src/main.jsx      bootstrap only (ErrorBoundary → BrowserRouter → LanguageProvider → App)
+  src/app/          App.jsx (routes + login gate), CommandCenter, AppShell,
+                    workspaces.js (nav registry), serviceWorker.js
+  src/features/     command-center workspaces: fleet, forecast, planning, twin,
+                    drivers, audit, assistant
+  src/surfaces/     standalone surfaces: driver (PWA + AR), field, login, supervisor, xr
+  src/shared/       api/client.js, config.js, hooks/, i18n/ (index.jsx + locales/en.js, id.js), ui/
+  src/styles/       index.css imports the global cascade (tokens.css … redesign.css last)
+  e2e/              Playwright specs, lib/ (budget, readme hygiene), recording/
+apps/wa-gateway/  Node/Express + Baileys WhatsApp gateway (:2785)
+apps/landing/     static landing page
+ml/data/          real/ raw/ processed/ sources/ datasets (real/manifest.json = provenance)
+ml/scripts/       train_models.py (Case 2), train_fleet_model.py (Case 1), data acquisition
+docs/             product/, architecture.md, audit/, knowledge/ (RAG), pilot/, evidence/,
+                  design/, aoic-2026/, gsc-2026/, archive/
+deploy/           docker compose stack (backend, frontend/nginx, wa-gateway, scentinel profile)
+scripts/          dev.ps1 / dev.sh one-command launchers
 ```
-File locations used by the API are defined once in `apps/api/app/paths.py`.
 
 ## Commands
 
-Backend (Python 3.12; `pip install -r requirements.txt` — also needs `python-dotenv`, which is not listed):
+Backend (`cd apps/api`; `pip install -r requirements-dev.txt` = runtime deps + pytest + ruff):
 
 ```bash
-cd apps/api
-PYTHIA_AI_ENGINE=on python -m uvicorn app.main:app --port 8001   # startup warms all 42 models (~20–25 s)
-python -m pytest tests -q                                       # full backend suite (~4 min)
-python -m pytest tests/test_spj_endpoints.py -q                 # single file
+PYTHIA_AI_ENGINE=on python -m uvicorn app.main:app --port 8001   # warms all 42 models (~20–25 s)
+python -m pytest tests -q                                       # full suite (~4 min)
+python -m pytest tests/field/test_spj.py -q                     # single file
+ruff check . && ruff format --check .                           # lint + format gate
 ```
 
 - Always use **pytest**, never `unittest discover`: `tests/conftest.py` forces a temp
   `PYTHIA_DB_PATH` and `PYTHIA_SPJ_SEED=off`, defaults (`setdefault`) `PYTHIA_AI_ENGINE=off` and
   `PYTHIA_SPJ_STRAIGHT_FALLBACK=on`, and provides `api_client` / `tokens` / `auth_headers(role)`
   fixtures. Don't run tests from a shell that exported `PYTHIA_AI_ENGINE=on` — it leaks in.
-- `test_osrm.py`, `test_map_truth.py`, `test_astar_routing.py` touch the public OSRM server;
-  failures there may be network/upstream drift rather than regressions.
+- `tests/fleet/test_osrm.py`, `test_map_truth.py`, `test_astar_routing.py` touch the public
+  OSRM server; failures there may be network/upstream drift rather than regressions.
 
-Frontend:
+Frontend (`cd apps/web`):
 
 ```bash
-cd apps/web
 npm install
 npm run dev                       # Vite dev :5173 by default; launchers use --port 5175
-npm run build && npm run preview -- --port 5175
-npm run budget                    # bundle byte budgets (run after build)
+npm run lint && npm run format:check
+npm run build && npm run budget   # bundle byte budgets (run after build)
+npm run preview -- --port 5175
 npx playwright test --workers 1   # needs backend on :8001 AND frontend on :5175 already running
 node e2e/lib/readme-hygiene.mjs   # fails if root README hardcodes a test count
 ```
 
 - Playwright has **no `webServer`**: start both servers yourself. Rebuild `dist/` before
-  running against `preview` — a stale build causes false failures.
-- E2E talks to the **real** backend at `http://127.0.0.1:8001/api` with only a few `page.route` stubs.
+  running against `preview` — a stale build causes false failures. Override targets with
+  `PLAYWRIGHT_BASE_URL` / `PLAYWRIGHT_API_BASE_URL` (defaults :5175 / `http://127.0.0.1:8001/api`).
+- E2E talks to the **real** backend with only a few `page.route` stubs.
 
-WhatsApp gateway: `cd apps/wa-gateway && npm install && node server.js` (scan QR).
+Everything at once: `scripts/dev.ps1` (Windows; `-WhatsApp`, `-Install`) or `scripts/dev.sh`.
+WhatsApp gateway alone: `cd apps/wa-gateway && npm install && npm start` (scan QR).
 
-There is **no CI** in this repo. Run the relevant suites locally before claiming done.
+**CI** (`.github/workflows/ci.yml`) runs on `main`, `feat/**`, `fix/**`, `refactor/**` and PRs:
+API — ruff check, ruff format --check, pytest; Web — lint, format:check, build, budget,
+README hygiene. E2E is not in CI: run the relevant Playwright specs locally.
 
 ## Backend architecture notes
 
-- **Auth** (`app/auth.py`): login username == role name (`executive`, `dispatcher`,
+- **Routing**: each `app/api/routers/*.py` owns an `APIRouter`; `main.py` only includes them.
+  Shared mutable state (stores, caches + their locks, AI detectors) lives once in
+  `app/api/state.py` — import it from there, never re-create it in a router. When a test
+  monkeypatches something, patch the module the router actually reads it from.
+- **Auth** (`app/core/auth.py`): login username == role name (`executive`, `dispatcher`,
   `supervisor`, `driver`, `auditor`, `administrator`), password `PYTHIA_PW_<ROLE>` or
   default `<role>-demo-pass`. Bearer token in an in-process registry (12 h TTL, lost on
   restart, not shared across workers). Routes gate with
-  `Depends(require_permission(...))` / `require_any_permission(...)` → 401/403.
-  The SPJ override permission is `spj:override` (supervisor, administrator).
-- **Persistence** (`app/storage.py`, `app/spj.py`, `app/operations_plans.py`): SQLite files
-  next to `PYTHIA_DB_PATH` (default: system temp dir, deliberately, so `uvicorn --reload` —
-  used by `scripts/dev.ps1` — doesn't restart on every DB write). `RecordStore` uses WAL + `BEGIN IMMEDIATE`; `StorageError` → HTTP 503,
-  store `ValueError` → 409 (`_spj_or_409`).
-- **Forecast** (`app/engine.py`): Prophet yhat + XGBoost residual (11 features) + event
-  overlay; falls back to a *labelled* heuristic if models fail to load. Keep feature order in
-  sync with `scripts/train_models.py`.
-- **Startup** (`_lifespan` in `main.py`): heavy cache warming. Model loading stays on the
-  main thread — xgboost/joblib hangs in daemon threads on Windows.
-- **AI engine**: only runs with `PYTHIA_AI_ENGINE=on`; otherwise `/api/ai/*` returns empty.
-  State is surfaced in `/api/health`.
-- **Assistant "Ana"** (`assistant.py`, `tools.py`, `rag.py`): OpenAI-compatible gateway
-  with read-only tools; without `OPENAI_API_KEY` it answers locally and says so. RAG
-  sources are listed in `rag.py` `DOCUMENT_PATHS` — editing those docs changes answers.
-- **Units**: every resource quantity comes from `app/units.py` (18 t/truck, 4 workers/crew,
-  8 h shift, 2.5 t bins). Never hardcode these elsewhere.
+  `Depends(require_permission(...))` / `require_any_permission(...)` from `app/api/deps.py`
+  → 401/403. The SPJ override permission is `spj:override` (supervisor, administrator).
+- **Persistence** (`app/core/storage.py`, `app/field/spj.py`, `app/fleet/operations_plans.py`):
+  SQLite files next to `PYTHIA_DB_PATH` (default: system temp dir, deliberately, so
+  `uvicorn --reload` doesn't restart on every DB write). `RecordStore` uses WAL +
+  `BEGIN IMMEDIATE`; `StorageError` → HTTP 503, store `ValueError` → 409 (`_spj_or_409`
+  in `routers/spj.py`).
+- **Paths** (`app/core/paths.py`): every file location the API uses. Datasets resolve to
+  `PYTHIA_DATA_DIR` or `ml/data` in the repo (docker: `/data`). Don't build paths ad hoc.
+- **Forecast** (`app/forecast/engine.py`): Prophet yhat + XGBoost residual (11 features) +
+  event overlay; falls back to a *labelled* heuristic if models fail to load. Keep feature
+  order in sync with `ml/scripts/train_models.py` (which writes to `apps/api/data/models`).
+- **Startup** (`_lifespan` in `main.py` → `app/api/warmup.py`, then the AI engine): heavy cache
+  warming. Model loading stays on the main thread — xgboost/joblib hangs in daemon threads
+  on Windows. Routers are imported inside `create_app()`, after `load_dotenv()`.
+- **AI engine** (`app/ai/`, started from `routers/ai.py`): only runs with
+  `PYTHIA_AI_ENGINE=on`; otherwise `/api/ai/*` returns empty. State is surfaced in `/api/health`.
+- **Assistant "Ana"** (`app/assistant/`): OpenAI-compatible gateway with read-only tools;
+  without `OPENAI_API_KEY` it answers locally and says so. RAG sources are listed in
+  `rag.py` `DOCUMENT_PATHS` — editing those docs changes answers.
+- **Units**: every resource quantity comes from `app/core/units.py` (18 t/truck,
+  4 workers/crew, 8 h shift, 2.5 t bins). Never hardcode these elsewhere.
 
 ## Frontend architecture notes
 
-- No router: `src/main.jsx` dispatches by pathname (`/field`, `/driver` without login;
-  `/pengawas` and the command center behind login). Workspaces (`fleet | forecast |
-  planning | drivers | audit`) are React state, registered in `layout/AppShell.jsx`.
-- API base: `src/config.js` `API_URL` (`VITE_API_URL`, default absolute `http://127.0.0.1:8001/api`).
-  Prefer `authenticatedRequest` from `src/dispatchApi.js` for authed calls.
+- **Routing** (`src/app/App.jsx`, react-router): public `/field`, `/driver`, `/xr`; behind
+  the login gate `/pengawas` and the command-center workspaces `/fleet` (default), `/twin`,
+  `/forecast`, `/planning`, `/drivers`, `/audit` (registry: `src/app/workspaces.js`).
+  `/` redirects to `/fleet`, or `/twin` for `?workspace=twin` / `?present=1` (the rest of the
+  query string is kept). The login gate renders in place, so deep links survive login.
+- **API**: every call goes through `src/shared/api/client.js` — `apiFetch` (raw `Response`,
+  bearer token from `localStorage.pythia_token`, network errors pass through unwrapped for
+  the outboxes), `apiGet` / `apiPost` (parsed JSON, throw `ApiError`). Base URL is
+  `src/shared/config.js` `API_URL` (`VITE_API_URL`, default `http://127.0.0.1:8001/api`).
+  Don't call `fetch` directly.
 - State is `useState` + props; only context is language. Offline writes go through
-  localStorage outboxes: `driver/DriverOutbox.js` (per-entry `op_id` sent as `X-Operation-Id`)
-  and `field/OfflineOutbox.js` (only dedupes same dispatch + status locally; no operation id is sent).
-- Service worker is hand-written (`public/sw.js`), registered only in PROD and **not** under
-  `navigator.webdriver`; the map uses a deterministic style under automation (`IS_AUTOMATION`).
+  localStorage outboxes: `surfaces/driver/DriverOutbox.js` (per-entry `op_id` sent as
+  `X-Operation-Id`) and `surfaces/field/OfflineOutbox.js` (dedupes same dispatch + status
+  locally; sends a per-entry `operation_id` in the confirm body for the backend replay guard).
+- Lazy chunks (`LiveFleetMap`, `TwinWorkspace`, `XrTabletop`, `ArNavigator`) have byte
+  budgets in `e2e/lib/bundle-budget.mjs`; keep heavy libraries out of the main chunk.
+- Service worker is hand-written (`public/sw.js`, registered from `src/app/serviceWorker.js`)
+  only in PROD and **not** under `navigator.webdriver`; navigations fall back to the cached
+  shell. The map uses a deterministic style under automation (`IS_AUTOMATION`).
   Keep both behaviours — e2e depends on them.
 
 ## Conventions (must follow)
 
 - **Data honesty is a product requirement.** Never present simulated, modelled, proxy or
-  cached data as live/real. Keep provenance labels (`SIMULATED`, `MODEL OUTPUT`,
-  `classification` real/proxy/modeled/…, `X-Pythia-Stale`) intact, and don't add metric claims
-  to docs/README that the pipeline doesn't reproduce.
-- **i18n**: Indonesian is the default UI language. Add user-facing strings to *both* `en` and
-  `id` in `src/i18n.jsx` and use `t()`; don't add new inline `lang === "id" ? … : …` ternaries.
+  cached data as live/real. Keep provenance labels (`SIMULATED`, `SIMULATED_DEMO_CITY`,
+  `MODEL OUTPUT`, `classification` real/proxy/modeled/…, `X-Pythia-Stale`) intact, and don't
+  add metric claims to docs/README that the pipeline doesn't reproduce.
+- **i18n**: Indonesian is the default UI language. Add user-facing strings to *both*
+  `src/shared/i18n/locales/en.js` and `id.js` and use `t()`; don't add new inline
+  `lang === "id" ? … : …` ternaries.
 - **Accessibility (enforced by e2e)**: ≥ 44×44 px touch targets, no transitions on
   width/height/padding, respect reduced motion, no horizontal overflow at 320/390 px, axe
   contrast, one `<main>`, localized aria-labels.
@@ -122,16 +172,23 @@ There is **no CI** in this repo. Run the relevant suites locally before claiming
   `--space-*`, `--fs-*`, `--z-*`, `--tap-min`, …) rather than raw values; one
   accent colour, no gradients, no card-in-card, flat metric strip (see `DESIGN.md`).
   Components are `PascalCase.jsx` with named exports, relative imports with explicit
-  extensions, icons from `lucide-react`, `data-testid` in kebab-case.
-- **Tests**: every fix ships with a test. Backend → `apps/api/tests/test_*.py`;
+  extensions, icons from `lucide-react`, `data-testid` in kebab-case. New code goes in the
+  feature/surface it belongs to; only genuinely shared pieces go in `src/shared/`.
+- **Style gates**: ruff (API) and ESLint + Prettier (web, printWidth 110) must pass —
+  CI enforces them. `.editorconfig` / `.gitattributes` fix line endings.
+- **Tests**: every fix ships with a test. Backend → `apps/api/tests/<area>/test_*.py`;
   UI behaviour → `apps/web/e2e/*.spec.js` headed with `// #NN:` issue reference.
 - **Git**: conventional commits with scope — `fix(spj): …`, `feat(pwa): …`, `test(e2e): …`,
-  `docs(readme): …` — ending with `(Fixes #NN)` or `(#NN)`. Work is batched per branch
-  (`fix/<owner>-<scope>`, `feat/<topic>`) and merged via PR into `main`.
-- **Secrets**: the repo is public. Never commit `.env`, `wa-gateway/baileys_auth_info/`,
-  `*.db`, or logs. Template is `.env.example`.
-- **Settings**: read backend settings through `app/env.py` `getenv("NAME")` (env var
-  `PYTHIA_NAME`), not `os.getenv("PYTHIA_…")`.
+  `docs(readme): …` — ending with `(Fixes #NN)` or `(#NN)` when there is an issue. Work is
+  batched per branch (`fix/<owner>-<scope>`, `feat/<topic>`, `refactor/<topic>`) and merged
+  via PR into `main`.
+- **Secrets**: the repo is public. Never commit `.env`, `apps/wa-gateway/baileys_auth_info/`,
+  `*.db`, or logs. Template is `.env.example` (lists every variable the code reads).
+- **Settings**: read `PYTHIA_*` settings through `app.core.env.getenv("NAME")` (env var
+  `PYTHIA_NAME`), not `os.getenv("PYTHIA_…")`. Third-party names (`OPENAI_*`, `OPENWA_*`,
+  `GUTS_*`) are read with `os.getenv`.
+- **Naming**: the product is Pythia. The only remaining mention of the old name (JWIS) is
+  the historical fact that the team registered for the competition under it.
 
 ## Gotchas
 
@@ -139,15 +196,12 @@ There is **no CI** in this repo. Run the relevant suites locally before claiming
   the backend is **8000** behind nginx `/api`. CORS is `PYTHIA_ALLOWED_ORIGINS` — the
   `.env.example` value only allows 5175, so a plain `npm run dev` on 5173 hits CORS errors
   unless you add that origin or set `VITE_API_URL=/api` to go through the Vite proxy.
-
-- Run everything locally with `scripts/dev.ps1` (Windows) or `scripts/dev.sh`; they use
-  `python`/`npm` from PATH.
-- `deploy/docker-compose.yml`'s `scentinel` service builds from an absolute path outside the repo.
 - Without `PYTHIA_DB_PATH`, every checkout/worktree shares one set of store files in the
   system temp dir — isolate e2e/dev runs with `PYTHIA_DB_PATH`.
-- Parts of `apps/web/DESIGN.md` (accent hex, fonts) drift from
-  the code; `src/styles/tokens.css` is the source of truth. `redesign.css` loads last and
-  overrides earlier stylesheets.
-- `.env.example` omits several vars the code reads: `OPENAI_BASE_URL`,
-  `OPENAI_MODEL`, `PYTHIA_DB_PATH`, `PYTHIA_SPJ_SEED`, `PYTHIA_SPJ_STRAIGHT_FALLBACK`,
-  `PYTHIA_GPS_SOURCE`, `OPENWA_TIMEOUT_SECONDS`.
+- `deploy/docker-compose.yml`'s `scentinel` service is behind the `scentinel` profile and
+  builds from `SCENTINEL_SRC` (default `../../scentinel`, outside this repo).
+- Parts of `apps/web/DESIGN.md` (accent hex, fonts) drift from the code;
+  `src/styles/tokens.css` is the source of truth. `redesign.css` loads last and overrides
+  earlier stylesheets.
+- The full stack (API warm-up ~600 MB, vite build, Playwright) is memory-hungry: on a small
+  machine run pytest, builds and e2e one at a time.

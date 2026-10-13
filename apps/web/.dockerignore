@@ -1,0 +1,11 @@
+# Host build outputs and dependencies would overwrite the image's npm ci / build.
+node_modules/
+dist/
+dist-*/
+test-results/
+playwright-report/
+recordings/
+.omc/
+*.log
+.env
+.env.*

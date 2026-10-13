@@ -185,8 +185,8 @@ def acquire_waste_dataset_metadata() -> dict:
 def acquire_waste_csv_fallback() -> dict:
     """
     Synthetic seed retained ONLY as a last-resort fallback. Real per-city
-    baselines now come from data/real (SIPSN KLHK); see verify_real_datasets
-    and backend/app/real_data.py. This file is explicitly labeled synthetic.
+    baselines now come from ml/data/real (SIPSN KLHK); see verify_real_datasets
+    and apps/api/app/forecast/real_data.py. This file is explicitly labeled synthetic.
     """
     rows = [
         ["date", "kelurahan", "city", "baseline_tons", "predicted_tons", "source"],

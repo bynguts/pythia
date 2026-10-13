@@ -1,7 +1,7 @@
 {
   "version": 1,
   "world": "Pythia civic operations",
-  "source": "frontend/src/styles/tokens.css",
+  "source": "apps/web/src/styles/tokens.css",
   "recorded": "2026-09-23",
   "scope": "Armada command-deck extension; inherits the established Pythia visual world",
   "mode": "operate",

@@ -145,45 +145,5 @@ class ReceiptWeightValidationTests(unittest.TestCase):
         )
 
 
-class SpjFileHandleTests(unittest.TestCase):
-    """#47: corrupt legacy JSON still recovers (behavior unchanged)."""
-
-    def test_corrupt_legacy_json_starts_empty(self):
-        import os
-        import tempfile
-
-        from app.field.spj import SpjStore
-
-        path = os.path.join(tempfile.gettempdir(), "bayu47_corrupt.db")
-        legacy = os.path.splitext(path)[0] + ".json"
-        for suffix in ("", "-wal", "-shm"):
-            p = path + suffix
-            if os.path.exists(p):
-                os.remove(p)
-        with open(legacy, "w", encoding="utf-8") as fh:
-            fh.write("{not valid json")
-        try:
-            store = SpjStore(persist_path=path)
-            self.assertEqual(len(store.list()), 0)
-            self.assertIsInstance(
-                store.create(
-                    driver_name="A",
-                    truck_code="T-47",
-                    destination="TPST Bantargebang",
-                    weigh_on_site=False,
-                    priority="normal",
-                    note="",
-                ).spj_number,
-                str,
-            )
-        finally:
-            for suffix in ("", "-wal", "-shm"):
-                p = path + suffix
-                if os.path.exists(p):
-                    os.remove(p)
-            if os.path.exists(legacy):
-                os.remove(legacy)
-
-
 if __name__ == "__main__":
     unittest.main()

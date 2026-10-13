@@ -25,17 +25,10 @@ pnpm-debug.log*
 Thumbs.db
 desktop.ini
 
-# Runtime SQLite (regenerated at runtime)
-pythia_history.db
+# Runtime SQLite stores (history, SPJ, permits, pretrip, damage, service,
+# operations) with their -wal/-shm/-journal files, plus old import markers.
+pythia_*.db*
 *.db-journal
-# Durable record stores (SPJ, permits, pretrip, damage, service) and the
-# one-time legacy JSON import marker.
-pythia_spj.db*
-pythia_permits.db*
-pythia_pretrip.db*
-pythia_damage_reports.db*
-pythia_service_history.db*
-pythia_operations.db*
 *.json.migrated
 
 # --- Secrets & runtime artifacts (MUST NOT be committed) ---
@@ -48,10 +41,14 @@ pythia_operations.db*
 # Backend boot / smoke logs
 *.log
 
-# WhatsApp (Baileys) session credentials — regenerated at runtime via QR scan
-apps/wa-gateway/baileys_auth_info/
+# WhatsApp (Baileys) session credentials — regenerated at runtime via QR scan.
+# Unanchored: the gateway writes it relative to the directory it is started from.
+**/baileys_auth_info/
 # Browser-automation cache from the old WhatsApp client library
-apps/wa-gateway/.node-persist/
+**/.node-persist/
+
+# Leftover pre-restructure tree in old checkouts (untracked .env, WhatsApp session)
+/pythia/
 
 
 # --- Internal working documents (not part of the shipped product) ---
