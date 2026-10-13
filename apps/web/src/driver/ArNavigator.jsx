@@ -11,15 +11,7 @@
 // FIX_STALE_MS → capture disabled until a fresh fix arrives; no stop
 // coordinate → an honest "no coordinate" state with no arrow at all.
 import { useEffect, useRef, useState } from "react";
-import {
-  AlertTriangle,
-  Camera,
-  CheckCircle2,
-  Compass,
-  LocateFixed,
-  MapPinOff,
-  X,
-} from "lucide-react";
+import { AlertTriangle, Camera, CheckCircle2, Compass, LocateFixed, MapPinOff, X } from "lucide-react";
 import { useLanguage } from "../i18n.jsx";
 import {
   ARRIVAL_RADIUS_M,
@@ -56,9 +48,11 @@ function stampTime(date) {
   const offset = -date.getTimezoneOffset();
   const sign = offset >= 0 ? "+" : "-";
   const abs = Math.abs(offset);
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
-    + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())} `
-    + `UTC${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())} ` +
+    `UTC${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
+  );
 }
 
 function turnText(t, angle) {
@@ -76,7 +70,9 @@ function FloorRing({ label, arrived }) {
       <circle className="ar-floor-ring" cx="50" cy="50" r="46" />
       <circle className="ar-floor-inner" cx="50" cy="50" r="30" />
       <path className="ar-floor-tick" d="M50 0 L55 10 L45 10 Z" />
-      <text className="ar-floor-label" x="50" y="21" textAnchor="middle">{label}</text>
+      <text className="ar-floor-label" x="50" y="21" textAnchor="middle">
+        {label}
+      </text>
       {arrived && (
         <g className="ar-floor-target">
           <circle cx="50" cy="50" r="20" />
@@ -126,9 +122,7 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
   const [fix, setFix] = useState(null);
   const [geoError, setGeoError] = useState(null);
   const [heading, setHeading] = useState(null);
-  const [headingState, setHeadingState] = useState(
-    orientationPermission === "denied" ? "denied" : "waiting",
-  );
+  const [headingState, setHeadingState] = useState(orientationPermission === "denied" ? "denied" : "waiting");
   const [arrived, setArrived] = useState(false);
   const [busy, setBusy] = useState(false);
   const [captureError, setCaptureError] = useState("");
@@ -170,7 +164,9 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
       })
       .catch((err) => {
         if (cancelled) return;
-        setCamera(err?.name === "NotAllowedError" || err?.name === "SecurityError" ? "denied" : "unavailable");
+        setCamera(
+          err?.name === "NotAllowedError" || err?.name === "SecurityError" ? "denied" : "unavailable",
+        );
       });
     const video = videoRef.current;
     return () => {
@@ -245,7 +241,9 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
         return;
       }
       if (event.key !== "Tab" || !rootRef.current) return;
-      const items = [...rootRef.current.querySelectorAll(FOCUSABLE)].filter((el) => el.getClientRects().length > 0);
+      const items = [...rootRef.current.querySelectorAll(FOCUSABLE)].filter(
+        (el) => el.getClientRects().length > 0,
+      );
       if (items.length === 0) return;
       const first = items[0];
       const last = items[items.length - 1];
@@ -276,7 +274,8 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
   const arrowAngle = bearing === null ? null : compassLive ? relativeAngle(bearing, heading) : bearing;
   const ringTurn = unwrapAngle(ringTurnRef.current, compassLive ? -heading : 0);
   ringTurnRef.current = ringTurn;
-  const arrowTurn = arrowAngle === null ? arrowTurnRef.current : unwrapAngle(arrowTurnRef.current, arrowAngle);
+  const arrowTurn =
+    arrowAngle === null ? arrowTurnRef.current : unwrapAngle(arrowTurnRef.current, arrowAngle);
   arrowTurnRef.current = arrowTurn;
 
   // Arrival is decided by fresh fixes only; a stale fix neither enters nor
@@ -292,7 +291,9 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
   // a live compass makes that true; otherwise the honest 2D compass card.
   const stageMode = view === "camera" && compassLive ? "floor" : "card";
   const headingMode = compassLive ? "compass" : headingState === "waiting" ? "waiting" : "north-up";
-  const stopTitle = t("drv_stop_title").replace("{n}", index + 1).replace("{name}", stop.name);
+  const stopTitle = t("drv_stop_title")
+    .replace("{n}", index + 1)
+    .replace("{name}", stop.name);
   const total = spj?.stops?.length || index + 1;
 
   const capture = async () => {
@@ -327,8 +328,8 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
       const lines = [
         `PYTHIA AR · ${spj?.spj_number || spj?.spj_id || "SPJ"} · ${stopTitle}`,
         stampTime(takenAt),
-        `GPS ${fix.lat.toFixed(6)}, ${fix.lng.toFixed(6)}${accuracy === null ? "" : ` ±${accuracy} m`}`
-          + (distance === null ? "" : ` · ${t("drv_ar_stamp_distance").replace("{n}", Math.round(distance))}`),
+        `GPS ${fix.lat.toFixed(6)}, ${fix.lng.toFixed(6)}${accuracy === null ? "" : ` ±${accuracy} m`}` +
+          (distance === null ? "" : ` · ${t("drv_ar_stamp_distance").replace("{n}", Math.round(distance))}`),
         t("drv_ar_stamp_fix").replace("{time}", stampTime(fixAt)),
       ];
       const fontPx = Math.max(14, Math.round(height * 0.03));
@@ -340,7 +341,12 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
       ctx.font = `600 ${fontPx}px "Plus Jakarta Sans", system-ui, sans-serif`;
       ctx.textBaseline = "top";
       lines.forEach((line, i) => {
-        ctx.fillText(line, Math.round(fontPx * 0.8), height - band + Math.round(fontPx / 2) + i * lineH, width - fontPx * 1.6);
+        ctx.fillText(
+          line,
+          Math.round(fontPx * 0.8),
+          height - band + Math.round(fontPx / 2) + i * lineH,
+          width - fontPx * 1.6,
+        );
       });
 
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
@@ -374,13 +380,16 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
   const cameraNotice = camera === "denied" || camera === "unavailable" ? t("drv_ar_camera_off") : "";
   // Shown even while an old fix still drives the arrow and distance.
   const staleNotice = fix && !fixFresh && geoError !== "denied" ? t("drv_ar_gps_stale") : "";
-  const guidance = arrowAngle === null
-    ? ""
-    : arrived
-      ? t("drv_ar_at_stop")
-      : compassLive
-      ? turnText(t, arrowAngle)
-      : t("drv_ar_heading_map").replace("{dir}", cardinal(bearing, lang)).replace("{n}", Math.round(bearing));
+  const guidance =
+    arrowAngle === null
+      ? ""
+      : arrived
+        ? t("drv_ar_at_stop")
+        : compassLive
+          ? turnText(t, arrowAngle)
+          : t("drv_ar_heading_map")
+              .replace("{dir}", cardinal(bearing, lang))
+              .replace("{n}", Math.round(bearing));
 
   return (
     <div
@@ -419,7 +428,9 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
         </button>
         <div className="ar-top-title">
           <span className="ar-top-kicker">
-            {t("drv_ar_stop_of").replace("{n}", index + 1).replace("{total}", total)}
+            {t("drv_ar_stop_of")
+              .replace("{n}", index + 1)
+              .replace("{total}", total)}
           </span>
           <strong>{stop.name}</strong>
         </div>
@@ -439,7 +450,9 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
           <MapPinOff size={36} aria-hidden="true" />
           <h2>{t("drv_ar_no_coord_title")}</h2>
           <p>{t("drv_ar_no_coord_desc")}</p>
-          <p className="ar-empty-address">{stop.kecamatan} — {stop.address}</p>
+          <p className="ar-empty-address">
+            {stop.kecamatan} — {stop.address}
+          </p>
           <button type="button" className="ar-btn secondary" onClick={onUseForm}>
             <Camera size={18} /> {t("drv_ar_use_form")}
           </button>
@@ -468,11 +481,7 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
               </div>
             ) : (
               <div className="ar-compass" data-testid="ar-compass">
-                <div
-                  className="ar-compass-ring"
-                  style={{ "--ar-ring": `${ringTurn}deg` }}
-                  aria-hidden="true"
-                >
+                <div className="ar-compass-ring" style={{ "--ar-ring": `${ringTurn}deg` }} aria-hidden="true">
                   {["N", "E", "S", "W"].map((dir, i) => (
                     <span key={dir} className={`ar-compass-mark m${i}`}>
                       {cardinal(i * 90, lang)}
@@ -498,7 +507,9 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
                 <span className="ar-distance" data-testid="ar-distance" data-meters={Math.round(distance)}>
                   {formatDistance(distance, lang)}
                 </span>
-                <span className="ar-guidance" data-testid="ar-guidance">{guidance}</span>
+                <span className="ar-guidance" data-testid="ar-guidance">
+                  {guidance}
+                </span>
               </div>
             )}
           </div>
@@ -525,12 +536,18 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
                     <Camera size={18} /> {t("drv_ar_use_form")}
                   </button>
                 )}
-                {captureError && <p className="ar-error" role="alert">{captureError}</p>}
+                {captureError && (
+                  <p className="ar-error" role="alert">
+                    {captureError}
+                  </p>
+                )}
               </div>
             ) : (
               <>
                 <p className="ar-sheet-kicker">{stopTitle}</p>
-                <p className="ar-sheet-address">{stop.kecamatan} — {stop.address}</p>
+                <p className="ar-sheet-address">
+                  {stop.kecamatan} — {stop.address}
+                </p>
               </>
             )}
             {(notice || cameraNotice || staleNotice) && (
@@ -547,13 +564,19 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
                 )}
                 {notice && (
                   <li className={notice.tone} data-testid="ar-notice">
-                    {notice.tone === "warn" ? <AlertTriangle size={14} aria-hidden="true" /> : <Compass size={14} aria-hidden="true" />}
-                    {" "}{notice.text}
+                    {notice.tone === "warn" ? (
+                      <AlertTriangle size={14} aria-hidden="true" />
+                    ) : (
+                      <Compass size={14} aria-hidden="true" />
+                    )}{" "}
+                    {notice.text}
                   </li>
                 )}
               </ul>
             )}
-            <p className="ar-honest" data-testid="ar-honest">{t("drv_ar_honest")}</p>
+            <p className="ar-honest" data-testid="ar-honest">
+              {t("drv_ar_honest")}
+            </p>
           </section>
         </>
       )}

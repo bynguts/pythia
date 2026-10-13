@@ -1,11 +1,12 @@
-import React, { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState } from "react";
 
 const translations = {
   en: {
     // Login
     login_kicker: "DLH Command Access",
     login_title: "Pythia Control Center",
-    login_copy: "Secure operator entry for fleet monitoring, predictive waste planning, and dispatch supervision.",
+    login_copy:
+      "Secure operator entry for fleet monitoring, predictive waste planning, and dispatch supervision.",
     login_username: "Username",
     login_password: "Password",
     login_password_placeholder: "Enter password",
@@ -22,10 +23,14 @@ const translations = {
     login_story_kicker: "Operations command center",
     login_story_headline_1: "One decision.",
     login_story_headline_2: "The entire operation moves.",
-    login_story_copy: "Forecast service load, compose the fleet, and act on field disruptions in one auditable workflow.",
-    login_proof1_title: "Live operations", login_proof1_sub: "Fleet, drivers, and TPA queues",
-    login_proof2_title: "Measured forecasts", login_proof2_sub: "Data evidence accompanies every recommendation",
-    login_proof3_title: "Protected access", login_proof3_sub: "Action rights follow the user role",
+    login_story_copy:
+      "Forecast service load, compose the fleet, and act on field disruptions in one auditable workflow.",
+    login_proof1_title: "Live operations",
+    login_proof1_sub: "Fleet, drivers, and TPA queues",
+    login_proof2_title: "Measured forecasts",
+    login_proof2_sub: "Data evidence accompanies every recommendation",
+    login_proof3_title: "Protected access",
+    login_proof3_sub: "Action rights follow the user role",
     login_story_footer: "Jakarta Environmental Agency (DLH)",
     // Navigation
     nav_fleet: "Fleet Operations",
@@ -111,7 +116,8 @@ const translations = {
     dmg_status_selesai: "Resolved",
     // Assistant (#76)
     asst_header_sub: "Ask about operational status, data sources, or how Pythia works.",
-    asst_greeting: "Hi, I am Ana. Ask about fleet status, TPA queues, routes, data sources, or how Pythia works. I can also review photos or PDFs.",
+    asst_greeting:
+      "Hi, I am Ana. Ask about fleet status, TPA queues, routes, data sources, or how Pythia works. I can also review photos or PDFs.",
     asst_prompts_label: "Suggested questions",
     asst_prompt1: "Fleet status",
     asst_prompt1_q: "How many trucks are currently damaged?",
@@ -164,7 +170,8 @@ const translations = {
     twin_locale: "en-GB",
     twin_kicker: "Pythia Twin · 3D city model",
     twin_title: "City waste digital twin",
-    twin_sub: "District forecasts, haul flows to the landfill and the simulated pilot fleet in one 3D view. Scrub the week or test a scenario before trucks are committed.",
+    twin_sub:
+      "District forecasts, haul flows to the landfill and the simulated pilot fleet in one 3D view. Scrub the week or test a scenario before trucks are committed.",
     twin_generated: "Scene built {time}",
     twin_map_label: "3D digital twin map of {city}",
     twin_loading: "Building the city scene…",
@@ -199,7 +206,8 @@ const translations = {
     twin_class_APPROXIMATE: "Approximate",
     twin_class_UNAVAILABLE: "Unavailable",
     twin_demo_banner_title: "Simulated demo city",
-    twin_demo_banner_body: "Volumes are the published citywide total allocated by census population with assumed uplifts. No trained model, no live feed.",
+    twin_demo_banner_body:
+      "Volumes are the published citywide total allocated by census population with assumed uplifts. No trained model, no live feed.",
     twin_timeline_label: "Forecast day",
     twin_today: "Today",
     twin_play: "Play the forecast week",
@@ -214,7 +222,8 @@ const translations = {
     twin_event: "Crowd event",
     twin_event_none: "None",
     twin_event_preset: "{n} · {venue}",
-    twin_scenario_note: "Scenario inputs re-run the district forecast. They are what-if assumptions, not observations.",
+    twin_scenario_note:
+      "Scenario inputs re-run the district forecast. They are what-if assumptions, not observations.",
     twin_tour: "Cinematic tour",
     twin_tour_stop: "Stop tour",
     twin_tour_overview: "City overview",
@@ -295,7 +304,8 @@ const translations = {
 
     // Unlicensed Panel
     unlicensed_title: "Unlicensed Waste Collector Detection & Enforcement",
-    unlicensed_subtitle: "Commercial vehicles operating without registered DLH permits inside Jakarta jurisdiction.",
+    unlicensed_subtitle:
+      "Commercial vehicles operating without registered DLH permits inside Jakarta jurisdiction.",
     unlicensed_th_plate: "Vehicle Plate",
     unlicensed_th_loc: "Detected Location",
     unlicensed_th_coords: "GPS Coordinates",
@@ -319,7 +329,8 @@ const translations = {
     tpa_title: "Bantargebang Landfill Queue Status",
     tpa_subtitle: "Real-time visualization of weighbridge throughput and final-disposal truck queues.",
     stagger_title: "Bantargebang Queue Optimization (Staggered Dispatch)",
-    stagger_subtitle: "Simulation model reducing landfill peak bottlenecks by spacing departures at 15-minute intervals.",
+    stagger_subtitle:
+      "Simulation model reducing landfill peak bottlenecks by spacing departures at 15-minute intervals.",
     stagger_uncoord: "Uncoordinated Dispatch",
     stagger_pythia: "Pythia Staggered Dispatch",
     stagger_delay_badge: "Queue Delay",
@@ -328,7 +339,8 @@ const translations = {
     fc_title: "Waste Forecast",
     fc_subtitle: "Multi-district demand forecasting with spatial risk analytics and explainable drivers.",
     fc_pred_title: "Predictive Waste Demand & Resource Allocation",
-    fc_pred_sub: "Multi-district 7-day spatial demand forecast driven by meteorological and population event models.",
+    fc_pred_sub:
+      "Multi-district 7-day spatial demand forecast driven by meteorological and population event models.",
     fc_hr_districts: "High-Risk Districts",
     fc_peak_spike: "Peak Volume Spike",
     fc_extra_cap: "Extra Required Capacity",
@@ -340,7 +352,8 @@ const translations = {
 
     // Planning
     plan_sim_title: "Event Scenario Simulator",
-    plan_sim_sub: "Weather and crowd scenarios run through the live 42-district hybrid model with instant resource forecasting.",
+    plan_sim_sub:
+      "Weather and crowd scenarios run through the live 42-district hybrid model with instant resource forecasting.",
     plan_att: "Event Attendance",
     plan_rain: "Rainfall Intensity",
     plan_opt_title: "Operations Optimizer (Constraint Satisfaction Problem — CP-SAT)",
@@ -348,7 +361,8 @@ const translations = {
     plan_fleet_need: "Fleet need",
     plan_tpa_queue: "TPA queue",
     plan_awaiting_title: "Awaiting Optimizer Generation",
-    plan_awaiting_desc: "Click above to solve optimal vehicle allocations across all 42 districts using Google OR-Tools CP-SAT.",
+    plan_awaiting_desc:
+      "Click above to solve optimal vehicle allocations across all 42 districts using Google OR-Tools CP-SAT.",
     // Driver PWA (#77)
     drv_subtitle: "Driver PWA",
     drv_gate_title: "Who is on duty?",
@@ -380,7 +394,8 @@ const translations = {
     drv_pretrip_item_lampu: "Lights & electrics",
     drv_pretrip_saved: "Inspection saved",
     drv_pretrip_save_failed: "Failed to save inspection",
-    drv_pretrip_damage_failed: "Inspection saved, but the damage report failed to send — report it to the admin.",
+    drv_pretrip_damage_failed:
+      "Inspection saved, but the damage report failed to send — report it to the admin.",
     drv_pretrip_no_reason: "NO during pretrip: {label}",
     drv_stop_title: "Stop {n}: {name}",
     drv_stop_selesai: "DONE",
@@ -404,7 +419,8 @@ const translations = {
     drv_stop_complete_failed: "Failed to complete the stop",
     drv_stop_done_toast: "Stop completed",
     drv_receipt_title: "Delivery receipt",
-    drv_receipt_intro: "All stops are done. Upload the loaded truck weighing receipt photo from {destination}.",
+    drv_receipt_intro:
+      "All stops are done. Upload the loaded truck weighing receipt photo from {destination}.",
     drv_receipt_photo_label: "Weighing receipt photo",
     drv_receipt_reading: "Reading the numbers on the receipt…",
     drv_receipt_suggested: "Suggestion from {source}: {n} kg. {extra}",
@@ -439,7 +455,8 @@ const translations = {
     drv_ar_accuracy: "GPS ±{n} m",
     drv_ar_accuracy_unknown: "GPS —",
     drv_ar_gps_waiting: "Finding GPS signal…",
-    drv_ar_gps_denied: "Location access is blocked. Allow location for this site in the browser settings to navigate.",
+    drv_ar_gps_denied:
+      "Location access is blocked. Allow location for this site in the browser settings to navigate.",
     drv_ar_gps_unavailable: "Location is unavailable on this device.",
     drv_ar_heading_waiting: "Calibrating compass…",
     drv_ar_north_up: "No compass on this device — the arrow points on a north-up map.",
@@ -451,10 +468,12 @@ const translations = {
     drv_ar_turn_left: "Turn left {n}°",
     drv_ar_turn_back: "Turn around",
     drv_ar_no_coord_title: "No coordinate for this stop",
-    drv_ar_no_coord_desc: "This dispatch order has no map position for the stop, so Pythia will not guess a direction. Follow the address and contact the supervisor.",
+    drv_ar_no_coord_desc:
+      "This dispatch order has no map position for the stop, so Pythia will not guess a direction. Follow the address and contact the supervisor.",
     drv_ar_use_form: "Use the photo form",
     drv_ar_arrived_title: "You have arrived",
-    drv_ar_arrived_desc: "Within {n} m of the stop. Point the camera at the collection point and capture the arrival evidence.",
+    drv_ar_arrived_desc:
+      "Within {n} m of the stop. Point the camera at the collection point and capture the arrival evidence.",
     drv_ar_capture: "Capture evidence",
     drv_ar_capture_failed: "Could not capture the camera frame. Try again or use the photo form.",
     drv_ar_captured: "Arrival photo captured from AR",
@@ -514,7 +533,8 @@ const translations = {
     // Login
     login_kicker: "Akses Masuk Komando DLH",
     login_title: "Pusat Kendali Pythia",
-    login_copy: "Akses resmi operator untuk pemantauan armada, prediksi timbulan sampah, dan pengawasan logistik.",
+    login_copy:
+      "Akses resmi operator untuk pemantauan armada, prediksi timbulan sampah, dan pengawasan logistik.",
     login_username: "Nama pengguna",
     login_password: "Kata sandi",
     login_password_placeholder: "Masukkan kata sandi",
@@ -531,10 +551,14 @@ const translations = {
     login_story_kicker: "Pusat kendali operasional",
     login_story_headline_1: "Satu keputusan.",
     login_story_headline_2: "Seluruh operasi bergerak.",
-    login_story_copy: "Prediksi beban, susun armada, dan tindak gangguan lapangan dalam satu alur kerja yang dapat diaudit.",
-    login_proof1_title: "Operasi langsung", login_proof1_sub: "Armada, pengemudi, dan antrean TPA",
-    login_proof2_title: "Prediksi terukur", login_proof2_sub: "Bukti data selalu menyertai rekomendasi",
-    login_proof3_title: "Akses terlindungi", login_proof3_sub: "Hak tindakan mengikuti peran pengguna",
+    login_story_copy:
+      "Prediksi beban, susun armada, dan tindak gangguan lapangan dalam satu alur kerja yang dapat diaudit.",
+    login_proof1_title: "Operasi langsung",
+    login_proof1_sub: "Armada, pengemudi, dan antrean TPA",
+    login_proof2_title: "Prediksi terukur",
+    login_proof2_sub: "Bukti data selalu menyertai rekomendasi",
+    login_proof3_title: "Akses terlindungi",
+    login_proof3_sub: "Hak tindakan mengikuti peran pengguna",
     login_story_footer: "Dinas Lingkungan Hidup Provinsi DKI Jakarta",
     // Waste Forecast workspace (#68)
     fc_kicker: "Intelijen permintaan",
@@ -573,7 +597,8 @@ const translations = {
     dmg_status_selesai: "Selesai",
     // Assistant (#76)
     asst_header_sub: "Tanya status operasional, sumber data, atau cara kerja Pythia.",
-    asst_greeting: "Halo, saya Ana. Tanyakan status armada, antrean TPA, rute, sumber data, atau cara kerja Pythia. Saya juga dapat menelaah foto atau PDF.",
+    asst_greeting:
+      "Halo, saya Ana. Tanyakan status armada, antrean TPA, rute, sumber data, atau cara kerja Pythia. Saya juga dapat menelaah foto atau PDF.",
     asst_prompts_label: "Pertanyaan yang disarankan",
     asst_prompt1: "Status armada",
     asst_prompt1_q: "Berapa truk yang bermasalah saat ini?",
@@ -673,7 +698,8 @@ const translations = {
     twin_locale: "id-ID",
     twin_kicker: "Pythia Twin · model kota 3D",
     twin_title: "Kembaran digital sampah kota",
-    twin_sub: "Prakiraan per kecamatan, arus angkutan ke TPA, dan armada pilot simulasi dalam satu tampilan 3D. Geser hari atau uji skenario sebelum truk dikerahkan.",
+    twin_sub:
+      "Prakiraan per kecamatan, arus angkutan ke TPA, dan armada pilot simulasi dalam satu tampilan 3D. Geser hari atau uji skenario sebelum truk dikerahkan.",
     twin_generated: "Adegan disusun {time}",
     twin_map_label: "Peta kembaran digital 3D {city}",
     twin_loading: "Menyusun adegan kota…",
@@ -708,7 +734,8 @@ const translations = {
     twin_class_APPROXIMATE: "Perkiraan",
     twin_class_UNAVAILABLE: "Tidak tersedia",
     twin_demo_banner_title: "Kota demo simulasi",
-    twin_demo_banner_body: "Volume adalah total resmi se-kota yang dibagi menurut populasi sensus dengan asumsi kenaikan. Tanpa model terlatih dan tanpa data langsung.",
+    twin_demo_banner_body:
+      "Volume adalah total resmi se-kota yang dibagi menurut populasi sensus dengan asumsi kenaikan. Tanpa model terlatih dan tanpa data langsung.",
     twin_timeline_label: "Hari prakiraan",
     twin_today: "Hari ini",
     twin_play: "Putar pekan prakiraan",
@@ -723,7 +750,8 @@ const translations = {
     twin_event: "Acara keramaian",
     twin_event_none: "Tidak ada",
     twin_event_preset: "{n} · {venue}",
-    twin_scenario_note: "Masukan skenario menghitung ulang prakiraan kecamatan. Ini asumsi bagaimana-jika, bukan hasil pengamatan.",
+    twin_scenario_note:
+      "Masukan skenario menghitung ulang prakiraan kecamatan. Ini asumsi bagaimana-jika, bukan hasil pengamatan.",
     twin_tour: "Tur sinematik",
     twin_tour_stop: "Hentikan tur",
     twin_tour_overview: "Gambaran kota",
@@ -837,7 +865,8 @@ const translations = {
     fc_title: "Prediksi Timbulan Sampah",
     fc_subtitle: "Prediksi timbulan multi-distrik dengan analitik risiko spasial dan faktor pemicu.",
     fc_pred_title: "Prediksi Timbulan Sampah & Alokasi Sumber Daya",
-    fc_pred_sub: "Prakiraan kebutuhan 7 hari multi-distrik berdasarkan model meteorologi dan kalender keramaian.",
+    fc_pred_sub:
+      "Prakiraan kebutuhan 7 hari multi-distrik berdasarkan model meteorologi dan kalender keramaian.",
     fc_hr_districts: "Distrik Risiko Tinggi",
     fc_peak_spike: "Lonjakan Volume Puncak",
     fc_extra_cap: "Tambahan Kapasitas Dibutuhkan",
@@ -857,7 +886,8 @@ const translations = {
     plan_fleet_need: "Kebutuhan armada",
     plan_tpa_queue: "Antrean TPA",
     plan_awaiting_title: "Rencana belum disusun",
-    plan_awaiting_desc: "Susun alokasi untuk membagi armada dan kru ke 42 kecamatan berdasarkan kebutuhan skenario.",
+    plan_awaiting_desc:
+      "Susun alokasi untuk membagi armada dan kru ke 42 kecamatan berdasarkan kebutuhan skenario.",
     // Driver PWA (#77)
     drv_subtitle: "PWA Sopir",
     drv_gate_title: "Siapa yang bertugas?",
@@ -889,7 +919,8 @@ const translations = {
     drv_pretrip_item_lampu: "Lampu & Kelistrikan",
     drv_pretrip_saved: "Inspeksi tersimpan",
     drv_pretrip_save_failed: "Gagal menyimpan inspeksi",
-    drv_pretrip_damage_failed: "Inspeksi tersimpan, tetapi laporan kerusakan gagal terkirim — laporkan ke admin.",
+    drv_pretrip_damage_failed:
+      "Inspeksi tersimpan, tetapi laporan kerusakan gagal terkirim — laporkan ke admin.",
     drv_pretrip_no_reason: "TIDAK saat pretrip: {label}",
     drv_stop_title: "Titik {n}: {name}",
     drv_stop_selesai: "SELESAI",
@@ -948,7 +979,8 @@ const translations = {
     drv_ar_accuracy: "GPS ±{n} m",
     drv_ar_accuracy_unknown: "GPS —",
     drv_ar_gps_waiting: "Mencari sinyal GPS…",
-    drv_ar_gps_denied: "Akses lokasi diblokir. Izinkan lokasi untuk situs ini di pengaturan browser agar bisa bernavigasi.",
+    drv_ar_gps_denied:
+      "Akses lokasi diblokir. Izinkan lokasi untuk situs ini di pengaturan browser agar bisa bernavigasi.",
     drv_ar_gps_unavailable: "Lokasi tidak tersedia di perangkat ini.",
     drv_ar_heading_waiting: "Mengkalibrasi kompas…",
     drv_ar_north_up: "Perangkat tanpa kompas — panah menunjuk arah pada peta dengan utara di atas.",
@@ -960,10 +992,12 @@ const translations = {
     drv_ar_turn_left: "Belok kiri {n}°",
     drv_ar_turn_back: "Putar balik",
     drv_ar_no_coord_title: "Titik ini belum punya koordinat",
-    drv_ar_no_coord_desc: "SPJ ini tidak menyimpan posisi peta untuk titik tersebut, jadi Pythia tidak menebak arah. Ikuti alamat dan hubungi pengawas.",
+    drv_ar_no_coord_desc:
+      "SPJ ini tidak menyimpan posisi peta untuk titik tersebut, jadi Pythia tidak menebak arah. Ikuti alamat dan hubungi pengawas.",
     drv_ar_use_form: "Pakai formulir foto",
     drv_ar_arrived_title: "Anda sudah tiba",
-    drv_ar_arrived_desc: "Dalam radius {n} m dari titik. Arahkan kamera ke lokasi pengangkutan lalu ambil bukti kedatangan.",
+    drv_ar_arrived_desc:
+      "Dalam radius {n} m dari titik. Arahkan kamera ke lokasi pengangkutan lalu ambil bukti kedatangan.",
     drv_ar_capture: "Ambil bukti",
     drv_ar_capture_failed: "Gagal mengambil gambar kamera. Coba lagi atau pakai formulir foto.",
     drv_ar_captured: "Foto kedatangan diambil dari AR",
@@ -1028,7 +1062,7 @@ const LanguageContext = createContext({
 });
 
 export function LanguageProvider({ children }) {
-  const [lang, setLangState] = useState(() => document.documentElement.lang === "en" ? "en" : "id");
+  const [lang, setLangState] = useState(() => (document.documentElement.lang === "en" ? "en" : "id"));
 
   function setLang(newLang) {
     if (newLang !== "id" && newLang !== "en") return;
@@ -1047,11 +1081,7 @@ export function LanguageProvider({ children }) {
     return translations[lang]?.[key] || translations.en?.[key] || key;
   }
 
-  return (
-    <LanguageContext.Provider value={{ lang, setLang, t }}>
-      {children}
-    </LanguageContext.Provider>
-  );
+  return <LanguageContext.Provider value={{ lang, setLang, t }}>{children}</LanguageContext.Provider>;
 }
 
 export function useLanguage() {

@@ -151,10 +151,15 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false } = 
   const barWidth = Math.min(0.03, Math.max(0.008, medianNearestNeighbour(positions) * 0.55));
   const barGeometry = track(new THREE.BoxGeometry(1, 1, 1), geometries);
   barGeometry.translate(0, 0.5, 0); // base sits on the plate
-  const riskMaterials = Object.fromEntries(RISK_LEVELS.map((level) => [
-    level,
-    track(new THREE.MeshStandardMaterial({ color: RISK_COLORS[level], roughness: 0.55, metalness: 0.05 }), materials),
-  ]));
+  const riskMaterials = Object.fromEntries(
+    RISK_LEVELS.map((level) => [
+      level,
+      track(
+        new THREE.MeshStandardMaterial({ color: RISK_COLORS[level], roughness: 0.55, metalness: 0.05 }),
+        materials,
+      ),
+    ]),
+  );
   const heightFor = (tons) => Math.max(MIN_BAR_M, (tons / maxTons) * MAX_BAR_M);
 
   const bars = districts.map((district, i) => {
@@ -171,29 +176,40 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false } = 
   });
 
   // ── Landfill marker: a pin and a ground ring, in the product accent ──
-  const landfill = (scene.facilities || []).find((f) => f.kind === "landfill" && finite(f.lat) && finite(f.lng));
+  const landfill = (scene.facilities || []).find(
+    (f) => f.kind === "landfill" && finite(f.lat) && finite(f.lng),
+  );
   let landfillMarker = null;
   if (landfill) {
     const p = projection.project(landfill.lat, landfill.lng);
-    const accent = track(new THREE.MeshStandardMaterial({ color: LANDFILL_COLOR, roughness: 0.4, metalness: 0.1 }), materials);
+    const accent = track(
+      new THREE.MeshStandardMaterial({ color: LANDFILL_COLOR, roughness: 0.4, metalness: 0.1 }),
+      materials,
+    );
     landfillMarker = new THREE.Group();
     landfillMarker.name = "landfill";
     landfillMarker.userData = { facility: landfill };
-    const stem = new THREE.Mesh(track(new THREE.CylinderGeometry(0.0025, 0.0025, 0.07, 12), geometries), accent);
+    const stem = new THREE.Mesh(
+      track(new THREE.CylinderGeometry(0.0025, 0.0025, 0.07, 12), geometries),
+      accent,
+    );
     stem.position.y = 0.035;
     const head = new THREE.Mesh(track(new THREE.SphereGeometry(0.011, 20, 14), geometries), accent);
     head.position.y = 0.078;
     const ring = new THREE.Mesh(track(new THREE.RingGeometry(0.014, 0.019, 40), geometries), accent);
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.0015;
-    [stem, head].forEach((m) => { m.castShadow = true; });
+    [stem, head].forEach((m) => {
+      m.castShadow = true;
+    });
     landfillMarker.add(stem, head, ring);
     landfillMarker.position.set(p.x, 0, p.z);
     root.add(landfillMarker);
   }
 
   // ── TPS collection points (optional; clipped to the plate) ──
-  const tps = (scene.tps || []).filter((t) => finite(t.lat) && finite(t.lng))
+  const tps = (scene.tps || [])
+    .filter((t) => finite(t.lat) && finite(t.lng))
     .map((t) => projection.project(t.lat, t.lng))
     .filter((p) => Math.abs(p.x) < plateW / 2 - 0.006 && Math.abs(p.z) < plateD / 2 - 0.006);
   let tpsMesh = null;

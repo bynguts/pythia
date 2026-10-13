@@ -9,7 +9,10 @@
     "preview": "vite preview --host 0.0.0.0",
     "e2e": "playwright test",
     "budget": "node e2e/lib/bundle-budget.mjs",
-    "record:demo": "node e2e/recording/record-demo.mjs"
+    "record:demo": "node e2e/recording/record-demo.mjs",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@deck.gl/core": "^9.4.0",
@@ -30,7 +33,13 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.61.1",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.0.0",
+    "prettier": "^3.9.9",
     "typescript-language-server": "^5.3.0"
   }
 }

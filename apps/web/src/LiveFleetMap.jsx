@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Compass } from "lucide-react";
@@ -106,32 +106,63 @@ function buildActualPath(truck, trail) {
 function metersBetween(a, b) {
   const R = 6371000;
   const lat0 = (a[1] * Math.PI) / 180;
-  const x = ((b[0] - a[0]) * Math.PI / 180) * Math.cos(lat0) * R;
-  const y = ((b[1] - a[1]) * Math.PI / 180) * R;
+  const x = (((b[0] - a[0]) * Math.PI) / 180) * Math.cos(lat0) * R;
+  const y = (((b[1] - a[1]) * Math.PI) / 180) * R;
   return Math.sqrt(x * x + y * y);
 }
 
 function renderTruckPopup(truckData, truthData, followingCode, lang = "id") {
   const isAnom = truckData?.deviation?.violated;
-  const statusTxt = isAnom 
-    ? (lang === "id" ? "Pelanggaran Koridor" : "Route violation") 
-    : truckData?.is_damaged 
-      ? (lang === "id" ? "Kerusakan Armada" : "Fleet damage") 
-      : (lang === "id" ? "Sesuai Koridor Normal" : "Normal corridor");
-  const rawStr = truthData?.raw_gps ? `${truthData.raw_gps.lat.toFixed(5)}, ${truthData.raw_gps.lng.toFixed(5)}` : "—";
-  const snapStr = truthData?.snapped_gps ? `${truthData.snapped_gps.lat.toFixed(5)}, ${truthData.snapped_gps.lng.toFixed(5)}` : "—";
+  const statusTxt = isAnom
+    ? lang === "id"
+      ? "Pelanggaran Koridor"
+      : "Route violation"
+    : truckData?.is_damaged
+      ? lang === "id"
+        ? "Kerusakan Armada"
+        : "Fleet damage"
+      : lang === "id"
+        ? "Sesuai Koridor Normal"
+        : "Normal corridor";
+  const rawStr = truthData?.raw_gps
+    ? `${truthData.raw_gps.lat.toFixed(5)}, ${truthData.raw_gps.lng.toFixed(5)}`
+    : "—";
+  const snapStr = truthData?.snapped_gps
+    ? `${truthData.snapped_gps.lat.toFixed(5)}, ${truthData.snapped_gps.lng.toFixed(5)}`
+    : "—";
   const snapCode = truthData?.provenance?.snapped_gps || "RAW_GPS_UNSNAPPED";
-  const snapSrc = lang === "id"
-    ? ({ SIMULATED_NO_SNAP: "Simulasi tanpa penyelarasan", RAW_GPS_UNSNAPPED: "GPS mentah belum diselaraskan", FALLBACK_DEGRADED: "Penyelarasan tidak tersedia" }[snapCode] || snapCode)
-    : snapCode;
+  const snapSrc =
+    lang === "id"
+      ? {
+          SIMULATED_NO_SNAP: "Simulasi tanpa penyelarasan",
+          RAW_GPS_UNSNAPPED: "GPS mentah belum diselaraskan",
+          FALLBACK_DEGRADED: "Penyelarasan tidak tersedia",
+        }[snapCode] || snapCode
+      : snapCode;
   const devM = Math.round(truthData?.deviation_m ?? truckData?.deviation?.distance_meters ?? 0);
   const speed = truckData?.latest_position?.speed_kmh ?? "?";
   const updated = truckData?.latest_position?.updated_seconds_ago ?? "?";
-  const activityTxt = truckData?.activity?.state ? `${lang === "id" ? "Aktivitas" : "Activity"}: ${lang === "id" ? ACTIVITY_ID[truckData.activity.state] || truckData.activity.label : truckData.activity.label}` : "";
-  const damageTxt = truckData?.is_damaged && truckData?.damage_status?.note ? `${lang === "id" ? "Kerusakan" : "Damage"}: ${localizedDamage(truckData.damage_status.note, lang)}` : "";
-  const distLabel = lang === "id" ? `${devM} m dari koridor resmi · ${speed} km/jam` : `${devM} m from assigned road · ${speed} km/h`;
-  const trackBtn = followingCode === truckData.truck_code ? (lang === "id" ? "Berhenti Lacak" : "Stop tracking") : (lang === "id" ? "Lacak Truk" : "Track");
-  const dispatchBtn = lang === "id" ? `Kirim Instruksi ${truckData.truck_code}` : `Dispatch ${truckData.truck_code}`;
+  const activityTxt = truckData?.activity?.state
+    ? `${lang === "id" ? "Aktivitas" : "Activity"}: ${lang === "id" ? ACTIVITY_ID[truckData.activity.state] || truckData.activity.label : truckData.activity.label}`
+    : "";
+  const damageTxt =
+    truckData?.is_damaged && truckData?.damage_status?.note
+      ? `${lang === "id" ? "Kerusakan" : "Damage"}: ${localizedDamage(truckData.damage_status.note, lang)}`
+      : "";
+  const distLabel =
+    lang === "id"
+      ? `${devM} m dari koridor resmi · ${speed} km/jam`
+      : `${devM} m from assigned road · ${speed} km/h`;
+  const trackBtn =
+    followingCode === truckData.truck_code
+      ? lang === "id"
+        ? "Berhenti Lacak"
+        : "Stop tracking"
+      : lang === "id"
+        ? "Lacak Truk"
+        : "Track";
+  const dispatchBtn =
+    lang === "id" ? `Kirim Instruksi ${truckData.truck_code}` : `Dispatch ${truckData.truck_code}`;
   const fitBtn = lang === "id" ? "Paskan Rute" : "Fit route";
 
   return `
@@ -160,8 +191,8 @@ function pointToSegment(p, a, b) {
   const R = 6371000;
   const lat0 = (a[1] * Math.PI) / 180;
   const toXY = (q) => [
-    ((q[0] - a[0]) * Math.PI / 180) * Math.cos(lat0) * R,
-    ((q[1] - a[1]) * Math.PI / 180) * R,
+    (((q[0] - a[0]) * Math.PI) / 180) * Math.cos(lat0) * R,
+    (((q[1] - a[1]) * Math.PI) / 180) * R,
   ];
   const [px, py] = toXY(p);
   const [bx, by] = toXY(b);
@@ -259,26 +290,26 @@ function routeFeature(id, coordinates, kind, truckCode) {
   };
 }
 
-export function LiveFleetMap({ 
-  trucks, 
-  attendance, 
-  rainfall, 
-  onSelectTruck, 
-  layers = { heatmap: false, osrm: true, unlicensed: true, tps: true, wr: true }, 
-  playbackTruck, 
+export function LiveFleetMap({
+  trucks,
+  attendance,
+  rainfall,
+  onSelectTruck,
+  layers = { heatmap: false, osrm: true, unlicensed: true, tps: true, wr: true },
+  playbackTruck,
   onBreadcrumbsLoaded,
   jamActive = false,
   focusRequest = null,
 }) {
-  const { lang, t } = useLanguage();
+  const { lang } = useLanguage();
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const languageRef = useRef(lang);
   languageRef.current = lang;
-  const mapLabel = (id, en) => languageRef.current === "id" ? id : en;
+  const mapLabel = (id, en) => (languageRef.current === "id" ? id : en);
   const [mapInstance, setMapInstance] = useState(null);
 
-  const [basemap, setBasemap] = useState("streets");
+  const [basemap] = useState("streets");
   const [styleTick, setStyleTick] = useState(0);
   const [showAllFleet, setShowAllFleet] = useState(false);
   const [streetsOffline, setStreetsOffline] = useState(false);
@@ -293,7 +324,7 @@ export function LiveFleetMap({
   const [tpsSearch, setTpsSearch] = useState([]);
   const [wrSearch, setWrSearch] = useState([]);
   const [heatSearch, setHeatSearch] = useState([]);
-  
+
   // Track active markers and their previous coordinates for interpolation
   const activeMarkersRef = useRef({});
   const tpaMarkerRef = useRef(null);
@@ -302,10 +333,15 @@ export function LiveFleetMap({
   const [astarData, setAstarData] = useState(null);
   const [eventPermits, setEventPermits] = useState([]);
   const [mapTruth, setMapTruth] = useState({});
-  const breadcrumbs = useMemo(() => Object.fromEntries(
-    Object.entries(mapTruth).filter(([, truth]) => truth.raw_breadcrumbs?.length > 1)
-      .map(([code, truth]) => [code, truth.raw_breadcrumbs]),
-  ), [mapTruth]);
+  const breadcrumbs = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(mapTruth)
+          .filter(([, truth]) => truth.raw_breadcrumbs?.length > 1)
+          .map(([code, truth]) => [code, truth.raw_breadcrumbs]),
+      ),
+    [mapTruth],
+  );
   const [unlicensed, setUnlicensed] = useState([]);
   const unlicensedMarkersRef = useRef([]);
   const heatmapCacheRef = useRef(null);
@@ -328,17 +364,17 @@ export function LiveFleetMap({
     }
   }
 
-
   useEffect(() => {
     async function fetchPermits() {
       try {
         const res = await fetch(`${API_URL}/events/permits`);
         if (res.ok) setEventPermits(await res.json());
-      } catch {}
+      } catch {
+        // API unreachable: keep the previously loaded permits
+      }
     }
     fetchPermits();
   }, []);
-
 
   useEffect(() => {
     async function fetchUnlicensed() {
@@ -348,7 +384,9 @@ export function LiveFleetMap({
           const j = await res.json();
           setUnlicensed(j.alerts || []);
         }
-      } catch {}
+      } catch {
+        // API unreachable: keep the previously loaded alerts
+      }
     }
     fetchUnlicensed();
   }, []);
@@ -360,11 +398,15 @@ export function LiveFleetMap({
         if (res.ok) {
           const j = await res.json();
           const byCode = {};
-          (j.trucks || []).forEach((t) => { byCode[t.truck_code] = t; });
+          (j.trucks || []).forEach((t) => {
+            byCode[t.truck_code] = t;
+          });
           mapTruthRef.current = byCode;
           setMapTruth(byCode);
         }
-      } catch {}
+      } catch {
+        // API unreachable: keep the previous map truth and retry on the next poll
+      }
     }
     fetchMapTruth();
     const timer = setInterval(fetchMapTruth, 8000);
@@ -379,7 +421,9 @@ export function LiveFleetMap({
       try {
         const res = await fetch(`${API_URL}/fleet/astar-reroute`);
         if (res.ok) setAstarData(await res.json());
-      } catch {}
+      } catch {
+        // API unreachable: keep the previous A* reroute data
+      }
     }
     fetchAstar();
   }, [jamActive]);
@@ -434,9 +478,9 @@ export function LiveFleetMap({
         coords[Math.floor(coords.length / 2)],
         new maplibregl.Popup({ offset: 20 }).setHTML(
           `<div class="map-popup"><h4>${r?.name || mapLabel("Rute rekomendasi", "Recommended route")}</h4>` +
-          `<p>${r?.distance_km ?? "—"} km · ~${r?.eta_minutes ?? "—"} ${mapLabel("menit", "min")}</p>` +
-          `<small>${r?.source || "OSRM"} · ${r?.path?.length || coords.length} ${mapLabel("titik geometri", "geometry points")}</small>` +
-          `<p class="popup-src">${mapLabel("LANGSUNG · perutean OSRM", "LIVE · OSRM routing")}</p></div>`
+            `<p>${r?.distance_km ?? "—"} km · ~${r?.eta_minutes ?? "—"} ${mapLabel("menit", "min")}</p>` +
+            `<small>${r?.source || "OSRM"} · ${r?.path?.length || coords.length} ${mapLabel("titik geometri", "geometry points")}</small>` +
+            `<p class="popup-src">${mapLabel("LANGSUNG · perutean OSRM", "LIVE · OSRM routing")}</p></div>`,
         ),
         { zoom: Math.max(12, map.getZoom()), offset: [0, -60], duration: 450 },
       );
@@ -452,8 +496,8 @@ export function LiveFleetMap({
         coords[Math.floor(coords.length / 2)],
         new maplibregl.Popup({ offset: 20 }).setHTML(
           `<div class="map-popup"><h4>${mapLabel("Koridor penugasan", "Assigned corridor")}</h4>` +
-          `<p>${mapLabel("Truk", "Truck")} ${p.truckCode || "—"} · ${coords.length} ${mapLabel("titik mengikuti jalan", "road-following points")}</p>` +
-          `<p class="popup-src">${mapLabel("SIMULASI · rute rencana", "SIMULATION · planned route")}</p></div>`
+            `<p>${mapLabel("Truk", "Truck")} ${p.truckCode || "—"} · ${coords.length} ${mapLabel("titik mengikuti jalan", "road-following points")}</p>` +
+            `<p class="popup-src">${mapLabel("SIMULASI · rute rencana", "SIMULATION · planned route")}</p></div>`,
         ),
         { zoom: Math.max(12, map.getZoom()), offset: [0, -60], duration: 450 },
       );
@@ -470,8 +514,8 @@ export function LiveFleetMap({
         coords[Math.floor(coords.length / 2)],
         new maplibregl.Popup({ offset: 20 }).setHTML(
           `<div class="map-popup"><h4>${isViolation ? mapLabel("Segmen pelanggaran rute", "Route violation segment") : mapLabel("Pergerakan aktual", "Actual movement")}</h4>` +
-          `<p>${mapLabel("Truk", "Truck")} ${p.truckCode || "—"} · ${coords.length} ${mapLabel("titik jalur simulasi", "simulated route points")}</p>` +
-          `<p class="popup-src">${mapLabel("SIMULASI · jejak perjalanan", "SIMULATION · breadcrumb trail")}</p></div>`
+            `<p>${mapLabel("Truk", "Truck")} ${p.truckCode || "—"} · ${coords.length} ${mapLabel("titik jalur simulasi", "simulated route points")}</p>` +
+            `<p class="popup-src">${mapLabel("SIMULASI · jejak perjalanan", "SIMULATION · breadcrumb trail")}</p></div>`,
         ),
         { zoom: Math.max(12, map.getZoom()), offset: [0, -60], duration: 450 },
       );
@@ -504,7 +548,11 @@ export function LiveFleetMap({
     const controls = [
       [".maplibregl-ctrl-zoom-in", "Perbesar", "Zoom in"],
       [".maplibregl-ctrl-zoom-out", "Perkecil", "Zoom out"],
-      [".maplibregl-ctrl-compass", "Seret untuk memutar peta, klik untuk menghadap utara", "Drag to rotate map, click to reset north"],
+      [
+        ".maplibregl-ctrl-compass",
+        "Seret untuk memutar peta, klik untuk menghadap utara",
+        "Drag to rotate map, click to reset north",
+      ],
       [".maplibregl-ctrl-fullscreen", "Masuk layar penuh", "Enter fullscreen"],
       [".maplibregl-ctrl-attrib-button", "Tampilkan atribusi", "Toggle attribution"],
     ];
@@ -558,7 +606,12 @@ export function LiveFleetMap({
         }
         if (truck.truck_code === "T-047" && truth?.abandoned_route?.geometry?.length) {
           assignedFeatures.push(
-            routeFeature("astar-abandoned", truth.abandoned_route.geometry.map(toLngLat), "astar-abandoned", "T-047"),
+            routeFeature(
+              "astar-abandoned",
+              truth.abandoned_route.geometry.map(toLngLat),
+              "astar-abandoned",
+              "T-047",
+            ),
           );
         }
 
@@ -570,16 +623,22 @@ export function LiveFleetMap({
           const truthAssigned = truth?.assigned_route?.geometry?.length
             ? truth.assigned_route.geometry.map(toLngLat)
             : [];
-          const assignedLine = truthAssigned.length ? truthAssigned : (truck.assigned_path || []).map(toLngLat);
+          const assignedLine = truthAssigned.length
+            ? truthAssigned
+            : (truck.assigned_path || []).map(toLngLat);
           if (truck.deviation?.violated) {
             const segs = splitByCorridor(actualPath, assignedLine);
             segs.forEach((s, i) => {
               if (s.coords.length >= 2) {
-                actualFeatures.push(routeFeature(`${truck.truck_code}-actual-${i}`, s.coords, s.kind, truck.truck_code));
+                actualFeatures.push(
+                  routeFeature(`${truck.truck_code}-actual-${i}`, s.coords, s.kind, truck.truck_code),
+                );
               }
             });
           } else {
-            actualFeatures.push(routeFeature(`${truck.truck_code}-actual`, actualPath, "actual-clean", truck.truck_code));
+            actualFeatures.push(
+              routeFeature(`${truck.truck_code}-actual`, actualPath, "actual-clean", truck.truck_code),
+            );
           }
         }
       });
@@ -614,18 +673,8 @@ export function LiveFleetMap({
           type: "line",
           source: "assigned-routes",
           paint: {
-            "line-color": [
-              "case",
-              ["==", ["get", "kind"], "astar-abandoned"],
-              "#b42318",
-              "#176b54",
-            ],
-            "line-width": [
-              "case",
-              ["==", ["get", "kind"], "astar-abandoned"],
-              4,
-              3,
-            ],
+            "line-color": ["case", ["==", ["get", "kind"], "astar-abandoned"], "#b42318", "#176b54"],
+            "line-width": ["case", ["==", ["get", "kind"], "astar-abandoned"], 4, 3],
             "line-dasharray": [1.5, 1],
             "line-opacity": 0.82,
           },
@@ -649,12 +698,7 @@ export function LiveFleetMap({
               "#0891b2",
               "#176b54",
             ],
-            "line-width": [
-              "case",
-              ["==", ["get", "kind"], "astar-active"],
-              5,
-              3,
-            ],
+            "line-width": ["case", ["==", ["get", "kind"], "astar-active"], 5, 3],
             "line-opacity": 0.9,
           },
         });
@@ -669,15 +713,14 @@ export function LiveFleetMap({
       eventPermits.forEach((ev) => {
         const key = "event-" + ev.id;
         let existing = activeMarkersRef.current[key];
-        
+
         if (!existing) {
           const element = document.createElement("button");
           element.className = "truck-marker event-permit-marker";
           element.type = "button";
           element.setAttribute("aria-label", `${lang === "id" ? "Acara" : "Event"}: ${ev.name}`);
-          
-          const popup = new maplibregl.Popup({ offset: 25 })
-            .setHTML(`
+
+          const popup = new maplibregl.Popup({ offset: 25 }).setHTML(`
               <div class="event-popup" style="color: #0f172a; padding: 6px;">
                 <h4 style="margin: 0 0 6px; font-weight: bold;">${lang === "id" ? "Acara" : "Event"}: ${ev.name}</h4>
                 <p style="margin: 0 0 4px; font-size: 11px;"><b>${lang === "id" ? "Izin" : "Permit"}:</b> ${ev.permit_number}</p>
@@ -697,14 +740,13 @@ export function LiveFleetMap({
             marker,
             element,
             popup,
-            coords: [ev.lng, ev.lat]
+            coords: [ev.lng, ev.lat],
           };
         }
-        
+
         nextMarkers[key] = existing;
         delete activeMarkersRef.current[key];
       });
-
 
       // Limit visible truck markers: curated + first 15 generated by default
       // (19 markers instead of 59). Toggle in map controls shows all.
@@ -721,7 +763,7 @@ export function LiveFleetMap({
           const key = truck.truck_code;
           const isAnomalous = truck.deviation?.violated;
           const statusClass = isAnomalous ? "is-critical" : truck.is_damaged ? "is-warning" : "is-normal";
-          
+
           let existing = activeMarkersRef.current[key];
 
           const truth047 = mapTruth[truck.truck_code];
@@ -734,7 +776,8 @@ export function LiveFleetMap({
             element.innerHTML = `<span>${truck.truck_code}</span>`;
             const headingEl = null;
 
-            const geomFirst = truth047?.assigned_route?.geometry?.length >= 2 ? truth047.assigned_route.geometry : null;
+            const geomFirst =
+              truth047?.assigned_route?.geometry?.length >= 2 ? truth047.assigned_route.geometry : null;
             const trail0 = breadcrumbs[truck.truck_code];
             let headFrom = null;
             let headTo = null;
@@ -751,7 +794,7 @@ export function LiveFleetMap({
             if (headFrom && headTo) setHeading(headingEl, headFrom, headTo);
 
             const popup = new maplibregl.Popup({ offset: 18, closeButton: false });
-popup.on("open", () => {
+            popup.on("open", () => {
               const t0 = trucksRef.current.find((x) => x.truck_code === truck.truck_code) || truck;
               const tr0 = mapTruthRef.current[truck.truck_code];
               popup.setHTML(renderTruckPopup(t0, tr0, followTruckRef.current, lang));
@@ -761,7 +804,9 @@ popup.on("open", () => {
               }
               const trackBtn = document.querySelector(`.popup-track[data-track="${truck.truck_code}"]`);
               if (trackBtn) {
-                trackBtn.addEventListener("click", () => setFollowTruck((cur) => (cur === truck.truck_code ? null : truck.truck_code)));
+                trackBtn.addEventListener("click", () =>
+                  setFollowTruck((cur) => (cur === truck.truck_code ? null : truck.truck_code)),
+                );
               }
               const fitBtn = document.querySelector(`.popup-fit[data-fit="${truck.truck_code}"]`);
               if (fitBtn) {
@@ -796,7 +841,7 @@ popup.on("open", () => {
                 if (geom) engine.registerTruck(truck.truck_code, geom);
               }
             }
-} else {
+          } else {
             if (existing.statusClass !== statusClass) {
               existing.element.className = `truck-marker ${statusClass}`;
               existing.statusClass = statusClass;
@@ -887,8 +932,8 @@ popup.on("open", () => {
           const coordinates = feature.geometry.coordinates.slice();
           const popup = new maplibregl.Popup({ offset: 18 }).setHTML(
             `<div class="map-popup"><h4>${feature.properties?.label || mapLabel("Titik kemacetan", "Congestion point")}</h4>` +
-            `<p>${mapLabel("Hambatan aktif pada pengalihan rute A*.", "Active A* rerouting hazard.")}</p>` +
-            `<p class="popup-src">${mapLabel("SIMULASI · skenario lalu lintas", "SIMULATION · traffic scenario")}</p></div>`
+              `<p>${mapLabel("Hambatan aktif pada pengalihan rute A*.", "Active A* rerouting hazard.")}</p>` +
+              `<p class="popup-src">${mapLabel("SIMULASI · skenario lalu lintas", "SIMULATION · traffic scenario")}</p></div>`,
           );
           focusMapPin(map, coordinates, popup, { zoom: 15.5 });
         });
@@ -897,7 +942,7 @@ popup.on("open", () => {
       }
 
       // Congestion as a highlighted ROAD SEGMENT (LineString), not just a pin.
-      const segFeatures = (astarData?.jam_active && astarData.congestion_segments || []).map((seg, i) => ({
+      const segFeatures = ((astarData?.jam_active && astarData.congestion_segments) || []).map((seg, i) => ({
         type: "Feature",
         id: "jamseg-" + i,
         properties: { name: seg.name, source: seg.source, multiplier: seg.traffic_multiplier },
@@ -939,7 +984,6 @@ popup.on("open", () => {
     return () => {
       cancelled = true;
     };
-
   }, [trucks, astarData, eventPermits, mapInstance, breadcrumbs, mapTruth, styleTick, showAllFleet, lang]);
 
   useEffect(() => {
@@ -964,16 +1008,18 @@ popup.on("open", () => {
         const res = await fetch(`${API_URL}/spj?status=aktif`);
         if (!res.ok) return;
         const body = await res.json();
-        const routes = await Promise.all((body.spj || []).map(async (s) => {
-          try {
-            const pr = await fetch(`${API_URL}/spj/active-path/${s.truck_code}`);
-            if (!pr.ok) return { spj: s, path: [] };
-            const p = await pr.json();
-            return { spj: s, path: p.path || [] };
-          } catch {
-            return { spj: s, path: [] };
-          }
-        }));
+        const routes = await Promise.all(
+          (body.spj || []).map(async (s) => {
+            try {
+              const pr = await fetch(`${API_URL}/spj/active-path/${s.truck_code}`);
+              if (!pr.ok) return { spj: s, path: [] };
+              const p = await pr.json();
+              return { spj: s, path: p.path || [] };
+            } catch {
+              return { spj: s, path: [] };
+            }
+          }),
+        );
         if (cancelled || !mapRef.current) return;
 
         const lineFeatures = [];
@@ -1081,7 +1127,11 @@ popup.on("open", () => {
               if (!p.kelurahan || !ring?.length) return null;
               const cx = ring.reduce((s, c) => s + c[0], 0) / ring.length;
               const cy = ring.reduce((s, c) => s + c[1], 0) / ring.length;
-              return { label: p.kelurahan, sub: `${p.kecamatan || ""} · ${p.predicted_tons ?? "?"} t`, coords: [cx, cy] };
+              return {
+                label: p.kelurahan,
+                sub: `${p.kecamatan || ""} · ${p.predicted_tons ?? "?"} t`,
+                coords: [cx, cy],
+              };
             })
             .filter(Boolean),
         );
@@ -1110,12 +1160,7 @@ popup.on("open", () => {
                   260,
                   "#0f4d3b",
                 ],
-                "fill-opacity": [
-                  "case",
-                  ["==", ["coalesce", ["get", "predicted_tons"], -1], -1],
-                  0.18,
-                  0.4,
-                ],
+                "fill-opacity": ["case", ["==", ["coalesce", ["get", "predicted_tons"], -1], -1], 0.18, 0.4],
               },
             },
             "assigned-routes-line",
@@ -1168,12 +1213,23 @@ popup.on("open", () => {
         if (!response.ok) throw new Error("osrm unavailable");
         const route = await response.json();
         routeInfoRef.current = route;
-        setRouteInfo({ name: route.name, eta_minutes: route.eta_minutes, distance_km: route.distance_km, source: route.source });
+        setRouteInfo({
+          name: route.name,
+          eta_minutes: route.eta_minutes,
+          distance_km: route.distance_km,
+          source: route.source,
+        });
         const coords = (route.path || []).map((p) => [p.lng, p.lat]);
         if (coords.length < 2) return;
         const data = {
           type: "FeatureCollection",
-          features: [{ type: "Feature", properties: { source: route.source }, geometry: { type: "LineString", coordinates: coords } }],
+          features: [
+            {
+              type: "Feature",
+              properties: { source: route.source },
+              geometry: { type: "LineString", coordinates: coords },
+            },
+          ],
         };
         if (!map.getSource("osrm-route")) {
           map.addSource("osrm-route", { type: "geojson", data });
@@ -1213,14 +1269,12 @@ popup.on("open", () => {
         el.title = q.facility_name || "TPA";
         const popup = new maplibregl.Popup({ offset: 18 }).setHTML(
           `<div class="map-popup"><h4>${q.facility_name || "TPA Bantargebang"}</h4>` +
-          `<p><b>${q.trucks_in_queue}</b> ${countUnit(q.trucks_in_queue, languageRef.current, "truk antre", "truck queued", "trucks queued")}</p>` +
-          `<p>${mapLabel("Waktu tunggu", "Wait")}: <b>${q.avg_wait_minutes} ${mapLabel("menit", "min")}</b> (P95 ${q.p95_wait_minutes})</p>` +
-          `<p>${q.weighbridge_status === "OPERATIONAL" ? mapLabel("Jembatan timbang beroperasi", "Weighbridge operational") : q.weighbridge_status === "DEGRADED (Overload)" ? mapLabel("Jembatan timbang terbebani", "Weighbridge overloaded") : q.weighbridge_status}</p>` +
-          `<p class="popup-src">${mapLabel("HASIL MODEL · simulasi antrean", "MODEL OUTPUT · queue simulation")}</p></div>`
+            `<p><b>${q.trucks_in_queue}</b> ${countUnit(q.trucks_in_queue, languageRef.current, "truk antre", "truck queued", "trucks queued")}</p>` +
+            `<p>${mapLabel("Waktu tunggu", "Wait")}: <b>${q.avg_wait_minutes} ${mapLabel("menit", "min")}</b> (P95 ${q.p95_wait_minutes})</p>` +
+            `<p>${q.weighbridge_status === "OPERATIONAL" ? mapLabel("Jembatan timbang beroperasi", "Weighbridge operational") : q.weighbridge_status === "DEGRADED (Overload)" ? mapLabel("Jembatan timbang terbebani", "Weighbridge overloaded") : q.weighbridge_status}</p>` +
+            `<p class="popup-src">${mapLabel("HASIL MODEL · simulasi antrean", "MODEL OUTPUT · queue simulation")}</p></div>`,
         );
-        const marker = new maplibregl.Marker({ element: el })
-          .setLngLat([q.lng, q.lat])
-          .addTo(map);
+        const marker = new maplibregl.Marker({ element: el }).setLngLat([q.lng, q.lat]).addTo(map);
         attachFocusableMarker(el, map, [q.lng, q.lat], popup, { zoom: 15 });
         tpaMarkerRef.current = { marker, popup };
       } catch {
@@ -1243,11 +1297,10 @@ popup.on("open", () => {
         el.title = a.plate;
         const popup = new maplibregl.Popup({ offset: 16 }).setHTML(
           `<div class="map-popup"><h4>${mapLabel("Kolektor tanpa izin", "Unlicensed collector")}</h4>` +
-          `<p><b>${a.plate}</b></p><p>${a.message}</p>` +
-          `<p class="popup-src">${dataClass(a.data_class, languageRef.current)} · ${mapLabel("pencocokan registri", "registry match")}</p></div>`
+            `<p><b>${a.plate}</b></p><p>${a.message}</p>` +
+            `<p class="popup-src">${dataClass(a.data_class, languageRef.current)} · ${mapLabel("pencocokan registri", "registry match")}</p></div>`,
         );
-        const marker = new maplibregl.Marker({ element: el })
-          .setLngLat([a.lng, a.lat]).addTo(map);
+        const marker = new maplibregl.Marker({ element: el }).setLngLat([a.lng, a.lat]).addTo(map);
         attachFocusableMarker(el, map, [a.lng, a.lat], popup, { zoom: 15.5 });
         unlicensedMarkersRef.current.push({ marker, popup });
       });
@@ -1279,13 +1332,14 @@ popup.on("open", () => {
   useEffect(() => {
     const map = mapInstance;
     if (!map || !map.isStyleLoaded?.()) return;
-    const set = (id, on) => { if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", on ? "visible" : "none"); };
+    const set = (id, on) => {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+    };
     set("kelurahan-heatmap-fill", layers.heatmap);
     set("kelurahan-heatmap-outline", layers.heatmap);
     set("osrm-route-line", layers.osrm);
   }, [layers, mapInstance, styleTick]);
 
-  
   // Load & render real TPS and WR locations
   useEffect(() => {
     const map = mapInstance;
@@ -1305,7 +1359,11 @@ popup.on("open", () => {
                 const p = f.properties || {};
                 const c = f.geometry?.coordinates;
                 if (!p.name || !c) return null;
-                return { label: p.name, sub: [p.kelurahan, p.kecamatan].filter(Boolean).join(" · "), coords: c };
+                return {
+                  label: p.name,
+                  sub: [p.kelurahan, p.kecamatan].filter(Boolean).join(" · "),
+                  coords: c,
+                };
               })
               .filter(Boolean),
           );
@@ -1315,7 +1373,7 @@ popup.on("open", () => {
               data: tpsData,
               cluster: true,
               clusterMaxZoom: 14,
-              clusterRadius: 50
+              clusterRadius: 50,
             });
 
             map.addLayer({
@@ -1324,19 +1382,13 @@ popup.on("open", () => {
               source: "tps-points",
               filter: ["has", "point_count"],
               paint: {
-                "circle-color": [
-                  "step", ["get", "point_count"],
-                  "#bbf7d0", 50, "#86efac", 200, "#22c55e"
-                ],
-                "circle-radius": [
-                  "step", ["get", "point_count"],
-                  13, 50, 18, 200, 24
-                ],
+                "circle-color": ["step", ["get", "point_count"], "#bbf7d0", 50, "#86efac", 200, "#22c55e"],
+                "circle-radius": ["step", ["get", "point_count"], 13, 50, 18, 200, 24],
                 "circle-opacity": 0.75,
                 "circle-stroke-width": 1.5,
-                "circle-stroke-color": "#15803d"
+                "circle-stroke-color": "#15803d",
               },
-              layout: { "visibility": layers.tps ? "visible" : "none" }
+              layout: { visibility: layers.tps ? "visible" : "none" },
             });
 
             map.addLayer({
@@ -1348,9 +1400,9 @@ popup.on("open", () => {
                 "text-field": "{point_count}",
                 "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
                 "text-size": 11,
-                "visibility": layers.tps ? "visible" : "none"
+                visibility: layers.tps ? "visible" : "none",
               },
-              paint: { "text-color": "#14532d" }
+              paint: { "text-color": "#14532d" },
             });
 
             map.addLayer({
@@ -1359,20 +1411,15 @@ popup.on("open", () => {
               source: "tps-points",
               filter: ["!", ["has", "point_count"]],
               paint: {
-                "circle-radius": [
-                  "interpolate", ["linear"], ["zoom"],
-                  10, 5,
-                  13, 8,
-                  16, 10
-                ],
+                "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 5, 13, 8, 16, 10],
                 "circle-color": "#22c55e",
                 "circle-stroke-width": 2.5,
                 "circle-stroke-color": "#ffffff",
-                "circle-opacity": 0.9
+                "circle-opacity": 0.9,
               },
               layout: {
-                "visibility": layers.tps ? "visible" : "none"
-              }
+                visibility: layers.tps ? "visible" : "none",
+              },
             });
 
             // TPS text label at high zoom so points are identifiable on satellite
@@ -1387,13 +1434,13 @@ popup.on("open", () => {
                 "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
                 "text-size": 10,
                 "text-offset": [0, 1.4],
-                "visibility": layers.tps ? "visible" : "none"
+                visibility: layers.tps ? "visible" : "none",
               },
               paint: {
                 "text-color": "#14532d",
                 "text-halo-color": "#ffffff",
-                "text-halo-width": 1.5
-              }
+                "text-halo-width": 1.5,
+              },
             });
 
             map.on("click", "tps-clusters", (e) => {
@@ -1405,28 +1452,31 @@ popup.on("open", () => {
                 map.easeTo({ center: features[0].geometry.coordinates, zoom });
               });
             });
-            
+
             // Popup on hover
             const popup = new maplibregl.Popup({
               closeButton: false,
-              closeOnClick: false
+              closeOnClick: false,
             });
-            
+
             map.on("mouseenter", "tps-layer", (e) => {
               map.getCanvas().style.cursor = "pointer";
               const coordinates = e.features[0].geometry.coordinates.slice();
               const props = e.features[0].properties;
-              
-              popup.setLngLat(coordinates)
-                .setHTML(`
+
+              popup
+                .setLngLat(coordinates)
+                .setHTML(
+                  `
                   <div style="color: #0f172a; padding: 4px; font-size: 11px;">
                     <strong style="display: block; font-weight: bold; margin-bottom: 2px;">TPS: ${props.name}</strong>
                     <span>${mapLabel("Kel.", "Ward")} ${props.kelurahan}, ${mapLabel("Kec.", "District")} ${props.kecamatan}</span>
                   </div>
-                `)
+                `,
+                )
                 .addTo(map);
             });
-            
+
             map.on("mouseleave", "tps-layer", () => {
               map.getCanvas().style.cursor = "";
               popup.remove();
@@ -1464,7 +1514,11 @@ popup.on("open", () => {
                 const p = f.properties || {};
                 const c = f.geometry?.coordinates;
                 if ((!p.name && !p.type) || !c) return null;
-                return { label: p.name || p.type, sub: [p.type, p.address].filter(Boolean).join(" · "), coords: c };
+                return {
+                  label: p.name || p.type,
+                  sub: [p.type, p.address].filter(Boolean).join(" · "),
+                  coords: c,
+                };
               })
               .filter(Boolean),
           );
@@ -1474,7 +1528,7 @@ popup.on("open", () => {
               data: wrData,
               cluster: true,
               clusterMaxZoom: 14,
-              clusterRadius: 50
+              clusterRadius: 50,
             });
 
             // Layer cluster
@@ -1491,24 +1545,16 @@ popup.on("open", () => {
                   100,
                   "#fdba74", // sedang
                   500,
-                  "#f97316"  // pekat untuk area sangat padat
+                  "#f97316", // pekat untuk area sangat padat
                 ],
-                "circle-radius": [
-                  "step",
-                  ["get", "point_count"],
-                  15,
-                  100,
-                  22,
-                  500,
-                  30
-                ],
+                "circle-radius": ["step", ["get", "point_count"], 15, 100, 22, 500, 30],
                 "circle-opacity": 0.75,
                 "circle-stroke-width": 1.5,
-                "circle-stroke-color": "#ea580c"
+                "circle-stroke-color": "#ea580c",
               },
               layout: {
-                "visibility": layers.wr ? "visible" : "none"
-              }
+                visibility: layers.wr ? "visible" : "none",
+              },
             });
 
             // Text count
@@ -1521,11 +1567,11 @@ popup.on("open", () => {
                 "text-field": "{point_count}",
                 "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
                 "text-size": 12,
-                "visibility": layers.wr ? "visible" : "none"
+                visibility: layers.wr ? "visible" : "none",
               },
               paint: {
-                "text-color": "#431407"
-              }
+                "text-color": "#431407",
+              },
             });
 
             // Single unclustered WR point
@@ -1536,19 +1582,14 @@ popup.on("open", () => {
               filter: ["!", ["has", "point_count"]],
               paint: {
                 "circle-color": "#f97316",
-                "circle-radius": [
-                  "interpolate", ["linear"], ["zoom"],
-                  10, 5,
-                  13, 7,
-                  16, 9
-                ],
+                "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 5, 13, 7, 16, 9],
                 "circle-stroke-width": 2.5,
                 "circle-stroke-color": "#ffffff",
-                "circle-opacity": 0.9
+                "circle-opacity": 0.9,
               },
               layout: {
-                "visibility": layers.wr ? "visible" : "none"
-              }
+                visibility: layers.wr ? "visible" : "none",
+              },
             });
 
             // WR text label at high zoom
@@ -1563,13 +1604,13 @@ popup.on("open", () => {
                 "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
                 "text-size": 10,
                 "text-offset": [0, 1.4],
-                "visibility": layers.wr ? "visible" : "none"
+                visibility: layers.wr ? "visible" : "none",
               },
               paint: {
                 "text-color": "#7c2d12",
                 "text-halo-color": "#ffffff",
-                "text-halo-width": 1.5
-              }
+                "text-halo-width": 1.5,
+              },
             });
 
             // Click cluster zoom
@@ -1579,29 +1620,36 @@ popup.on("open", () => {
               const clusterId = features[0].properties.cluster_id;
               map.getSource("wr-points").getClusterExpansionZoom(clusterId, (err, zoom) => {
                 if (err) return;
-                focusMapPin(map, features[0].geometry.coordinates, null, { zoom, duration: 650, offset: [0, 0] });
+                focusMapPin(map, features[0].geometry.coordinates, null, {
+                  zoom,
+                  duration: 650,
+                  offset: [0, 0],
+                });
               });
             });
 
             // Popup on unclustered point hover
             const wrPopup = new maplibregl.Popup({
               closeButton: false,
-              closeOnClick: false
+              closeOnClick: false,
             });
 
             map.on("mouseenter", "wr-unclustered-point", (e) => {
               map.getCanvas().style.cursor = "pointer";
               const coordinates = e.features[0].geometry.coordinates.slice();
               const props = e.features[0].properties;
-              
-              wrPopup.setLngLat(coordinates)
-                .setHTML(`
+
+              wrPopup
+                .setLngLat(coordinates)
+                .setHTML(
+                  `
                   <div style="color: #0f172a; padding: 4px; font-size: 11px; max-width: 200px;">
                     <strong style="display: block; font-weight: bold; margin-bottom: 2px;">WR: ${props.name}</strong>
                     <span style="display: block; margin-bottom: 2px;">${mapLabel("Jenis", "Type")}: ${props.type}</span>
                     <span style="display: block; color: #64748b; font-size: 10px;">${props.address || ""}</span>
                   </div>
-                `)
+                `,
+                )
                 .addTo(map);
             });
 
@@ -1655,13 +1703,13 @@ popup.on("open", () => {
   useEffect(() => {
     const map = mapInstance;
     if (!map || !map.isStyleLoaded()) return;
-    
+
     const setVisibility = (layerId, isVisible) => {
       if (map.getLayer(layerId)) {
         map.setLayoutProperty(layerId, "visibility", isVisible ? "visible" : "none");
       }
     };
-    
+
     setVisibility("tps-layer", layers.tps);
     setVisibility("tps-clusters", layers.tps);
     setVisibility("tps-cluster-count", layers.tps);
@@ -1672,19 +1720,25 @@ popup.on("open", () => {
     setVisibility("wr-label", layers.wr);
   }, [layers.tps, layers.wr, mapInstance, styleTick]);
 
-
   // Auto-fit the viewport to active fleet + TPonce positions are known.
   const fittedRef = useRef(false);
   useEffect(() => {
     const map = mapInstance;
     if (!map || fittedRef.current) return;
-    const pts = (trucks || []).filter((t) => t.latest_position)
+    const pts = (trucks || [])
+      .filter((t) => t.latest_position)
       .map((t) => [t.latest_position.lng, t.latest_position.lat]);
-    pts.push([106.9910, -6.3310]); // TPA Bantargebang
+    pts.push([106.991, -6.331]); // TPA Bantargebang
     if (pts.length < 2) return;
-    const lngs = pts.map((p) => p[0]); const lats = pts.map((p) => p[1]);
-    map.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-      { padding: 60, maxZoom: 12, duration: 600 });
+    const lngs = pts.map((p) => p[0]);
+    const lats = pts.map((p) => p[1]);
+    map.fitBounds(
+      [
+        [Math.min(...lngs), Math.min(...lats)],
+        [Math.max(...lngs), Math.max(...lats)],
+      ],
+      { padding: 60, maxZoom: 12, duration: 600 },
+    );
     fittedRef.current = true;
   }, [trucks, mapInstance]);
 
@@ -1701,15 +1755,18 @@ popup.on("open", () => {
     const marker = new maplibregl.Marker({ element: el }).setLngLat([trail[0].lng, trail[0].lat]).addTo(map);
     const popup = new maplibregl.Popup({ offset: 16 }).setHTML(
       `<div class="map-popup"><h4>${playbackTruck} ${lang === "id" ? "putar ulang" : "playback"}</h4>` +
-      `<p>${lang === "id" ? "Penanda pemutaran riwayat perjalanan." : "Trip movement replay marker."}</p>` +
-      `<p class="popup-src">${lang === "id" ? "SIMULASI · jejak perjalanan" : "SIMULATION · breadcrumb trail"}</p></div>`
+        `<p>${lang === "id" ? "Penanda pemutaran riwayat perjalanan." : "Trip movement replay marker."}</p>` +
+        `<p class="popup-src">${lang === "id" ? "SIMULASI · jejak perjalanan" : "SIMULATION · breadcrumb trail"}</p></div>`,
     );
     attachFocusableMarker(el, map, () => marker.getLngLat(), popup, { zoom: 15 });
     playbackMarkerRef.current = marker;
     let i = 0;
     const timer = setInterval(() => {
       i += 1;
-      if (i >= trail.length) { clearInterval(timer); return; }
+      if (i >= trail.length) {
+        clearInterval(timer);
+        return;
+      }
       marker.setLngLat([trail[i].lng, trail[i].lat]);
     }, 700);
     return () => {
@@ -1761,27 +1818,58 @@ popup.on("open", () => {
     };
   }, [mapInstance]);
 
-  const playbackOptions = Object.keys(breadcrumbs);
-
   const searchIndex = useMemo(() => {
     const items = [];
-    const push = (item) => { if (item && item.coords) items.push(item); };
+    const push = (item) => {
+      if (item && item.coords) items.push(item);
+    };
     (trucks || []).forEach((t) => {
       const snapped = mapTruth[t.truck_code]?.snapped_gps;
-      const coords = snapped ? [snapped.lng, snapped.lat]
-        : t.latest_position ? [t.latest_position.lng, t.latest_position.lat] : null;
-      push({ id: "truck-" + t.truck_code, kind: lang === "id" ? "Truk" : "Truck", label: t.truck_code, sub: `${t.driver_name} · ${t.assigned_zone}`, coords });
+      const coords = snapped
+        ? [snapped.lng, snapped.lat]
+        : t.latest_position
+          ? [t.latest_position.lng, t.latest_position.lat]
+          : null;
+      push({
+        id: "truck-" + t.truck_code,
+        kind: lang === "id" ? "Truk" : "Truck",
+        label: t.truck_code,
+        sub: `${t.driver_name} · ${t.assigned_zone}`,
+        coords,
+      });
     });
-    (tpsSearch || []).forEach((t) => push({ id: "tps-" + t.label, kind: "TPS", label: t.label, sub: t.sub, coords: t.coords }));
-    (wrSearch || []).forEach((w) => push({ id: "wr-" + w.label, kind: "WR", label: w.label, sub: w.sub, coords: w.coords }));
-    (heatSearch || []).forEach((h) => push({ id: "kel-" + h.label, kind: lang === "id" ? "Wilayah" : "District", label: h.label, sub: h.sub, coords: h.coords }));
-    (eventPermits || []).forEach((ev) => push({ id: "ev-" + ev.id, kind: lang === "id" ? "Acara" : "Event", label: ev.name, sub: `${lang === "id" ? "perkiraan" : "forecast"} ${ev.predicted_waste_tons} t`, coords: [ev.lng, ev.lat] }));
+    (tpsSearch || []).forEach((t) =>
+      push({ id: "tps-" + t.label, kind: "TPS", label: t.label, sub: t.sub, coords: t.coords }),
+    );
+    (wrSearch || []).forEach((w) =>
+      push({ id: "wr-" + w.label, kind: "WR", label: w.label, sub: w.sub, coords: w.coords }),
+    );
+    (heatSearch || []).forEach((h) =>
+      push({
+        id: "kel-" + h.label,
+        kind: lang === "id" ? "Wilayah" : "District",
+        label: h.label,
+        sub: h.sub,
+        coords: h.coords,
+      }),
+    );
+    (eventPermits || []).forEach((ev) =>
+      push({
+        id: "ev-" + ev.id,
+        kind: lang === "id" ? "Acara" : "Event",
+        label: ev.name,
+        sub: `${lang === "id" ? "perkiraan" : "forecast"} ${ev.predicted_waste_tons} t`,
+        coords: [ev.lng, ev.lat],
+      }),
+    );
     return items;
   }, [trucks, mapTruth, tpsSearch, wrSearch, heatSearch, eventPermits, lang]);
 
   const searchResults = (searchQuery || "").trim()
     ? searchIndex
-        .filter((it) => `${it.label} ${it.sub || ""}`.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+        .filter((it) =>
+          `${it.label} ${it.sub || ""}`.toLowerCase().includes(searchQuery.trim().toLowerCase()),
+        )
         .slice(0, 8)
     : [];
 
@@ -1792,7 +1880,7 @@ popup.on("open", () => {
     setSearchQuery("");
     const popup = new maplibregl.Popup({ offset: 20 }).setHTML(
       `<div class="map-popup"><h4>${item.label}</h4><p>${item.sub || item.kind}</p>` +
-      `<p class="popup-src">${item.kind} · ${lang === "id" ? "pencarian peta" : "map search"}</p></div>`
+        `<p class="popup-src">${item.kind} · ${lang === "id" ? "pencarian peta" : "map search"}</p></div>`,
     );
     focusMapPin(map, item.coords, popup, { zoom: 13.5 });
   }
@@ -1802,8 +1890,15 @@ popup.on("open", () => {
     const path = routeInfoRef.current?.path;
     if (!map || !path?.length) return;
     const pts = path.map((p) => [p.lng, p.lat]);
-    const lngs = pts.map((p) => p[0]); const lats = pts.map((p) => p[1]);
-    map.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: 60, duration: 600 });
+    const lngs = pts.map((p) => p[0]);
+    const lats = pts.map((p) => p[1]);
+    map.fitBounds(
+      [
+        [Math.min(...lngs), Math.min(...lats)],
+        [Math.max(...lngs), Math.max(...lats)],
+      ],
+      { padding: 60, duration: 600 },
+    );
   }
 
   function fitTruckRoute(code) {
@@ -1817,9 +1912,13 @@ popup.on("open", () => {
     const truck = (trucks || []).find((t) => t.truck_code === code);
     if (truck?.latest_position) pts.push([truck.latest_position.lng, truck.latest_position.lat]);
     if (pts.length < 2) return;
-    const lngs = pts.map((p) => p[0]); const lats = pts.map((p) => p[1]);
+    const lngs = pts.map((p) => p[0]);
+    const lats = pts.map((p) => p[1]);
     map.fitBounds(
-      [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+      [
+        [Math.min(...lngs), Math.min(...lats)],
+        [Math.max(...lngs), Math.max(...lats)],
+      ],
       { padding: 90, maxZoom: 12.5, duration: 600 },
     );
   }
@@ -1827,13 +1926,20 @@ popup.on("open", () => {
   function resetView() {
     const map = mapInstance;
     if (!map) return;
-    const pts = (trucks || []).filter((t) => t.latest_position)
+    const pts = (trucks || [])
+      .filter((t) => t.latest_position)
       .map((t) => [t.latest_position.lng, t.latest_position.lat]);
-    pts.push([106.9910, -6.3310]);
+    pts.push([106.991, -6.331]);
     if (pts.length < 2) return;
-    const lngs = pts.map((p) => p[0]); const lats = pts.map((p) => p[1]);
-    map.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-      { padding: 60, maxZoom: 12, duration: 600 });
+    const lngs = pts.map((p) => p[0]);
+    const lats = pts.map((p) => p[1]);
+    map.fitBounds(
+      [
+        [Math.min(...lngs), Math.min(...lats)],
+        [Math.max(...lngs), Math.max(...lats)],
+      ],
+      { padding: 60, maxZoom: 12, duration: 600 },
+    );
   }
 
   useEffect(() => {
@@ -1841,8 +1947,11 @@ popup.on("open", () => {
     if (!map || !followTruck) return;
     const truck = (trucks || []).find((t) => t.truck_code === followTruck);
     const snapped = truck && mapTruth[truck.truck_code]?.snapped_gps;
-    const coords = snapped ? [snapped.lng, snapped.lat]
-      : truck?.latest_position ? [truck.latest_position.lng, truck.latest_position.lat] : null;
+    const coords = snapped
+      ? [snapped.lng, snapped.lat]
+      : truck?.latest_position
+        ? [truck.latest_position.lng, truck.latest_position.lat]
+        : null;
     if (!coords) return;
     map.easeTo({ center: coords, zoom: Math.max(map.getZoom(), 14), duration: 700 });
   }, [followTruck, trucks, mapTruth, mapInstance]);
@@ -1857,8 +1966,11 @@ popup.on("open", () => {
     lastFocusTsRef.current = focusRequest.ts;
     const truck = (trucks || []).find((t) => t.truck_code === focusRequest.code);
     const snapped = truck && mapTruthRef.current[truck?.truck_code]?.snapped_gps;
-    const coords = snapped ? [snapped.lng, snapped.lat]
-      : truck?.latest_position ? [truck.latest_position.lng, truck.latest_position.lat] : null;
+    const coords = snapped
+      ? [snapped.lng, snapped.lat]
+      : truck?.latest_position
+        ? [truck.latest_position.lng, truck.latest_position.lat]
+        : null;
     if (!coords) return;
     map.easeTo({ center: coords, zoom: Math.max(map.getZoom(), 14), duration: 700 });
   }, [focusRequest, trucks, mapInstance]);
@@ -1871,10 +1983,15 @@ popup.on("open", () => {
         <input
           className="map-search-input"
           value={searchQuery}
-          onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            setSearchOpen(true);
+          }}
           onFocus={() => setSearchOpen(true)}
           onBlur={() => window.setTimeout(() => setSearchOpen(false), 200)}
-          placeholder={lang === "id" ? "Cari nomor truk, TPS, kecamatan..." : "Search trucks, TPS, districts..."}
+          placeholder={
+            lang === "id" ? "Cari nomor truk, TPS, kecamatan..." : "Search trucks, TPS, districts..."
+          }
           aria-label={lang === "id" ? "Cari pada peta" : "Search map"}
         />
         {searchOpen && searchResults.length > 0 && (
@@ -1892,15 +2009,36 @@ popup.on("open", () => {
         )}
       </div>
 
-      <div className="map-basemap" role="group" aria-label={lang === "id" ? "Gaya peta dasar" : "Basemap style"}>
-        {streetsOffline && <span className="basemap-offline-note" title={lang === "id" ? "Ubin jalan jarak jauh tidak tersedia" : "Remote street tiles unreachable"}>{lang === "id" ? "peta offline" : "offline map"}</span>}
+      <div
+        className="map-basemap"
+        role="group"
+        aria-label={lang === "id" ? "Gaya peta dasar" : "Basemap style"}
+      >
+        {streetsOffline && (
+          <span
+            className="basemap-offline-note"
+            title={lang === "id" ? "Ubin jalan jarak jauh tidak tersedia" : "Remote street tiles unreachable"}
+          >
+            {lang === "id" ? "peta offline" : "offline map"}
+          </span>
+        )}
         <button
           className={showAllFleet ? "active" : ""}
           onClick={() => setShowAllFleet((v) => !v)}
-          title={showAllFleet ? (lang === "id" ? "Tampilkan lebih sedikit" : "Show fewer trucks") : (lang === "id" ? `Tampilkan semua ${trucks.length} truk` : `Show all ${trucks.length} trucks`)}
+          title={
+            showAllFleet
+              ? lang === "id"
+                ? "Tampilkan lebih sedikit"
+                : "Show fewer trucks"
+              : lang === "id"
+                ? `Tampilkan semua ${trucks.length} truk`
+                : `Show all ${trucks.length} trucks`
+          }
           style={{ marginLeft: 8 }}
         >
-          {showAllFleet ? `${lang === "id" ? "Armada" : "Fleet"}: ${trucks.length}` : `${lang === "id" ? "Armada" : "Fleet"}: ${Math.min(trucks.length, 19)}`}
+          {showAllFleet
+            ? `${lang === "id" ? "Armada" : "Fleet"}: ${trucks.length}`
+            : `${lang === "id" ? "Armada" : "Fleet"}: ${Math.min(trucks.length, 19)}`}
         </button>
       </div>
 
@@ -1908,7 +2046,9 @@ popup.on("open", () => {
         <div className="map-route-pill">
           <span>
             <strong>{routeInfo.name}</strong>
-            <small>{routeInfo.distance_km} km · ~{routeInfo.eta_minutes} min · {routeInfo.source}</small>
+            <small>
+              {routeInfo.distance_km} km · ~{routeInfo.eta_minutes} min · {routeInfo.source}
+            </small>
           </span>
           <button onClick={fitRoute}>{lang === "id" ? "Paskan Rute" : "Fit"}</button>
         </div>
@@ -1916,14 +2056,20 @@ popup.on("open", () => {
 
       {followTruck && (
         <button className="map-follow-chip" onClick={() => setFollowTruck(null)}>
-          {lang === "id" ? `Mengikuti ${followTruck} — ketuk untuk berhenti` : `Following ${followTruck} — tap to stop`}
+          {lang === "id"
+            ? `Mengikuti ${followTruck} — ketuk untuk berhenti`
+            : `Following ${followTruck} — tap to stop`}
         </button>
       )}
 
-      <button className="map-reset-btn" onClick={resetView} aria-label={lang === "id" ? "Reset tampilan" : "Reset view"} title={lang === "id" ? "Reset tampilan" : "Reset view"}>
+      <button
+        className="map-reset-btn"
+        onClick={resetView}
+        aria-label={lang === "id" ? "Reset tampilan" : "Reset view"}
+        title={lang === "id" ? "Reset tampilan" : "Reset view"}
+      >
         <Compass size={15} />
       </button>
     </div>
   );
 }
-

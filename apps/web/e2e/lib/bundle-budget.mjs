@@ -58,7 +58,8 @@ for (const file of files) {
   const budget = budgetFor(file);
   const status = size <= budget ? "ok" : "OVER";
   report.push(`${status.padEnd(4)} ${file}  ${(size / KB).toFixed(1)} kB / ${(budget / KB).toFixed(0)} kB`);
-  if (size > budget) violations.push(`${file}: ${(size / KB).toFixed(1)} kB exceeds ${(budget / KB).toFixed(0)} kB budget`);
+  if (size > budget)
+    violations.push(`${file}: ${(size / KB).toFixed(1)} kB exceeds ${(budget / KB).toFixed(0)} kB budget`);
 }
 
 console.log(report.join("\n"));

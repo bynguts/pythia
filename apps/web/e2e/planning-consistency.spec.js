@@ -14,12 +14,15 @@ async function signIn(page, lang = "id") {
     data: { username: "dispatcher", password: "dispatcher-demo-pass" },
   });
   const principal = await response.json();
-  await page.evaluate(({ token, role, lang }) => {
-    localStorage.setItem("pythia_auth", "true");
-    localStorage.setItem("pythia_lang", lang);
-    localStorage.setItem("pythia_token", token);
-    localStorage.setItem("pythia_role", role);
-  }, { ...principal, lang });
+  await page.evaluate(
+    ({ token, role, lang }) => {
+      localStorage.setItem("pythia_auth", "true");
+      localStorage.setItem("pythia_lang", lang);
+      localStorage.setItem("pythia_token", token);
+      localStorage.setItem("pythia_role", role);
+    },
+    { ...principal, lang },
+  );
   // Parallel suites register the PWA service worker on this origin; its fetch
   // handler would serve stale /api/predictions caches to this suite. Unregister
   // every worker and clear caches so this page talks to the live backend only.
@@ -70,17 +73,22 @@ test("planning review derives from the active scenario inputs", async ({ page })
   // Change the simulator inputs drastically → scenario auto-reruns → the
   // review must re-derive from the NEW response.
   const scenarioPromise = page.waitForResponse(
-    (res) => res.url().includes("/predictions/kecamatan") &&
-      res.url().includes("event_attendance=200000") && res.status() === 200,
+    (res) =>
+      res.url().includes("/predictions/kecamatan") &&
+      res.url().includes("event_attendance=200000") &&
+      res.status() === 200,
     { timeout: 30000 },
   );
-  await page.locator('input[type="range"]').first().evaluate((el) => {
-    // Programmatic value change fires React's onChange via the native setter.
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-    setter.call(el, "200000");
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  await page
+    .locator('input[type="range"]')
+    .first()
+    .evaluate((el) => {
+      // Programmatic value change fires React's onChange via the native setter.
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+      setter.call(el, "200000");
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    });
   const scenarioResponse = await scenarioPromise;
   const scenario = await scenarioResponse.json();
   const scenarioPeak = topDistrictFromScenario(scenario);

@@ -66,7 +66,13 @@ test("driver pretrip, stop and receipt surfaces localize end to end", async ({ p
     await fetch(`${API}/spj/${spj.spj_id}/stops`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...headers },
-      body: JSON.stringify({ name: "TPS E2E", kecamatan: "Cilandak", address: "Jl. E2E", lat: -6.29, lng: 106.79 }),
+      body: JSON.stringify({
+        name: "TPS E2E",
+        kecamatan: "Cilandak",
+        address: "Jl. E2E",
+        lat: -6.29,
+        lng: 106.79,
+      }),
     });
     await fetch(`${API}/spj/${spj.spj_id}/activate`, { method: "POST", headers });
 

@@ -11,12 +11,15 @@ async function signIn(page, lang = "id") {
     data: { username: "dispatcher", password: "dispatcher-demo-pass" },
   });
   const principal = await response.json();
-  await page.evaluate(({ token, role, lang }) => {
-    localStorage.setItem("pythia_auth", "true");
-    localStorage.setItem("pythia_lang", lang);
-    localStorage.setItem("pythia_token", token);
-    localStorage.setItem("pythia_role", role);
-  }, { ...principal, lang });
+  await page.evaluate(
+    ({ token, role, lang }) => {
+      localStorage.setItem("pythia_auth", "true");
+      localStorage.setItem("pythia_lang", lang);
+      localStorage.setItem("pythia_token", token);
+      localStorage.setItem("pythia_role", role);
+    },
+    { ...principal, lang },
+  );
   await page.reload({ waitUntil: "domcontentloaded" });
 }
 
@@ -37,7 +40,9 @@ test("forecast never overflows the page at mobile and tablet widths", async ({ p
       scrollWidth: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
     }));
-    expect(overflow.scrollWidth, `page overflows at ${width}px: ${overflow.scrollWidth} > ${overflow.clientWidth}`)
-      .toBeLessThanOrEqual(overflow.clientWidth);
+    expect(
+      overflow.scrollWidth,
+      `page overflows at ${width}px: ${overflow.scrollWidth} > ${overflow.clientWidth}`,
+    ).toBeLessThanOrEqual(overflow.clientWidth);
   }
 });

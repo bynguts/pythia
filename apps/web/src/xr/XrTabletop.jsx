@@ -92,7 +92,15 @@ function makeLabelSprite(lines) {
 
 // Owns the WebGL renderer, the orbit controls and any XR session. React only
 // talks to it through the returned handle.
-function createEngine({ container, cityScene, dayIndex, onSelectDistrict, onArStage, onSessionChange, onNextDay }) {
+function createEngine({
+  container,
+  cityScene,
+  dayIndex,
+  onSelectDistrict,
+  onArStage,
+  onSessionChange,
+  onNextDay,
+}) {
   const reducedMotion = prefersReducedMotion();
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -166,9 +174,12 @@ function createEngine({ container, cityScene, dayIndex, onSelectDistrict, onArSt
     // the plate's width.
     // The plate is seen corner-on while it orbits, so fit its diagonal.
     const span = Math.hypot(model.footprint.width, model.footprint.depth);
-    const fitDistance = (span * 1.12) / (2 * Math.tan((camera.fov * Math.PI) / 360) * Math.min(1, camera.aspect));
+    const fitDistance =
+      (span * 1.12) / (2 * Math.tan((camera.fov * Math.PI) / 360) * Math.min(1, camera.aspect));
     const dir = new THREE.Vector3(0.62, 0.72, 0.92).normalize();
-    camera.position.copy(controls.target).addScaledVector(dir, Math.min(controls.maxDistance, Math.max(0.6, fitDistance)));
+    camera.position
+      .copy(controls.target)
+      .addScaledVector(dir, Math.min(controls.maxDistance, Math.max(0.6, fitDistance)));
     controls.update();
   }
   const resizeObserver = new ResizeObserver(() => {
@@ -192,7 +203,10 @@ function createEngine({ container, cityScene, dayIndex, onSelectDistrict, onArSt
   const onPointerUp = (event) => {
     if (!downAt || Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 6) return;
     const rect = renderer.domElement.getBoundingClientRect();
-    pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+    pointer.set(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1,
+    );
     raycaster.setFromCamera(pointer, camera);
     pick(raycaster.ray);
   };
@@ -274,7 +288,13 @@ function createEngine({ container, cityScene, dayIndex, onSelectDistrict, onArSt
   // never stays in an immersive mode the page has given up on.
   function adopt(next, kind) {
     let ended = false;
-    next.addEventListener("end", () => { ended = true; }, { once: true });
+    next.addEventListener(
+      "end",
+      () => {
+        ended = true;
+      },
+      { once: true },
+    );
     session = next;
     sessionKind = kind;
     next.addEventListener("end", onSessionEnd);
@@ -555,9 +575,12 @@ export function XrTabletop() {
     };
   }, [engineState, mode, session, params.city, day, cityScene, labelClass, labelNote]);
 
-  useEffect(() => () => {
-    delete window.__pythiaXr;
-  }, []);
+  useEffect(
+    () => () => {
+      delete window.__pythiaXr;
+    },
+    [],
+  );
 
   // A tap on any DOM-overlay panel (header, selected district, controls) must
   // not double as an XR "select" (place / pick) behind it. beforexrselect
@@ -566,7 +589,8 @@ export function XrTabletop() {
     const el = overlayRef.current;
     if (!el) return undefined;
     const block = (event) => {
-      if (event.target instanceof Element && event.target.closest(".xr-panel, .xr-controls")) event.preventDefault();
+      if (event.target instanceof Element && event.target.closest(".xr-panel, .xr-controls"))
+        event.preventDefault();
     };
     el.addEventListener("beforexrselect", block);
     return () => el.removeEventListener("beforexrselect", block);
@@ -591,9 +615,14 @@ export function XrTabletop() {
 
   const locale = lang === "en" ? "en-GB" : "id-ID";
   const dates = cityScene?.horizon?.dates || [];
-  const dateLabel = (iso) => (iso
-    ? new Date(`${iso}T00:00:00`).toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" })
-    : "—");
+  const dateLabel = (iso) =>
+    iso
+      ? new Date(`${iso}T00:00:00`).toLocaleDateString(locale, {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+        })
+      : "—";
   const tonnes = (n) => `${Math.round(n).toLocaleString(locale)} t`;
   const districts = cityScene?.districts || [];
   const totalToday = cityScene?.horizon?.daily_total_tons?.[day] ?? 0;
@@ -621,7 +650,9 @@ export function XrTabletop() {
         <header className="xr-panel xr-head">
           <div className="xr-head-row">
             <div className="xr-title">
-              <span className="xr-kicker"><Box size={13} aria-hidden="true" /> {t("xr_kicker")}</span>
+              <span className="xr-kicker">
+                <Box size={13} aria-hidden="true" /> {t("xr_kicker")}
+              </span>
               <h1>{cityName}</h1>
             </div>
             <div className="xr-lang" role="group" aria-label={t("xr_language")}>
@@ -655,7 +686,10 @@ export function XrTabletop() {
                 <p className="xr-scenario" data-testid="xr-scenario">
                   {t("xr_scenario")
                     .replace("{rain}", Number(cityScene.scenario.rainfall_mm || 0).toLocaleString(locale))
-                    .replace("{people}", Number(cityScene.scenario.event_attendance || 0).toLocaleString(locale))}
+                    .replace(
+                      "{people}",
+                      Number(cityScene.scenario.event_attendance || 0).toLocaleString(locale),
+                    )}
                 </p>
               )}
               <dl className="xr-metrics">
@@ -675,7 +709,10 @@ export function XrTabletop() {
             </>
           )}
           <nav className="xr-cities" aria-label={t("xr_city_switch")}>
-            {[["jakarta", "Jakarta"], ["hcmc", "Ho Chi Minh City"]].map(([id, name]) => (
+            {[
+              ["jakarta", "Jakarta"],
+              ["hcmc", "Ho Chi Minh City"],
+            ].map(([id, name]) => (
               <a
                 key={id}
                 href={`/xr?city=${id}`}
@@ -689,7 +726,9 @@ export function XrTabletop() {
         </header>
 
         {!cityScene && !loadError && (
-          <p className="xr-panel xr-status" role="status">{t("xr_loading")}</p>
+          <p className="xr-panel xr-status" role="status">
+            {t("xr_loading")}
+          </p>
         )}
         {loadError && (
           <div className="xr-panel xr-status" role="alert">
@@ -700,7 +739,9 @@ export function XrTabletop() {
           </div>
         )}
         {engineState.error && (
-          <p className="xr-panel xr-status" role="alert">{t("xr_webgl_failed")}</p>
+          <p className="xr-panel xr-status" role="alert">
+            {t("xr_webgl_failed")}
+          </p>
         )}
 
         <div className="xr-spacer" />
@@ -713,7 +754,12 @@ export function XrTabletop() {
                 {tonnes(dayTons(selected, day))} · {t(`xr_risk_${dayRisk(selected, day)}`)}
               </span>
             </div>
-            <button type="button" className="xr-icon-btn" aria-label={t("xr_close")} onClick={() => setSelectedId(null)}>
+            <button
+              type="button"
+              className="xr-icon-btn"
+              aria-label={t("xr_close")}
+              onClick={() => setSelectedId(null)}
+            >
               <X size={18} />
             </button>
           </div>
@@ -724,25 +770,59 @@ export function XrTabletop() {
             {session === "immersive-ar" && (
               <>
                 <p className="xr-hint" role="status" data-testid="xr-ar-hint">
-                  {arStage === "placed" ? t("xr_ar_placed") : arStage === "ready" ? t("xr_ar_tap") : t("xr_ar_scan")}
+                  {arStage === "placed"
+                    ? t("xr_ar_placed")
+                    : arStage === "ready"
+                      ? t("xr_ar_tap")
+                      : t("xr_ar_scan")}
                 </p>
                 <div className="xr-tool-row">
-                  <button type="button" className="xr-icon-btn" aria-label={t("xr_rotate_left")} onClick={() => engineRef.current?.rotate(-15)}>
+                  <button
+                    type="button"
+                    className="xr-icon-btn"
+                    aria-label={t("xr_rotate_left")}
+                    onClick={() => engineRef.current?.rotate(-15)}
+                  >
                     <RotateCcw size={18} />
                   </button>
-                  <button type="button" className="xr-icon-btn" aria-label={t("xr_rotate_right")} onClick={() => engineRef.current?.rotate(15)}>
+                  <button
+                    type="button"
+                    className="xr-icon-btn"
+                    aria-label={t("xr_rotate_right")}
+                    onClick={() => engineRef.current?.rotate(15)}
+                  >
                     <RotateCw size={18} />
                   </button>
-                  <button type="button" className="xr-icon-btn" aria-label={t("xr_smaller")} onClick={() => engineRef.current?.scale(0.8)}>
+                  <button
+                    type="button"
+                    className="xr-icon-btn"
+                    aria-label={t("xr_smaller")}
+                    onClick={() => engineRef.current?.scale(0.8)}
+                  >
                     <Minus size={18} />
                   </button>
-                  <button type="button" className="xr-icon-btn" aria-label={t("xr_larger")} onClick={() => engineRef.current?.scale(1.25)}>
+                  <button
+                    type="button"
+                    className="xr-icon-btn"
+                    aria-label={t("xr_larger")}
+                    onClick={() => engineRef.current?.scale(1.25)}
+                  >
                     <Plus size={18} />
                   </button>
-                  <button type="button" className="xr-icon-btn" aria-label={t("xr_move")} onClick={() => engineRef.current?.replace()}>
+                  <button
+                    type="button"
+                    className="xr-icon-btn"
+                    aria-label={t("xr_move")}
+                    onClick={() => engineRef.current?.replace()}
+                  >
                     <Move size={18} />
                   </button>
-                  <button type="button" className="xr-icon-btn" aria-label={t("xr_exit")} onClick={() => engineRef.current?.endSession()}>
+                  <button
+                    type="button"
+                    className="xr-icon-btn"
+                    aria-label={t("xr_exit")}
+                    onClick={() => engineRef.current?.endSession()}
+                  >
                     <LogOut size={18} />
                   </button>
                 </div>
@@ -750,19 +830,37 @@ export function XrTabletop() {
             )}
 
             {!session && mode === "ar" && (
-              <button type="button" className="xr-btn primary" data-testid="xr-enter-ar" onClick={enterAr} disabled={!engineState.ready}>
+              <button
+                type="button"
+                className="xr-btn primary"
+                data-testid="xr-enter-ar"
+                onClick={enterAr}
+                disabled={!engineState.ready}
+              >
                 <Box size={18} /> {t("xr_place_ar")}
               </button>
             )}
             {!session && mode === "vr" && (
-              <button type="button" className="xr-btn primary" data-testid="xr-enter-vr" onClick={enterVr} disabled={!engineState.ready}>
+              <button
+                type="button"
+                className="xr-btn primary"
+                data-testid="xr-enter-vr"
+                onClick={enterVr}
+                disabled={!engineState.ready}
+              >
                 <Glasses size={18} /> {t("xr_enter_vr")}
               </button>
             )}
             {!session && mode === "orbit" && (
-              <p className="xr-hint" data-testid="xr-orbit-hint">{t("xr_orbit_hint")}</p>
+              <p className="xr-hint" data-testid="xr-orbit-hint">
+                {t("xr_orbit_hint")}
+              </p>
             )}
-            {xrError && <p className="xr-error" role="alert">{xrError}</p>}
+            {xrError && (
+              <p className="xr-error" role="alert">
+                {xrError}
+              </p>
+            )}
 
             <div className="xr-scrubber">
               <button
@@ -811,7 +909,11 @@ export function XrTabletop() {
               <ul aria-label={t("xr_legend")}>
                 {RISK_LEVELS.map((level) => (
                   <li key={level}>
-                    <span className="xr-swatch" style={{ background: RISK_COLORS[level] }} aria-hidden="true" />
+                    <span
+                      className="xr-swatch"
+                      style={{ background: RISK_COLORS[level] }}
+                      aria-hidden="true"
+                    />
                     {t(`xr_risk_${level}`)}
                   </li>
                 ))}

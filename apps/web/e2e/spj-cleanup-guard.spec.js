@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { assertNoLeftoverActiveSpj, cancelSpjIndependently, disposeCleanupContext } from "./lib/spjCleanup.js";
+import {
+  assertNoLeftoverActiveSpj,
+  cancelSpjIndependently,
+  disposeCleanupContext,
+} from "./lib/spjCleanup.js";
 
 // #89 regression guard: cleanup must run and complete even when the scenario
 // body fails (or times out). A leftover active/draft SPJ on T-210 would poison

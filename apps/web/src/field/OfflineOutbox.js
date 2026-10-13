@@ -36,7 +36,9 @@ export function enqueue(entry) {
   if (existing >= 0) {
     const kept = items[existing];
     items[existing] = {
-      ...kept, ...entry, queued_at: kept.queued_at,
+      ...kept,
+      ...entry,
+      queued_at: kept.queued_at,
       operation_id: kept.operation_id || newOperationId(),
     };
   } else {

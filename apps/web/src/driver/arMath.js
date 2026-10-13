@@ -23,20 +23,22 @@ export function normalizeAngle(deg) {
 }
 
 export function hasCoordinate(point) {
-  return Boolean(point)
-    && Number.isFinite(Number(point.lat))
-    && Number.isFinite(Number(point.lng))
-    && point.lat !== null && point.lng !== null
-    && Math.abs(Number(point.lat)) <= 90
-    && Math.abs(Number(point.lng)) <= 180;
+  return (
+    Boolean(point) &&
+    Number.isFinite(Number(point.lat)) &&
+    Number.isFinite(Number(point.lng)) &&
+    point.lat !== null &&
+    point.lng !== null &&
+    Math.abs(Number(point.lat)) <= 90 &&
+    Math.abs(Number(point.lng)) <= 180
+  );
 }
 
 /** Great-circle distance in metres between two {lat, lng} points. */
 export function haversineMeters(a, b) {
   const dLat = (b.lat - a.lat) * DEG;
   const dLng = (b.lng - a.lng) * DEG;
-  const h = Math.sin(dLat / 2) ** 2
-    + Math.cos(a.lat * DEG) * Math.cos(b.lat * DEG) * Math.sin(dLng / 2) ** 2;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * DEG) * Math.cos(b.lat * DEG) * Math.sin(dLng / 2) ** 2;
   return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
@@ -139,8 +141,9 @@ export function formatDistance(meters, lang = "id") {
 
 /** 0° → "U"/"N", 90° → "T"/"E" … eight-point compass label. */
 export function cardinal(deg, lang = "id") {
-  const labels = lang === "en"
-    ? ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-    : ["U", "TL", "T", "TG", "S", "BD", "B", "BL"];
+  const labels =
+    lang === "en"
+      ? ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+      : ["U", "TL", "T", "TG", "S", "BD", "B", "BL"];
   return labels[Math.round(wrap360(deg) / 45) % 8];
 }

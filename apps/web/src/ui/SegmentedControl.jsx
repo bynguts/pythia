@@ -1,5 +1,3 @@
-import React from "react";
-
 export function SegmentedControl({ label, describedBy, value, options, onChange }) {
   return (
     <div className="segmented-control" role="group" aria-label={label} aria-describedby={describedBy}>

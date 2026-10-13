@@ -12,12 +12,15 @@ async function signIn(page, lang = "id", role = "dispatcher") {
     data: { username: role, password: role === "admin" ? "admin-demo-pass" : "dispatcher-demo-pass" },
   });
   const principal = await response.json();
-  await page.evaluate(({ token, role, lang }) => {
-    localStorage.setItem("pythia_auth", "true");
-    localStorage.setItem("pythia_lang", lang);
-    localStorage.setItem("pythia_token", token);
-    localStorage.setItem("pythia_role", role);
-  }, { ...principal, lang, role });
+  await page.evaluate(
+    ({ token, role, lang }) => {
+      localStorage.setItem("pythia_auth", "true");
+      localStorage.setItem("pythia_lang", lang);
+      localStorage.setItem("pythia_token", token);
+      localStorage.setItem("pythia_role", role);
+    },
+    { ...principal, lang, role },
+  );
   await page.reload({ waitUntil: "domcontentloaded" });
 }
 
@@ -39,8 +42,12 @@ test.afterEach(async () => {
 // The dispatcher session token for independent cleanup.
 let page_token = Promise.resolve("");
 
-test("SPJ expansion is a named keyboard-operable button and the panel stays contained at 390px", async ({ page }) => {
-  page_token = signIn(page, "id", "admin").then(() => page.evaluate(() => localStorage.getItem("pythia_token")));
+test("SPJ expansion is a named keyboard-operable button and the panel stays contained at 390px", async ({
+  page,
+}) => {
+  page_token = signIn(page, "id", "admin").then(() =>
+    page.evaluate(() => localStorage.getItem("pythia_token")),
+  );
   await page.setViewportSize({ width: 390, height: 844 });
   await openFleet(page);
 
@@ -89,7 +96,6 @@ test("SPJ create form works at 390px without overflow", async ({ page }) => {
   const picker = page.locator(".spj-stop-picker input");
   await picker.waitFor({ timeout: 20000 });
   const site = await page.evaluate(async () => {
-    const token = localStorage.getItem("pythia_token");
     const res = await fetch("http://127.0.0.1:8001/api/geo/tps-coordinates");
     const body = await res.json();
     const f = (body.features || []).find((x) => x.properties?.name);

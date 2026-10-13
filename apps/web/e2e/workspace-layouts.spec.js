@@ -124,7 +124,14 @@ test("planning presents scenario, allocation, and approval as one flow", async (
       body: JSON.stringify({
         plan_id: "PLAN-E2E",
         status: "proposed",
-        assignments: [{ truck_code: "T-001", area: "tebet", assigned_tons: 24, evidence: { capacity_tons: 24, permit_compliant: true } }],
+        assignments: [
+          {
+            truck_code: "T-001",
+            area: "tebet",
+            assigned_tons: 24,
+            evidence: { capacity_tons: 24, permit_compliant: true },
+          },
+        ],
         unmet_reasons: [],
         total_demand_tons: 24,
         total_assigned_tons: 24,

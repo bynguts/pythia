@@ -1,9 +1,5 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { API_URL } from "../config.js";
-import {
-  Route,
-  Truck,
-} from "lucide-react";
 
 export const fallbackSnapshot = {
   kpis: {
@@ -30,7 +26,11 @@ export const fallbackSnapshot = {
       status: "active",
       is_damaged: false,
       latest_position: { lat: -6.151, lng: 106.841, speed_kmh: 34, updated_seconds_ago: 24 },
-      assigned_path: [{ lat: -6.132, lng: 106.826 }, { lat: -6.145, lng: 106.835 }, { lat: -6.158, lng: 106.848 }],
+      assigned_path: [
+        { lat: -6.132, lng: 106.826 },
+        { lat: -6.145, lng: 106.835 },
+        { lat: -6.158, lng: 106.848 },
+      ],
       deviation: { violated: false, distance_meters: 220, severity: "normal" },
     },
     {
@@ -41,7 +41,11 @@ export const fallbackSnapshot = {
       status: "deviation",
       is_damaged: false,
       latest_position: { lat: -6.221, lng: 106.785, speed_kmh: 18, updated_seconds_ago: 24 },
-      assigned_path: [{ lat: -6.172, lng: 106.764 }, { lat: -6.181, lng: 106.781 }, { lat: -6.195, lng: 106.802 }],
+      assigned_path: [
+        { lat: -6.172, lng: 106.764 },
+        { lat: -6.181, lng: 106.781 },
+        { lat: -6.195, lng: 106.802 },
+      ],
       deviation: { violated: true, distance_meters: 2924, severity: "critical" },
     },
     {
@@ -52,7 +56,11 @@ export const fallbackSnapshot = {
       status: "active",
       is_damaged: true,
       latest_position: { lat: -6.211, lng: 106.874, speed_kmh: 23, updated_seconds_ago: 24 },
-      assigned_path: [{ lat: -6.229, lng: 106.9 }, { lat: -6.218, lng: 106.883 }, { lat: -6.205, lng: 106.865 }],
+      assigned_path: [
+        { lat: -6.229, lng: 106.9 },
+        { lat: -6.218, lng: 106.883 },
+        { lat: -6.205, lng: 106.865 },
+      ],
       deviation: { violated: false, distance_meters: 331, severity: "normal" },
     },
   ],
@@ -69,7 +77,8 @@ export const fallbackSnapshot = {
           name: "Route B - Daan Mogot Recovery",
           eta_minutes: 48,
           score: 39.0,
-          reason: "recommended because it is permit-compliant, has the lowest combined ETA/traffic/flood risk score",
+          reason:
+            "recommended because it is permit-compliant, has the lowest combined ETA/traffic/flood risk score",
         },
       ],
       status: "active",
@@ -92,12 +101,60 @@ export const fallbackSnapshot = {
     },
   ],
   predictions: [
-    { district: "CENGKARENG", date: "2026-06-01", predicted_tons: 489.4, spike_percent: 41, risk_level: "critical", recommended_extra_trucks: 27, recommended_extra_crews: 28 },
-    { district: "CILINCING", date: "2026-06-01", predicted_tons: 443.1, spike_percent: 36, risk_level: "high", recommended_extra_trucks: 25, recommended_extra_crews: 25 },
-    { district: "CAKUNG", date: "2026-06-01", predicted_tons: 426.6, spike_percent: 33, risk_level: "high", recommended_extra_trucks: 24, recommended_extra_crews: 24 },
-    { district: "TANJUNG PRIOK", date: "2026-06-01", predicted_tons: 399.5, spike_percent: 31, risk_level: "high", recommended_extra_trucks: 22, recommended_extra_crews: 23 },
-    { district: "KALI DERES", date: "2026-06-01", predicted_tons: 380.2, spike_percent: 29, risk_level: "high", recommended_extra_trucks: 21, recommended_extra_crews: 22 },
-    { district: "DUREN SAWIT", date: "2026-06-01", predicted_tons: 354.2, spike_percent: 27, risk_level: "high", recommended_extra_trucks: 20, recommended_extra_crews: 20 },
+    {
+      district: "CENGKARENG",
+      date: "2026-06-01",
+      predicted_tons: 489.4,
+      spike_percent: 41,
+      risk_level: "critical",
+      recommended_extra_trucks: 27,
+      recommended_extra_crews: 28,
+    },
+    {
+      district: "CILINCING",
+      date: "2026-06-01",
+      predicted_tons: 443.1,
+      spike_percent: 36,
+      risk_level: "high",
+      recommended_extra_trucks: 25,
+      recommended_extra_crews: 25,
+    },
+    {
+      district: "CAKUNG",
+      date: "2026-06-01",
+      predicted_tons: 426.6,
+      spike_percent: 33,
+      risk_level: "high",
+      recommended_extra_trucks: 24,
+      recommended_extra_crews: 24,
+    },
+    {
+      district: "TANJUNG PRIOK",
+      date: "2026-06-01",
+      predicted_tons: 399.5,
+      spike_percent: 31,
+      risk_level: "high",
+      recommended_extra_trucks: 22,
+      recommended_extra_crews: 23,
+    },
+    {
+      district: "KALI DERES",
+      date: "2026-06-01",
+      predicted_tons: 380.2,
+      spike_percent: 29,
+      risk_level: "high",
+      recommended_extra_trucks: 21,
+      recommended_extra_crews: 22,
+    },
+    {
+      district: "DUREN SAWIT",
+      date: "2026-06-01",
+      predicted_tons: 354.2,
+      spike_percent: 27,
+      risk_level: "high",
+      recommended_extra_trucks: 20,
+      recommended_extra_crews: 20,
+    },
   ],
   osrm_route: {
     name: "Route B - Daan Mogot Recovery",
@@ -119,7 +176,8 @@ export const fallbackSnapshot = {
         wind_speed_kmh: 17.1,
         risk_level: "critical",
         waste_impact_percent: 22,
-        operational_advice: "Delay low-priority departures, protect flood-prone TPS routes, and prepare backup crews.",
+        operational_advice:
+          "Delay low-priority departures, protect flood-prone TPS routes, and prepare backup crews.",
       },
       {
         date: "2026-06-02",
@@ -162,18 +220,22 @@ export function normalizeCommandSnapshot(rawSnapshot) {
     osrm_route: rawSnapshot?.osrm_route || fallbackSnapshot.osrm_route,
   };
 
-  const predictions = Array.isArray(merged.predictions) && merged.predictions.length
-    ? merged.predictions
-    : fallbackSnapshot.critical_predictions;
-  const criticalPredictions = Array.isArray(merged.critical_predictions) && merged.critical_predictions.length
-    ? merged.critical_predictions
-    : predictions
-      .filter((item) => ["critical", "high"].includes(item.risk_level))
-      .sort((a, b) => (b.spike_percent || 0) - (a.spike_percent || 0))
-      .slice(0, 8);
+  const predictions =
+    Array.isArray(merged.predictions) && merged.predictions.length
+      ? merged.predictions
+      : fallbackSnapshot.critical_predictions;
+  const criticalPredictions =
+    Array.isArray(merged.critical_predictions) && merged.critical_predictions.length
+      ? merged.critical_predictions
+      : predictions
+          .filter((item) => ["critical", "high"].includes(item.risk_level))
+          .sort((a, b) => (b.spike_percent || 0) - (a.spike_percent || 0))
+          .slice(0, 8);
 
   merged.predictions = predictions;
-  merged.critical_predictions = criticalPredictions.length ? criticalPredictions : fallbackSnapshot.critical_predictions;
+  merged.critical_predictions = criticalPredictions.length
+    ? criticalPredictions
+    : fallbackSnapshot.critical_predictions;
   return merged;
 }
 

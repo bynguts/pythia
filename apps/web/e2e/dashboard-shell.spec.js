@@ -36,7 +36,11 @@ test("command rail exposes six task workspaces and preserves active state", asyn
   await expect(nav.getByRole("button")).toHaveCount(labels.length);
   for (const label of labels) await expect(nav.getByRole("button", { name: label })).toBeVisible();
 
-  for (const [label, heading] of [["Prediksi", "Prediksi timbulan sampah"], ["Rencana", "Rencana operasi terpadu"], ["Armada", "Operasi armada hari ini"]]) {
+  for (const [label, heading] of [
+    ["Prediksi", "Prediksi timbulan sampah"],
+    ["Rencana", "Rencana operasi terpadu"],
+    ["Armada", "Operasi armada hari ini"],
+  ]) {
     const button = nav.getByRole("button", { name: label });
     await button.click();
     await expect(button).toHaveAttribute("aria-current", "page");
@@ -46,7 +50,14 @@ test("command rail exposes six task workspaces and preserves active state", asyn
 
 test("desktop and mobile layouts never create document-level horizontal overflow", async ({ page }) => {
   await page.getByRole("button", { name: "Surat Perintah Jalan" }).click();
-  for (const viewport of [{ width: 1440, height: 900 }, { width: 820, height: 1180 }, { width: 768, height: 1024 }, { width: 390, height: 844 }, { width: 375, height: 812 }, { width: 320, height: 720 }]) {
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 820, height: 1180 },
+    { width: 768, height: 1024 },
+    { width: 390, height: 844 },
+    { width: 375, height: 812 },
+    { width: 320, height: 720 },
+  ]) {
     await page.setViewportSize(viewport);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2)).toBe(true);
   }
@@ -102,7 +113,10 @@ test("core workspaces meet text contrast requirements", async ({ page }) => {
   test.setTimeout(120000);
   const scan = async (surface) => {
     const results = await new AxeBuilder({ page }).withRules(["color-contrast"]).analyze();
-    expect(results.violations, `${surface}: ${JSON.stringify(results.violations.map(({ nodes }) => nodes.map(({ target }) => target)))}`).toEqual([]);
+    expect(
+      results.violations,
+      `${surface}: ${JSON.stringify(results.violations.map(({ nodes }) => nodes.map(({ target }) => target)))}`,
+    ).toEqual([]);
   };
 
   await page.evaluate(() => localStorage.removeItem("pythia_auth"));
@@ -116,7 +130,8 @@ test("core workspaces meet text contrast requirements", async ({ page }) => {
     ["Rencana", "Rencana operasi terpadu"],
     ["Audit Data & Model ML", "Audit data & model"],
   ]) {
-    if (workspace) await page.getByTestId("workspace-navigation").getByRole("button", { name: workspace }).click();
+    if (workspace)
+      await page.getByTestId("workspace-navigation").getByRole("button", { name: workspace }).click();
     await expect(page.getByRole("heading", { name: heading }).first()).toBeVisible();
     await scan(workspace || "Fleet");
   }
@@ -125,7 +140,9 @@ test("core workspaces meet text contrast requirements", async ({ page }) => {
 test("workspace navigation emits no runtime errors", async ({ page }) => {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
   for (const label of ["Prediksi", "Rencana", "Sopir", "Audit Data & Model ML", "Armada"]) {
     await page.getByTestId("workspace-navigation").getByRole("button", { name: label }).click();
   }

@@ -28,7 +28,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: max(env(safe-area-inset-top), var(--space-3)) var(--space-4) max(env(safe-area-inset-bottom), var(--space-3));
+  padding: max(env(safe-area-inset-top), var(--space-3)) var(--space-4)
+    max(env(safe-area-inset-bottom), var(--space-3));
   pointer-events: none;
 }
 

@@ -533,7 +533,7 @@
 .driver-link {
   min-height: 36px;
   padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, .16);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 7px;
   color: #ffffff;
 }
@@ -544,7 +544,7 @@
   padding: 22px;
   border: 0;
   border-radius: 14px;
-  box-shadow: 0 8px 30px rgba(20, 32, 28, .07);
+  box-shadow: 0 8px 30px rgba(20, 32, 28, 0.07);
 }
 
 .driver-shell > .driver-card:first-of-type {
@@ -553,7 +553,7 @@
 
 .driver-card h2 {
   font-size: 18px;
-  letter-spacing: -.02em;
+  letter-spacing: -0.02em;
 }
 
 .driver-pick-list {

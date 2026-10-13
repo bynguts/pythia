@@ -17,7 +17,10 @@ async function authenticatedApi() {
   return { api, token };
 }
 
-test("a retried field confirmation re-sends the operation id it was queued with", async ({ page, context }) => {
+test("a retried field confirmation re-sends the operation id it was queued with", async ({
+  page,
+  context,
+}) => {
   const { api, token } = await authenticatedApi();
   const instruction = `E2E op-id ${Date.now()}`;
   const create = await api.post(`${API}/dispatch`, {
@@ -35,8 +38,13 @@ test("a retried field confirmation re-sends the operation id it was queued with"
   await context.setOffline(true);
   await page.getByTestId("btn-ready").click();
   await page.getByTestId("btn-ready").click();
-  const queued = await page.evaluate((id) => JSON.parse(localStorage.getItem("pythia_field_outbox") || "[]")
-    .filter((entry) => entry.dispatchId === id), dispatch.id);
+  const queued = await page.evaluate(
+    (id) =>
+      JSON.parse(localStorage.getItem("pythia_field_outbox") || "[]").filter(
+        (entry) => entry.dispatchId === id,
+      ),
+    dispatch.id,
+  );
   expect(queued).toHaveLength(1);
   expect(queued[0].operation_id.length).toBeGreaterThanOrEqual(8);
 

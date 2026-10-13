@@ -1,14 +1,39 @@
-import React from "react";
-import {
-  Activity,
-} from "lucide-react";
+import { Activity } from "lucide-react";
 
 export function IotBinSensors() {
   const sensors = [
-    { loc: "Kawasan Monas, Jakarta Pusat", id: "RAD-MONAS-01", fill: 82, status: "CRITICAL", batt: "88%", last: "3 mins ago" },
-    { loc: "Gelora Bung Karno, Senayan", id: "RAD-GBK-02", fill: 45, status: "NORMAL", batt: "94%", last: "5 mins ago" },
-    { loc: "Bundaran HI - Jl. Sudirman", id: "RAD-HI-03", fill: 94, status: "CRITICAL", batt: "90%", last: "1 min ago" },
-    { loc: "Taman Fatahillah, Kota Tua", id: "RAD-KOTUA-04", fill: 20, status: "NORMAL", batt: "92%", last: "12 mins ago" },
+    {
+      loc: "Kawasan Monas, Jakarta Pusat",
+      id: "RAD-MONAS-01",
+      fill: 82,
+      status: "CRITICAL",
+      batt: "88%",
+      last: "3 mins ago",
+    },
+    {
+      loc: "Gelora Bung Karno, Senayan",
+      id: "RAD-GBK-02",
+      fill: 45,
+      status: "NORMAL",
+      batt: "94%",
+      last: "5 mins ago",
+    },
+    {
+      loc: "Bundaran HI - Jl. Sudirman",
+      id: "RAD-HI-03",
+      fill: 94,
+      status: "CRITICAL",
+      batt: "90%",
+      last: "1 min ago",
+    },
+    {
+      loc: "Taman Fatahillah, Kota Tua",
+      id: "RAD-KOTUA-04",
+      fill: 20,
+      status: "NORMAL",
+      batt: "92%",
+      last: "12 mins ago",
+    },
   ];
 
   return (
@@ -39,7 +64,10 @@ export function IotBinSensors() {
               </div>
             </div>
             <div className="iot-fill-track">
-              <span className={s.status === "CRITICAL" ? "critical" : "normal"} style={{ width: `${s.fill}%` }} />
+              <span
+                className={s.status === "CRITICAL" ? "critical" : "normal"}
+                style={{ width: `${s.fill}%` }}
+              />
             </div>
           </div>
         ))}

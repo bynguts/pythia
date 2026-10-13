@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { MapboxOverlay } from "@deck.gl/mapbox";
@@ -37,7 +37,8 @@ import "../styles/twin.css";
 // remote tiles. Presentation mode (?present=1, used for recorded footage) and
 // ?basemap=streets opt back into the real 3D street basemap.
 const IS_AUTOMATION = typeof navigator !== "undefined" && Boolean(navigator.webdriver);
-const QUERY = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+const QUERY =
+  typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
 const PRESENT = QUERY.get("present") === "1";
 const USE_STREETS = !IS_AUTOMATION || PRESENT || QUERY.get("basemap") === "streets";
 const ANIMATE_UNDER_AUTOMATION = PRESENT || QUERY.get("motion") === "on";
@@ -65,7 +66,9 @@ const TRUCK_UNITS_PER_MS = TRUCK_PERIOD / 9000;
 const DESKTOP_QUERY = "(min-width: 921px)";
 
 function useMediaQuery(query) {
-  const [matches, setMatches] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+  const [matches, setMatches] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(query).matches,
+  );
   useEffect(() => {
     const media = window.matchMedia(query);
     const update = () => setMatches(media.matches);
@@ -90,7 +93,9 @@ export function TwinWorkspace({ onCityChange }) {
 
   const [city, setCity] = useState(initialCity);
   // The shell header names the city, so it must follow the twin's city switch.
-  useEffect(() => { onCityChange?.(city); }, [city, onCityChange]);
+  useEffect(() => {
+    onCityChange?.(city);
+  }, [city, onCityChange]);
   const [rainfall, setRainfall] = useState(0);
   const [eventPreset, setEventPreset] = useState("none");
   const [day, setDay] = useState(0);
@@ -116,11 +121,13 @@ export function TwinWorkspace({ onCityChange }) {
   const dayCount = scene?.horizon?.dates?.length || TWIN_DAYS;
   const safeDay = Math.min(day, dayCount - 1);
   // Mark the event the scene was computed for, not the pending preset.
-  const sceneEvent = useMemo(() => (
-    scene?.scenario?.event_attendance && scene.scenario.event_lat != null
-      ? { lat: scene.scenario.event_lat, lng: scene.scenario.event_lng }
-      : null
-  ), [scene]);
+  const sceneEvent = useMemo(
+    () =>
+      scene?.scenario?.event_attendance && scene.scenario.event_lat != null
+        ? { lat: scene.scenario.event_lat, lng: scene.scenario.event_lng }
+        : null,
+    [scene],
+  );
   // Data arrays for the layers, rebuilt only when the view changes — never
   // per animation frame.
   const view = useMemo(
@@ -131,9 +138,15 @@ export function TwinWorkspace({ onCityChange }) {
   const ready = mapReady && settled && scene?.city?.id === city;
 
   const number = useMemo(() => new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }), [locale]);
-  const dateFormat = useMemo(() => new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short" }), [locale]);
+  const dateFormat = useMemo(
+    () => new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short" }),
+    [locale],
+  );
   const weekdayFormat = useMemo(() => new Intl.DateTimeFormat(locale, { weekday: "short" }), [locale]);
-  const formatDate = useCallback((iso, format = dateFormat) => (iso ? format.format(new Date(`${iso}T00:00:00`)) : "—"), [dateFormat]);
+  const formatDate = useCallback(
+    (iso, format = dateFormat) => (iso ? format.format(new Date(`${iso}T00:00:00`)) : "—"),
+    [dateFormat],
+  );
   const classLabel = useCallback((value) => t(`twin_class_${value}`), [t]);
 
   const containerRef = useRef(null);
@@ -167,7 +180,8 @@ export function TwinWorkspace({ onCityChange }) {
       interleaved: true,
       layers: [],
       onHover: (info) => {
-        if (info.layer?.id === "twin-districts" && info.object) setHover({ x: info.x, y: info.y, id: info.object.id });
+        if (info.layer?.id === "twin-districts" && info.object)
+          setHover({ x: info.x, y: info.y, id: info.object.id });
         else setHover(null);
       },
       onClick: (info) => {
@@ -203,14 +217,20 @@ export function TwinWorkspace({ onCityChange }) {
       // Quiet the basemap so the data columns carry the colour: hide points
       // of interest and wash out parks and land cover.
       for (const layer of map.getStyle().layers || []) {
-        if (layer.type === "symbol" && /^poi/.test(layer.id)) map.setLayoutProperty(layer.id, "visibility", "none");
-        if (layer.type === "fill" && /park|landuse|landcover|wood|grass|forest/.test(layer.id)) map.setPaintProperty(layer.id, "fill-opacity", 0.35);
+        if (layer.type === "symbol" && /^poi/.test(layer.id))
+          map.setLayoutProperty(layer.id, "visibility", "none");
+        if (layer.type === "fill" && /park|landuse|landcover|wood|grass|forest/.test(layer.id))
+          map.setPaintProperty(layer.id, "fill-opacity", 0.35);
       }
       setMapReady(true);
     });
     // Attribution stays one tap away (the "i" control) instead of opening
     // over the bottom of small map windows.
-    const collapseAttribution = () => map.getContainer().querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
+    const collapseAttribution = () =>
+      map
+        .getContainer()
+        .querySelector(".maplibregl-ctrl-attrib")
+        ?.classList.remove("maplibregl-compact-show");
     map.once("load", collapseAttribution);
     map.once("idle", collapseAttribution);
 
@@ -229,7 +249,12 @@ export function TwinWorkspace({ onCityChange }) {
     if (!map) return;
     const sidePanel = desktop && !PRESENT;
     // Leave room for the legend (top-left), timeline (bottom) and panel (right).
-    map.setPadding({ top: sidePanel ? 40 : 0, left: 0, right: sidePanel ? 368 : 0, bottom: sidePanel ? 92 : 0 });
+    map.setPadding({
+      top: sidePanel ? 40 : 0,
+      left: 0,
+      right: sidePanel ? 368 : 0,
+      bottom: sidePanel ? 92 : 0,
+    });
   }, [desktop, mapReady]);
 
   // ---- camera follows the city ----------------------------------------------
@@ -247,7 +272,8 @@ export function TwinWorkspace({ onCityChange }) {
   const queue = scene?.landfill_queue;
   const queueClass = scene?.provenance?.landfill_queue?.class;
   // Data honesty: the queue figures are a simulation, and the label says so.
-  const queueClassText = queue && queueClass ? t("twin_queue_class").replace("{class}", classLabel(queueClass)) : null;
+  const queueClassText =
+    queue && queueClass ? t("twin_queue_class").replace("{class}", classLabel(queueClass)) : null;
   const landfillName = prepared?.landfill?.name;
   const landfillLabel = landfillName
     ? [
@@ -256,7 +282,9 @@ export function TwinWorkspace({ onCityChange }) {
           ? `${t("twin_queue_trucks").replace("{n}", number.format(queue.trucks_in_queue ?? 0))} · ${t("twin_queue_wait").replace("{n}", number.format(queue.avg_wait_minutes ?? 0))}`
           : t("twin_queue_none"),
         queueClassText,
-      ].filter(Boolean).join("\n")
+      ]
+        .filter(Boolean)
+        .join("\n")
     : null;
 
   const draw = useCallback(() => {
@@ -339,7 +367,9 @@ export function TwinWorkspace({ onCityChange }) {
 
   useEffect(() => {
     if (!tour) return undefined;
-    const onKey = (e) => { if (e.key === "Escape") stopTour(); };
+    const onKey = (e) => {
+      if (e.key === "Escape") stopTour();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [tour, stopTour]);
@@ -365,7 +395,12 @@ export function TwinWorkspace({ onCityChange }) {
       setEventPreset,
     };
   }, [ready, scene, safeDay, summary, tour, startTour, stopTour, landfillLabel]);
-  useEffect(() => () => { delete window.__pythiaTwin; }, []);
+  useEffect(
+    () => () => {
+      delete window.__pythiaTwin;
+    },
+    [],
+  );
 
   // ---- derived copy ---------------------------------------------------------
   const truckCapacity = /([\d.]+)\s*t/.exec(scene?.units?.trucks_required || "")?.[1];
@@ -378,7 +413,9 @@ export function TwinWorkspace({ onCityChange }) {
     {
       label: t("twin_metric_peak"),
       value: scene ? formatDate(scene.summary.peak_date) : "—",
-      helper: scene ? t("twin_metric_peak_helper").replace("{n}", number.format(scene.summary.peak_total_tons)) : "",
+      helper: scene
+        ? t("twin_metric_peak_helper").replace("{n}", number.format(scene.summary.peak_total_tons))
+        : "",
       tone: "warning",
     },
     {
@@ -399,7 +436,9 @@ export function TwinWorkspace({ onCityChange }) {
   const isDemoCity = scene?.city?.data_class === "SIMULATED_DEMO_CITY";
   const provenance = scene ? Object.entries(scene.provenance || {}) : [];
   const generatedAt = scene?.generated_at
-    ? new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(scene.generated_at))
+    ? new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(
+        new Date(scene.generated_at),
+      )
     : null;
   const riskList = useMemo(() => {
     if (!scene) return [];
@@ -428,11 +467,20 @@ export function TwinWorkspace({ onCityChange }) {
   const minTotal = Math.min(...totals, maxTotal);
 
   function onTimelineKey(event) {
-    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft" && event.key !== "Home" && event.key !== "End") return;
+    if (
+      event.key !== "ArrowRight" &&
+      event.key !== "ArrowLeft" &&
+      event.key !== "Home" &&
+      event.key !== "End"
+    )
+      return;
     event.preventDefault();
-    const next = event.key === "Home" ? 0
-      : event.key === "End" ? dayCount - 1
-        : (safeDay + (event.key === "ArrowRight" ? 1 : -1) + dayCount) % dayCount;
+    const next =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? dayCount - 1
+          : (safeDay + (event.key === "ArrowRight" ? 1 : -1) + dayCount) % dayCount;
     setDay(next);
     dayButtonsRef.current[next]?.focus();
   }
@@ -444,7 +492,13 @@ export function TwinWorkspace({ onCityChange }) {
       [t("twin_tt_tons"), `${number.format(row.predicted_tons)} t`],
       [t("twin_tt_normal"), `${number.format(row.normal_tons)} t`],
       [t("twin_tt_delta"), formatDelta(delta)],
-      [t("twin_tt_risk"), <span className={`twin-risk-tag risk-${row.risk}`} key="risk"><i aria-hidden="true" />{t(`twin_risk_${row.risk}`)}</span>],
+      [
+        t("twin_tt_risk"),
+        <span className={`twin-risk-tag risk-${row.risk}`} key="risk">
+          <i aria-hidden="true" />
+          {t(`twin_risk_${row.risk}`)}
+        </span>,
+      ],
       [t("twin_tt_trucks"), number.format(row.trucks_required)],
       [t("twin_tt_source"), classLabel(scene.provenance?.districts?.class)],
     ];
@@ -460,7 +514,9 @@ export function TwinWorkspace({ onCityChange }) {
     >
       <header className="workspace-heading twin-heading">
         <div>
-          <span className="workspace-kicker"><Box size={14} /> {t("twin_kicker")}</span>
+          <span className="workspace-kicker">
+            <Box size={14} /> {t("twin_kicker")}
+          </span>
           <h1 id="twin-title">{t("twin_title")}</h1>
           <p>{t("twin_sub")}</p>
         </div>
@@ -506,10 +562,28 @@ export function TwinWorkspace({ onCityChange }) {
             )}
 
             {status && (
-              <div className={`twin-status twin-status-${status}`} role={status === "error" ? "alert" : "status"} data-testid="twin-status">
-                {status === "error" ? <AlertTriangle size={15} aria-hidden="true" /> : <RefreshCw size={15} aria-hidden="true" className="twin-spin" />}
-                <span>{status === "error" ? t("twin_error") : status === "loading" ? t("twin_loading") : t("twin_refreshing")}</span>
-                {status === "error" && <button type="button" onClick={retry}>{t("twin_retry")}</button>}
+              <div
+                className={`twin-status twin-status-${status}`}
+                role={status === "error" ? "alert" : "status"}
+                data-testid="twin-status"
+              >
+                {status === "error" ? (
+                  <AlertTriangle size={15} aria-hidden="true" />
+                ) : (
+                  <RefreshCw size={15} aria-hidden="true" className="twin-spin" />
+                )}
+                <span>
+                  {status === "error"
+                    ? t("twin_error")
+                    : status === "loading"
+                      ? t("twin_loading")
+                      : t("twin_refreshing")}
+                </span>
+                {status === "error" && (
+                  <button type="button" onClick={retry}>
+                    {t("twin_retry")}
+                  </button>
+                )}
               </div>
             )}
 
@@ -517,13 +591,18 @@ export function TwinWorkspace({ onCityChange }) {
               <div
                 className="twin-tooltip"
                 data-testid="twin-tooltip"
-                style={{ transform: `translate(${Math.round(hover.x + 14)}px, ${Math.round(hover.y + 14)}px)` }}
+                style={{
+                  transform: `translate(${Math.round(hover.x + 14)}px, ${Math.round(hover.y + 14)}px)`,
+                }}
               >
                 <strong>{hovered.name}</strong>
                 {hovered.admin_area && <small>{hovered.admin_area}</small>}
                 <dl>
                   {districtFacts(hovered).map(([label, value]) => (
-                    <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
+                    <div key={label}>
+                      <dt>{label}</dt>
+                      <dd>{value}</dd>
+                    </div>
                   ))}
                 </dl>
                 {hovered.event_localized && <em>{t("twin_tt_event")}</em>}
@@ -531,23 +610,45 @@ export function TwinWorkspace({ onCityChange }) {
             )}
 
             {tour && (
-              <div className="twin-tour-caption" role="status" aria-live="polite" data-testid="twin-tour-caption">
-                <span>{tour.index + 1} / {tour.total}</span>
+              <div
+                className="twin-tour-caption"
+                role="status"
+                aria-live="polite"
+                data-testid="twin-tour-caption"
+              >
+                <span>
+                  {tour.index + 1} / {tour.total}
+                </span>
                 <strong>{t(`twin_tour_${tour.step.key}`).replace("{name}", tour.step.name || "")}</strong>
-                <button type="button" onClick={stopTour}><Square size={14} aria-hidden="true" /> {t("twin_tour_stop")}</button>
+                <button type="button" onClick={stopTour}>
+                  <Square size={14} aria-hidden="true" /> {t("twin_tour_stop")}
+                </button>
               </div>
             )}
           </div>
 
           <div className="twin-legend" data-testid="twin-legend">
-            <div className="twin-legend-risk" aria-label={t("twin_risk_legend")} title={t("twin_risk_legend")} role="group">
+            <div
+              className="twin-legend-risk"
+              aria-label={t("twin_risk_legend")}
+              title={t("twin_risk_legend")}
+              role="group"
+            >
               {RISK_ORDER.map((risk) => (
-                <span key={risk} className={`twin-risk-tag risk-${risk}`}><i aria-hidden="true" />{t(`twin_risk_${risk}`)}</span>
+                <span key={risk} className={`twin-risk-tag risk-${risk}`}>
+                  <i aria-hidden="true" />
+                  {t(`twin_risk_${risk}`)}
+                </span>
               ))}
             </div>
             <ul className="twin-provenance" data-testid="twin-provenance" aria-label={t("twin_layers_title")}>
               {provenance.map(([layer, info]) => (
-                <li key={layer} className={`twin-chip class-${String(info.class).toLowerCase()}`} title={info.source} data-testid={`twin-provenance-${layer}`}>
+                <li
+                  key={layer}
+                  className={`twin-chip class-${String(info.class).toLowerCase()}`}
+                  title={info.source}
+                  data-testid={`twin-provenance-${layer}`}
+                >
                   <span>{t(`twin_layer_${layer}`)}</span>
                   <b>{classLabel(info.class)}</b>
                 </li>
@@ -569,7 +670,12 @@ export function TwinWorkspace({ onCityChange }) {
             >
               {playing ? <Pause size={18} /> : <Play size={18} />}
             </button>
-            <div className="twin-days" role="group" aria-label={t("twin_timeline_label")} onKeyDown={onTimelineKey}>
+            <div
+              className="twin-days"
+              role="group"
+              aria-label={t("twin_timeline_label")}
+              onKeyDown={onTimelineKey}
+            >
               {(scene?.horizon?.dates || []).map((date, index) => {
                 const total = totals[index] || 0;
                 const height = 22 + ((total - minTotal) / Math.max(1, maxTotal - minTotal)) * 78;
@@ -577,7 +683,9 @@ export function TwinWorkspace({ onCityChange }) {
                   <button
                     key={date}
                     type="button"
-                    ref={(el) => { dayButtonsRef.current[index] = el; }}
+                    ref={(el) => {
+                      dayButtonsRef.current[index] = el;
+                    }}
                     className="twin-day"
                     data-testid={`twin-day-${index}`}
                     aria-pressed={index === safeDay}
@@ -585,7 +693,9 @@ export function TwinWorkspace({ onCityChange }) {
                     tabIndex={index === safeDay ? 0 : -1}
                     onClick={() => setDay(index)}
                   >
-                    <span className="twin-day-bar" aria-hidden="true"><i style={{ height: `${height}%` }} /></span>
+                    <span className="twin-day-bar" aria-hidden="true">
+                      <i style={{ height: `${height}%` }} />
+                    </span>
                     <span className="twin-day-label" aria-hidden="true">
                       {index === 0 ? t("twin_today") : formatDate(date, weekdayFormat)}
                       <small>{new Date(`${date}T00:00:00`).getDate()}</small>
@@ -612,12 +722,18 @@ export function TwinWorkspace({ onCityChange }) {
               >
                 <span>{t("twin_panel_toggle")}</span>
                 <small>{`${number.format(rainfall)} mm · ${preset.attendance ? number.format(preset.attendance) : t("twin_event_none")}`}</small>
-                {sheetOpen ? <ChevronDown size={18} aria-hidden="true" /> : <ChevronUp size={18} aria-hidden="true" />}
+                {sheetOpen ? (
+                  <ChevronDown size={18} aria-hidden="true" />
+                ) : (
+                  <ChevronUp size={18} aria-hidden="true" />
+                )}
               </button>
 
               <div className="twin-panel-body" id="twin-panel-body" hidden={!desktop && !sheetOpen}>
                 <section className="twin-panel-section" aria-labelledby="twin-city-label">
-                  <h2 id="twin-city-label" className="twin-panel-title">{t("twin_city_label")}</h2>
+                  <h2 id="twin-city-label" className="twin-panel-title">
+                    {t("twin_city_label")}
+                  </h2>
                   <div className="twin-choice" role="group" aria-labelledby="twin-city-label">
                     {CITIES.map((id) => (
                       <button
@@ -625,7 +741,10 @@ export function TwinWorkspace({ onCityChange }) {
                         type="button"
                         data-testid={`twin-city-${id}`}
                         aria-pressed={city === id}
-                        onClick={() => { setCity(id); setSelectedId(null); }}
+                        onClick={() => {
+                          setCity(id);
+                          setSelectedId(null);
+                        }}
                       >
                         {t(`twin_city_${id}`)}
                       </button>
@@ -634,10 +753,16 @@ export function TwinWorkspace({ onCityChange }) {
                 </section>
 
                 <section className="twin-panel-section" aria-labelledby="twin-scenario-title">
-                  <h2 id="twin-scenario-title" className="twin-panel-title">{t("twin_scenario_title")}</h2>
+                  <h2 id="twin-scenario-title" className="twin-panel-title">
+                    {t("twin_scenario_title")}
+                  </h2>
                   <label className="twin-slider" htmlFor="twin-rainfall">
-                    <span><CloudRain size={15} aria-hidden="true" /> {t("twin_rainfall")}</span>
-                    <output htmlFor="twin-rainfall" data-testid="twin-rainfall-value">{number.format(rainfall)} mm</output>
+                    <span>
+                      <CloudRain size={15} aria-hidden="true" /> {t("twin_rainfall")}
+                    </span>
+                    <output htmlFor="twin-rainfall" data-testid="twin-rainfall-value">
+                      {number.format(rainfall)} mm
+                    </output>
                   </label>
                   <input
                     id="twin-rainfall"
@@ -650,7 +775,9 @@ export function TwinWorkspace({ onCityChange }) {
                     aria-valuetext={`${rainfall} mm`}
                     onChange={(e) => setRainfall(Number(e.target.value))}
                   />
-                  <span className="twin-field-label" id="twin-event-label"><Users size={15} aria-hidden="true" /> {t("twin_event")}</span>
+                  <span className="twin-field-label" id="twin-event-label">
+                    <Users size={15} aria-hidden="true" /> {t("twin_event")}
+                  </span>
                   <div className="twin-choice twin-choice-3" role="group" aria-labelledby="twin-event-label">
                     {EVENT_PRESETS.map((p) => (
                       <button
@@ -661,7 +788,9 @@ export function TwinWorkspace({ onCityChange }) {
                         onClick={() => setEventPreset(p.id)}
                       >
                         {p.attendance
-                          ? t("twin_event_preset").replace("{n}", number.format(p.attendance)).replace("{venue}", venue.name)
+                          ? t("twin_event_preset")
+                              .replace("{n}", number.format(p.attendance))
+                              .replace("{venue}", venue.name)
                           : t("twin_event_none")}
                       </button>
                     ))}
@@ -677,7 +806,11 @@ export function TwinWorkspace({ onCityChange }) {
                     onClick={tour ? stopTour : startTour}
                     disabled={!ready && !tour}
                   >
-                    {tour ? <Square size={16} aria-hidden="true" /> : <Clapperboard size={16} aria-hidden="true" />}
+                    {tour ? (
+                      <Square size={16} aria-hidden="true" />
+                    ) : (
+                      <Clapperboard size={16} aria-hidden="true" />
+                    )}
                     {tour ? t("twin_tour_stop") : t("twin_tour")}
                   </button>
                   <a className="twin-btn secondary" data-testid="twin-xr-link" href={xrHref}>
@@ -686,7 +819,9 @@ export function TwinWorkspace({ onCityChange }) {
                 </section>
 
                 <section className="twin-panel-section" aria-labelledby="twin-risk-list-title">
-                  <h2 id="twin-risk-list-title" className="twin-panel-title">{t("twin_risk_list_title")}</h2>
+                  <h2 id="twin-risk-list-title" className="twin-panel-title">
+                    {t("twin_risk_list_title")}
+                  </h2>
                   <ul className="twin-risk-list" data-testid="twin-risk-list">
                     {riskList.map(({ district, row, delta }) => (
                       <li key={district.id}>
@@ -698,15 +833,24 @@ export function TwinWorkspace({ onCityChange }) {
                         >
                           <span className="twin-risk-name">{district.name}</span>
                           <span className="twin-risk-delta">{formatDelta(delta)}</span>
-                          <span className={`twin-risk-tag risk-${row.risk}`}><i aria-hidden="true" />{t(`twin_risk_${row.risk}`)}</span>
+                          <span className={`twin-risk-tag risk-${row.risk}`}>
+                            <i aria-hidden="true" />
+                            {t(`twin_risk_${row.risk}`)}
+                          </span>
                         </button>
                       </li>
                     ))}
                   </ul>
                 </section>
 
-                <section className="twin-panel-section" aria-labelledby="twin-detail-title" data-testid="twin-detail">
-                  <h2 id="twin-detail-title" className="twin-panel-title">{t("twin_selected_title")}</h2>
+                <section
+                  className="twin-panel-section"
+                  aria-labelledby="twin-detail-title"
+                  data-testid="twin-detail"
+                >
+                  <h2 id="twin-detail-title" className="twin-panel-title">
+                    {t("twin_selected_title")}
+                  </h2>
                   {selected ? (
                     <div className="twin-detail">
                       <div className="twin-detail-head">
@@ -715,14 +859,20 @@ export function TwinWorkspace({ onCityChange }) {
                       </div>
                       <dl>
                         {districtFacts(selected).map(([label, value]) => (
-                          <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
+                          <div key={label}>
+                            <dt>{label}</dt>
+                            <dd>{value}</dd>
+                          </div>
                         ))}
                       </dl>
                       <div className="twin-detail-series" aria-hidden="true">
                         {selected.series.map((row, index) => {
                           const max = Math.max(...selected.series.map((r) => r.predicted_tons));
                           return (
-                            <span key={row.date} className={`risk-${row.risk}${index === safeDay ? " is-current" : ""}`}>
+                            <span
+                              key={row.date}
+                              className={`risk-${row.risk}${index === safeDay ? " is-current" : ""}`}
+                            >
                               <i style={{ height: `${Math.max(12, (row.predicted_tons / max) * 100)}%` }} />
                             </span>
                           );

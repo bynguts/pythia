@@ -12,11 +12,7 @@ const KEY = "pythia_driver_outbox";
 // a SUCCESS for the queue (the server state already matches the intent):
 // pre-trip is a daily record, stop completion is idempotent, and a receipt
 // replay with the same operation_id conflicts with itself on record.
-const CONFLICT_MEANS_DONE = [
-  "/pretrip",
-  "/stops/",
-  "/receipt",
-];
+const CONFLICT_MEANS_DONE = ["/pretrip", "/stops/", "/receipt"];
 
 export function readDriverOutbox() {
   try {

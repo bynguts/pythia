@@ -96,9 +96,7 @@ async function post(path, data) {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    const fallback = currentLang() === "en"
-      ? `Request failed (${res.status})`
-      : `Gagal (${res.status})`;
+    const fallback = currentLang() === "en" ? `Request failed (${res.status})` : `Gagal (${res.status})`;
     throw new Error(body.detail || fallback);
   }
   return res.json();
@@ -152,9 +150,7 @@ function PreTripForm({ driver, done, onDone, say }) {
 
   const answered = Object.keys(items).length;
   const failures = PRETRIP_ITEMS.filter((key) => items[key] === false);
-  const canSubmit =
-    answered === PRETRIP_ITEMS.length &&
-    (failures.length === 0 || note.trim().length > 0);
+  const canSubmit = answered === PRETRIP_ITEMS.length && (failures.length === 0 || note.trim().length > 0);
 
   const markRestOk = () => {
     setItems((prev) => {
@@ -184,7 +180,12 @@ function PreTripForm({ driver, done, onDone, say }) {
           driver_name: driver.driver_name,
           component: key,
           severity: BERAT_COMPONENTS.has(key) ? "berat" : "ringan",
-          note: note.trim() || t("drv_pretrip_no_reason").replace("{label}", t(`drv_pretrip_item_${key === "bak_compactor" ? "bak" : key}`)),
+          note:
+            note.trim() ||
+            t("drv_pretrip_no_reason").replace(
+              "{label}",
+              t(`drv_pretrip_item_${key === "bak_compactor" ? "bak" : key}`),
+            ),
           source: "pretrip",
         });
       }
@@ -214,7 +215,9 @@ function PreTripForm({ driver, done, onDone, say }) {
   if (done === null) {
     return (
       <section className="driver-card" data-testid="pretrip-loading" aria-busy="true">
-        <p className="driver-muted" role="status">{t("drv_pretrip_checking")}</p>
+        <p className="driver-muted" role="status">
+          {t("drv_pretrip_checking")}
+        </p>
       </section>
     );
   }
@@ -228,9 +231,7 @@ function PreTripForm({ driver, done, onDone, say }) {
           </h2>
           <span className="driver-badge done">{t("drv_pretrip_done_badge")}</span>
         </div>
-        <p className="driver-muted">
-          {t("drv_pretrip_done_desc")}
-        </p>
+        <p className="driver-muted">{t("drv_pretrip_done_desc")}</p>
       </section>
     );
   }
@@ -300,12 +301,7 @@ function PreTripForm({ driver, done, onDone, say }) {
         >
           {t("drv_pretrip_rest_ok")}
         </button>
-        <button
-          type="button"
-          className="driver-btn primary"
-          onClick={submit}
-          disabled={!canSubmit || busy}
-        >
+        <button type="button" className="driver-btn primary" onClick={submit} disabled={!canSubmit || busy}>
           <Check size={16} /> {t("drv_pretrip_save")}
         </button>
       </div>
@@ -405,7 +401,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
     // #45: evidence is hoisted so the offline catch can queue it durably.
     let evidence = null;
     try {
-      const pos = arrival.fix || await getPosition(stop);
+      const pos = arrival.fix || (await getPosition(stop));
       evidence = {
         arrival: {
           photo_name: arrival.name,
@@ -414,7 +410,12 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
           lng: pos.lng,
           approx: Boolean(pos.approx),
           ...(arrival.fix
-            ? { source: "ar", accuracy_m: arrival.fix.accuracy_m, at: arrival.fix.at, fix_at: arrival.fix.fix_at }
+            ? {
+                source: "ar",
+                accuracy_m: arrival.fix.accuracy_m,
+                at: arrival.fix.at,
+                fix_at: arrival.fix.fix_at,
+              }
             : {}),
         },
         weighing,
@@ -429,7 +430,9 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
         enqueueDriverOperation({
           path: `/spj/${spj.spj_id}/stops/${index}/complete`,
           data: { evidence },
-          label: t("drv_stop_title").replace("{n}", index + 1).replace("{name}", stop.name),
+          label: t("drv_stop_title")
+            .replace("{n}", index + 1)
+            .replace("{name}", stop.name),
         });
         window.dispatchEvent(new Event("pythia-driver-outbox-changed"));
         onCompleted();
@@ -442,8 +445,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
     }
   };
 
-  const canSubmit =
-    arrival && weighing.length > 0 && officerPhoto && officerName.trim().length > 0;
+  const canSubmit = arrival && weighing.length > 0 && officerPhoto && officerName.trim().length > 0;
 
   return (
     <article
@@ -452,7 +454,10 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
     >
       <div className="driver-card-head">
         <h2>
-          <MapPin size={18} /> {t("drv_stop_title").replace("{n}", index + 1).replace("{name}", stop.name)}
+          <MapPin size={18} />{" "}
+          {t("drv_stop_title")
+            .replace("{n}", index + 1)
+            .replace("{name}", stop.name)}
         </h2>
         {completed && <span className="driver-badge done">{t("drv_stop_selesai")}</span>}
       </div>
@@ -470,9 +475,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
         </ul>
       )}
 
-      {locked && !completed && (
-        <p className="driver-muted">{t("drv_stop_locked")}</p>
-      )}
+      {locked && !completed && <p className="driver-muted">{t("drv_stop_locked")}</p>}
 
       {current && !completed && !open && (
         <div className="driver-actions">
@@ -509,10 +512,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
         <div className="stop-form">
           <ol className="step-list">
             {[t("drv_step_arrival"), t("drv_step_weigh"), t("drv_step_officer")].map((label, i) => (
-              <li
-                key={label}
-                className={`step ${step > i + 1 ? "done" : step === i + 1 ? "current" : ""}`}
-              >
+              <li key={label} className={`step ${step > i + 1 ? "done" : step === i + 1 ? "current" : ""}`}>
                 {step > i + 1 ? <CheckCircle2 size={15} /> : <span className="step-num">{i + 1}</span>}
                 {label}
               </li>
@@ -545,7 +545,9 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
             className="driver-file"
             onChange={(e) => handlePhoto(e.target.files?.[0], setArrival)}
           />
-          {arrival && <p className="driver-muted">{t("drv_photo_attached").replace("{name}", arrival.name)}</p>}
+          {arrival && (
+            <p className="driver-muted">{t("drv_photo_attached").replace("{name}", arrival.name)}</p>
+          )}
           {arrival?.fix && (
             <figure className="arrival-ar" data-testid="arrival-ar-evidence">
               <img src={arrival.b64} alt={t("drv_ar_photo_alt")} />
@@ -703,9 +705,12 @@ function DeliveryCard({ spj, say, onDone }) {
     try {
       const result = await post("/ocr/timbangan", { photo_b64: photo.b64 });
       if (version !== photoVersion.current) return;
-      if (result.confidence === "high" &&
-          typeof result.weight_kg === "number" &&
-          Number.isFinite(result.weight_kg) && result.weight_kg > 0) {
+      if (
+        result.confidence === "high" &&
+        typeof result.weight_kg === "number" &&
+        Number.isFinite(result.weight_kg) &&
+        result.weight_kg > 0
+      ) {
         setTotalWeight(String(result.weight_kg));
         setWeightSource("ocr");
         setOcr({
@@ -751,7 +756,9 @@ function DeliveryCard({ spj, say, onDone }) {
       });
       try {
         localStorage.setItem(`pythia_receipt_${spj.spj_id}`, "done");
-      } catch { /* flag is best-effort; receipt is already recorded server-side */ }
+      } catch {
+        /* flag is best-effort; receipt is already recorded server-side */
+      }
       onDone();
     } catch (err) {
       if (err?.network) {
@@ -771,7 +778,9 @@ function DeliveryCard({ spj, say, onDone }) {
         window.dispatchEvent(new Event("pythia-driver-outbox-changed"));
         try {
           localStorage.setItem(`pythia_receipt_${spj.spj_id}`, "done");
-        } catch { /* best-effort */ }
+        } catch {
+          /* best-effort */
+        }
         onDone();
         say(t("drv_queued_offline"));
       } else {
@@ -783,16 +792,13 @@ function DeliveryCard({ spj, say, onDone }) {
   };
 
   return (
-    <section className="driver-card" data-testid="delivery-card"
-             data-spj-id={spj.spj_id}>
+    <section className="driver-card" data-testid="delivery-card" data-spj-id={spj.spj_id}>
       <div className="driver-card-head">
         <h2>
           <PackageCheck size={18} /> {t("drv_receipt_title")}
         </h2>
       </div>
-      <p className="driver-muted">
-        {t("drv_receipt_intro").replace("{destination}", spj.destination)}
-      </p>
+      <p className="driver-muted">{t("drv_receipt_intro").replace("{destination}", spj.destination)}</p>
       <label className="driver-label" htmlFor="receipt-photo">
         {t("drv_receipt_photo_label")}
       </label>
@@ -811,11 +817,19 @@ function DeliveryCard({ spj, say, onDone }) {
       />
       {receipt && <p className="driver-muted">{t("drv_photo_attached").replace("{name}", receipt.name)}</p>}
       {ocr.status === "loading" && (
-        <p className="weigh-feedback" role="status">{t("drv_receipt_reading")}</p>
+        <p className="weigh-feedback" role="status">
+          {t("drv_receipt_reading")}
+        </p>
       )}
       {ocr.status === "suggested" && (
         <p className="weigh-feedback" role="status">
-          {t("drv_receipt_suggested").replace("{source}", ocr.source).replace("{n}", ocr.suggestion).replace("{extra}", weightSource === "ocr" ? t("drv_receipt_confirm_hint") : t("drv_receipt_manual_hint"))}
+          {t("drv_receipt_suggested")
+            .replace("{source}", ocr.source)
+            .replace("{n}", ocr.suggestion)
+            .replace(
+              "{extra}",
+              weightSource === "ocr" ? t("drv_receipt_confirm_hint") : t("drv_receipt_manual_hint"),
+            )}
         </p>
       )}
       {ocr.status === "unavailable" && (
@@ -1028,10 +1042,7 @@ export default function DriverApp() {
   }, [driver]);
 
   const pickDriver = (d) => {
-    localStorage.setItem(
-      "pythia_driver",
-      JSON.stringify({ driver_name: d.name, truck_code: d.code }),
-    );
+    localStorage.setItem("pythia_driver", JSON.stringify({ driver_name: d.name, truck_code: d.code }));
     setDriver({ driver_name: d.name, truck_code: d.code });
   };
 
@@ -1079,9 +1090,7 @@ export default function DriverApp() {
                 </button>
               </li>
             ))}
-            {drivers.length === 0 && (
-              <li className="driver-muted">{t("drv_gate_loading")}</li>
-            )}
+            {drivers.length === 0 && <li className="driver-muted">{t("drv_gate_loading")}</li>}
           </ul>
         </section>
         <Toast message={toast} />
@@ -1111,9 +1120,7 @@ export default function DriverApp() {
         <span className="driver-header-right">
           {queuedCount > 0 && (
             <span className="driver-queued" data-testid="driver-queued-count">
-              {flushing
-                ? t("drv_syncing")
-                : t("drv_queued_n").replace("{n}", queuedCount)}
+              {flushing ? t("drv_syncing") : t("drv_queued_n").replace("{n}", queuedCount)}
             </span>
           )}
           {!online && (
@@ -1140,14 +1147,8 @@ export default function DriverApp() {
         <section className="driver-card driver-done" data-testid="done-screen">
           <ShieldCheck size={40} />
           <h1>{t("drv_done_title")}</h1>
-          <p className="driver-muted">
-            {t("drv_done_desc")}
-          </p>
-          <button
-            type="button"
-            className="driver-btn ghost"
-            onClick={() => setDoneScreen(false)}
-          >
+          <p className="driver-muted">{t("drv_done_desc")}</p>
+          <button type="button" className="driver-btn ghost" onClick={() => setDoneScreen(false)}>
             <ArrowLeft size={16} /> {t("drv_done_back")}
           </button>
         </section>

@@ -1,9 +1,5 @@
-import React from "react";
 import { useLanguage } from "../i18n.jsx";
 import { StatusPill } from "../ui/StatusPill.jsx";
-import {
-  Route,
-} from "lucide-react";
 
 export function RouteEvidencePanel({ route }) {
   const { lang } = useLanguage();
@@ -13,7 +9,11 @@ export function RouteEvidencePanel({ route }) {
       <div className="panel-title">
         <div>
           <h2>{lang === "id" ? "Bukti Rute OSRM" : "OSRM Route Evidence"}</h2>
-          <p>{lang === "id" ? "Estimasi waktu dan geometri rute diambil dari routing publik OSRM." : "ETA and route geometry are fetched from OSRM public routing, with fallback for demo resilience."}</p>
+          <p>
+            {lang === "id"
+              ? "Estimasi waktu dan geometri rute diambil dari routing publik OSRM."
+              : "ETA and route geometry are fetched from OSRM public routing, with fallback for demo resilience."}
+          </p>
         </div>
         <StatusPill tone={route.source === "osrm" ? "success" : "warning"}>{route.source}</StatusPill>
       </div>

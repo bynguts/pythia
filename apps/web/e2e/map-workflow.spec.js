@@ -37,7 +37,8 @@ test("map canvas renders (not blank)", async ({ page }) => {
 test("cold Fleet load reuses aggregate map truth for route playback", async ({ page }) => {
   const breadcrumbRequests = [];
   page.on("request", (request) => {
-    if (/\/api\/fleet\/[^/]+\/breadcrumbs(?:\?|$)/.test(request.url())) breadcrumbRequests.push(request.url());
+    if (/\/api\/fleet\/[^/]+\/breadcrumbs(?:\?|$)/.test(request.url()))
+      breadcrumbRequests.push(request.url());
   });
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.getByTestId("deck-tools-toggle").click();
@@ -50,11 +51,9 @@ test("cold Fleet load reuses aggregate map truth for route playback", async ({ p
 
 test("actual routes colored by violation state", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.waitForFunction(
-    () => (window.__pythiaMapFeatures?.actualKinds || []).length > 0,
-    null,
-    { timeout: 30000 }
-  );
+  await page.waitForFunction(() => (window.__pythiaMapFeatures?.actualKinds || []).length > 0, null, {
+    timeout: 30000,
+  });
   const kinds = await page.evaluate(() => window.__pythiaMapFeatures?.actualKinds || []);
   // At least one clean (green) and, given T-047 deviates, one violation (red).
   expect(kinds).toContain("actual-clean");
@@ -94,13 +93,16 @@ test("map canvas has real color diversity (decoded pixels, not byte variance)", 
   const buckets = await page.evaluate(async (url) => {
     const img = await createImageBitmap(await (await fetch(url)).blob());
     const cv = document.createElement("canvas");
-    cv.width = img.width; cv.height = img.height;
+    cv.width = img.width;
+    cv.height = img.height;
     const ctx = cv.getContext("2d");
     ctx.drawImage(img, 0, 0);
     const { data } = ctx.getImageData(0, 0, cv.width, cv.height);
     const seen = new Set();
     for (let i = 0; i < data.length; i += 4 * 37) {
-      const r = data[i] >> 5, g = data[i + 1] >> 5, b = data[i + 2] >> 5;
+      const r = data[i] >> 5,
+        g = data[i + 1] >> 5,
+        b = data[i + 2] >> 5;
       seen.add((r << 6) | (g << 3) | b);
     }
     return seen.size;
@@ -164,44 +166,68 @@ test("map-truth payload has road-following geometry and synced snapped GPS", asy
 // always verifies the server state before the scenario acts on it.
 async function verifiedJamCleared(page) {
   await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, { headers: authHeaders });
-  await expect.poll(async () => {
-    const mt = await (await page.request.get(`${API_BASE}/api/fleet/map-truth`)).json();
-    const t047 = mt.trucks?.find((x) => x.truck_code === "T-047");
-    return Boolean(t047?.traffic && t047.traffic.jam_active === false);
-  }, { timeout: 30000, intervals: [500, 1000, 2000] }).toBe(true);
+  await expect
+    .poll(
+      async () => {
+        const mt = await (await page.request.get(`${API_BASE}/api/fleet/map-truth`)).json();
+        const t047 = mt.trucks?.find((x) => x.truck_code === "T-047");
+        return Boolean(t047?.traffic && t047.traffic.jam_active === false);
+      },
+      { timeout: 30000, intervals: [500, 1000, 2000] },
+    )
+    .toBe(true);
 }
 
 // #69: the diverted-state assertions live in a helper so the finally clause
 // in the caller can restore the cleared state even on failure.
 async function runJamDiversionScenario(page) {
   await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=true`, { headers: authHeaders });
-  await expect(page.getByTestId("deck-tools-panel").locator(".traffic-status-badge")).toContainText(/JAM TERDETEKSI AI|Jam Active|Macet Aktif/, { timeout: 45000 });
+  await expect(page.getByTestId("deck-tools-panel").locator(".traffic-status-badge")).toContainText(
+    /JAM TERDETEKSI AI|Jam Active|Macet Aktif/,
+    { timeout: 45000 },
+  );
 
   // The AI engine loop may independently clear/re-set the global jam flag, and
   // the demo jam is position-relative (truck cruising): wait until the server
   // actually applies a diversion before asserting the diverted-state payloads.
-  await expect.poll(async () => {
-    const r = await (await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)).json();
-    return r.jam_active && r.diversion_applied;
-  }, { timeout: 45000, intervals: [1000, 2000, 3000] }).toBe(true);
-  await expect(page.locator(".astar-stat-col strong").filter({ hasText: /Diverted \(A\*\)|Dialihkan \(A\*\)/ })).toBeVisible({ timeout: 20000 });
+  await expect
+    .poll(
+      async () => {
+        const r = await (
+          await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)
+        ).json();
+        return r.jam_active && r.diversion_applied;
+      },
+      { timeout: 45000, intervals: [1000, 2000, 3000] },
+    )
+    .toBe(true);
+  await expect(
+    page.locator(".astar-stat-col strong").filter({ hasText: /Diverted \(A\*\)|Dialihkan \(A\*\)/ }),
+  ).toBeVisible({ timeout: 20000 });
 
-  const reroute = await (await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)).json();
+  const reroute = await (
+    await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)
+  ).json();
   expect(reroute.diversion_applied).toBe(true);
   expect(reroute.abandoned_route.path.length).toBeGreaterThan(20);
 
   // map-truth lags the reroute endpoint: poll until the abandoned route is
   // populated instead of dereferencing a potentially-null payload.
   let t;
-  await expect.poll(async () => {
-    const mt = await (await page.request.get(`${API_BASE}/api/fleet/map-truth`)).json();
-    const truck = mt.trucks.find((x) => x.truck_code === "T-047");
-    if (truck && truck.abandoned_route && truck.abandoned_route.geometry.length > 20) {
-      t = truck;
-      return true;
-    }
-    return false;
-  }, { timeout: 45000, intervals: [1000, 2000, 3000] }).toBe(true);
+  await expect
+    .poll(
+      async () => {
+        const mt = await (await page.request.get(`${API_BASE}/api/fleet/map-truth`)).json();
+        const truck = mt.trucks.find((x) => x.truck_code === "T-047");
+        if (truck && truck.abandoned_route && truck.abandoned_route.geometry.length > 20) {
+          t = truck;
+          return true;
+        }
+        return false;
+      },
+      { timeout: 45000, intervals: [1000, 2000, 3000] },
+    )
+    .toBe(true);
   expect(t.traffic.jam_active).toBe(true);
   expect(t.abandoned_route.geometry.length).toBeGreaterThan(20);
   expect(t.deviation_segments).not.toContain("violation");
@@ -209,7 +235,7 @@ async function runJamDiversionScenario(page) {
   await page.waitForFunction(
     () => (window.__pythiaMapFeatures?.assignedKinds || []).includes("astar-abandoned"),
     null,
-    { timeout: 15000 }
+    { timeout: 15000 },
   );
   return "diverted";
 }
@@ -220,11 +246,9 @@ test("jam toggle diverts T-047 end-to-end (UI, reroute API, map-truth agree)", a
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.getByTestId("deck-tools-toggle").click();
   await expect(page.getByTestId("deck-tools-panel")).toBeVisible();
-  await page.waitForFunction(
-    () => (window.__pythiaMapFeatures?.actualKinds || []).length > 0,
-    null,
-    { timeout: 15000 }
-  );
+  await page.waitForFunction(() => (window.__pythiaMapFeatures?.actualKinds || []).length > 0, null, {
+    timeout: 15000,
+  });
 
   const before = await page.evaluate(() => window.__pythiaMapFeatures?.actualKinds || []);
   expect(before).toContain("actual-violation");
@@ -236,10 +260,11 @@ test("jam toggle diverts T-047 end-to-end (UI, reroute API, map-truth agree)", a
   try {
     scenario = await runJamDiversionScenario(page);
   } finally {
-    await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, { headers: authHeaders });
+    await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, {
+      headers: authHeaders,
+    });
   }
   expect(scenario).toBe("diverted");
-
 });
 
 test("restore traffic returns T-047 to compliant and clears abandoned line", async ({ page }) => {
@@ -253,7 +278,7 @@ test("restore traffic returns T-047 to compliant and clears abandoned line", asy
   await page.waitForFunction(
     () => (window.__pythiaMapFeatures?.assignedKinds || []).includes("astar-abandoned"),
     null,
-    { timeout: 15000 }
+    { timeout: 15000 },
   );
 
   await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, { headers: authHeaders });
@@ -264,31 +289,46 @@ test("restore traffic returns T-047 to compliant and clears abandoned line", asy
   try {
     await restoreScenario(page);
   } finally {
-    await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, { headers: authHeaders });
+    await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, {
+      headers: authHeaders,
+    });
   }
 });
 
 async function restoreScenario(page) {
-  await expect.poll(async () => {
-    const r = await (await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)).json();
-    if (r.jam_active || r.diversion_applied) {
-      await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, { headers: authHeaders });
-      return false;
-    }
-    return true;
-  }, { timeout: 45000, intervals: [1000, 2000, 3000] }).toBe(true);
-  await expect(page.getByTestId("deck-tools-panel").locator(".traffic-status-badge")).toContainText(/KORIDOR NORMAL|Corridor Clear|Koridor Lancar/, { timeout: 20000 });
+  await expect
+    .poll(
+      async () => {
+        const r = await (
+          await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)
+        ).json();
+        if (r.jam_active || r.diversion_applied) {
+          await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, {
+            headers: authHeaders,
+          });
+          return false;
+        }
+        return true;
+      },
+      { timeout: 45000, intervals: [1000, 2000, 3000] },
+    )
+    .toBe(true);
+  await expect(page.getByTestId("deck-tools-panel").locator(".traffic-status-badge")).toContainText(
+    /KORIDOR NORMAL|Corridor Clear|Koridor Lancar/,
+    { timeout: 20000 },
+  );
 
-  const reroute = await (await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)).json();
+  const reroute = await (
+    await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)
+  ).json();
   expect(reroute.diversion_applied).toBe(false);
 
   await page.waitForFunction(
     () => !(window.__pythiaMapFeatures?.assignedKinds || []).includes("astar-abandoned"),
     null,
-    { timeout: 15000 }
+    { timeout: 15000 },
   );
 }
-
 
 test("TPS and WR layers survive basemap switch", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });

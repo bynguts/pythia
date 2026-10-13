@@ -24,7 +24,10 @@ const BEACON_MATERIAL = { ambient: 0.55, diffuse: 0.55, shininess: 40, specularC
 const LABEL_FONT = "Plus Jakarta Sans, Geist Sans, Inter, system-ui, sans-serif";
 const NO_TRANSITIONS = {};
 const HIGHLIGHT = [255, 255, 255, 80];
-const COLUMN_TRANSITIONS = { getElevation: { duration: 750, easing: easeInOutCubic }, getFillColor: { duration: 450 } };
+const COLUMN_TRANSITIONS = {
+  getElevation: { duration: 750, easing: easeInOutCubic },
+  getFillColor: { duration: 450 },
+};
 // Landfill pulse: alphas at full opacity; the pulse scales them via `opacity`.
 const PULSE_FILL = [...ACCENT, 58];
 const PULSE_LINE = [...ACCENT, 220];
@@ -104,17 +107,23 @@ export function landfillOf(scene) {
  */
 export function prepareScene(scene) {
   const districts = scene?.districts || [];
-  const maxNormal = Math.max(1, ...districts.flatMap((d) => d.series.map((row) => row.normal_tons || row.predicted_tons)));
+  const maxNormal = Math.max(
+    1,
+    ...districts.flatMap((d) => d.series.map((row) => row.normal_tons || row.predicted_tons)),
+  );
   const metersPerTon = TARGET_MAX_HEIGHT_M / maxNormal;
 
   // Column radius follows how tightly the city's districts are packed.
-  const nearest = districts.map((d, i) => {
-    let min = Infinity;
-    districts.forEach((other, j) => {
-      if (i !== j) min = Math.min(min, metresBetween([d.lng, d.lat], [other.lng, other.lat]));
-    });
-    return min;
-  }).filter(Number.isFinite).sort((a, b) => a - b);
+  const nearest = districts
+    .map((d, i) => {
+      let min = Infinity;
+      districts.forEach((other, j) => {
+        if (i !== j) min = Math.min(min, metresBetween([d.lng, d.lat], [other.lng, other.lat]));
+      });
+      return min;
+    })
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
   const median = nearest.length ? nearest[Math.floor(nearest.length / 2)] : 3000;
   const radius = Math.min(1700, Math.max(420, median * 0.34));
 
@@ -123,7 +132,8 @@ export function prepareScene(scene) {
     .map((truck) => {
       const forward = truck.path;
       const cumulative = [0];
-      for (let i = 1; i < forward.length; i += 1) cumulative.push(cumulative[i - 1] + metresBetween(forward[i - 1], forward[i]));
+      for (let i = 1; i < forward.length; i += 1)
+        cumulative.push(cumulative[i - 1] + metresBetween(forward[i - 1], forward[i]));
       const total = cumulative[cumulative.length - 1] || 1;
       const fractions = cumulative.map((value) => value / total);
       const phase = hash(truck.code) % TRUCK_PERIOD;
@@ -230,222 +240,248 @@ export function buildTwinLayers({ scene, prepared, view, time, animate, labels =
   const elevationOf = (d) => dayRow(d, day).predicted_tons * metersPerTon;
   const layers = [];
 
-  layers.push(new ScatterplotLayer({
-    id: "twin-tps",
-    data: prepared.tps,
-    getPosition: (p) => [p.lng, p.lat],
-    getRadius: 45,
-    radiusMinPixels: 1.4,
-    radiusMaxPixels: 4,
-    getFillColor: [...INK, 120],
-    pickable: false,
-  }));
+  layers.push(
+    new ScatterplotLayer({
+      id: "twin-tps",
+      data: prepared.tps,
+      getPosition: (p) => [p.lng, p.lat],
+      getRadius: 45,
+      radiusMinPixels: 1.4,
+      radiusMaxPixels: 4,
+      getFillColor: [...INK, 120],
+      pickable: false,
+    }),
+  );
 
   if (landfill) {
     const { flowTons } = view;
-    layers.push(new ArcLayer({
-      id: "twin-flows",
-      data: prepared.flows,
-      getSourcePosition: (f) => f.from,
-      getTargetPosition: (f) => f.to,
-      getWidth: (f) => 0.5 + (flowTons.get(f.district) ?? f.tons) / 160,
-      widthUnits: "pixels",
-      widthMaxPixels: 5,
-      getHeight: 0.28,
-      getSourceColor: [...FLOW, 25],
-      getTargetColor: [...FLOW, 150],
-      updateTriggers: { getWidth: [day] },
-      pickable: false,
-    }));
+    layers.push(
+      new ArcLayer({
+        id: "twin-flows",
+        data: prepared.flows,
+        getSourcePosition: (f) => f.from,
+        getTargetPosition: (f) => f.to,
+        getWidth: (f) => 0.5 + (flowTons.get(f.district) ?? f.tons) / 160,
+        widthUnits: "pixels",
+        widthMaxPixels: 5,
+        getHeight: 0.28,
+        getSourceColor: [...FLOW, 25],
+        getTargetColor: [...FLOW, 150],
+        updateTriggers: { getWidth: [day] },
+        pickable: false,
+      }),
+    );
   }
 
   const { eventDistricts } = prepared;
   if (eventDistricts.length || event) {
-    layers.push(new ScatterplotLayer({
-      id: "twin-event-rings",
-      data: eventDistricts,
-      getPosition: (d) => [d.lng, d.lat],
-      getRadius: radius * 1.55,
-      stroked: true,
-      filled: false,
-      getLineColor: [...ACCENT, 230],
-      lineWidthMinPixels: 2,
-      pickable: false,
-    }));
+    layers.push(
+      new ScatterplotLayer({
+        id: "twin-event-rings",
+        data: eventDistricts,
+        getPosition: (d) => [d.lng, d.lat],
+        getRadius: radius * 1.55,
+        stroked: true,
+        filled: false,
+        getLineColor: [...ACCENT, 230],
+        lineWidthMinPixels: 2,
+        pickable: false,
+      }),
+    );
   }
 
-  layers.push(new ColumnLayer({
-    id: "twin-districts",
-    data: districts,
-    diskResolution: 28,
-    radius,
-    extruded: true,
-    pickable: true,
-    autoHighlight: true,
-    highlightColor: HIGHLIGHT,
-    getPosition: (d) => [d.lng, d.lat],
-    getElevation: elevationOf,
-    getFillColor: (d) => {
-      const color = RISK_COLORS[dayRow(d, day).risk] || RISK_COLORS.normal;
-      return [...color, selectedId && selectedId !== d.id ? 200 : 245];
-    },
-    material: DISTRICT_MATERIAL,
-    transitions: reducedMotion ? NO_TRANSITIONS : COLUMN_TRANSITIONS,
-    updateTriggers: { getElevation: [day, metersPerTon], getFillColor: [day, selectedId] },
-  }));
+  layers.push(
+    new ColumnLayer({
+      id: "twin-districts",
+      data: districts,
+      diskResolution: 28,
+      radius,
+      extruded: true,
+      pickable: true,
+      autoHighlight: true,
+      highlightColor: HIGHLIGHT,
+      getPosition: (d) => [d.lng, d.lat],
+      getElevation: elevationOf,
+      getFillColor: (d) => {
+        const color = RISK_COLORS[dayRow(d, day).risk] || RISK_COLORS.normal;
+        return [...color, selectedId && selectedId !== d.id ? 200 : 245];
+      },
+      material: DISTRICT_MATERIAL,
+      transitions: reducedMotion ? NO_TRANSITIONS : COLUMN_TRANSITIONS,
+      updateTriggers: { getElevation: [day, metersPerTon], getFillColor: [day, selectedId] },
+    }),
+  );
 
   if (view.selectedData.length) {
-    layers.push(new ScatterplotLayer({
-      id: "twin-selected-ring",
-      data: view.selectedData,
-      getPosition: (d) => [d.lng, d.lat],
-      getRadius: radius * 1.3,
-      stroked: true,
-      filled: false,
-      getLineColor: [...INK, 255],
-      lineWidthMinPixels: 3,
-      pickable: false,
-    }));
+    layers.push(
+      new ScatterplotLayer({
+        id: "twin-selected-ring",
+        data: view.selectedData,
+        getPosition: (d) => [d.lng, d.lat],
+        getRadius: radius * 1.3,
+        stroked: true,
+        filled: false,
+        getLineColor: [...INK, 255],
+        lineWidthMinPixels: 3,
+        pickable: false,
+      }),
+    );
   }
 
-  layers.push(new TextLayer({
-    id: "twin-district-labels",
-    data: view.labelled,
-    getPosition: ({ d, z }) => [d.lng, d.lat, z + 120],
-    getText: ({ d, row }) => `${d.name}  ${Math.round(row.predicted_tons)} t`,
-    getSize: 12,
-    sizeMaxPixels: 12,
-    getColor: [255, 255, 255, 255],
-    background: true,
-    getBackgroundColor: [...INK, 232],
-    backgroundPadding: [6, 3],
-    fontFamily: LABEL_FONT,
-    fontWeight: 600,
-    characterSet: "auto",
-    getTextAnchor: "middle",
-    getAlignmentBaseline: "bottom",
-    billboard: true,
-    updateTriggers: { getPosition: [day, metersPerTon], getText: [day] },
-    pickable: false,
-  }));
+  layers.push(
+    new TextLayer({
+      id: "twin-district-labels",
+      data: view.labelled,
+      getPosition: ({ d, z }) => [d.lng, d.lat, z + 120],
+      getText: ({ d, row }) => `${d.name}  ${Math.round(row.predicted_tons)} t`,
+      getSize: 12,
+      sizeMaxPixels: 12,
+      getColor: [255, 255, 255, 255],
+      background: true,
+      getBackgroundColor: [...INK, 232],
+      backgroundPadding: [6, 3],
+      fontFamily: LABEL_FONT,
+      fontWeight: 600,
+      characterSet: "auto",
+      getTextAnchor: "middle",
+      getAlignmentBaseline: "bottom",
+      billboard: true,
+      updateTriggers: { getPosition: [day, metersPerTon], getText: [day] },
+      pickable: false,
+    }),
+  );
 
   if (trips.length) {
-    layers.push(new TripsLayer({
-      id: "twin-truck-trails",
-      data: trips,
-      getPath: (trip) => trip.path,
-      getTimestamps: (trip) => trip.timestamps,
-      getColor: (trip) => TRUCK_COLORS[trip.status],
-      widthMinPixels: 3,
-      widthMaxPixels: 6,
-      capRounded: true,
-      jointRounded: true,
-      fadeTrail: animate,
-      trailLength: animate ? TRAIL_LENGTH : TRUCK_PERIOD * 3,
-      currentTime: animate ? time : TRUCK_PERIOD,
-      pickable: false,
-    }));
-    layers.push(new ScatterplotLayer({
-      id: "twin-truck-heads",
-      data: trips,
-      getPosition: (trip) => truckPosition(trip, animate ? time : 0),
-      getRadius: 60,
-      radiusMinPixels: 3.5,
-      radiusMaxPixels: 8,
-      getFillColor: (trip) => TRUCK_COLORS[trip.status],
-      stroked: true,
-      getLineColor: [255, 255, 255, 255],
-      lineWidthMinPixels: 1.5,
-      updateTriggers: { getPosition: [animate ? time : 0] },
-      pickable: false,
-    }));
+    layers.push(
+      new TripsLayer({
+        id: "twin-truck-trails",
+        data: trips,
+        getPath: (trip) => trip.path,
+        getTimestamps: (trip) => trip.timestamps,
+        getColor: (trip) => TRUCK_COLORS[trip.status],
+        widthMinPixels: 3,
+        widthMaxPixels: 6,
+        capRounded: true,
+        jointRounded: true,
+        fadeTrail: animate,
+        trailLength: animate ? TRAIL_LENGTH : TRUCK_PERIOD * 3,
+        currentTime: animate ? time : TRUCK_PERIOD,
+        pickable: false,
+      }),
+    );
+    layers.push(
+      new ScatterplotLayer({
+        id: "twin-truck-heads",
+        data: trips,
+        getPosition: (trip) => truckPosition(trip, animate ? time : 0),
+        getRadius: 60,
+        radiusMinPixels: 3.5,
+        radiusMaxPixels: 8,
+        getFillColor: (trip) => TRUCK_COLORS[trip.status],
+        stroked: true,
+        getLineColor: [255, 255, 255, 255],
+        lineWidthMinPixels: 1.5,
+        updateTriggers: { getPosition: [animate ? time : 0] },
+        pickable: false,
+      }),
+    );
   }
 
   if (event) {
-    layers.push(new ScatterplotLayer({
-      id: "twin-event-marker",
-      data: view.eventData,
-      getPosition: (e) => [e.lng, e.lat],
-      getRadius: 260,
-      radiusMinPixels: 6,
-      getFillColor: [...ACCENT, 255],
-      stroked: true,
-      getLineColor: [255, 255, 255, 255],
-      lineWidthMinPixels: 2,
-      pickable: false,
-    }));
+    layers.push(
+      new ScatterplotLayer({
+        id: "twin-event-marker",
+        data: view.eventData,
+        getPosition: (e) => [e.lng, e.lat],
+        getRadius: 260,
+        radiusMinPixels: 6,
+        getFillColor: [...ACCENT, 255],
+        stroked: true,
+        getLineColor: [255, 255, 255, 255],
+        lineWidthMinPixels: 2,
+        pickable: false,
+      }),
+    );
   }
 
   const { otherFacilities } = prepared;
   if (otherFacilities.length) {
-    layers.push(new ColumnLayer({
-      id: "twin-facilities",
-      data: otherFacilities,
-      diskResolution: 6,
-      radius: radius * 0.45,
-      extruded: true,
-      getPosition: (f) => [f.lng, f.lat],
-      getElevation: beaconHeight * 0.22,
-      getFillColor: [...INK, 210],
-      pickable: false,
-    }));
+    layers.push(
+      new ColumnLayer({
+        id: "twin-facilities",
+        data: otherFacilities,
+        diskResolution: 6,
+        radius: radius * 0.45,
+        extruded: true,
+        getPosition: (f) => [f.lng, f.lat],
+        getElevation: beaconHeight * 0.22,
+        getFillColor: [...INK, 210],
+        pickable: false,
+      }),
+    );
   }
 
   if (landfill) {
     const pulse = animate ? 0.5 + 0.5 * Math.sin((time / TRUCK_PERIOD) * Math.PI * 4) : 0.6;
     // The pulse rides on uniforms (radiusScale, opacity): no attribute is
     // regenerated per frame.
-    layers.push(new ScatterplotLayer({
-      id: "twin-landfill-ring",
-      data: prepared.landfillData,
-      getPosition: (f) => [f.lng, f.lat],
-      getRadius: radius,
-      radiusScale: 1.6 + pulse * 0.9,
-      stroked: true,
-      filled: true,
-      getFillColor: PULSE_FILL,
-      getLineColor: PULSE_LINE,
-      opacity: (120 + 100 * (1 - pulse)) / 220,
-      lineWidthMinPixels: 2,
-      updateTriggers: { getRadius: [radius] },
-      pickable: false,
-    }));
-    layers.push(new ColumnLayer({
-      id: "twin-landfill-beacon",
-      data: prepared.landfillData,
-      diskResolution: 6,
-      radius: radius * 0.55,
-      extruded: true,
-      getPosition: (f) => [f.lng, f.lat],
-      getElevation: beaconHeight,
-      getFillColor: [...INK, 240],
-      material: BEACON_MATERIAL,
-      pickable: false,
-    }));
-    if (labels.landfill) {
-      layers.push(new TextLayer({
-        id: "twin-landfill-label",
+    layers.push(
+      new ScatterplotLayer({
+        id: "twin-landfill-ring",
         data: prepared.landfillData,
-        getPosition: (f) => [f.lng, f.lat, beaconHeight + 150],
-        getText: () => labels.landfill,
-        getSize: 12,
-        sizeMaxPixels: 12,
-        lineHeight: 1.35,
-        getColor: [255, 255, 255, 255],
-        background: true,
-        getBackgroundColor: [...INK, 240],
-        getBorderColor: [...ACCENT, 255],
-        getBorderWidth: 2,
-        backgroundPadding: [9, 6],
-        fontFamily: LABEL_FONT,
-        fontWeight: 650,
-        characterSet: "auto",
-        getTextAnchor: "middle",
-        getAlignmentBaseline: "bottom",
-        billboard: true,
-        updateTriggers: { getText: [labels.landfill] },
+        getPosition: (f) => [f.lng, f.lat],
+        getRadius: radius,
+        radiusScale: 1.6 + pulse * 0.9,
+        stroked: true,
+        filled: true,
+        getFillColor: PULSE_FILL,
+        getLineColor: PULSE_LINE,
+        opacity: (120 + 100 * (1 - pulse)) / 220,
+        lineWidthMinPixels: 2,
+        updateTriggers: { getRadius: [radius] },
         pickable: false,
-      }));
+      }),
+    );
+    layers.push(
+      new ColumnLayer({
+        id: "twin-landfill-beacon",
+        data: prepared.landfillData,
+        diskResolution: 6,
+        radius: radius * 0.55,
+        extruded: true,
+        getPosition: (f) => [f.lng, f.lat],
+        getElevation: beaconHeight,
+        getFillColor: [...INK, 240],
+        material: BEACON_MATERIAL,
+        pickable: false,
+      }),
+    );
+    if (labels.landfill) {
+      layers.push(
+        new TextLayer({
+          id: "twin-landfill-label",
+          data: prepared.landfillData,
+          getPosition: (f) => [f.lng, f.lat, beaconHeight + 150],
+          getText: () => labels.landfill,
+          getSize: 12,
+          sizeMaxPixels: 12,
+          lineHeight: 1.35,
+          getColor: [255, 255, 255, 255],
+          background: true,
+          getBackgroundColor: [...INK, 240],
+          getBorderColor: [...ACCENT, 255],
+          getBorderWidth: 2,
+          backgroundPadding: [9, 6],
+          fontFamily: LABEL_FONT,
+          fontWeight: 650,
+          characterSet: "auto",
+          getTextAnchor: "middle",
+          getAlignmentBaseline: "bottom",
+          billboard: true,
+          updateTriggers: { getText: [labels.landfill] },
+          pickable: false,
+        }),
+      );
     }
   }
 

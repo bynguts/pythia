@@ -1,12 +1,7 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { API_URL } from "../config.js";
 import { useLanguage } from "../i18n.jsx";
-import {
-  RefreshCcw,
-  Truck,
-  Clock,
-  ArrowRight,
-} from "lucide-react";
+import { RefreshCcw, Clock, ArrowRight } from "lucide-react";
 
 export function StaggerSimulatorPanel() {
   const { t, lang } = useLanguage();
@@ -35,7 +30,9 @@ export function StaggerSimulatorPanel() {
         const data = await response.json();
         setResult(data);
       }
-    } catch {}
+    } catch {
+      // API unreachable: leave the previous simulation result in place
+    }
     setLoading(false);
   }
 
@@ -46,8 +43,14 @@ export function StaggerSimulatorPanel() {
           <h2>{t("stagger_title")}</h2>
           <p>{t("stagger_subtitle")}</p>
         </div>
-        <button className="primary-button" onClick={runSimulation} disabled={loading} style={{ width: "auto", minHeight: "36px", height: "36px", padding: "0 16px", fontSize: "12.5px" }}>
-          <RefreshCcw size={14} /> {loading ? (lang === "id" ? "Mengoptimalkan..." : "Optimizing...") : t("btn_rerun_optimizer")}
+        <button
+          className="primary-button"
+          onClick={runSimulation}
+          disabled={loading}
+          style={{ width: "auto", minHeight: "36px", height: "36px", padding: "0 16px", fontSize: "12.5px" }}
+        >
+          <RefreshCcw size={14} />{" "}
+          {loading ? (lang === "id" ? "Mengoptimalkan..." : "Optimizing...") : t("btn_rerun_optimizer")}
         </button>
       </div>
 
@@ -55,41 +58,65 @@ export function StaggerSimulatorPanel() {
         <div className="stagger-col before">
           <span className="stagger-label">{t("stagger_uncoord")}</span>
           <strong>{result.baseline_wait_minutes} min</strong>
-          <small>{result.baseline_queue_trucks} {lang === "id" ? "truk mengantre" : "queued trucks"}</small>
+          <small>
+            {result.baseline_queue_trucks} {lang === "id" ? "truk mengantre" : "queued trucks"}
+          </small>
         </div>
-        <div className="stagger-arrow" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div
+          className="stagger-arrow"
+          style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
           <ArrowRight size={18} />
         </div>
         <div className="stagger-col after">
           <span className="stagger-label">{t("stagger_pythia")}</span>
           <strong>{result.optimized_wait_minutes} min</strong>
-          <small>{result.optimized_queue_trucks} {lang === "id" ? "truk mengantre" : "queued trucks"}</small>
+          <small>
+            {result.optimized_queue_trucks} {lang === "id" ? "truk mengantre" : "queued trucks"}
+          </small>
         </div>
-        <div className="stagger-badge">-{result.queue_reduction_percent}% {t("stagger_delay_badge")}</div>
+        <div className="stagger-badge">
+          -{result.queue_reduction_percent}% {t("stagger_delay_badge")}
+        </div>
       </div>
 
       {result.dispatch_slots && result.dispatch_slots.length > 0 && (
         <div className="stagger-schedule-wrap">
           <h3 style={{ fontSize: "13px", fontWeight: 700, margin: "0 0 10px", color: "var(--ui-ink)" }}>
-            {lang === "id" ? "Rekomendasi Jadwal Keberangkatan Bertahap:" : "Recommended Staggered Departure Slots:"}
+            {lang === "id"
+              ? "Rekomendasi Jadwal Keberangkatan Bertahap:"
+              : "Recommended Staggered Departure Slots:"}
           </h3>
           <div className="table-wrap">
             <table className="audit-table">
               <thead>
                 <tr>
-                  <th scope="col" style={{ width: "25%" }}>{lang === "id" ? "ID Truk" : "Truck ID"}</th>
-                  <th scope="col" style={{ width: "25%" }}>{lang === "id" ? "Saran Jam Berangkat" : "Recommended Departure"}</th>
-                  <th scope="col" style={{ width: "25%" }}>{lang === "id" ? "Estimasi Antre TPA" : "Est. Landfill Wait"}</th>
-                  <th scope="col" style={{ width: "25%" }}>{lang === "id" ? "Status Jadwal" : "Slot Status"}</th>
+                  <th scope="col" style={{ width: "25%" }}>
+                    {lang === "id" ? "ID Truk" : "Truck ID"}
+                  </th>
+                  <th scope="col" style={{ width: "25%" }}>
+                    {lang === "id" ? "Saran Jam Berangkat" : "Recommended Departure"}
+                  </th>
+                  <th scope="col" style={{ width: "25%" }}>
+                    {lang === "id" ? "Estimasi Antre TPA" : "Est. Landfill Wait"}
+                  </th>
+                  <th scope="col" style={{ width: "25%" }}>
+                    {lang === "id" ? "Status Jadwal" : "Slot Status"}
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {result.dispatch_slots.slice(0, 10).map((slot, i) => (
                   <tr key={i}>
-                    <td><span className="plate-badge">T-00{slot.truck_index}</span></td>
+                    <td>
+                      <span className="plate-badge">T-00{slot.truck_index}</span>
+                    </td>
                     <td>
                       <span style={{ fontFamily: "var(--mono, monospace)", fontWeight: 600 }}>
-                        <Clock size={12} style={{ display: "inline-block", verticalAlign: "-1px", marginRight: "4px" }} />
+                        <Clock
+                          size={12}
+                          style={{ display: "inline-block", verticalAlign: "-1px", marginRight: "4px" }}
+                        />
                         {slot.suggested_departure} WIB
                       </span>
                     </td>

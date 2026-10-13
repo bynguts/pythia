@@ -17,9 +17,7 @@ const MANIFEST = {
   source_version: "v1.2.0",
   scenario: "tps-cilandak-compact",
   gas_set: ["ch4", "h2s"],
-  candidate_sensors: [
-    { sensor_id: "S1", lat: -6.29, lng: 106.79, rationale: "upwind boundary" },
-  ],
+  candidate_sensors: [{ sensor_id: "S1", lat: -6.29, lng: 106.79, rationale: "upwind boundary" }],
   execution: {
     pipeline_success: true,
     numerical_convergence: true,

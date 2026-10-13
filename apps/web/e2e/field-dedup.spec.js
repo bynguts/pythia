@@ -22,7 +22,10 @@ async function outboxEntries(page) {
   return page.evaluate(() => JSON.parse(localStorage.getItem("pythia_field_outbox") || "[]"));
 }
 
-test("double tap while offline enqueues exactly one confirmation, READY then ISSUE both survive", async ({ page, context }) => {
+test("double tap while offline enqueues exactly one confirmation, READY then ISSUE both survive", async ({
+  page,
+  context,
+}) => {
   const { api, token } = await authenticatedApi();
   const instruction = `E2E dedup ${Date.now()}`;
   const create = await api.post(`${API}/dispatch`, {
@@ -42,7 +45,9 @@ test("double tap while offline enqueues exactly one confirmation, READY then ISS
   for (let i = 0; i < 3; i += 1) {
     await page.getByTestId("btn-ready").click();
   }
-  await expect(page.getByTestId("field-status")).toContainText("antre untuk disinkronkan", { timeout: 10000 });
+  await expect(page.getByTestId("field-status")).toContainText("antre untuk disinkronkan", {
+    timeout: 10000,
+  });
 
   let entries = await outboxEntries(page);
   const readyEntries = entries.filter((e) => e.dispatchId === dispatch.id && e.status === "READY");
@@ -85,13 +90,13 @@ test("flush sends each queued operation exactly once and clears the queue", asyn
   // and stays drained — a repeated sync must not resurrect or duplicate ops.
   await context.setOffline(false);
   await expect
-    .poll(async () => (await outboxEntries(page)).filter((e) => e.dispatchId === dispatch.id).length,
-      { timeout: 20000 })
+    .poll(async () => (await outboxEntries(page)).filter((e) => e.dispatchId === dispatch.id).length, {
+      timeout: 20000,
+    })
     .toBe(0);
 
   // Second sync pass (now a no-op) — queue stays empty.
   await page.evaluate(async () => {
-    const token = localStorage.getItem("pythia_token");
     const items = JSON.parse(localStorage.getItem("pythia_field_outbox") || "[]");
     // flushOutbox equivalent: nothing left, so nothing is re-sent.
     localStorage.setItem("pythia_field_outbox", JSON.stringify(items));

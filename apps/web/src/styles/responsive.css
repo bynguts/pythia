@@ -342,7 +342,7 @@
    Only declarations no later layer already defined; duplicate selector
    ownership is what made visual fixes order-dependent. ─────────────── */
 
-@media(max-width:640px) {
+@media (max-width: 640px) {
   .map-legend:not([open]) span {
     display: none;
   }

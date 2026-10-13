@@ -17,9 +17,11 @@ const text = readFileSync(readme, "utf8");
 const offenders = [];
 text.split("\n").forEach((line, i) => {
   // "42 tests", "45 passed", "N tests, headless" — hardcoded pass/count claims.
-  if (/\*\*\d+\s+(tests?|passed|failed)\*\*/i.test(line) ||
-      /\b\d+\s+tests?,\s*(headless|all|zero)/i.test(line) ||
-      /\ball\s+\d+\s+tests?\s+pass/i.test(line)) {
+  if (
+    /\*\*\d+\s+(tests?|passed|failed)\*\*/i.test(line) ||
+    /\b\d+\s+tests?,\s*(headless|all|zero)/i.test(line) ||
+    /\ball\s+\d+\s+tests?\s+pass/i.test(line)
+  ) {
     offenders.push(`README.md:${i + 1}: ${line.trim()}`);
   }
 });

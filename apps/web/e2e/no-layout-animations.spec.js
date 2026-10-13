@@ -12,40 +12,64 @@ async function signIn(page, lang = "id") {
     data: { username: "dispatcher", password: "dispatcher-demo-pass" },
   });
   const principal = await response.json();
-  await page.evaluate(({ token, role, lang }) => {
-    localStorage.setItem("pythia_auth", "true");
-    localStorage.setItem("pythia_lang", lang);
-    localStorage.setItem("pythia_token", token);
-    localStorage.setItem("pythia_role", role);
-  }, { ...principal, lang });
+  await page.evaluate(
+    ({ token, role, lang }) => {
+      localStorage.setItem("pythia_auth", "true");
+      localStorage.setItem("pythia_lang", lang);
+      localStorage.setItem("pythia_token", token);
+      localStorage.setItem("pythia_role", role);
+    },
+    { ...principal, lang },
+  );
   await page.reload({ waitUntil: "domcontentloaded" });
   return { Authorization: "Bearer " + principal.token };
 }
 
 const LAYOUT_PROPS = new Set([
-  "width", "height", "min-width", "min-height", "max-width", "max-height",
-  "padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
-  "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
-  "top", "left", "right", "bottom",
+  "width",
+  "height",
+  "min-width",
+  "min-height",
+  "max-width",
+  "max-height",
+  "padding",
+  "padding-top",
+  "padding-right",
+  "padding-bottom",
+  "padding-left",
+  "margin",
+  "margin-top",
+  "margin-right",
+  "margin-bottom",
+  "margin-left",
+  "top",
+  "left",
+  "right",
+  "bottom",
 ]);
 
-async function auditTransitions(page, scope) {
-  return page.evaluate(({ LAYOUT_PROPS }) => {
-    const bad = [];
-    document.querySelectorAll("*").forEach((el) => {
-      const cs = getComputedStyle(el);
-      const props = cs.transitionProperty.split(", ").map((p) => p.trim());
-      const durations = cs.transitionDuration.split(", ").map((d) => d.trim());
-      props.forEach((prop, i) => {
-        if (prop === "none") return;
-        const hasDuration = durations[i] && durations[i] !== "0s";
-        if (LAYOUT_PROPS.includes(prop) && hasDuration) {
-          bad.push(`${el.tagName}.${(typeof el.className === "string" ? el.className : "").split(" ")[0]} → ${prop}`);
-        }
+async function auditTransitions(page) {
+  return page.evaluate(
+    ({ LAYOUT_PROPS }) => {
+      const bad = [];
+      document.querySelectorAll("*").forEach((el) => {
+        const cs = getComputedStyle(el);
+        const props = cs.transitionProperty.split(", ").map((p) => p.trim());
+        const durations = cs.transitionDuration.split(", ").map((d) => d.trim());
+        props.forEach((prop, i) => {
+          if (prop === "none") return;
+          const hasDuration = durations[i] && durations[i] !== "0s";
+          if (LAYOUT_PROPS.includes(prop) && hasDuration) {
+            bad.push(
+              `${el.tagName}.${(typeof el.className === "string" ? el.className : "").split(" ")[0]} → ${prop}`,
+            );
+          }
+        });
       });
-    });
-    return bad;
-  }, { LAYOUT_PROPS: [...LAYOUT_PROPS] });
+      return bad;
+    },
+    { LAYOUT_PROPS: [...LAYOUT_PROPS] },
+  );
 }
 
 test("dispatcher app transitions never animate layout properties", async ({ page }) => {
@@ -91,7 +115,9 @@ test("driver app progress bar animates without layout properties", async ({ page
     await context.grantPermissions(["geolocation"]);
     await context.setGeolocation({ latitude: -6.29, longitude: 106.79 });
     await page.goto("/driver");
-    const pretripLoaded = page.waitForResponse((response) => response.url().includes(`/pretrip/today/${TEST_TRUCK}`));
+    const pretripLoaded = page.waitForResponse((response) =>
+      response.url().includes(`/pretrip/today/${TEST_TRUCK}`),
+    );
     await page.locator(`[data-testid="pick-${TEST_TRUCK}"]`).click();
     await pretripLoaded;
     await page.waitForTimeout(800);
