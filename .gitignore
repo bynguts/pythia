@@ -37,10 +37,6 @@ pythia_damage_reports.db*
 pythia_service_history.db*
 pythia_operations.db*
 *.json.migrated
-# Pre-rebrand store files (kept on disk after adoption as a rollback copy)
-# and interrupted adoptions.
-jwis_*.db*
-*.db.adopting-*
 
 # --- Secrets & runtime artifacts (MUST NOT be committed) ---
 
@@ -55,10 +51,6 @@ jwis_*.db*
 # WhatsApp (Baileys) session credentials — regenerated at runtime via QR scan
 pythia/backend/wa-gateway/baileys_auth_info/
 
-# The source tree moved from jwis/ to pythia/. Untracked files left behind in
-# an existing checkout (.env, node_modules, the Baileys session above, *.db)
-# stay local; move what you still need into pythia/.
-/jwis/
 
 # --- Internal working documents (not part of the shipped product) ---
 **/.superpowers/

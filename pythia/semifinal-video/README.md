@@ -13,7 +13,7 @@ This folder is the production source of truth for the AI Open Innovation Challen
 Run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "D:\ai open presu lomba\jwis-winning-system\semifinal-video\prepare-recording.ps1"
+powershell -ExecutionPolicy Bypass -File .\prepare-recording.ps1   # from this folder
 ```
 
 This starts missing local services, resets dispatch state, checks API health, and prints the recording URLs.

@@ -25,7 +25,6 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.env import getenv
-from app.storage import DB_PREFIX, LEGACY_DB_PREFIX, adopt_legacy_db
 from app.osrm import road_route
 from app.facilities import provenance_payload, route_ground_truth
 
@@ -65,7 +64,6 @@ def _require_coord(value, field: str, rng: tuple[float, float]) -> None:
             f"region [{rng[0]}, {rng[1]}]")
 
 TABLE = "pythia_spj"
-LEGACY_JSON = "jwis_spj.json"
 
 
 def _validate_evidence(evidence: dict) -> None:
@@ -242,17 +240,6 @@ def _default_persist_path() -> str:
     return os.path.join(tempfile.gettempdir(), "pythia_spj.db")
 
 
-def _legacy_json_path(db_path: str) -> str:
-    """Where the pre-SQLite store kept its whole-file JSON state.
-
-    That store predates the Pythia rebrand, so a pythia_<x>.db looks for the
-    jwis_<x>.json it would have been written as.
-    """
-    directory, name = os.path.split(os.path.splitext(db_path)[0])
-    if name.startswith(DB_PREFIX):
-        name = LEGACY_DB_PREFIX + name[len(DB_PREFIX):]
-    return os.path.join(directory, name + ".json")
-
 
 class SpjStore:
     """SQLite-backed SPJ store, safe across worker processes.
@@ -272,9 +259,7 @@ class SpjStore:
         self._path = persist_path or db_path or _default_persist_path()
         self._spj: dict[str, Spj] = {}  # read cache; SQLite is the source of truth
         self._lock = threading.RLock()
-        adopt_legacy_db(self._path)
         self._init_schema()
-        self._migrate_legacy_json()
         self._reload_cache()
 
     # -- connection helpers -------------------------------------------------
@@ -403,53 +388,6 @@ class SpjStore:
             for r in rows
         ]
 
-    def _migrate_legacy_json(self) -> None:
-        """One-time import from the pre-SQLite whole-file JSON store."""
-        legacy = _legacy_json_path(self._path)
-        if not os.path.exists(legacy):
-            return
-        with open(legacy, "rb") as fh:
-            head = fh.read(16)
-        if head.startswith(b"SQLite format 3"):
-            return  # the "legacy" path is itself a SQLite file (test habit)
-        try:
-            with closing(self._connect()) as connection:
-                row = connection.execute("SELECT COUNT(*) AS n FROM spj").fetchone()
-                if row["n"] > 0:
-                    return  # DB already populated; JSON is stale
-                with open(legacy, encoding="utf-8") as fh:
-                    raw = json.loads(fh.read())
-                with connection:
-                    for item in raw:
-                        stops = item.pop("stops", [])
-                        connection.execute(
-                            "INSERT INTO spj (spj_id, spj_number, date, driver_name, "
-                            "truck_code, destination, weigh_on_site, priority, note, "
-                            "status, created_by, created_at, activated_at, completed_at) "
-                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                            (item.get("spj_id"), item.get("spj_number"), item.get("date"),
-                             item.get("driver_name"), item.get("truck_code"),
-                             item.get("destination"), int(bool(item.get("weigh_on_site"))),
-                             item.get("priority", "normal"), item.get("note", ""),
-                             item.get("status", "draft"), item.get("created_by", "admin"),
-                             item.get("created_at", ""), item.get("activated_at"),
-                             item.get("completed_at")),
-                        )
-                        for idx, stop in enumerate(stops):
-                            connection.execute(
-                                "INSERT INTO spj_stops (spj_id, idx, name, kecamatan, "
-                                "address, lat, lng, location_type, status, completed_at, "
-                                "evidence) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                                (item["spj_id"], idx, stop.get("name"),
-                                 stop.get("kecamatan"), stop.get("address"),
-                                 stop.get("lat"), stop.get("lng"),
-                                 stop.get("location_type", "Pemukiman Kelas Menengah"),
-                                 stop.get("status", "pending"), stop.get("completed_at"),
-                                 json.dumps(stop["evidence"]) if stop.get("evidence") else None),
-                            )
-            logger.info("migrated legacy SPJ JSON %s into %s", legacy, self._path)
-        except Exception:  # noqa: BLE001
-            logger.exception("legacy SPJ JSON migration failed for %s", legacy)
 
     @staticmethod
     def _row_to_spj(spj_row: sqlite3.Row, stop_rows: list,

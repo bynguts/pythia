@@ -21,7 +21,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.env import getenv
-from app.storage import adopt_legacy_db
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +39,6 @@ class OperationsPlanStore:
         parent = os.path.dirname(db_path)
         if parent:
             os.makedirs(parent, exist_ok=True)
-        adopt_legacy_db(db_path)
         self._lock = threading.RLock()
         self._init_schema()
 

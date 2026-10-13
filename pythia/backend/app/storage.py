@@ -15,9 +15,6 @@ from app.env import getenv
 
 logger = logging.getLogger(__name__)
 
-# Store files and RecordStore tables were named jwis_* before the Pythia rebrand.
-DB_PREFIX = "pythia_"
-LEGACY_DB_PREFIX = "jwis_"
 
 
 class StorageError(RuntimeError):
@@ -41,56 +38,6 @@ def default_records_db(name: str) -> Path:
     return Path(tempfile.gettempdir()) / f"{name}.db"
 
 
-def adopt_legacy_db(db_path: Path | str) -> bool:
-    """Carry a pre-rebrand ``jwis_<x>.db`` over to ``pythia_<x>.db``, once.
-
-    Runs only when the pythia_ file does not exist yet and its jwis_ sibling
-    does. The copy goes through SQLite's backup API (consistent even with an
-    uncheckpointed WAL), RecordStore tables named jwis_* are renamed to
-    pythia_* inside the copy, and the result is published only if no other
-    process got there first. The legacy file keeps its records (opening it may
-    checkpoint its WAL) so the upgrade can be rolled back.
-    """
-    path = Path(db_path)
-    if path.exists() or not path.name.startswith(DB_PREFIX):
-        return False
-    legacy = path.with_name(LEGACY_DB_PREFIX + path.name[len(DB_PREFIX):])
-    if not legacy.exists():
-        return False
-    staging = path.with_name(f"{path.name}.adopting-{os.getpid()}")
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with closing(sqlite3.connect(legacy)) as source, \
-                closing(sqlite3.connect(staging)) as target:
-            source.backup(target)
-            tables = [row[0] for row in target.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE ? ESCAPE '\\'",
-                (LEGACY_DB_PREFIX.replace("_", "\\_") + "%",))]
-            for table in tables:
-                renamed = DB_PREFIX + table[len(LEGACY_DB_PREFIX):]
-                target.execute(f'ALTER TABLE "{table}" RENAME TO "{renamed}"')
-            target.commit()
-        try:
-            # A hard link fails if the target exists, so a store another worker
-            # adopted (and may already be writing) is never replaced.
-            os.link(staging, path)
-        except FileExistsError:
-            return False
-        except OSError:
-            # Filesystem without hard links: same rule, checked just before.
-            if path.exists():
-                return False
-            os.replace(staging, path)
-    except (sqlite3.Error, OSError) as exc:
-        raise StorageError(f"cannot adopt legacy store {legacy}: {exc}") from exc
-    finally:
-        try:
-            staging.unlink()
-        except OSError:
-            pass
-    logger.info("adopted pre-rebrand store %s as %s", legacy, path)
-    return True
-
 
 class RecordStore:
     """Durable single-table record store backed by SQLite.
@@ -108,7 +55,6 @@ class RecordStore:
         self.db_path = Path(db_path) if db_path is not None else default_records_db(table)
         try:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            adopt_legacy_db(self.db_path)
             self._init_schema()
         except (sqlite3.Error, OSError, StorageError) as exc:
             raise StorageError(
@@ -293,39 +239,6 @@ class RecordStore:
             raise StorageError(f"{self.table}: cannot read {name}: {exc}") from exc
         return int(row["value"]) + 1 if row is not None else 1
 
-    def migrate_legacy_json(self, path: Path | str, id_key: str) -> int:
-        """Import a pre-SQLite JSON store once, then retire the file.
-
-        Returns the number of imported records. The JSON file is renamed so the
-        import cannot run twice and cannot resurrect deleted records.
-        """
-        legacy = Path(path)
-        if not legacy.exists() or self.count() > 0:
-            return 0
-        try:
-            raw = json.loads(legacy.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            logger.error("legacy store %s unreadable, not importing: %s", legacy, exc)
-            return 0
-        if not isinstance(raw, list):
-            return 0
-        imported = 0
-        connection = self._connect()
-        try:
-            with connection:
-                for item in raw:
-                    if not isinstance(item, dict) or not item.get(id_key):
-                        continue
-                    self.write(str(item[id_key]), item, connection=connection)
-                    imported += 1
-        except (sqlite3.Error, StorageError) as exc:
-            logger.error("legacy import of %s failed: %s", legacy, exc)
-            return 0
-        finally:
-            connection.close()
-        legacy.rename(legacy.with_suffix(legacy.suffix + ".migrated"))
-        logger.info("imported %s records from %s", imported, legacy)
-        return imported
 
 
 class HistoryStore:
@@ -337,7 +250,6 @@ class HistoryStore:
             db_path = getenv("DB_PATH") or os.path.join(tempfile.gettempdir(), "pythia_history.db")
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        adopt_legacy_db(self.db_path)
         self._init_schema()
 
     def _connect(self) -> sqlite3.Connection:

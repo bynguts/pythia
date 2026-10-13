@@ -22,7 +22,6 @@ Pythia is an end-to-end AI command center prototype that addresses **both cases*
 - [End-to-End Demo Flow](#end-to-end-demo-flow)
 - [Testing](#testing)
 - [Security & Credentials](#security--credentials)
-- [Upgrading from JWIS](#upgrading-from-jwis)
 
 ---
 
@@ -230,30 +229,6 @@ The repository is **public** — handle sensitive material with care:
 - **WhatsApp session store** (`pythia/backend/wa-gateway/baileys_auth_info/`) contains real session credentials — it is ignored/untracked and regenerated on every QR scan.
 - **Runtime logs** (`*.log`) are ignored & untracked.
 - ⚠️ **If a secret was ever pushed to public history, rotate it at the provider immediately.** History rewrites require force push and should be avoided in forked repos.
-
----
-
-## Upgrading from JWIS
-
-The project was previously named **JWIS**. Existing installs keep working:
-
-- **Source folder:** `jwis/` is now `pythia/`. In an existing checkout, untracked
-  files stay behind in `jwis/` (ignored by git) — move `jwis/.env` to `pythia/.env`
-  and `jwis/backend/wa-gateway/baileys_auth_info/` to the same path under `pythia/`
-  to keep the paired WhatsApp session, then re-run `npm install`.
-- **Settings:** every `JWIS_*` variable is still read when its `PYTHIA_*` name is
-  unset (`PYTHIA_` wins when both are set). Rename them at your convenience.
-- **Records:** on first start each store copies its `jwis_*.db` file to the new
-  `pythia_*.db` name; the old file is left untouched as a rollback copy.
-- **Browsers:** saved login, language, and offline field/driver queues stored under
-  `jwis_*` keys move to `pythia_*` on first load — queued submissions are kept.
-- **Docker:** the compose project is now `pythia-stack`, but its volumes keep their
-  `jwis-stack_*` names so the paired WhatsApp session survives the upgrade. Stop the
-  old stack first — `docker compose -p jwis-stack down` (no `-v`) — or two gateways
-  will share one WhatsApp session. (The backend container keeps its records in its
-  own temp dir, not on the history volume, so they never survived a rebuild.)
-- **`.env` left in `jwis/`:** until you move it, the backend still loads
-  `jwis/backend/.env` or `jwis/.env` and logs a warning.
 
 ---
 
