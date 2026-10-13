@@ -1,0 +1,331 @@
+import { test, expect } from "@playwright/test";
+
+const API_BASE = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001";
+let authHeaders;
+
+// Necessary: the jam toggle tests mutate GLOBAL server-side state (simulate-jam
+// active flag) mid-test. Parallel workers raced: test 158's jam=true landed
+// while test 126 was reading map features, flipping T-047 to clean and failing
+// the violation precondition. Serializing the file (1 worker, ordered tests,
+// per-test beforeEach reset) makes the shared jam state deterministic.
+test.describe.configure({ mode: "serial" });
+
+// Map truthfulness E2E: render, deviation coloring, heatmap, TPA marker.
+test.beforeEach(async ({ page }) => {
+  const login = await page.request.post(`${API_BASE}/api/auth/login`, {
+    data: { username: "dispatcher", password: "dispatcher-demo-pass" },
+  });
+  expect(login.ok()).toBeTruthy();
+  const principal = await login.json();
+  authHeaders = { Authorization: `Bearer ${principal.token}` };
+  await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, { headers: authHeaders });
+  await page.goto("/");
+  await page.evaluate(({ token, role }) => {
+    localStorage.setItem("pythia_auth", "true");
+    localStorage.setItem("pythia_lang", "id");
+    localStorage.setItem("pythia_token", token);
+    localStorage.setItem("pythia_role", role);
+  }, principal);
+});
+
+test("map canvas renders (not blank)", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  const canvas = page.locator(".maplibregl-canvas");
+  await expect(canvas).toBeVisible({ timeout: 15000 });
+});
+
+test("cold Fleet load reuses aggregate map truth for route playback", async ({ page }) => {
+  const breadcrumbRequests = [];
+  page.on("request", (request) => {
+    if (/\/api\/fleet\/[^/]+\/breadcrumbs(?:\?|$)/.test(request.url())) breadcrumbRequests.push(request.url());
+  });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByTestId("deck-tools-toggle").click();
+  const playback = page.getByRole("combobox", { name: "Putar ulang perjalanan" });
+  await expect(playback.locator('option[value="T-047"]')).toHaveCount(1);
+  expect(breadcrumbRequests).toEqual([]);
+  await playback.selectOption("T-047");
+  await expect(page.locator(".playback-marker")).toBeVisible();
+});
+
+test("actual routes colored by violation state", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(
+    () => (window.__pythiaMapFeatures?.actualKinds || []).length > 0,
+    null,
+    { timeout: 30000 }
+  );
+  const kinds = await page.evaluate(() => window.__pythiaMapFeatures?.actualKinds || []);
+  // At least one clean (green) and, given T-047 deviates, one violation (red).
+  expect(kinds).toContain("actual-clean");
+  expect(kinds).toContain("actual-violation");
+});
+
+test("map legend shows provenance tags", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByTestId("deck-tools-toggle").click();
+  await page.locator(".deck-legend > summary").click();
+  const legend = page.locator(".deck-legend-body");
+  await expect(legend).toContainText("LANGSUNG");
+  await expect(legend).toContainText("MODEL");
+  await expect(legend).toContainText("SIMULASI");
+});
+
+test("fleet panel labels positions as simulated data", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  const notice = page.locator(".map-data-notice");
+  await expect(notice).toContainText("Data simulasi");
+  await expect(notice).toContainText("Posisi bukan GPS langsung");
+});
+
+test("TPA marker present on map", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".tpa-marker")).toBeVisible({ timeout: 15000 });
+});
+
+test("map canvas has real color diversity (decoded pixels, not byte variance)", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(4500);
+  const buf = await page.locator(".maplibregl-canvas").screenshot();
+  const dataUrl = "data:image/png;base64," + buf.toString("base64");
+  // Decode the PNG into real RGBA pixels in the browser, then count distinct
+  // coarse color buckets. A blank/single-color canvas yields very few buckets;
+  // a rendered map (tiles, roads, markers) yields many.
+  const buckets = await page.evaluate(async (url) => {
+    const img = await createImageBitmap(await (await fetch(url)).blob());
+    const cv = document.createElement("canvas");
+    cv.width = img.width; cv.height = img.height;
+    const ctx = cv.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    const { data } = ctx.getImageData(0, 0, cv.width, cv.height);
+    const seen = new Set();
+    for (let i = 0; i < data.length; i += 4 * 37) {
+      const r = data[i] >> 5, g = data[i + 1] >> 5, b = data[i + 2] >> 5;
+      seen.add((r << 6) | (g << 3) | b);
+    }
+    return seen.size;
+  }, dataUrl);
+  expect(buckets).toBeGreaterThan(12);
+});
+
+test("A* route anchors near T-047 marker (GPS)", async ({ page }) => {
+  const res = await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`);
+  const j = await res.json();
+  const p0 = j.active_route.path[0];
+  const origin = j.active_route.origin_position;
+  const dLat = Math.abs(p0.lat - origin.lat);
+  const dLng = Math.abs(p0.lng - origin.lng);
+  // Within ~1km (~0.01 deg) of the marker — anchored, not 3km off.
+  expect(dLat).toBeLessThan(0.01);
+  expect(dLng).toBeLessThan(0.01);
+});
+
+test("A* route is road-following (many points)", async ({ page }) => {
+  const res = await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`);
+  const j = await res.json();
+  expect(j.active_route.path.length).toBeGreaterThan(200);
+});
+
+test("breadcrumbs endpoint returns simulated trail", async ({ page }) => {
+  const res = await page.request.get(`${API_BASE}/api/fleet/T-047/breadcrumbs`);
+  expect(res.status()).toBe(200);
+  const j = await res.json();
+  expect(j.source).toBe("simulated");
+  expect(j.breadcrumbs.length).toBeGreaterThan(1);
+});
+
+test("mobile viewport renders map without horizontal overflow", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2500);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
+  expect(overflow).toBe(false);
+});
+
+test("map-truth payload has road-following geometry and synced snapped GPS", async ({ page }) => {
+  const res = await page.request.get(`${API_BASE}/api/fleet/map-truth`);
+  expect(res.status()).toBe(200);
+  const j = await res.json();
+  const t = j.trucks.find((x) => x.truck_code === "T-047");
+  expect(t).toBeTruthy();
+  // Road-following assigned geometry (or explicitly labeled fallback).
+  if (t.assigned_route.source === "LIVE_EXTERNAL") {
+    expect(t.assigned_route.geometry.length).toBeGreaterThan(20);
+  } else {
+    expect(t.assigned_route.source).toBe("FALLBACK_DEGRADED");
+  }
+  // Snapped GPS is close to raw (map-matched), and provenance is labeled.
+  expect(t.provenance.raw_gps).toBe("RAW_GPS_SIMULATED");
+  expect(typeof t.deviation_m).toBe("number");
+});
+
+// #69: deterministic jam isolation — the endpoint notes a 90s manual override
+// so the AI engine loop cannot flip the global flag mid-test; the helper
+// always verifies the server state before the scenario acts on it.
+async function verifiedJamCleared(page) {
+  await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, { headers: authHeaders });
+  await expect.poll(async () => {
+    const mt = await (await page.request.get(`${API_BASE}/api/fleet/map-truth`)).json();
+    const t047 = mt.trucks?.find((x) => x.truck_code === "T-047");
+    return Boolean(t047?.traffic && t047.traffic.jam_active === false);
+  }, { timeout: 30000, intervals: [500, 1000, 2000] }).toBe(true);
+}
+
+// #69: the diverted-state assertions live in a helper so the finally clause
+// in the caller can restore the cleared state even on failure.
+async function runJamDiversionScenario(page) {
+  await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=true`, { headers: authHeaders });
+  await expect(page.getByTestId("deck-tools-panel").locator(".traffic-status-badge")).toContainText(/JAM TERDETEKSI AI|Jam Active|Macet Aktif/, { timeout: 45000 });
+
+  // The AI engine loop may independently clear/re-set the global jam flag, and
+  // the demo jam is position-relative (truck cruising): wait until the server
+  // actually applies a diversion before asserting the diverted-state payloads.
+  await expect.poll(async () => {
+    const r = await (await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)).json();
+    return r.jam_active && r.diversion_applied;
+  }, { timeout: 45000, intervals: [1000, 2000, 3000] }).toBe(true);
+  await expect(page.locator(".astar-stat-col strong").filter({ hasText: /Diverted \(A\*\)|Dialihkan \(A\*\)/ })).toBeVisible({ timeout: 20000 });
+
+  const reroute = await (await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)).json();
+  expect(reroute.diversion_applied).toBe(true);
+  expect(reroute.abandoned_route.path.length).toBeGreaterThan(20);
+
+  // map-truth lags the reroute endpoint: poll until the abandoned route is
+  // populated instead of dereferencing a potentially-null payload.
+  let t;
+  await expect.poll(async () => {
+    const mt = await (await page.request.get(`${API_BASE}/api/fleet/map-truth`)).json();
+    const truck = mt.trucks.find((x) => x.truck_code === "T-047");
+    if (truck && truck.abandoned_route && truck.abandoned_route.geometry.length > 20) {
+      t = truck;
+      return true;
+    }
+    return false;
+  }, { timeout: 45000, intervals: [1000, 2000, 3000] }).toBe(true);
+  expect(t.traffic.jam_active).toBe(true);
+  expect(t.abandoned_route.geometry.length).toBeGreaterThan(20);
+  expect(t.deviation_segments).not.toContain("violation");
+
+  await page.waitForFunction(
+    () => (window.__pythiaMapFeatures?.assignedKinds || []).includes("astar-abandoned"),
+    null,
+    { timeout: 15000 }
+  );
+  return "diverted";
+}
+
+test("jam toggle diverts T-047 end-to-end (UI, reroute API, map-truth agree)", async ({ page }) => {
+  // Known initial state first, restored even when the scenario fails (#69).
+  await verifiedJamCleared(page);
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByTestId("deck-tools-toggle").click();
+  await expect(page.getByTestId("deck-tools-panel")).toBeVisible();
+  await page.waitForFunction(
+    () => (window.__pythiaMapFeatures?.actualKinds || []).length > 0,
+    null,
+    { timeout: 15000 }
+  );
+
+  const before = await page.evaluate(() => window.__pythiaMapFeatures?.actualKinds || []);
+  expect(before).toContain("actual-violation");
+
+  // #69: the manual override hold (90s) keeps the AI loop from flipping the
+  // flag mid-test; the finally clause restores the cleared state even when
+  // an assertion below fails, so later runs start from a known state.
+  let scenario = null;
+  try {
+    scenario = await runJamDiversionScenario(page);
+  } finally {
+    await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, { headers: authHeaders });
+  }
+  expect(scenario).toBe("diverted");
+
+});
+
+test("restore traffic returns T-047 to compliant and clears abandoned line", async ({ page }) => {
+  // #69: known initial state (cleared) before turning the jam on, so the
+  // scenario cannot race a leftover jam from a prior run or test.
+  await verifiedJamCleared(page);
+  await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=true`, { headers: authHeaders });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByTestId("deck-tools-toggle").click();
+  await expect(page.getByTestId("deck-tools-panel")).toBeVisible();
+  await page.waitForFunction(
+    () => (window.__pythiaMapFeatures?.assignedKinds || []).includes("astar-abandoned"),
+    null,
+    { timeout: 15000 }
+  );
+
+  await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, { headers: authHeaders });
+  // The AI engine loop keeps running and can re-set the jam flag after the
+  // manual restore: keep re-posting false until the server stays cleared,
+  // then assert the UI settles on the normal state. The finally clause
+  // guarantees the cleared state even when an assertion below fails (#69).
+  try {
+    await restoreScenario(page);
+  } finally {
+    await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, { headers: authHeaders });
+  }
+});
+
+async function restoreScenario(page) {
+  await expect.poll(async () => {
+    const r = await (await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)).json();
+    if (r.jam_active || r.diversion_applied) {
+      await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, { headers: authHeaders });
+      return false;
+    }
+    return true;
+  }, { timeout: 45000, intervals: [1000, 2000, 3000] }).toBe(true);
+  await expect(page.getByTestId("deck-tools-panel").locator(".traffic-status-badge")).toContainText(/KORIDOR NORMAL|Corridor Clear|Koridor Lancar/, { timeout: 20000 });
+
+  const reroute = await (await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)).json();
+  expect(reroute.diversion_applied).toBe(false);
+
+  await page.waitForFunction(
+    () => !(window.__pythiaMapFeatures?.assignedKinds || []).includes("astar-abandoned"),
+    null,
+    { timeout: 15000 }
+  );
+}
+
+
+test("TPS and WR layers survive basemap switch", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(3000);
+  const satBtn = page.locator(".map-basemap button", { hasText: "Satellite" });
+  if (await satBtn.count()) await satBtn.click();
+  await page.waitForTimeout(2500);
+  const mapBtn = page.locator(".map-basemap button", { hasText: "Map" });
+  if (await mapBtn.count()) await mapBtn.click();
+  await page.waitForTimeout(2500);
+  const layerCheck = await page.evaluate(() => {
+    const m = document.querySelector("canvas")?.__maplibre_map || window.__pythiaMap;
+    if (!m || !m.getLayer) return { error: "no map ref" };
+    return {
+      tps: !!m.getLayer("tps-layer"),
+      tpsCluster: !!m.getLayer("tps-clusters"),
+      wr: !!m.getLayer("wr-unclustered-point"),
+      wrCluster: !!m.getLayer("wr-clusters"),
+    };
+  });
+  if (!layerCheck.error) {
+    expect(layerCheck.tps).toBe(true);
+    expect(layerCheck.tpsCluster).toBe(true);
+    expect(layerCheck.wr).toBe(true);
+    expect(layerCheck.wrCluster).toBe(true);
+  }
+});
+
+test("truck markers cruise smoothly on the live map", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  const marker = page.locator(".truck-marker").first();
+  await marker.waitFor({ state: "visible", timeout: 30000 });
+  const box1 = await marker.boundingBox();
+  await page.waitForTimeout(2500);
+  const box2 = await marker.boundingBox();
+  expect(box1).toBeTruthy();
+  expect(box2).toBeTruthy();
+  const moved = Math.hypot(box2.x - box1.x, box2.y - box1.y);
+  expect(moved).toBeGreaterThan(0.5); // continuous cruise, not static
+});

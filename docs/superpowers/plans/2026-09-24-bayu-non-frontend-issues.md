@@ -23,14 +23,14 @@
 
 - #44: dedup key must be (dispatchId, status) — repeated taps of the SAME choice collapse; a READY then an ISSUE on the same dispatch are both preserved.
 - #50: `event.waitUntil` must wrap cache writes; failed cache write must NOT fail the live response.
-- #49/#85: two manifests (`manifest.webmanifest` EN default, `manifest.id.webmanifest`), shortcuts for Field/Driver, link swap by `jwis_lang`.
+- #49/#85: two manifests (`manifest.webmanifest` EN default, `manifest.id.webmanifest`), shortcuts for Field/Driver, link swap by `pythia_lang`.
 - #89: cleanup must run in its own bounded context even when the test body times out.
 - #87: README must only name metrics reachable in the current UI/API (suitability labels + provenance, not WAPE/MAE).
 - #67: verify only — the button selector fix already landed in `73b8df8`; if E2E runs green locally, close with evidence.
 
 ## Task 1 — Issue #50: service-worker cache writes attached to fetch lifetime
 
-Files: `jwis/frontend/public/sw.js`
+Files: `pythia/frontend/public/sw.js`
 
 - [ ] 1.1 Write failing E2E check first: extend `e2e/field-workflow.spec.js` (or new `e2e/sw-cache.spec.js`) — register SW, fetch a shell/API resource, then verify `caches.match` for that resource after waiting for the put to settle. With the current buggy `cachePut` (returns nothing), a stress approach: call `cachePut` shape indirectly — the reliable programmatic check is that the fetch handler returns a promise chain that includes the put. For E2E-level verification: assert the resource IS in `caches` after a navigation + short settle, and that the response to the page was NOT an error even if cache write fails (stub `cache.put` rejection via page.evaluate is not possible in SW scope; keep to settle-and-match assertion).
 - [ ] 1.2 Run the new spec; observe current behavior (baseline pass/fail information).
@@ -40,9 +40,9 @@ Files: `jwis/frontend/public/sw.js`
 
 ## Task 2 — Issue #44: dedupe queued field confirmations
 
-Files: `jwis/frontend/src/field/OfflineOutbox.js`, `jwis/frontend/src/field/FieldApp.jsx` (maybe), `jwis/frontend/e2e/field-workflow.spec.js`
+Files: `pythia/frontend/src/field/OfflineOutbox.js`, `pythia/frontend/src/field/FieldApp.jsx` (maybe), `pythia/frontend/e2e/field-workflow.spec.js`
 
-- [ ] 2.1 Failing test first: E2E scenario — double-tap "Siap" while offline (route abort `/api/dispatch/*/confirm`), then verify `localStorage.jwis_field_outbox` contains exactly ONE pending entry for that dispatch (not two).
+- [ ] 2.1 Failing test first: E2E scenario — double-tap "Siap" while offline (route abort `/api/dispatch/*/confirm`), then verify `localStorage.pythia_field_outbox` contains exactly ONE pending entry for that dispatch (not two).
 - [ ] 2.2 Fix `enqueue`: dedupe by `(dispatchId, status)` — if an entry with the same dispatchId AND status is already queued, replace it (update note, keep earliest queued_at) instead of appending.
 - [ ] 2.3 Also make flush exactly-once observable: after flush, a second flush attempt sends nothing new (items are removed on success — already true; verify no re-enqueue path duplicates).
 - [ ] 2.4 Backend hardening (additive, optional per issue but cheap): `DispatchConfirmRequest` gains `operation_id: str | None`; when present and already used for that dispatch, the endpoint returns the stored result instead of re-recording. Follow the same pattern as the SPJ receipt `operation_id` idempotency (see `test_receipt_retry_with_operation_id_is_not_a_conflict`).
@@ -52,17 +52,17 @@ Files: `jwis/frontend/src/field/OfflineOutbox.js`, `jwis/frontend/src/field/Fiel
 
 ## Task 3 — Issues #49 + #85: role-specific install entries + localized manifests
 
-Files: `jwis/frontend/public/manifest.webmanifest` (EN default), new `jwis/frontend/public/manifest.id.webmanifest`, `jwis/frontend/index.html`
+Files: `pythia/frontend/public/manifest.webmanifest` (EN default), new `pythia/frontend/public/manifest.id.webmanifest`, `pythia/frontend/index.html`
 
 - [ ] 3.1 Create the ID manifest (localized name/description/short_name, same icons/scope/start_url logic) and extend BOTH manifests with `shortcuts`: Field (`/field`, short_label) and Driver (`/driver`).
-- [ ] 3.2 `index.html`: swap the manifest link based on `localStorage.jwis_lang` at boot (inline script before the app loads, default ID if unset — matches app default).
+- [ ] 3.2 `index.html`: swap the manifest link based on `localStorage.pythia_lang` at boot (inline script before the app loads, default ID if unset — matches app default).
 - [ ] 3.3 E2E/check: assert both manifests are served (HTTP 200, valid JSON) and each contains the two shortcuts with correct `url` fields; assert link swap works in ID and EN modes.
 - [ ] 3.4 Verify icons exist for declared sizes; start_url and scope unchanged for the default install.
 - [ ] 3.5 Commit: `feat(pwa): role-specific install entry points and localized manifests (Fixes #49, Fixes #85)`.
 
 ## Task 4 — Issue #89: independent cleanup timeout for SPJ E2E
 
-Files: `jwis/frontend/e2e/spj-workflow.spec.js`
+Files: `pythia/frontend/e2e/spj-workflow.spec.js`
 
 - [ ] 4.1 Add a helper `cleanupSpj(page, spjId, headers)` that uses a fresh, bounded `page.request.newContext({ timeout: 10000 })` (APIRequestContext) — not the shared scenario budget.
 - [ ] 4.2 Use it in `test.afterEach`/`finally` for every created SPJ; report cleanup failure separately (console + soft annotation) from the scenario failure.
@@ -72,7 +72,7 @@ Files: `jwis/frontend/e2e/spj-workflow.spec.js`
 
 ## Task 5 — Issue #87: correct README audit-metrics claim
 
-Files: `jwis/README.md`
+Files: `pythia/README.md`
 
 - [ ] 5.1 Replace the WAPE/MAE claim (line ~98 "Audit the Prophet/XGBoost models' accuracy metrics (WAPE, MAE), training limits, and data provenance.") with what the UI/API actually exposes: per-resolution suitability labels (`reliable` / `synthetic-validated` / `not supported`) with validation-target classes and data provenance, via the Data & Model Audit workspace and `/api/ml/suitability`.
 - [ ] 5.2 Mention the navigation path that reaches those metrics.
