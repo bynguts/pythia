@@ -4,7 +4,8 @@
 // requests past the fetch-settle window and reset keep-alive connections.
 import { request } from "@playwright/test";
 
-const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001";
+// Specs take PLAYWRIGHT_API_BASE_URL with the /api suffix; accept either form.
+const API = (process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001").replace(/\/api\/?$/, "");
 
 export default async function globalSetup() {
   const ctx = await request.newContext();

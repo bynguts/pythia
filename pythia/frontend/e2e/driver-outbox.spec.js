@@ -77,7 +77,9 @@ test("offline stop submission queues durably, survives reload, and syncs on reco
     // Pretrip online first (it gates the stop form) — only when today's
     // inspection has not been recorded yet (server-side daily gate).
     const markRest = page.getByRole("button", { name: "Mark the rest as OK" });
-    if (await markRest.count()) {
+    // Wait until today's status resolves to either the form or the done card.
+    await expect(markRest.or(page.getByTestId("pretrip-done"))).toBeVisible({ timeout: 15000 });
+    if (await markRest.isVisible()) {
       await expect(markRest).toBeEnabled();
       await markRest.click();
       const save = page.getByRole("button", { name: "Save inspection" });

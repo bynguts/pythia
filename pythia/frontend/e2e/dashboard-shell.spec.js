@@ -28,10 +28,11 @@ async function expectMinimumTouchTarget(locator) {
 
 test.beforeEach(async ({ page }) => signIn(page));
 
-test("command rail exposes five task workspaces and preserves active state", async ({ page }) => {
+// GSC-2026 WS-A: the Digital Twin joins the rail as its first workspace.
+test("command rail exposes six task workspaces and preserves active state", async ({ page }) => {
   const nav = page.getByTestId("workspace-navigation");
   await expect(nav).toBeVisible();
-  const labels = ["Armada", "Prediksi", "Rencana", "Sopir", "Audit Data & Model ML"];
+  const labels = ["Kembaran Digital", "Armada", "Prediksi", "Rencana", "Sopir", "Audit Data & Model ML"];
   await expect(nav.getByRole("button")).toHaveCount(labels.length);
   for (const label of labels) await expect(nav.getByRole("button", { name: label })).toBeVisible();
 
@@ -55,7 +56,7 @@ test("mobile bottom navigation stays reachable and switches workspaces", async (
   await page.setViewportSize({ width: 390, height: 844 });
   const nav = page.locator(".command-mobile-nav");
   await expect(nav).toBeVisible();
-  await expect(nav.getByRole("button")).toHaveCount(5);
+  await expect(nav.getByRole("button")).toHaveCount(6);
   for (const button of await nav.getByRole("button").all()) await expectMinimumTouchTarget(button);
 
   const planning = nav.getByRole("button", { name: "Rencana" });

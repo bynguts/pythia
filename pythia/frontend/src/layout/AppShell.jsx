@@ -2,6 +2,7 @@ import React, { useLayoutEffect, useRef, useState } from "react";
 import {
   BarChart3,
   Bot,
+  Building2,
   ChevronDown,
   CircleUserRound,
   LogOut,
@@ -15,11 +16,12 @@ import { useLanguage } from "../i18n.jsx";
 
 // #15: descriptions are catalog keys, resolved per active locale at render time.
 const items = [
+  { id: "twin", key: "nav_twin", shortKey: "nav_twin_short", descKey: "desc_twin", icon: Building2 },
   { id: "fleet", key: "nav_armada", descKey: "desc_fleet", icon: Truck },
   { id: "forecast", key: "nav_prediksi", descKey: "desc_forecast", icon: BarChart3 },
   { id: "planning", key: "nav_rencana", descKey: "desc_planning", icon: Workflow },
   { id: "drivers", key: "nav_sopir", descKey: "desc_drivers", icon: Users },
-  { id: "audit", key: "nav_audit", descKey: "desc_audit", icon: ShieldCheck },
+  { id: "audit", key: "nav_audit", shortKey: "nav_audit_short", descKey: "desc_audit", icon: ShieldCheck },
 ];
 
 const ALIASES = {
@@ -29,7 +31,8 @@ const ALIASES = {
   iot: "audit",
 };
 
-export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout, assistant, children }) {
+export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout, assistant, children,
+  contextKey = "shell_context_eyebrow" }) {
   const { lang, setLang, t } = useLanguage();
   const resolvedWorkspace = ALIASES[activeWorkspace] || activeWorkspace;
   const current = items.find((item) => item.id === resolvedWorkspace) || items[0];
@@ -102,7 +105,7 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
 
       <aside className="command-sidebar" aria-label={t("shell_sidebar_label")}>
         <div className="command-brand">
-          <span className="command-brand-mark" aria-hidden="true">J</span>
+          <span className="command-brand-mark" aria-hidden="true">P</span>
           <div>
             <strong>Pythia</strong>
             <small>{t("shell_brand_sub")}</small>
@@ -143,7 +146,7 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
       <main className="command-main" id="overview">
         <header className="command-topbar">
           <div className="command-context">
-            <span className="command-eyebrow">{t("shell_context_eyebrow")}</span>
+            <span className="command-eyebrow">{t(contextKey)}</span>
             <div className="command-title-row">
               <strong>{t(current.key)}</strong>
               <span>{t(current.descKey)}</span>
@@ -170,7 +173,7 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
         <div className="command-canvas">{children}</div>
 
         <nav className="command-mobile-nav" aria-label={t("shell_mobile_nav_label")}>
-          {items.map(({ id, key, icon: Icon }) => (
+          {items.map(({ id, key, shortKey, icon: Icon }) => (
             <button
               key={id}
               type="button"
@@ -179,7 +182,7 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
               onClick={() => selectWorkspace(id)}
             >
               <Icon size={20} />
-              <span>{id === "audit" ? t("nav_audit") : t(key)}</span>
+              <span>{t(shortKey || key)}</span>
             </button>
           ))}
         </nav>

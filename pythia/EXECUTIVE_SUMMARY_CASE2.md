@@ -20,10 +20,10 @@ Dilatih ulang secara reproducible (`scripts/train_models.py`) pada **42 kecamata
 | Resolusi Keputusan | Metrik | Nilai |
 |---|---|--:|
 | Peringkat hotspot spasial | Spearman ρ | 0.998 |
-| Level volume spasial | R² | 0.980 |
-| Bulanan per-kecamatan | R² | 0.966 |
-| Mingguan per-kecamatan | R² | 0.954 |
-| Harian level-kota | R² | 0.893 |
+| Level volume spasial | R² | 0.984 |
+| Bulanan per-kecamatan | R² | 0.971 |
+| Mingguan per-kecamatan | R² | 0.963 |
+| Harian level-kota | R² | 0.915 |
 
 Model unggul di tempat keputusan diambil: menentukan **kecamatan mana jadi hotspot & kapan**. Resolusi harian mikro per-kecamatan lemah (data harian riil tak tersedia publik) dan dilaporkan terbuka — bukan disembunyikan. Laporan lengkap: `data/processed/hybrid_forecaster_evaluation.md`.
 
