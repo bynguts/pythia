@@ -23,7 +23,7 @@ COPY --from=app app ./app
 
 # /app = apps/api (with data/models), /data = ml/data (real/raw government
 # datasets + kelurahan GeoJSON). The image has no repo around it, so
-# app/paths.py is told where the datasets are.
+# app/core/paths.py is told where the datasets are.
 COPY --from=app data ./data
 COPY --from=dataset . /data/
 

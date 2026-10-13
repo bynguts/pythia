@@ -11,7 +11,7 @@ import {
 // scenario body throws AFTER creating an SPJ, and the independent cleanup
 // path must still cancel it before the run ends. The run must stay green —
 // a red suite from a working guard would just train people to ignore it.
-const API = "http://127.0.0.1:8001/api";
+const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
 test.afterAll(async () => {
   await disposeCleanupContext();

@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 // #50: runtime cache writes must be attached to the fetch event lifetime so
 // the service worker cannot terminate before `cache.put` finishes, and a
 // failed cache write must never fail the live response.
-const API = "http://127.0.0.1:8001/api";
+const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
 test("fetched shell and API resources are actually cached once the fetch settles", async ({ page }) => {
   await page.goto("/field");

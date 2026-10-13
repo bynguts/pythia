@@ -13,7 +13,7 @@ import {
   normalizeAngle,
   relativeAngle,
   unwrapAngle,
-} from "../src/driver/arMath.js";
+} from "../src/surfaces/driver/arMath.js";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 const PHOTO = "e2e/fixtures/test-photo.png";

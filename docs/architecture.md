@@ -31,7 +31,7 @@ and assignments are simulated; fleet composition uses the DKI 2023 truck census.
 ### Durable record storage
 
 SPJ work orders, submitted event permits, pre-trip inspections, damage reports,
-and service history live in SQLite record stores (`app/storage.py`,
+and service history live in SQLite record stores (`app/core/storage.py`,
 `RecordStore`) whose location follows `PYTHIA_DB_PATH` (its directory when set,
 otherwise the temp directory). Mutations are transactional: a request is only
 acknowledged after the row commits, a failed commit returns HTTP 503 instead of
@@ -42,7 +42,7 @@ imported once on first start and renamed `*.json.migrated`.
 
 ### Operational resource units
 
-`app/units.py` is the single source for every resource quantity, and each API
+`app/core/units.py` is the single source for every resource quantity, and each API
 response carries a `units` glossary next to the numbers:
 
 | Field | Unit |
@@ -62,7 +62,7 @@ override with a reason and is gated by the `dispatch:override` permission, which
 only the `supervisor` and `administrator` roles hold. Receipt submission is
 idempotent per `operation_id`; replacing an existing receipt requires a
 `replace_reason` and archives the previous one in `receipt_history`. Destination
-coordinates come from `app/facilities.py`; a destination without a sourced
+coordinates come from `app/fleet/facilities.py`; a destination without a sourced
 coordinate (`JRC Pesanggrahan`) is reported as `usable_for_routing: false` and
 does not become a deviation-scoring reference path.
 
@@ -98,7 +98,7 @@ does not become a deviation-scoring reference path.
    - Review constraints and approve the weekly staggered queue plan.
 5. **Data & ML Audit:**
    - Audit per-Kecamatan model suitability: each resolution (Kecamatan, Kelurahan, RW) carries a suitability label — `reliable`, `synthetic-validated`, or `not supported` — together with the data provenance behind it.
-   - The audit workspace surfaces validation-target classes and provenance for every predicted series, so planners can see exactly which numbers rest on observed data versus synthetic coverage. (Accuracy metrics like WAPE/MAE are computed in `app/forecast_metrics.py` for offline evaluation but are not part of the current audit UI/API surface.)
+   - The audit workspace surfaces validation-target classes and provenance for every predicted series, so planners can see exactly which numbers rest on observed data versus synthetic coverage. (Accuracy metrics like WAPE/MAE are computed in `app/forecast/forecast_metrics.py` for offline evaluation but are not part of the current audit UI/API surface.)
 
 
 ### Driver weighbridge receipt

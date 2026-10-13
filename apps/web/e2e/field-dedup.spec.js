@@ -4,7 +4,7 @@ import { test, expect, request } from "@playwright/test";
 // is (dispatchId, status): the same choice collapses into one pending entry,
 // while a READY then an ISSUE on the same dispatch are both preserved. Flush
 // retries keep exactly-once observable confirmation behavior.
-const API = "http://127.0.0.1:8001/api";
+const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
 async function authenticatedApi() {
   const bootstrap = await request.newContext();
