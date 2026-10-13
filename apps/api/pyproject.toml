@@ -24,8 +24,6 @@ known-first-party = ["app"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B011", "B017"]
-# until main.py is split into routers
-"app/main.py" = ["E402"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

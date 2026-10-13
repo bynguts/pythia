@@ -8,8 +8,8 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from app.data import unlicensed_collectors_payload
-from app.real_data import load_real_tps_coordinates, load_real_wr_coordinates
+from app.fleet.data import unlicensed_collectors_payload
+from app.forecast.real_data import load_real_tps_coordinates, load_real_wr_coordinates
 
 EARTH_RADIUS_M = 6_371_000.0
 

@@ -12,7 +12,7 @@ import threading
 from collections.abc import Callable
 
 from app.ai.base import GpsDataSource, get_gps_source
-from app.env import getenv
+from app.core.env import getenv
 
 logger = logging.getLogger(__name__)
 

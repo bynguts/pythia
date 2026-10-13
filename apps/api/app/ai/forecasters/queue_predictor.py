@@ -9,8 +9,8 @@ from collections import deque
 from datetime import UTC, datetime
 
 from app.ai.base import GpsDataSource
-from app.astar_routing import NODES
-from app.queue_simulation import simulate_queue
+from app.fleet.astar_routing import NODES
+from app.fleet.queue_simulation import simulate_queue
 
 # NODES values are (lat, lng, label) tuples; only the coordinates are needed here.
 TPA_LAT, TPA_LNG = NODES["TPA_BANTARGEBANG"][0], NODES["TPA_BANTARGEBANG"][1]
