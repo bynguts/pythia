@@ -13,10 +13,14 @@ from typing import Any, cast
 
 from app.fleet.data import ACTUAL_PATHS, ASSIGNED_PATHS
 from app.fleet.gps_feed import latest_breadcrumbs
-from app.fleet.osrm import road_route, snap_to_road
+from app.fleet.osrm import _haversine_km, road_route, snap_to_road
 from app.forecast.engine import distance_point_to_polyline_m
 
 DEVIATION_THRESHOLD_M = 500.0
+SNAP_CACHE_TTL_S = 120.0
+# A cached snap is reused only while the truck is still near the point it was
+# snapped from; past this the snapped marker would visibly lag the raw GPS.
+SNAP_CACHE_MAX_DRIFT_M = 100.0
 
 _snap_cache: dict[str, dict] = {}
 
@@ -24,20 +28,25 @@ _snap_cache: dict[str, dict] = {}
 def _snapped_for(truck: dict[str, Any]) -> dict[str, Any]:
     # Necessary: the simulated GPS feed moves every request, which defeats
     # osrm's per-coordinate lru_cache and makes each map-truth call pay 4
-    # live OSRM snap fetches (~5-9s). Caching per truck (30s TTL) keeps the
-    # snap fresh enough for a moving truck (~100m drift) while making
-    # repeated map-truth calls cheap. State-dependent fields (jam_active,
+    # live OSRM snap fetches (~5-9s). Caching per truck keeps repeated
+    # map-truth calls cheap; the snap is re-fetched once it is older than the
+    # TTL or the truck has drifted more than SNAP_CACHE_MAX_DRIFT_M from the
+    # point it was snapped from. State-dependent fields (jam_active,
     # deviation) are recomputed fresh every call — only the snap is cached.
     import time
 
     code = truck["truck_code"]
+    pos = truck["latest_position"]
     entry = _snap_cache.get(code)
     now = time.time()
-    if entry is not None and now - entry["ts"] < 120.0:
+    if (
+        entry is not None
+        and now - entry["ts"] < SNAP_CACHE_TTL_S
+        and _haversine_km(entry["pos"], (pos["lat"], pos["lng"])) * 1000 <= SNAP_CACHE_MAX_DRIFT_M
+    ):
         return entry["snap"]
-    pos = truck["latest_position"]
     snap = snap_to_road(pos["lat"], pos["lng"])
-    _snap_cache[code] = {"ts": now, "snap": snap}
+    _snap_cache[code] = {"ts": now, "pos": (pos["lat"], pos["lng"]), "snap": snap}
     return snap
 
 
