@@ -1,6 +1,8 @@
 # Pythia
 
-AI command center prototype for the AI Open Innovation Challenge 2026 DLH waste case (Case 1 & Case 2).
+AI + immersive-media command center for city waste agencies, piloted on Jakarta's public
+waste data: fleet supervision (Case 1 module), waste forecasting and planning (Case 2
+module), and an immersive layer (3D twin, driver AR, XR tabletop).
 
 ## What This Replaces
 
