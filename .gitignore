@@ -82,7 +82,10 @@ build/
 .idea/
 .vscode/
 
-# Local tool state
+# Local tool state and agent instruction files (kept on each machine, not published)
 .omc/
 .codegraph/
 .claude/
+CLAUDE.md
+AGENTS.md
+DESIGN.md

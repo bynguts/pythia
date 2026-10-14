@@ -7,7 +7,7 @@ AI command center prototype for the AI Open Innovation Challenge 2026 DLH waste 
 This version replaces the legacy Streamlit code with a high-performance React/Vite command center, a Python FastAPI backend, and a lightweight Node.js WhatsApp Gateway (Baileys).
 The interface is a task-first operations product: a persistent command rail,
 single-action decision surfaces, and dedicated desktop/mobile workflows that
-follow the visual rules in `apps/web/DESIGN.md`.
+follow the design tokens in `apps/web/src/styles/tokens.css`.
 
 ## Project Architecture
 

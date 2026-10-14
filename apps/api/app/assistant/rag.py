@@ -101,7 +101,6 @@ DOCUMENT_PATHS = [
     PROCESSED_DIR / "hybrid_forecaster_evaluation.md",
     PROCESSED_DIR / "system_impact_evaluation.md",
     SOURCES_DIR / "DATA_RESEARCH_SUMMARY.md",
-    REPO_ROOT / "apps" / "web" / "DESIGN.md",
     REPO_ROOT / "apps" / "wa-gateway" / "package.json",
     KNOWLEDGE_DIR / "01_OPERATIONS_AND_DECISION_LOGIC.md",
     KNOWLEDGE_DIR / "02_MODULES_AND_WORKFLOW.md",

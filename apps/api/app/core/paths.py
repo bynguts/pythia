@@ -8,8 +8,8 @@ Repository layout::
 
 The docker image has no repository around it (``/app`` holds the service,
 ``/data`` the datasets), so the dataset location can be set with
-``PYTHIA_DATA_DIR``. Repo-level documents the assistant indexes (README,
-``apps/web/DESIGN.md``) are simply skipped when absent.
+``PYTHIA_DATA_DIR``. The repo README, which the assistant indexes, is
+simply skipped when absent.
 """
 
 from __future__ import annotations
