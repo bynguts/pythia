@@ -47,8 +47,9 @@ pythia_*.db*
 # Browser-automation cache from the old WhatsApp client library
 **/.node-persist/
 
-# Leftover pre-restructure tree in old checkouts (untracked .env, WhatsApp session)
+# Leftover pre-restructure trees in old checkouts (untracked .env, WhatsApp session)
 /pythia/
+/jwis/
 
 
 # --- Internal working documents (not part of the shipped product) ---
@@ -80,3 +81,4 @@ build/
 # Local tool state
 .omc/
 .codegraph/
+.claude/
