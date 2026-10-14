@@ -1,8 +1,8 @@
-# JWIS — Jakarta Waste Intelligence System
+# Pythia
 
 **AI Command Center for Smart Waste Management** — solution built for the **AI Open Innovation Challenge 2026**, with the Jakarta Environmental Agency (DLH DKI Jakarta) as Case Provider.
 
-JWIS (Jakarta Waste Intelligence System) is an end-to-end AI command center prototype that addresses **both cases** issued by DLH Jakarta in a single, integrated platform:
+Pythia is an end-to-end AI command center prototype that addresses **both cases** issued by DLH Jakarta in a single, integrated platform:
 
 - **Case 1 — AI-Based Waste Transportation Monitoring & Supervision System:** fleet tracking (simulated positioning today; live GPS is planned once a reachable runtime path exists), violation detection, and route/schedule optimization.
 - **Case 2 — Waste Volume Prediction System Based on Historical Data & Events**: predictive (not reactive) estimation of waste generation and required resources in crowded areas.
@@ -14,7 +14,6 @@ JWIS (Jakarta Waste Intelligence System) is an end-to-end AI command center prot
 - [The Two Cases](#the-two-cases)
 - [Solution Overview](#solution-overview)
 - [Key Features](#key-features)
-- [Screenshots](#screenshots)
 - [Architecture](#architecture)
 - [Repository Structure](#repository-structure)
 - [Getting Started](#getting-started)
@@ -54,11 +53,11 @@ JWIS (Jakarta Waste Intelligence System) is an end-to-end AI command center prot
 
 ## Solution Overview
 
-JWIS is one integrated command center covering both cases — from live operations through AI forecasting to actionable alerts:
+Pythia is one integrated command center covering both cases — from live operations through AI forecasting to actionable alerts:
 
 | Layer | Stack | Purpose |
 |---|---|---|
-| **Command Center** | React + Vite · MapLibre GL · CSS variables | Real-time interactive dashboards: fleet, routes, landfill queue, forecast per sub-district |
+| **Command Center** | React + Vite · MapLibre GL · CSS variables | Interactive dashboards on a simulated fleet feed: fleet, routes, landfill queue, forecast per sub-district |
 | **AI / Backend** | Python FastAPI · OR-Tools CP-SAT · Prophet · XGBoost · A\* | Route optimization, staggered scheduling, waste forecasting, RAG assistant |
 | **Field Alerting** | Node.js Express · WhatsApp (Baileys) | Sends reroute instructions & alerts straight to officers' phones |
 
@@ -68,37 +67,29 @@ Every workflow is an auditable loop — `detect → dispatch → acknowledge →
 
 ## Key Features
 
-### Fleet Operations (Fleet Case 1)
+### Fleet Operations (Case 1)
 - **Live Fleet Map** (full-width) — simulated fleet positions with on-/off-corridor status (e.g. `T-047` off-corridor, highlighted amber). Positions are refreshed from the backend simulation, not live GPS; the map UI labels them "Data simulasi" / "SIMULATION · not live GPS".
 - **A\* Reroute Simulator** — simulates a traffic jam, then computes a new street-following route for `T-047` to TPA Bantargebang dynamically.
-- **TPA Queue & Staggered Dispatch** — live landfill queue status with staggered dispatch slots.
+- **TPA Queue & Staggered Dispatch** — predicted landfill queue (from the simulated fleet) with staggered dispatch slots.
 - **WhatsApp Alerts** — dispatch reroute instructions via the Baileys gateway straight to driver WhatsApp.
-- **Field App** (`/field`) — driver view to confirm instructions; confirmations sync to the dashboard in real time.
+- **Field App** (`/field`, no login) — driver view to confirm instructions; confirmations sync to the dashboard in real time.
 - **Historical Trips & Reporting** — trip history and route evidence for officer/management follow-up.
 
-### Pr Forecasting & AI (Case 2)
+### Forecasting & AI (Case 2)
 - **42-Subdistrict Forecast** — map/list of 42 Kecamatan; select one to expand a 3-column resource dashboard (predicted tonnage, fuel, carbon emissions, crew, fleet mix).
 - **Operational AI Assistant (RAG)** — ask domain questions; answers retrieved from the custom knowledge base via an OpenAI-compatible gateway.
 - **Integrated Planning** — constraint-aware weekly plan (OR-Tools CP-SAT) with an approve/deny flow.
 
 ### Data & ML Audit
-- **WAPE / MAE accuracy** — model metrics, training limits, and data provenance reviewable straight from the dashboard.
+- **Data provenance & model suitability** — every series is labelled observed, proxy or modelled in the dashboard; WAPE / MAE come from the offline evaluation report (`ml/data/processed/hybrid_forecaster_evaluation.md`).
 
 ---
 
-## Screenshots
-
-| Login (operator gate) | Armada — ActionCard + 5-item nav |
-|---|---|
-| ![Login](jwis/docs/audit/screenshots/01-login.png) | ![Armada](jwis/docs/audit/screenshots/02-fleet-actioncard-nav5.png) |
-
-| Prediksi Timbulan Sampah | Field App (driver, Indonesian) | Pengawas (mobile) |
-|---|---|---|
-| ![Prediksi](jwis/docs/audit/screenshots/03-forecast.png) | ![Field](jwis/docs/audit/screenshots/04-field-indonesian.png) | ![Pengawas](jwis/docs/audit/screenshots/05-pengawas-mobile.png) |
-
-Older-operator readability pass: body ≥ 14 px captions, ≥ 44 px tap targets, 9.4:1 muted-text contrast, one decision (ActionCard) above the fold, full-Indonesian field app, and a single-screen `/pengawas` mobile view. See `jwis/docs/audit/2026-09-22-runtime-ux-audit.md` for the measured baseline and `jwis/docs/audit/2026-09-22-fix-plan.md` for the file-by-file plan.
-
 ## Architecture
+
+Detailed notes: [`apps/api/knowledge/ARCHITECTURE.md`](apps/api/knowledge/ARCHITECTURE.md)
+(data contracts, storage, receipts) and [`apps/api/knowledge/PRODUCT.md`](apps/api/knowledge/PRODUCT.md)
+(users, product principles). The assistant answers from the same documents.
 
 ```text
 ┌───────────────────────────────────────────────────────────────┐
@@ -127,63 +118,67 @@ Older-operator readability pass: body ≥ 14 px captions, ≥ 44 px tap targets,
 ## Repository Structure
 
 ```text
-jwis-system/
-├── README.md
-├── START_JWIS.bat            # One-click launcher (Windows)
-├── TASK_retrain_models.md    # Model retraining notes
-└── jwis/
-    ├── backend/
-    │   ├── app/              # FastAPI routes (routing, RAG, forecast, WA)
-    │   ├── wa-gateway/       # WhatsApp Baileys gateway (Express)
-    │   ├── data/             # Datasets, models, provenance
-    │   └── tests/            # Backend test-suite
-    ├── frontend/
-    │   ├── src/              # React component code & workspaces
-    │   └── e2e/              # Playwright end-to-end tests
-    ├── PRODUCT.md            # Product specification
-    └── .env.example          # Environment template (no real secrets)
+pythia/
+├── .github/workflows/  # CI: API lint + tests, web lint + build + bundle budget
+├── apps/
+│   ├── api/            # FastAPI service
+│   │   ├── app/        #   routers, forecasting, fleet/routing, field (SPJ), assistant (RAG)
+│   │   ├── tests/      #   pytest, one folder per app area
+│   │   ├── knowledge/  #   assistant knowledge base: ARCHITECTURE.md, PRODUCT.md, operator guides
+│   │   └── data/       #   models/ (Prophet + XGBoost), assets/ (road cache, YOLO weights), media/ (demo clip)
+│   ├── web/            # React + Vite command center, field & driver PWAs, 3D twin, XR (src/, e2e/)
+│   └── wa-gateway/     # WhatsApp gateway (Express + Baileys)
+├── ml/                 # datasets + training scripts (see ml/README.md)
+│   ├── data/           # real/ raw/ processed/ sources/ — provenance in real/manifest.json
+│   └── scripts/        # reproducible training + data acquisition pipelines
+├── deploy/             # docker compose: backend, frontend (nginx), wa-gateway; optional scentinel profile
+├── scripts/            # dev.ps1 / dev.sh — run everything locally
+└── .env.example        # environment template (copy to .env; never commit secrets)
 ```
 
 ---
 
 ## Getting Started
 
-> Prerequisites: Python 3.10+, Node.js 18+, npm.
+> Prerequisites: Python 3.12+, Node.js 20+, npm.
 
-### 1. Backend API (FastAPI)
+Copy the environment template once: `cp .env.example .env` (PowerShell:
+`Copy-Item .env.example .env`). Every setting is optional for a local demo.
+
+### One command
 
 ```powershell
-cd "jwis/backend"
+.\scripts\dev.ps1 -Install      # Windows; add -WhatsApp for the gateway
+./scripts/dev.sh --install        # Linux / macOS; add --whatsapp
+```
+
+It starts the API on **:8001**, the web app on **http://localhost:5175** and
+opens the browser once the API is healthy (the first start warms the 42
+forecast models, ~20–25 s).
+
+### Each service by hand
+
+```bash
+# API (FastAPI) — the AI engine runs only when enabled
+cd apps/api
 pip install -r requirements.txt
+PYTHIA_AI_ENGINE=on python -m uvicorn app.main:app --port 8001
 
-# Copy the template (then fill in your real values)
-Copy-Item ..\.env.example .env
-
-python -m uvicorn app.main:app --port 8001
-```
-
-> On startup the backend warms every Prophet + XGBoost forecast cache (± 20–25 s) so dashboard responses are instant.
-
-### 2. WhatsApp Gateway (Baileys)
-
-```powershell
-cd "jwis/backend/wa-gateway"
+# Web app (React + Vite)
+cd apps/web
 npm install
-node server.js
-```
+npm run dev -- --port 5175
 
-> A QR code is printed in the terminal; scan it with a driver's WhatsApp (e.g. `6289675877496`). Session files under `baileys_auth_info/` are regenerated at runtime and **never committed** (see Security below).
-
-### 3. Frontend Web App
-
-```powershell
-cd "jwis/frontend"
+# WhatsApp gateway (optional) — scan the QR code it prints
+cd apps/wa-gateway
 npm install
-npm run build
-npm run preview -- --port 5175
+npm start          # listens on 127.0.0.1:2785; set HOST to bind elsewhere
 ```
 
-Open **http://localhost:5175** — or use `START_JWIS.bat` at the repo root to launch everything at once.
+Session files under `apps/wa-gateway/baileys_auth_info/` are created at runtime
+and **never committed** (see Security below). Driver WhatsApp numbers go in
+`apps/api/driver_contacts.json` (git-ignored; copy `driver_contacts.example.json`);
+without it alerts go to `PYTHIA_WA_DEFAULT_CHAT_ID` / `PYTHIA_WA_DEFAULT_GROUP_ID`.
 
 ---
 
@@ -192,32 +187,36 @@ Open **http://localhost:5175** — or use `START_JWIS.bat` at the repo root to l
 | Role | Username | Password |
 |---|---|---|
 | Dispatcher (command center) | `dispatcher` | `dispatcher-demo-pass` |
-| Driver (field app) | `driver` | — |
+| Supervisor (`/pengawas`, SPJ override) | `supervisor` | `supervisor-demo-pass` |
+
+The field app (`/field`) and the driver PWA (`/driver`) open without a login.
+Every role's password can be overridden with `PYTHIA_PW_<ROLE>`.
 
 ---
 
 ## End-to-End Demo Flow
 
 1. **Sign in** with `dispatcher` on the dashboard.
-2. **Fleet Operations (Case 1):** open the live fleet map and notice `T-047` off-corridor; click **A\* Simulate Jam** → watch it recompute a street-following route to TPA Bantargebang; inspect the TPA queue & staggered dispatch slots; click **Send Alert**; open `/field` in another tab, log in as `driver`, and confirm the instruction — the dashboard syncs instantly.
+2. **Fleet Operations (Case 1):** open the live fleet map and notice `T-047` off-corridor; click **A\* Simulate Jam** → watch it recompute a street-following route to TPA Bantargebang; inspect the TPA queue & staggered dispatch slots; click **Send Alert**; open `/field` in another tab (no login) and confirm the instruction — the dashboard syncs instantly.
 3. **Waste Forecast & AI Assistant (Case 2):** browse the 42-Kecamatan list, select one, expand the resource-optimization view (tonnage, fuel, emission, crew, fleet mix), then ask the **Operational AI Assistant** a domain question and get a RAG-grounded answer.
 4. **Integrated Planning:** review the constraints, then approve the next weekly staggered-dispatch plan.
-5. **Data & ML Audit:** review WAPE / MAE accuracy, training limits, and data provenance of the forecasting models.
+5. **Data & ML Audit:** review data provenance, validation classes and model suitability; accuracy (WAPE / MAE) is in the offline evaluation report.
 
 ---
 
 ## Testing
 
-```powershell
-cd "jwis/frontend"
-npx playwright test --workers 1
+```bash
+cd apps/api && python -m pytest tests -q              # backend
+cd apps/web && npm run build && npx playwright test --workers 1   # end-to-end
 ```
 
-E2E suite (Playwright, headless). The suite grows with every fixed issue, so
-test counts are not tracked in this file — run the command above for the
-current total, or check the CI run attached to each commit/PR for pass/fail
-status. Hygiene gate: `node jwis/frontend/e2e/lib/readme-hygiene.mjs` (fails
-if this README hardcodes a stale count).
+The end-to-end suite needs the API on :8001 and the built web app on :5175
+(`npm run preview -- --port 5175`). The suite grows with every fixed issue, so
+test counts are not tracked in this file — run the commands above, or check the
+CI run attached to each commit/PR. Hygiene gate:
+`node apps/web/e2e/lib/readme-hygiene.mjs` (fails if this README hardcodes a
+stale count).
 
 ---
 
@@ -225,10 +224,19 @@ if this README hardcodes a stale count).
 
 The repository is **public** — handle sensitive material with care:
 
-- **`.env` files are `gitignore`d and must never be committed.** Use `.env.example` as the template; values live only on the runne machine.
-- **WhatsApp session store** (`jwis/backend/wa-gateway/baileys_auth_info/`) contains real session credentials — it is ignored/untracked and regenerated on every QR scan.
+- **`.env` files are `gitignore`d and must never be committed.** Use `.env.example` as the template; values live only on the running machine.
+- **WhatsApp session store** (`apps/wa-gateway/baileys_auth_info/`) contains real session credentials — it is ignored/untracked and regenerated on every QR scan.
+- **Driver contacts** (`apps/api/driver_contacts.json`) hold real phone numbers — ignored/untracked; the repo ships only placeholder examples.
 - **Runtime logs** (`*.log`) are ignored & untracked.
 - ⚠️ **If a secret was ever pushed to public history, rotate it at the provider immediately.** History rewrites require force push and should be avoided in forked repos.
+
+---
+
+## Third-party assets
+
+- `apps/api/data/assets/yolov8n.pt` — Ultralytics YOLOv8n weights, licensed under
+  [AGPL-3.0](https://github.com/ultralytics/ultralytics/blob/main/LICENSE); used by
+  the simulated gate-camera demo.
 
 ---
 
@@ -236,4 +244,4 @@ The repository is **public** — handle sensitive material with care:
 
 - **Competition:** AI Open Innovation Challenge 2026 — [ai-open.president.ac.id](https://ai-open.president.ac.id)
 - **Case Provider:** DLH DKI Jakarta
-- **Team:** JWIS
+- **Team:** Pythia

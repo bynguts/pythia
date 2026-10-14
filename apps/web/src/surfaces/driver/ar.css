@@ -1,0 +1,537 @@
+/* driver AR navigator. Full-screen over the driver PWA; the
+   camera feed sits behind translucent forest panels so text keeps contrast on
+   any street scene. Tokens from styles/tokens.css. */
+
+.ar-nav {
+  --ar-glass: rgba(19, 33, 29, 0.78);
+  --ar-glass-line: rgba(255, 255, 255, 0.2);
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  background: var(--ui-surface-dark);
+  color: #ffffff;
+  font-family: inherit;
+}
+
+.ar-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.ar-video[hidden] {
+  display: none;
+}
+
+.ar-top,
+.ar-stage,
+.ar-sheet,
+.ar-empty {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Top bar ── */
+
+.ar-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: max(env(safe-area-inset-top), var(--space-3)) var(--space-4) var(--space-3);
+}
+
+.ar-icon-btn {
+  flex: none;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--ar-glass-line);
+  background: var(--ar-glass);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.ar-icon-btn:focus-visible,
+.ar-btn:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.ar-top-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 6px var(--space-3);
+  border-radius: var(--ui-radius-card);
+  border: 1px solid var(--ar-glass-line);
+  background: var(--ar-glass);
+}
+
+.ar-top-title strong {
+  font-size: 15px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ar-top-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.ar-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--ar-glass-line);
+  background: var(--ar-glass);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ar-chip.is-weak {
+  color: #ffd8a8;
+  border-color: rgba(255, 216, 168, 0.5);
+}
+
+/* ── Stage: arrow + distance ── */
+
+.ar-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  min-height: 0;
+}
+
+.ar-arrow-3d {
+  position: relative;
+  width: min(72vw, 300px, 40vh);
+  aspect-ratio: 1;
+  perspective: 640px;
+  perspective-origin: 50% 20%;
+}
+
+.ar-floor,
+.ar-arrow-plane {
+  position: absolute;
+  transform-style: preserve-3d;
+  transition: transform 160ms ease-out;
+}
+
+.ar-floor {
+  inset: 0;
+  transform: rotateX(56deg) rotateZ(var(--ar-ring, 0deg));
+}
+
+.ar-arrow-plane {
+  inset: 16%;
+  transform: rotateX(56deg) translateZ(14px) rotateZ(var(--ar-angle, 0deg));
+}
+
+.ar-floor svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.ar-floor-ring {
+  fill: rgba(19, 33, 29, 0.28);
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 2.5;
+}
+
+.ar-floor-inner {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.4);
+  stroke-width: 1.2;
+  stroke-dasharray: 3 4;
+}
+
+.ar-floor-tick {
+  fill: #ffffff;
+}
+
+.ar-floor-label {
+  fill: #ffffff;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.is-arrived .ar-floor-ring {
+  stroke: #7fe0b5;
+  stroke-width: 3.5;
+}
+
+.is-arrived .ar-arrow-plane {
+  display: none;
+}
+
+.ar-floor-target circle {
+  fill: var(--ui-success);
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.ar-floor-target path {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ar-arrow-plane svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.ar-arrow-shadow {
+  transform: translateZ(-34px) scale(1.04);
+  filter: blur(7px);
+}
+
+.ar-arrow-shadow path {
+  fill: rgba(0, 0, 0, 0.45);
+}
+
+.ar-arrow-side {
+  transform: translateZ(-9px);
+}
+
+.ar-arrow-side path {
+  fill: #6f240f;
+  stroke: #6f240f;
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+.ar-arrow-face {
+  transform: translateZ(0);
+}
+
+.ar-arrow-face path {
+  fill: var(--ui-accent);
+  stroke: #ffffff;
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+.ar-arrow-face .ar-arrow-facet {
+  fill: rgba(0, 0, 0, 0.24);
+  stroke: none;
+}
+
+.ar-arrow-face .ar-arrow-ridge {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.45);
+  stroke-width: 2;
+}
+
+.ar-searching {
+  width: 120px;
+  height: 120px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--ar-glass-line);
+  background: var(--ar-glass);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.ar-readout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--ui-radius-elevated);
+  border: 1px solid var(--ar-glass-line);
+  background: var(--ar-glass);
+  text-align: center;
+}
+
+.ar-distance {
+  font-size: 40px;
+  line-height: 1.1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.ar-guidance {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ── 2D compass fallback (no camera, or no live compass) ── */
+
+.ar-compass {
+  position: relative;
+  width: min(70vw, 280px, 40vh);
+  aspect-ratio: 1;
+}
+
+/* Over the camera feed (camera live, compass not) the card needs its own
+   glass so the marks keep contrast on any street scene. */
+.ar-view-camera .ar-compass {
+  border-radius: 50%;
+  background: var(--ar-glass);
+}
+
+.ar-compass-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.04);
+  transform: rotate(var(--ar-ring, 0deg));
+  transition: transform 160ms ease-out;
+}
+
+.ar-compass-mark {
+  position: absolute;
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.82);
+  transform: translate(-50%, -50%);
+}
+
+.ar-compass-mark.m0 {
+  left: 50%;
+  top: 9%;
+  color: #ffb59c;
+}
+.ar-compass-mark.m1 {
+  left: 91%;
+  top: 50%;
+}
+.ar-compass-mark.m2 {
+  left: 50%;
+  top: 91%;
+}
+.ar-compass-mark.m3 {
+  left: 9%;
+  top: 50%;
+}
+
+.ar-compass-arrow {
+  position: absolute;
+  inset: 20%;
+  transform: rotate(var(--ar-angle, 0deg));
+  transition: transform 160ms ease-out;
+}
+
+.ar-compass-arrow svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.ar-compass-arrow path {
+  fill: var(--ui-accent);
+  stroke: #ffffff;
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+/* ── Bottom sheet ── */
+
+.ar-sheet {
+  width: min(100%, 560px);
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-4) max(env(safe-area-inset-bottom), var(--space-4));
+  border-radius: var(--ui-radius-elevated) var(--ui-radius-elevated) 0 0;
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+  box-shadow: 0 -8px 28px rgba(16, 32, 26, 0.22);
+}
+
+.ar-sheet-kicker {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ar-sheet-address {
+  margin: 2px 0 0;
+  font-size: var(--fs-caption);
+  color: var(--ui-muted);
+}
+
+.ar-arrived h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 18px;
+  color: var(--ui-success);
+}
+
+.ar-arrived p {
+  margin: var(--space-1) 0 var(--space-3);
+  font-size: 14px;
+  color: var(--ui-ink-soft);
+}
+
+.ar-btn {
+  width: 100%;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border-radius: var(--ui-radius-control);
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ar-btn.primary {
+  background: var(--ui-accent);
+  color: var(--ui-accent-foreground);
+}
+
+.ar-btn.primary:hover:not(:disabled) {
+  background: var(--ui-accent-hover);
+}
+
+.ar-btn.secondary {
+  background: var(--ui-surface);
+  border-color: var(--ui-border-strong);
+  color: var(--ui-ink);
+}
+
+.ar-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.ar-arrived .ar-btn:focus-visible,
+.ar-sheet .ar-btn:focus-visible {
+  outline-color: var(--ui-accent);
+}
+
+.ar-error {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-caption);
+  color: var(--ui-danger);
+}
+
+.ar-notices {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.ar-notices li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: var(--fs-caption);
+  line-height: 1.35;
+  color: var(--ui-muted);
+}
+
+.ar-notices li svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.ar-notices li.warn {
+  color: var(--ui-warning);
+}
+
+.ar-honest {
+  margin: var(--space-3) 0 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--ui-border);
+  font-size: 12px;
+  color: var(--ui-muted);
+}
+
+/* ── No coordinate ── */
+
+.ar-empty {
+  grid-row: 2 / 4;
+  align-self: center;
+  justify-self: center;
+  width: min(100% - 2 * var(--space-4), 420px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  border-radius: var(--ui-radius-elevated);
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+  text-align: center;
+}
+
+.ar-empty svg {
+  color: var(--ui-warning);
+}
+
+.ar-empty h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.ar-empty p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ui-ink-soft);
+}
+
+.ar-empty .ar-empty-address {
+  font-size: var(--fs-caption);
+  color: var(--ui-muted);
+}
+
+.ar-empty .ar-btn {
+  margin-top: var(--space-3);
+}
+
+@media (max-height: 640px) {
+  .ar-distance {
+    font-size: 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ar-arrow-plane,
+  .ar-floor,
+  .ar-compass-ring,
+  .ar-compass-arrow {
+    transition: none;
+  }
+}
