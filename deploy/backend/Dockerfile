@@ -20,14 +20,19 @@ COPY --from=app requirements.txt .
 RUN pip install --retries 10 --timeout 120 -r requirements.txt
 
 COPY --from=app app ./app
+# Assistant RAG corpus (app/core/paths.py KNOWLEDGE_DIR).
+COPY --from=app knowledge ./knowledge
+# Placeholder driver list; mount a real driver_contacts.json at /app to override.
+COPY --from=app driver_contacts.example.json ./
 
-# real_data.py resolves datasets at parents[2]/data = jwis/data (real/raw
-# government datasets + kelurahan GeoJSON), one level ABOVE backend/.
-# Layout inside the image mirrors that: /app = backend, /data = jwis/data.
+# /app = apps/api (with data/models), /data = ml/data (real/raw government
+# datasets + kelurahan GeoJSON). The image has no repo around it, so
+# app/core/paths.py is told where the datasets are.
 COPY --from=app data ./data
 COPY --from=dataset . /data/
 
-ENV JWIS_ALLOWED_ORIGINS="http://localhost"
+ENV PYTHIA_ALLOWED_ORIGINS="http://localhost" \
+    PYTHIA_DATA_DIR=/data
 
 EXPOSE 8000
 

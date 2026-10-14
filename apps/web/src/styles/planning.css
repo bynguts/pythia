@@ -1,0 +1,694 @@
+/* ── Operations Optimizer & Planning specific styles ── */
+
+.summary-panel h3 {
+  margin: 0 0 12px;
+  font-weight: 800;
+}
+
+.summary-panel ul {
+  margin: 0 0 18px;
+  padding-left: 18px;
+  color: #344452;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.summary-panel li {
+  margin-bottom: 8px;
+}
+
+.queue-box {
+  border: 1px solid #cbd5df;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fbfcfd;
+}
+
+.queue-box strong {
+  display: block;
+}
+
+.queue-box span {
+  display: block;
+  font-size: 13px;
+  color: #526170;
+  margin-top: 2px;
+}
+
+.queue-box p {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.scenario-panel .control-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.scenario-panel label span {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  color: #526170;
+  margin-bottom: 4px;
+}
+
+.scenario-panel input {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #cbd5df;
+  padding: 10px 12px;
+  min-height: 44px;
+}
+
+.scenario-result {
+  border: 1px solid #d8d9f5;
+  background: #f5f5ff;
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+  color: var(--ui-ink);
+}
+
+.scenario-result strong {
+  display: block;
+  font-size: 18px;
+}
+
+.scenario-result span {
+  display: block;
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+/* Scenario and stagger simulator extensions */
+.scenario-reqs {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  justify-content: space-between;
+}
+
+.req-chip {
+  flex: 1;
+  background: var(--ui-accent-soft);
+  padding: 10px;
+  border-radius: 8px;
+  text-align: center;
+  border: 1px solid #d8d9f5;
+}
+
+.req-chip b {
+  display: block;
+  font-size: 18px;
+  color: var(--ui-accent);
+}
+
+.req-chip span {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.stagger-compare {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  margin-top: 16px;
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  position: relative;
+}
+
+.stagger-col {
+  text-align: center;
+}
+
+.stagger-col.before strong {
+  color: var(--red);
+}
+
+.stagger-col.after strong {
+  color: var(--green-dark);
+}
+
+.stagger-col strong {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.stagger-label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.stagger-arrow {
+  font-size: 24px;
+  color: var(--text-muted);
+}
+
+.stagger-badge {
+  position: absolute;
+  top: -10px;
+  right: 12px;
+  background: var(--green-dark);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+/* A* Dynamic Rerouting Panel */
+.astar-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.success-button {
+  background: var(--ui-accent);
+}
+
+.danger-button {
+  background: var(--red);
+}
+
+.traffic-status-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 6px;
+}
+
+.traffic-status-badge.clear {
+  background: var(--green-light);
+  color: var(--green-dark);
+}
+
+.traffic-status-badge.congested {
+  background: var(--red-light);
+  color: var(--red);
+}
+
+.astar-info-card {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  padding: 14px;
+}
+
+.astar-msg {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.astar-stats {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.astar-stat-col {
+  flex: 1;
+  text-align: center;
+}
+
+.astar-stat-col span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.astar-stat-col strong {
+  font-size: 16px;
+  color: var(--text);
+}
+
+.text-diverted {
+  color: var(--red) !important;
+}
+
+.text-normal {
+  color: var(--green-dark) !important;
+}
+
+/* TPA Queue Panel */
+.tpa-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tpa-status-card {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  padding: 12px;
+  text-align: center;
+}
+
+.tpa-status-card span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.tpa-status-card strong {
+  font-size: 17px;
+  color: var(--text);
+}
+
+.text-danger {
+  color: var(--red) !important;
+}
+
+.text-success {
+  color: var(--green-dark) !important;
+}
+
+.tpa-logs h3 {
+  font-size: 13px;
+  margin: 0 0 8px;
+  color: var(--text-muted);
+}
+
+.tpa-logs ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.tpa-logs li {
+  font-size: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.tpa-logs .time {
+  font-weight: 700;
+}
+
+.status-badge.cleared {
+  background: var(--green-light);
+  color: var(--green-dark);
+}
+
+.status-badge.weighing {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+/* Operations Optimizer UI styling */
+.optimizer-section {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+.optimizer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.optimizer-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.optimizer-plan-card {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  margin-top: 14px;
+}
+
+.plan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.plan-header strong {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.plan-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.plan-stat-item {
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.plan-stat-item strong {
+  font-size: 14px;
+  color: var(--ink);
+  margin-top: 2px;
+}
+
+.unmet-reasons-box {
+  background: var(--red-light);
+  border: 1px solid rgba(180, 35, 24, 0.2);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  color: var(--red);
+}
+
+.unmet-reasons-box strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.unmet-reasons-box ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.assign-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 12px 0 8px 0;
+}
+
+.assign-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.assign-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.assign-info strong {
+  color: var(--ink);
+}
+
+.assign-info span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.assign-evidence {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.assign-evidence span.ok {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.assign-evidence span.warn {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.optimizer-success {
+  background: var(--green-light);
+  border: 1px solid rgba(23, 107, 84, 0.2);
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--green-dark);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan-status-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.plan-status-badge.proposed {
+  background: var(--amber-light);
+  color: var(--amber);
+}
+
+.plan-status-badge.approved {
+  background: var(--green-light);
+  color: var(--green);
+}
+
+/* ── Migrated from the retired legacy.css layer (issue #66) ─────────────
+   Only declarations no later layer already defined; duplicate selector
+   ownership is what made visual fixes order-dependent. ─────────────── */
+
+.scenario-result {
+  border-top: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.scenario-result strong {
+  font-family: inherit;
+  font-weight: 600;
+}
+
+.scenario-reqs {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.req-chip b {
+  font-weight: 500;
+}
+
+.traffic-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.traffic-status-badge.clear {
+  border: 1px solid #bbf7d0;
+}
+
+.traffic-status-badge.congested {
+  border: 1px solid #fecaca;
+}
+
+.astar-info-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.astar-msg-icon.congested {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.astar-msg-icon.clear {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.astar-stats {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.astar-stat-col {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+
+.astar-stat-col span {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.astar-stat-col strong {
+  font-weight: 700;
+}
+
+.astar-reroute-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.astar-route-step {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--fs-caption);
+  color: var(--ui-muted);
+}
+
+.astar-route-step strong {
+  color: var(--ui-ink);
+  font-weight: 600;
+}
+
+.tpa-logs {
+  margin-top: var(--space-4);
+}
+
+.tpa-logs h3 {
+  font-weight: 700;
+}
+
+.tpa-logs ul {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  overflow: hidden;
+  background: var(--ui-surface);
+}
+
+.tpa-logs li {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 64px minmax(78px, 1fr) minmax(76px, 0.8fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.tpa-logs li:last-child {
+  border-bottom: 0;
+}
+
+.tpa-logs .time {
+  font-variant-numeric: tabular-nums;
+}
+
+.tpa-logs .truck {
+  color: var(--ui-muted);
+  font-weight: 600;
+}
+
+.tpa-logs .weight {
+  color: var(--ui-ink);
+  font-weight: 600;
+  text-align: right;
+}
+
+.tpa-logs .status-badge {
+  min-height: 22px;
+  justify-self: end;
+}
+
+.tpa-live-gauge {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.tpa-wait-number {
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.tpa-wait-number span {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ui-muted);
+}
+
+.tpa-live-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+}
+
+.tpa-live-stats > div {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  padding: 8px 10px;
+}
+
+.tpa-live-stats span {
+  display: block;
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.tpa-live-stats strong {
+  font-size: 15px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-stats-grid {
+  border-top: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.plan-stat-item {
+  padding: var(--space-3);
+  border-left: 1px solid var(--ui-border);
+}
+
+.plan-stat-item:first-child {
+  border-left: 0;
+}
+
+.assign-card {
+  border-top: 1px solid var(--ui-border);
+}
+
+.assign-card:first-child {
+  border-top: 0;
+}

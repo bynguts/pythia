@@ -1,0 +1,42 @@
+"""Filesystem locations the API reads, defined once.
+
+Repository layout::
+
+    apps/api/          this service (API_DIR): app/, tests/, knowledge/ (assistant
+                       RAG corpus), data/models/, data/assets/
+    ml/data/           datasets: real/, raw/, processed/, sources/
+
+The docker image has no repository around it (``/app`` holds the service,
+``/data`` the datasets), so the dataset location can be set with
+``PYTHIA_DATA_DIR``. Repo-level documents the assistant indexes (README,
+``apps/web/DESIGN.md``) are simply skipped when absent.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from app.core.env import getenv
+
+API_DIR = Path(__file__).resolve().parents[2]
+REPO_ROOT = API_DIR.parent.parent
+
+MODELS_DIR = API_DIR / "data" / "models"
+# Product/operations documents the assistant "Ana" retrieves from (RAG).
+KNOWLEDGE_DIR = API_DIR / "knowledge"
+# Non-code assets the service reads at runtime (cached road geometry, YOLO weights,
+# the simulated gate-camera clip).
+ASSETS_DIR = API_DIR / "data" / "assets"
+ROAD_GEOMETRY_CACHE = ASSETS_DIR / "road_geometry_cache.json"
+YOLO_WEIGHTS = ASSETS_DIR / "yolov8n.pt"
+DEMO_MEDIA_DIR = API_DIR / "data" / "media"
+# Real driver WhatsApp numbers stay local (git-ignored); the example file holds
+# placeholders and is what the API serves when no local file exists.
+DRIVER_CONTACTS_FILE = API_DIR / "driver_contacts.json"
+DRIVER_CONTACTS_EXAMPLE_FILE = API_DIR / "driver_contacts.example.json"
+
+DATA_DIR = Path(getenv("DATA_DIR") or REPO_ROOT / "ml" / "data")
+REAL_DIR = DATA_DIR / "real"
+RAW_DIR = DATA_DIR / "raw"
+PROCESSED_DIR = DATA_DIR / "processed"
+SOURCES_DIR = DATA_DIR / "sources"
