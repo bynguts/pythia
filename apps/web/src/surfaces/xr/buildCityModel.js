@@ -14,7 +14,7 @@ const MIN_BAR_M = 0.003;
 const PLATE_MARGIN_M = 0.035;
 const PLATE_THICKNESS_M = 0.012;
 
-// Status hues are semantic (DESIGN.md); the overlay legend carries text labels
+// Status hues are semantic (styles/tokens.css); the overlay legend carries text labels
 // too, so colour is never the only signal.
 export const RISK_COLORS = {
   normal: "#86a497",
