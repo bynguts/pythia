@@ -1,0 +1,126 @@
+{
+  "generated_at": "2026-05-31",
+  "results": [
+    {
+      "name": "satudata_open_data",
+      "url": "https://satudata.jakarta.go.id/open-data",
+      "status": "scraped",
+      "keyword_matches": [],
+      "text_file": "data/raw/satudata_open_data.txt",
+      "links_sample": []
+    },
+    {
+      "name": "satudata_waste_detail",
+      "url": "https://satudata.jakarta.go.id/open-data/detail/data-timbulan-dan-berat-jenis-sampah-di-setiap-sumber-sampah",
+      "status": "scraped",
+      "keyword_matches": [],
+      "text_file": "data/raw/satudata_waste_detail.txt",
+      "links_sample": []
+    },
+    {
+      "name": "satudata_kelurahan_dashboard",
+      "url": "https://satudata.jakarta.go.id/dashboard/dashboard-publik/dashboard-potensi-kelurahan?blok=kependudukan-dan-ketenagakerjaan",
+      "status": "scraped",
+      "keyword_matches": [
+        "kelurahan",
+        "podes",
+        "bps",
+        "download data",
+        "metadata"
+      ],
+      "text_file": "data/raw/satudata_kelurahan_dashboard.txt",
+      "links_sample": [
+        {
+          "text": "",
+          "href": "https://www.facebook.com/share_channel/?type=reshare&link=https://satudata.jakarta.go.id/dashboard/dashboard-publik/dashboard-potensi-kelurahan?blok=kependudukan-dan-ketenagakerjaan&app_id=87741124305&source_surface=external_reshare&display=popup&hashtag#"
+        },
+        {
+          "text": "",
+          "href": "https://api.whatsapp.com/send/?text=https://satudata.jakarta.go.id/dashboard/dashboard-publik/dashboard-potensi-kelurahan?blok=kependudukan-dan-ketenagakerjaan&type=custom_url&app_absent=0"
+        },
+        {
+          "text": "",
+          "href": "https://x.com/intent/post?url=https://satudata.jakarta.go.id/dashboard/dashboard-publik/dashboard-potensi-kelurahan?blok=kependudukan-dan-ketenagakerjaan"
+        },
+        {
+          "text": "",
+          "href": "https://www.instagram.com/p/https://satudata.jakarta.go.id/dashboard/dashboard-publik/dashboard-potensi-kelurahan?blok=kependudukan-dan-ketenagakerjaan"
+        },
+        {
+          "text": "Keterangan Umum",
+          "href": "?blok=keterangan-umum-kelurahan"
+        },
+        {
+          "text": "Kependudukan Dan Ketenagakerjaan",
+          "href": "?blok=kependudukan-dan-ketenagakerjaan"
+        },
+        {
+          "text": "Perumahan Dan Lingkungan Hidup",
+          "href": "?blok=perumahan-dan-lingkungan-hidup"
+        },
+        {
+          "text": "Bencana Alam Dan Mitigasi Bencana Alam",
+          "href": "?blok=bencana-alam-dan-mitigasi-bencana-alam"
+        },
+        {
+          "text": "Pendidikan",
+          "href": "?blok=pendidikan"
+        },
+        {
+          "text": "Kesehatan",
+          "href": "?blok=kesehatan"
+        },
+        {
+          "text": "Sosial Budaya",
+          "href": "?blok=sosial-budaya"
+        },
+        {
+          "text": "Olahraga Dan Hiburan",
+          "href": "?blok=olahraga-dan-hiburan"
+        },
+        {
+          "text": "Angkutan, Komunikasi, Dan Informasi",
+          "href": "?blok=angkutan-komunikasi-dan-informasi"
+        },
+        {
+          "text": "Ekonomi",
+          "href": "?blok=ekonomi"
+        },
+        {
+          "text": "Keamanan",
+          "href": "?blok=keamanan"
+        },
+        {
+          "text": "Perlindungan Sosial, Pembanguanan Dan Pemberdayaan Masyarakat",
+          "href": "?blok=perlindungan-sosial-pembanguanan-dan-pemberdayaan-masyarakat"
+        },
+        {
+          "text": "Keterangan Umum",
+          "href": "?blok=keterangan-umum-kelurahan"
+        },
+        {
+          "text": "Kependudukan Dan Ketenagakerjaan",
+          "href": "?blok=kependudukan-dan-ketenagakerjaan"
+        },
+        {
+          "text": "Perumahan Dan Lingkungan Hidup",
+          "href": "?blok=perumahan-dan-lingkungan-hidup"
+        },
+        {
+          "text": "Bencana Alam Dan Mitigasi Bencana Alam",
+          "href": "?blok=bencana-alam-dan-mitigasi-bencana-alam"
+        }
+      ]
+    },
+    {
+      "name": "jakarta_satu_geospatial",
+      "url": "https://satudata.jakarta.go.id/jakarta-satu",
+      "status": "scraped",
+      "keyword_matches": [
+        "jakarta satu"
+      ],
+      "text_file": "data/raw/jakarta_satu_geospatial.txt",
+      "links_sample": []
+    }
+  ]
+}

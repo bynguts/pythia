@@ -1,0 +1,385 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "KL-001",
+        "name": "Gambir",
+        "city": "Jakarta Pusat",
+        "baseline_tons": 990,
+        "spike_percent": 25,
+        "predicted_tons": 1237.5
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.8126,
+              -6.1947
+            ],
+            [
+              106.8486,
+              -6.1947
+            ],
+            [
+              106.8486,
+              -6.1587000000000005
+            ],
+            [
+              106.8126,
+              -6.1587000000000005
+            ],
+            [
+              106.8126,
+              -6.1947
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "KL-002",
+        "name": "Tanah Abang",
+        "city": "Jakarta Pusat",
+        "baseline_tons": 1040,
+        "spike_percent": 18,
+        "predicted_tons": 1227.2
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.7926,
+              -6.2238999999999995
+            ],
+            [
+              106.8286,
+              -6.2238999999999995
+            ],
+            [
+              106.8286,
+              -6.1879
+            ],
+            [
+              106.7926,
+              -6.1879
+            ],
+            [
+              106.7926,
+              -6.2238999999999995
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "KL-003",
+        "name": "Penjaringan",
+        "city": "Jakarta Utara",
+        "baseline_tons": 1190,
+        "spike_percent": 24,
+        "predicted_tons": 1475.6
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.7619,
+              -6.1444
+            ],
+            [
+              106.7979,
+              -6.1444
+            ],
+            [
+              106.7979,
+              -6.1084000000000005
+            ],
+            [
+              106.7619,
+              -6.1084000000000005
+            ],
+            [
+              106.7619,
+              -6.1444
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "KL-004",
+        "name": "Tanjung Priok",
+        "city": "Jakarta Utara",
+        "baseline_tons": 1215,
+        "spike_percent": 17,
+        "predicted_tons": 1421.5
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.8539,
+              -6.1479
+            ],
+            [
+              106.8899,
+              -6.1479
+            ],
+            [
+              106.8899,
+              -6.1119
+            ],
+            [
+              106.8539,
+              -6.1119
+            ],
+            [
+              106.8539,
+              -6.1479
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "KL-005",
+        "name": "Cengkareng",
+        "city": "Jakarta Barat",
+        "baseline_tons": 1280,
+        "spike_percent": 31,
+        "predicted_tons": 1676.8
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.7166,
+              -6.1627
+            ],
+            [
+              106.7526,
+              -6.1627
+            ],
+            [
+              106.7526,
+              -6.1267000000000005
+            ],
+            [
+              106.7166,
+              -6.1267000000000005
+            ],
+            [
+              106.7166,
+              -6.1627
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "KL-006",
+        "name": "Kebon Jeruk",
+        "city": "Jakarta Barat",
+        "baseline_tons": 1240,
+        "spike_percent": 41,
+        "predicted_tons": 1748.4
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.7518,
+              -6.2097999999999995
+            ],
+            [
+              106.7878,
+              -6.2097999999999995
+            ],
+            [
+              106.7878,
+              -6.1738
+            ],
+            [
+              106.7518,
+              -6.1738
+            ],
+            [
+              106.7518,
+              -6.2097999999999995
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "KL-007",
+        "name": "Pulogadung",
+        "city": "Jakarta Timur",
+        "baseline_tons": 1510,
+        "spike_percent": 15,
+        "predicted_tons": 1736.5
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.8876,
+              -6.2096
+            ],
+            [
+              106.92360000000001,
+              -6.2096
+            ],
+            [
+              106.92360000000001,
+              -6.1736
+            ],
+            [
+              106.8876,
+              -6.1736
+            ],
+            [
+              106.8876,
+              -6.2096
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "KL-008",
+        "name": "Cakung",
+        "city": "Jakarta Timur",
+        "baseline_tons": 1580,
+        "spike_percent": 13,
+        "predicted_tons": 1785.4
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.9338,
+              -6.2038
+            ],
+            [
+              106.9698,
+              -6.2038
+            ],
+            [
+              106.9698,
+              -6.167800000000001
+            ],
+            [
+              106.9338,
+              -6.167800000000001
+            ],
+            [
+              106.9338,
+              -6.2038
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "KL-009",
+        "name": "Tebet",
+        "city": "Jakarta Selatan",
+        "baseline_tons": 1365,
+        "spike_percent": 19,
+        "predicted_tons": 1624.3
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.8293,
+              -6.2501999999999995
+            ],
+            [
+              106.8653,
+              -6.2501999999999995
+            ],
+            [
+              106.8653,
+              -6.2142
+            ],
+            [
+              106.8293,
+              -6.2142
+            ],
+            [
+              106.8293,
+              -6.2501999999999995
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "KL-010",
+        "name": "Kebayoran Baru",
+        "city": "Jakarta Selatan",
+        "baseline_tons": 1400,
+        "spike_percent": 22,
+        "predicted_tons": 1708.0
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.7812,
+              -6.262
+            ],
+            [
+              106.8172,
+              -6.262
+            ],
+            [
+              106.8172,
+              -6.226
+            ],
+            [
+              106.7812,
+              -6.226
+            ],
+            [
+              106.7812,
+              -6.262
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,263 @@
+{
+  "created": "2026-07-13",
+  "updated": "2026-10-14",
+  "note": "Rebuilt from files actually present in data/real/. Every entry classified real/proxy with source_url and limitations.",
+  "files": [
+    {
+      "file": "sipsn_timbulan_2018_2025_dki.csv",
+      "bytes": 1970,
+      "source_url": "https://sampahnasional.kemenlh.go.id/portal-indikatif/data/timbulan-sampah",
+      "as_of": "2025",
+      "granularity": "city-year",
+      "classification": "real",
+      "limitations": "Yearly per-city daily-average timbulan; no daily or per-kecamatan resolution.",
+      "columns": [
+        "jml_timbulan_harian",
+        "jml_timbulan_tahun",
+        "nama_kabkota",
+        "nama_provinsi",
+        "periode",
+        "tahun"
+      ],
+      "rows": 29
+    },
+    {
+      "file": "bantargebang_hasil_penimbangan.csv",
+      "bytes": 32791,
+      "source_url": "https://data.go.id/dataset/dataset/data-hasil-penimbangan-sampah-masuk-tempat-pengolahan-sampah-terpadu-tpst-bantargebang",
+      "as_of": "2026-04",
+      "granularity": "landfill-month",
+      "classification": "real",
+      "limitations": "Monthly landfill intake totals; inconsistent tonase formats normalized on load.",
+      "columns": [
+        "periode_data",
+        "instansi_asal_kendaraan",
+        "ritasi",
+        "tonase"
+      ],
+      "rows": 465
+    },
+    {
+      "file": "data_truk_sampah_dki.csv",
+      "bytes": 16372,
+      "source_url": "https://data.go.id/dataset/dataset/data-truk-sampah",
+      "as_of": "2023",
+      "granularity": "fleet-census",
+      "classification": "real",
+      "limitations": "Vehicle counts per wilayah/type; not live telematics.",
+      "columns": [
+        "periode_data",
+        "wilayah",
+        "unit_kerja_pengelola",
+        "jenis_kendaraan",
+        "jumlah_kendaraan"
+      ],
+      "rows": 153
+    },
+    {
+      "file": "dki_tps.csv",
+      "bytes": 392221,
+      "source_url": "https://data.go.id/dataset/dataset/data-tempat-penampungan-sampah-sementara-tps-di-provinsi-dki-jakarta",
+      "as_of": "2023",
+      "granularity": "tps-location",
+      "classification": "real",
+      "limitations": "TPS registry; no operational throughput capacity.",
+      "columns": [
+        "periode_data",
+        "wilayah",
+        "kecamatan",
+        "kelurahan",
+        "nama_tps",
+        "jenis_tps",
+        "alamat"
+      ],
+      "rows": 3520
+    },
+    {
+      "file": "timbulan_kecamatan_2023.csv",
+      "bytes": 10681,
+      "source_url": "https://silika.jakarta.go.id/timbulan_sampah",
+      "as_of": "2023",
+      "granularity": "kecamatan-year",
+      "classification": "real",
+      "limitations": "Per-kecamatan generation modeled by SILIKA population formula; lat/lng column labels swapped in source.",
+      "columns": [
+        "kode_wilayah",
+        "kota_wilayah",
+        "kecamatan",
+        "penduduk",
+        "timbulan_ton_per_hari",
+        "lat",
+        "lng",
+        "source",
+        "source_url",
+        "quality_note"
+      ],
+      "rows": 42
+    },
+    {
+      "file": "tps_capacity_vs_timbulan_kecamatan.csv",
+      "bytes": 4683,
+      "source_url": "https://silika.jakarta.go.id/timbulan_sampah",
+      "as_of": "2023",
+      "granularity": "kecamatan-year",
+      "classification": "proxy",
+      "limitations": "TPS capacity is a PROXY (not official operational capacity); demand side is real SILIKA.",
+      "columns": [
+        "wilayah",
+        "kecamatan",
+        "timbulan_ton_per_hari",
+        "tps_capacity_proxy_ton_per_day",
+        "proxy_gap_ton_per_day",
+        "coverage_ratio_proxy",
+        "quality_note"
+      ],
+      "rows": 42
+    },
+    {
+      "file": "penduduk_kelurahan_dki.csv",
+      "bytes": 874642,
+      "source_url": "https://data.go.id/dataset/dataset/data-jumlah-penduduk-berdasarkan-usia-per-kelurahan-dki-jakarta",
+      "as_of": "2013",
+      "granularity": "kelurahan-age-gender",
+      "classification": "real",
+      "limitations": "2013 census snapshot; used only as relative population weights.",
+      "columns": [
+        "periode_data",
+        "nama_provinsi",
+        "nama_kabupaten_kota",
+        "nama_kecamatan",
+        "nama_kelurahan",
+        "jenis_kelamin",
+        "usia",
+        "jumlah"
+      ],
+      "rows": 8544
+    },
+    {
+      "file": "jakarta_events_2021_2026.csv",
+      "bytes": 8539,
+      "source_url": "https://www.jakartafair.co.id",
+      "as_of": "2026",
+      "granularity": "event",
+      "classification": "real",
+      "limitations": "Officially-scraped event calendar; attendance present only where published.",
+      "columns": [
+        "tanggal_mulai",
+        "tanggal_selesai",
+        "nama_event",
+        "lokasi",
+        "kota_wilayah",
+        "estimasi_pengunjung",
+        "estimasi_type",
+        "sumber",
+        "source_url",
+        "notes"
+      ],
+      "rows": 34
+    },
+    {
+      "file": "hari_libur_indonesia_2026.json",
+      "bytes": 1783,
+      "source_url": "https://api-hari-libur.vercel.app/api?year=2026",
+      "as_of": "2026",
+      "granularity": "national-holiday",
+      "classification": "real",
+      "limitations": "2026 holidays; applied by month-day across years for fixed-date approximation."
+    },
+    {
+      "file": "kelurahan_dki_full_267.geojson",
+      "bytes": 1017812,
+      "source_url": "https://github.com/pararawendy/border-indonesia-geojson",
+      "as_of": "2020",
+      "granularity": "kelurahan-polygon",
+      "classification": "real",
+      "limitations": "267 DKI village polygons; administrative boundaries only.",
+      "features": 267
+    },
+    {
+      "file": "sipsn_timbulan_2025_dki.csv",
+      "source_url": "https://sampahnasional.kemenlh.go.id/portal-indikatif/data/timbulan-sampah",
+      "as_of": "2025",
+      "granularity": "city-year",
+      "classification": "real",
+      "limitations": "2025-only SIPSN per-city timbulan; read only when the multi-year file is missing.",
+      "bytes": 465,
+      "columns": [
+        "jml_timbulan_harian",
+        "jml_timbulan_tahun",
+        "nama_kabkota",
+        "nama_provinsi",
+        "periode",
+        "tahun"
+      ],
+      "rows": 6
+    },
+    {
+      "file": "jakarta_events_2026_scraped_official_clean.csv",
+      "source_url": "https://www.jakartafair.co.id/jadwal-acara",
+      "as_of": "2026",
+      "granularity": "event",
+      "classification": "real",
+      "limitations": "Five events scraped from the Jakarta Fair schedule, JIExpo directory and GBK pages (per-row source_url); estimasi_pengunjung is blank because crowd estimates are not published.",
+      "bytes": 1087,
+      "columns": [
+        "tanggal",
+        "nama_event",
+        "lokasi",
+        "waktu",
+        "estimasi_pengunjung",
+        "sumber",
+        "source_url",
+        "notes"
+      ],
+      "rows": 5
+    },
+    {
+      "file": "silika_tps_locations.csv",
+      "source_url": "https://silika.jakarta.go.id/tps",
+      "as_of": "2023",
+      "granularity": "tps-location",
+      "classification": "real",
+      "limitations": "Official SILIKA TPS coordinate layer; no capacity field; longitude/latitude columns are swapped in the source and corrected on load.",
+      "bytes": 259340,
+      "columns": [
+        "source_id",
+        "kode_wilayah",
+        "wilayah",
+        "kecamatan",
+        "kelurahan",
+        "nama_tps",
+        "longitude",
+        "latitude",
+        "source",
+        "source_url",
+        "quality_note"
+      ],
+      "rows": 1081
+    },
+    {
+      "file": "silika_wajib_retribusi_locations.csv",
+      "source_url": "https://silika.jakarta.go.id/wr",
+      "as_of": "2023",
+      "granularity": "wr-location",
+      "classification": "real",
+      "limitations": "Official SILIKA Wajib Retribusi commercial waste generator layer; personal columns (names, addresses, coordinators) removed, so only category, area and coordinates remain; rows geocoded outside DKI are dropped on load.",
+      "bytes": 2048635,
+      "columns": [
+        "source_id",
+        "kode_wilayah",
+        "wilayah_group",
+        "source",
+        "source_url",
+        "jns",
+        "kab",
+        "kec",
+        "kel",
+        "lng",
+        "lat"
+      ],
+      "rows": 7884
+    }
+  ]
+}
