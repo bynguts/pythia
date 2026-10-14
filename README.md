@@ -1,17 +1,22 @@
 # Pythia
 
-**AI Command Center for Smart Waste Management** — solution built for the **AI Open Innovation Challenge 2026**, with the Jakarta Environmental Agency (DLH DKI Jakarta) as Case Provider.
+**See tomorrow's city waste today.** Pythia is an AI + immersive-media command
+center for city waste agencies: it forecasts waste district by district, turns
+the forecast into a fleet plan, and lets everyone *see* that plan — a 3D digital
+twin for planners, live supervision for dispatchers, AR guidance for drivers and
+an XR tabletop for leaders.
 
-Pythia is an end-to-end AI command center prototype that addresses **both cases** issued by DLH Jakarta in a single, integrated platform:
-
-- **Case 1 — AI-Based Waste Transportation Monitoring & Supervision System:** fleet tracking (simulated positioning today; live GPS is planned once a reachable runtime path exists), violation detection, and route/schedule optimization.
-- **Case 2 — Waste Volume Prediction System Based on Historical Data & Events**: predictive (not reactive) estimation of waste generation and required resources in crowded areas.
+Startup entry for the **2026 Global Startup Competition** (Chung-Ang University —
+College of Virtual Convergence & Center for eXtended Reality, COSS Immersive Media).
+Piloted on Jakarta's public waste data; built to scale across Southeast Asia.
 
 ---
 
 ## Table of Contents
 
-- [The Two Cases](#the-two-cases)
+- [The Problem](#the-problem)
+- [What Pythia Does](#what-pythia-does)
+- [Who It's For](#who-its-for)
 - [Solution Overview](#solution-overview)
 - [Key Features](#key-features)
 - [Architecture](#architecture)
@@ -24,42 +29,66 @@ Pythia is an end-to-end AI command center prototype that addresses **both cases*
 
 ---
 
-## The Two Cases
+## The Problem
 
-### Case 1 — AI-Based Waste Transportation Monitoring & Supervision System
+City waste operations are **reactive**: a city learns how much waste there is
+only after it has piled up, and the trucks, crews and landfill find out together.
 
-**Background.** Waste collection activities in Jakarta face several challenges: unmonitored fleets, sub-optimal routes, and the presence of unlicensed collectors. Oversight today relies heavily on manual reports and reactive field inspections.
+- On 8 March 2026 part of **TPST Bantargebang**, the landfill that takes Jakarta's
+  waste, slid after heavy rain *while trucks were queuing to unload*; at least
+  five people were killed ([Asia News Network](https://asianews.network/deadly-landfill-collapse-exposes-jakartas-decades-long-waste-mismanagement/)).
+- Jakarta produces roughly **7,400–8,700 tonnes of waste a day**, almost all of it
+  trucked to that one site (SIPSN data via [RRI](https://rri.co.id/en/archipelago/2248964/jakarta-targets-rorotan-rdf-to-process-1000-tons-daily)).
+- The same pattern repeats across Southeast Asia: Ho Chi Minh City's Da Phuoc
+  landfill moved to night-only intake in December 2025 and backlogs followed
+  ([Tuổi Trẻ](https://news.tuoitre.vn/ho-chi-minh-city-faces-waste-backlogs-as-landfill-restricts-daytime-operations-103251118145703962.htm)).
 
-**Main challenge.** How can the entire waste collection process be carried out lawfully, transparently, and monitored in real time — while making the on-field work of officers easier?
+Rain, holidays and crowd events drive the spikes, so they can be predicted — but
+nobody turns that prediction into an operational plan the whole team can see.
 
-**Scope & deliverables required by the case provider:**
-- Live-tracking visuals overlaid on a base map.
-- Transport scheduling optimized by estimated travel time, fleet condition, and landfill (TPA) queue status.
-- Alternative-route recommendations that respect traffic regulations and permits.
-- **Deliverables:** Model · Dashboard (live routes, fleet status, trip history, TPA queue view) · Simulator (scheduling, ETA, alternative routes) · Executive summary (optimized schedule, fewer landfill queues).
+## What Pythia Does
 
-### Case 2 — Waste Volume Prediction System Based on Historical Data & Events
+| Step | What happens | Who sees it |
+|---|---|---|
+| **Forecast** | Prophet + XGBoost model per district (42 Jakarta kecamatan), weather- and event-aware | Planners |
+| **Plan** | OR-Tools CP-SAT assigns trucks and crews; landfill arrivals are staggered to shorten queues | Planners, supervisors |
+| **See** | **3D digital twin** of the city: district forecasts as columns, risk colours, trucks and landfill queue, scenario controls and a cinematic present mode | Planners, leaders |
+| **Execute** | Live fleet supervision, route-deviation detection, A\* reroute, SPJ work orders, WhatsApp alerts | Dispatchers |
+| **Guide** | **AR navigation** in the driver app; offline-safe work orders and evidence capture | Drivers, field crews |
+| **Explain** | **XR tabletop** of the city (`/xr`, WebXR with an orbit fallback) | Leaders, stakeholders |
+| **Audit** | Every number carries its provenance: real, modelled or simulated | Everyone |
 
-**Background case:** Waste volume spikes are common during the rainy season, major holidays, and special events — yet handling has always been **reactive**, waiting for the problem to appear instead of acting on measurable predictions.
+AI decides *what* will happen; immersive media makes the plan *visible* to the
+people who have to act on it.
 
-**Expected outcome.** Shift waste management from reactive to **predictive**: estimate volume and location of waste **temporally and spatially**, and recommend fleet & facility readiness based on crowd-permit data.
+## Who It's For
 
-**Scope & deliverables:**
-- Estimation mapped temporally and spatially in each crowded area.
-- Recommended facility needs (disposal & transport) per busy area, grounded on crowd-permit data.
-- **Deliverables:** Dashboard (location/volume estimates, man–hour requirements) · Simulator (crowd location, waste generation, facility & fleet needs) · Executive summary (optimized facilities, operating hours, and collection schedules).
+- **Customer:** city environment agencies (B2G) — starting with Jakarta, then other
+  Indonesian metros, then Vietnam (a simulated Ho Chi Minh City demo city is
+  already in the twin and the XR tabletop).
+- **Users:** planners, dispatchers and supervisors, drivers and field crews, and
+  city leaders.
+- **Model:** software subscription for the agency, sized by fleet and districts;
+  collection and landfill operators can run the same supervision stack.
+
+> **Prototype honesty.** Fleet positions are simulated (not live GPS), the Ho Chi
+> Minh City data is a labelled demo city, and forecasts are model outputs; the UI
+> labels each of these. Accuracy figures live in the offline evaluation report
+> (`ml/data/processed/hybrid_forecaster_evaluation.md`).
 
 ---
 
 ## Solution Overview
 
-Pythia is one integrated command center covering both cases — from live operations through AI forecasting to actionable alerts:
+Pythia is one integrated product — from AI forecasting through immersive
+planning to field execution:
 
 | Layer | Stack | Purpose |
 |---|---|---|
-| **Command Center** | React + Vite · MapLibre GL · CSS variables | Interactive dashboards on a simulated fleet feed: fleet, routes, landfill queue, forecast per sub-district |
-| **AI / Backend** | Python FastAPI · OR-Tools CP-SAT · Prophet · XGBoost · A\* | Route optimization, staggered scheduling, waste forecasting, RAG assistant |
-| **Field Alerting** | Node.js Express · WhatsApp (Baileys) | Sends reroute instructions & alerts straight to officers' phones |
+| **Immersive** | deck.gl · three.js · WebXR · device camera, GPS & compass | 3D digital twin, driver AR navigation, XR tabletop |
+| **Command Center** | React + Vite · MapLibre GL · CSS variables | Interactive dashboards on a simulated fleet feed: fleet, routes, landfill queue, forecast per district |
+| **AI / Backend** | Python FastAPI · OR-Tools CP-SAT · Prophet · XGBoost · A\* | Waste forecasting, route optimisation, staggered scheduling, RAG assistant |
+| **Field Alerting** | Node.js Express · WhatsApp (Baileys) | Sends reroute instructions & alerts straight to drivers' phones |
 
 Every workflow is an auditable loop — `detect → dispatch → acknowledge → confirmed` — suitable for follow-up by managers or the government.
 
@@ -67,7 +96,21 @@ Every workflow is an auditable loop — `detect → dispatch → acknowledge →
 
 ## Key Features
 
-### Fleet Operations (Case 1)
+### Immersive Layer
+- **Pythia Twin** (`/twin`) — a 3D city model: one column per district (height =
+  forecast tonnes per day, colour = spike against a normal day), TPS, landfill
+  queue and fleet layers, a 7-day timeline you can play, rain and crowd-event
+  scenarios that re-run the forecast, Jakarta or the simulated Ho Chi Minh City
+  demo city, a cinematic tour and a full-screen present mode (`/?present=1`).
+  Each layer shows its provenance (real, model output, simulated).
+- **Driver AR navigation** (`/driver`) — camera view with a direction arrow to the
+  next stop from phone GPS and compass, arrival detection and in-AR evidence
+  photos; falls back to a compass view without a camera and states its ±10–30 m
+  accuracy.
+- **XR tabletop** (`/xr`, no login) — the city as a tabletop model for leaders and
+  stakeholders; WebXR on capable devices, an orbit view everywhere else.
+
+### Fleet Supervision
 - **Live Fleet Map** (full-width) — simulated fleet positions with on-/off-corridor status (e.g. `T-047` off-corridor, highlighted amber). Positions are refreshed from the backend simulation, not live GPS; the map UI labels them "Data simulasi" / "SIMULATION · not live GPS".
 - **A\* Reroute Simulator** — simulates a traffic jam, then computes a new street-following route for `T-047` to TPA Bantargebang dynamically.
 - **TPA Queue & Staggered Dispatch** — predicted landfill queue (from the simulated fleet) with staggered dispatch slots.
@@ -75,7 +118,7 @@ Every workflow is an auditable loop — `detect → dispatch → acknowledge →
 - **Field App** (`/field`, no login) — driver view to confirm instructions; confirmations sync to the dashboard in real time.
 - **Historical Trips & Reporting** — trip history and route evidence for officer/management follow-up.
 
-### Forecasting & AI (Case 2)
+### Forecasting & Planning
 - **42-Subdistrict Forecast** — map/list of 42 Kecamatan; select one to expand a 3-column resource dashboard (predicted tonnage, fuel, carbon emissions, crew, fleet mix).
 - **Operational AI Assistant (RAG)** — ask domain questions; answers retrieved from the custom knowledge base via an OpenAI-compatible gateway.
 - **Integrated Planning** — constraint-aware weekly plan (OR-Tools CP-SAT) with an approve/deny flow.
@@ -95,8 +138,9 @@ Detailed notes: [`apps/api/knowledge/ARCHITECTURE.md`](apps/api/knowledge/ARCHIT
 ┌───────────────────────────────────────────────────────────────┐
 │ FRONTEND — React + Vite + MapLibre GL            (5175)       │
 │                                                               │
-│   Fleet Ops                Waste Forecast / AI Ops            │
-│   Field App (/field)       Planning · Data & ML Audit         │
+│   Twin (deck.gl 3D)        Fleet · Forecast · Planning        │
+│   Driver AR (/driver)      XR tabletop (/xr, three.js)        │
+│   Field App (/field)       AI assistant · Data & ML Audit     │
 └────────────────────────────┬──────────────────────────────────┘
                              │  HTTP / JSON
 ┌────────────────────────────▼──────────────────────────────────┐
@@ -197,10 +241,12 @@ Every role's password can be overridden with `PYTHIA_PW_<ROLE>`.
 ## End-to-End Demo Flow
 
 1. **Sign in** with `dispatcher` on the dashboard.
-2. **Fleet Operations (Case 1):** open the live fleet map and notice `T-047` off-corridor; click **A\* Simulate Jam** → watch it recompute a street-following route to TPA Bantargebang; inspect the TPA queue & staggered dispatch slots; click **Send Alert**; open `/field` in another tab (no login) and confirm the instruction — the dashboard syncs instantly.
-3. **Waste Forecast & AI Assistant (Case 2):** browse the 42-Kecamatan list, select one, expand the resource-optimization view (tonnage, fuel, emission, crew, fleet mix), then ask the **Operational AI Assistant** a domain question and get a RAG-grounded answer.
-4. **Integrated Planning:** review the constraints, then approve the next weekly staggered-dispatch plan.
-5. **Data & ML Audit:** review data provenance, validation classes and model suitability; accuracy (WAPE / MAE) is in the offline evaluation report.
+2. **See the week ahead (Twin):** open `/twin`, play the 7-day forecast, raise rainfall or add a crowd event and watch the at-risk districts rise; switch to the Ho Chi Minh City demo city; start the cinematic tour.
+3. **Plan it:** in **Forecast**, open a district's resource view (tonnage, fuel, emissions, crew, fleet mix); in **Planning**, review the constraints and approve the weekly staggered-dispatch plan. Ask the **AI assistant** a domain question for a RAG-grounded answer.
+4. **Run the day (Fleet):** notice `T-047` off-corridor; click **A\* Simulate Jam** → watch it recompute a street-following route to TPA Bantargebang; inspect the landfill queue and staggered slots; click **Send Alert**; confirm the instruction in `/field` (no login) — the dashboard syncs instantly.
+5. **Guide the driver (AR):** open `/driver` on a phone, pick a stop and tap **AR guide** for camera navigation and an in-AR arrival photo.
+6. **Explain it (XR):** open `/xr` for the tabletop city model.
+7. **Audit it:** in **Data & ML Audit**, review provenance, validation classes and model suitability; accuracy (WAPE / MAE) is in the offline evaluation report.
 
 ---
 
@@ -240,8 +286,10 @@ The repository is **public** — handle sensitive material with care:
 
 ---
 
-## Built For
+## Competition
 
-- **Competition:** AI Open Innovation Challenge 2026 — [ai-open.president.ac.id](https://ai-open.president.ac.id)
-- **Case Provider:** DLH DKI Jakarta
+- **2026 Global Startup Competition** — Chung-Ang University, College of Virtual
+  Convergence & Center for eXtended Reality (COSS Immersive Media).
+- **Pilot data:** public Jakarta waste data (DLH DKI Jakarta SILIKA, SIPSN, Bantargebang
+  weighbridge records) — provenance in `ml/data/real/manifest.json`.
 - **Team:** Pythia
