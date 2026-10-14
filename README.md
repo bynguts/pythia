@@ -125,7 +125,7 @@ pythia/
 │   │   ├── app/        #   routers, forecasting, fleet/routing, field (SPJ), assistant (RAG)
 │   │   ├── tests/      #   pytest, one folder per app area
 │   │   ├── knowledge/  #   assistant knowledge base: ARCHITECTURE.md, PRODUCT.md, operator guides
-│   │   └── data/       #   models/ (Prophet + XGBoost), assets/ (road cache, YOLO weights), media/ (demo clip)
+│   │   └── data/       #   models/ (Prophet + XGBoost), assets/ (road cache, YOLO weights), media/ (optional local demo clip, not in the repo)
 │   ├── web/            # React + Vite command center, field & driver PWAs, 3D twin, XR (src/, e2e/)
 │   └── wa-gateway/     # WhatsApp gateway (Express + Baileys)
 ├── ml/                 # datasets + training scripts (see ml/README.md)

@@ -4,7 +4,6 @@ dist/
 dist-*/
 test-results/
 playwright-report/
-recordings/
 .omc/
 *.log
 .env

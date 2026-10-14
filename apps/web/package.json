@@ -9,7 +9,6 @@
     "preview": "vite preview --host 0.0.0.0",
     "e2e": "playwright test",
     "budget": "node e2e/lib/bundle-budget.mjs",
-    "record:demo": "node e2e/recording/record-demo.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

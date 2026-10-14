@@ -3,7 +3,6 @@ dist-*/
 node_modules/
 test-results/
 playwright-report/
-recordings/
 .impeccable/
 package-lock.json
 *.md
