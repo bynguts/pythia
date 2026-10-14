@@ -5,7 +5,9 @@ Only the pure pipeline logic — detection wiring, whitelist verification, event
 dedup, history ordering, and status payload — is exercised.
 """
 
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
@@ -92,10 +94,37 @@ class CvSurveillancePipelineTests(unittest.TestCase):
 
 
 class CvSurveillanceDiscoveryTests(unittest.TestCase):
-    def test_discover_returns_existing_preferred_video(self):
-        found = _discover_demo_video()
-        self.assertIsInstance(found, type(_discover_demo_video()))
-        self.assertEqual(found.name, "garbage_truck_demo.mp4")
+    """The demo clip is a local file (not in the repo); discovery must cope either way."""
+
+    def _discover_in(self, media_dir):
+        preferred = media_dir / "garbage_truck_demo.mp4"
+        with (
+            patch("app.fleet.cv_surveillance.DEMO_MEDIA_DIR", media_dir),
+            patch("app.fleet.cv_surveillance.DEMO_VIDEO", preferred),
+        ):
+            return _discover_demo_video(), preferred
+
+    def test_prefers_the_named_demo_clip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            media = Path(tmp)
+            (media / "a_other.mp4").write_bytes(b"")
+            (media / "garbage_truck_demo.mp4").write_bytes(b"")
+            found, preferred = self._discover_in(media)
+            self.assertEqual(found, preferred)
+
+    def test_falls_back_to_any_local_video(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            media = Path(tmp)
+            (media / "notes.txt").write_text("not a video")
+            (media / "gate_cam.webm").write_bytes(b"")
+            found, _ = self._discover_in(media)
+            self.assertEqual(found.name, "gate_cam.webm")
+
+    def test_missing_clip_returns_the_expected_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            found, preferred = self._discover_in(Path(tmp) / "absent")
+            self.assertEqual(found, preferred)
+            self.assertFalse(found.exists())
 
 
 if __name__ == "__main__":

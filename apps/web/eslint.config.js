@@ -5,15 +5,7 @@ import globals from "globals";
 
 export default [
   {
-    ignores: [
-      "dist/",
-      "dist-*/",
-      "node_modules/",
-      "test-results/",
-      "playwright-report/",
-      "recordings/",
-      ".impeccable/",
-    ],
+    ignores: ["dist/", "dist-*/", "node_modules/", "test-results/", "playwright-report/", ".impeccable/"],
   },
   js.configs.recommended,
   {
