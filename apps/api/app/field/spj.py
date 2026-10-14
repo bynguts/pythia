@@ -1136,7 +1136,12 @@ def _maybe_seed(store: SpjStore) -> None:
         ),
     ]:
         store.add_stop(seed.spj_id, name=name, kecamatan=kec, address=addr, lat=lat, lng=lng)
-    store.activate(seed.spj_id)
+    try:
+        store.activate(seed.spj_id)
+    except ValueError as exc:
+        # Runs at import time: a routing outage must not stop the API from
+        # starting. The seed stays a draft that can be activated from the UI.
+        logger.warning("demo SPJ %s left as draft: %s", seed.spj_number, exc)
 
 
 def _init_store() -> SpjStore:
