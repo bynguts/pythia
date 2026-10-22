@@ -174,6 +174,29 @@
   border-left: 1px solid var(--ui-border);
 }
 
+/* Second readout row (vs normal, trucks & crews, TPA queue). */
+.xr-metrics div:nth-child(3n + 1) {
+  border-left: 0;
+}
+
+.xr-metrics div:nth-child(n + 4) {
+  border-top: 1px solid var(--ui-border);
+}
+
+/* Scenario-scaled TPA queue: its own row so the normal-day comparison is not cut off. */
+.xr-metrics div.xr-metric-wide {
+  grid-column: 1 / -1;
+  border-left: 0;
+}
+
+.xr-metrics .xr-metric-wide dd {
+  white-space: normal;
+}
+
+.xr-metrics[aria-busy="true"] dd {
+  color: var(--ui-muted);
+}
+
 .xr-metrics dt {
   font-size: 11px;
   font-weight: 600;
@@ -252,6 +275,157 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  /* Shrinks and scrolls on short screens instead of pushing off the bottom. */
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ── Scenario presets (P1-10) ── */
+
+.xr-scenario-toggle {
+  justify-content: flex-start;
+  padding: 0 var(--space-3);
+  font-size: 14px;
+}
+
+.xr-toggle-title {
+  flex: none;
+}
+
+.xr-toggle-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  color: var(--ui-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.xr-scenario-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.xr-scenario-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.xr-chip-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.xr-chip-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ui-muted);
+}
+
+.xr-chips {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: var(--space-1);
+}
+
+.xr-chip {
+  min-width: 0;
+  min-height: var(--tap-min);
+  padding: 0 var(--space-1);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface);
+  color: var(--ui-ink-soft);
+  font: inherit;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.xr-chip[aria-pressed="true"] {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-accent-foreground);
+}
+
+.xr-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--ui-focus);
+}
+
+/* ── Agreement & shared session (P2) ── */
+
+.xr-session-row {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: var(--space-2);
+}
+
+.xr-agreed {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--ui-success);
+  border-radius: var(--ui-radius);
+  font-size: var(--fs-caption);
+  font-weight: 650;
+  color: var(--ui-success);
+}
+
+.xr-session {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--ui-border);
+}
+
+.xr-session-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.xr-session-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ui-muted);
+}
+
+.xr-session-code {
+  font-size: var(--fs-kpi);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-ink);
+  user-select: all;
+}
+
+.xr-session-url {
+  font-size: 12px;
+  color: var(--ui-ink-soft);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.xr-session-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-muted);
 }
 
 .xr-hint {
@@ -453,7 +627,8 @@
 
 @media (max-height: 700px) {
   .xr-prov-note,
-  .xr-legend p {
+  .xr-legend p,
+  .xr-session-note {
     display: none;
   }
 }

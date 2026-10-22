@@ -66,6 +66,10 @@ SCENTINEL_STORE = RecordStore("scentinel_evidence")
 _compliance_lock = threading.Lock()
 _compliance_cache: dict[str, Any] = {"ts": 0.0, "payload": None}
 
+# gsc P2 shared tabletop: in-memory /api/xr/session/{code} scenario state.
+_xr_sessions_lock = threading.Lock()
+_xr_sessions: dict[str, dict[str, Any]] = {}
+
 
 def _refresh_fleet_caches() -> None:
     from app.fleet.data import _fleet_cache

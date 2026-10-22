@@ -91,7 +91,8 @@ export function dayRisk(district, dayIndex) {
 /**
  * Build the tabletop model. Returns the root group plus handles the viewer
  * uses: `bars` (one mesh per district, userData.district), `setDay(i, {instant})`
- * to retarget heights/colours, `tick(dt)` to ease toward them, and `dispose()`.
+ * to retarget heights/colours, `setScene(scene, i)` for a new scenario of the
+ * same city, `tick(dt)` to ease toward them, and `dispose()`.
  */
 export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false } = {}) {
   const geometries = [];
@@ -240,6 +241,18 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false } = 
     });
   }
 
+  // A re-fetched scenario (rain / event) for the same city: swap each bar's
+  // district data and retarget. The height scale stays the one this model was
+  // built with, so a heavier scenario visibly grows the columns.
+  function setScene(nextScene, nextDay, options) {
+    const byId = new Map((nextScene.districts || []).map((d) => [d.id, d]));
+    bars.forEach((mesh) => {
+      const district = byId.get(mesh.userData.district.id);
+      if (district) mesh.userData.district = district;
+    });
+    setDay(nextDay, options);
+  }
+
   // Ease bar heights toward their targets (~250 ms); a no-op once settled.
   function tick(dt) {
     const k = 1 - Math.exp(-Math.min(dt, 0.1) * 12);
@@ -268,6 +281,7 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false } = 
     footprint: { width: plateW, depth: plateD },
     maxTons,
     setDay,
+    setScene,
     tick,
     dispose,
   };

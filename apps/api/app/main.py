@@ -61,6 +61,7 @@ def create_app() -> FastAPI:
         spj,
         twin,
         whatsapp,
+        xr_session,
     )
 
     application = FastAPI(title="Pythia FastAPI Backend", version="2.5.0", lifespan=_lifespan)
@@ -84,6 +85,7 @@ def create_app() -> FastAPI:
         spj,
         scentinel,
         driver,
+        xr_session,
     ):
         application.include_router(module.router)
     return application
