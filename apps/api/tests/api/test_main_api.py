@@ -68,7 +68,15 @@ class MainApiTests(unittest.TestCase):
             json={"truck_code": "T-047", "issue": "deviation", "recommendation": "reroute"},
         )
         self.assertEqual(response.status_code, 200)
-        status = self.client.get("/api/whatsapp/status").json()
+        dispatcher = self.client.post(
+            "/api/auth/login", json={"username": "dispatcher", "password": "dispatcher-demo-pass"}
+        ).json()["token"]
+        status_response = self.client.get(
+            "/api/whatsapp/status", headers={"Authorization": f"Bearer {dispatcher}"}
+        )
+        # A 401/403 body has no "connected" key and would silently take the else branch.
+        self.assertEqual(status_response.status_code, 200, status_response.text[:200])
+        status = status_response.json()
         if status.get("connected"):
             # Live gateway: a real send is the honest outcome. Guard the response shape.
             body = response.json()

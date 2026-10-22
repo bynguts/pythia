@@ -143,8 +143,11 @@ app.post('/api/sessions/:sessionId/messages/send-text', async (req, res) => {
 });
 
 startWA().then(() => {
-  // The send routes are unauthenticated: bind to loopback unless HOST says
-  // otherwise (the docker service sets HOST=0.0.0.0 on its private network).
+  // Every route here (send, /api/qr pairing QR, /api/groups, logout) is
+  // unauthenticated: bind to loopback unless HOST says otherwise (the docker
+  // service sets HOST=0.0.0.0 on its private network and publishes no host
+  // port). Operators reach QR/groups only through the Pythia API, which gates
+  // them to the administrator role. Never expose port 2785 publicly.
   const host = process.env.HOST || '127.0.0.1';
   app.listen(2785, host, () => {
     console.log(`WhatsApp Gateway (Baileys) listening on ${host}:2785`);

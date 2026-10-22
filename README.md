@@ -219,10 +219,18 @@ npm install
 npm start          # listens on 127.0.0.1:2785; set HOST to bind elsewhere
 ```
 
+The gateway itself has **no authentication** and is meant to stay on localhost (or a
+private docker network): never publish port 2785. Operators reach its pairing QR and
+group list only through the API (`/api/whatsapp/qr`, `/api/whatsapp/groups`), which
+require an administrator login.
+
 Session files under `apps/wa-gateway/baileys_auth_info/` are created at runtime
 and **never committed** (see Security below). Driver WhatsApp numbers go in
 `apps/api/driver_contacts.json` (git-ignored; copy `driver_contacts.example.json`);
 without it alerts go to `PYTHIA_WA_DEFAULT_CHAT_ID` / `PYTHIA_WA_DEFAULT_GROUP_ID`.
+Its `drivers` keys must be the simulated fleet's driver names (`Pengemudi Sim 01`,
+`Pengemudi Sim 02`, …); an alert for a name with no entry goes to the default chat and
+the API logs the unmatched name once.
 
 ---
 

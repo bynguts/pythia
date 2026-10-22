@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.deps import require_permission
+from app.api.deps import require_any_permission, require_permission
 from app.api.schemas import WhatsAppAlertRequest
 from app.api.state import history_store
 from app.core.paths import DRIVER_CONTACTS_EXAMPLE_FILE, DRIVER_CONTACTS_FILE
@@ -19,6 +20,7 @@ from app.integrations.whatsapp import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # Module attributes so tests can point them at temporary files.
@@ -110,6 +112,28 @@ def save_contacts(data):
         json.dump(normalized, f, indent=4)
 
 
+_UNMATCHED_DRIVERS_LOGGED: set[str] = set()
+
+
+def driver_chat_id(config: dict, driver_name: str) -> str:
+    """The driver's WhatsApp chat, or the default chat when the contacts have no such key.
+
+    Keys must match the simulated fleet's driver names ("Pengemudi Sim NN"); an
+    unmatched name is logged once per process so a mis-keyed file is visible.
+    """
+    jid = (config.get("drivers") or {}).get(driver_name)
+    if jid:
+        return jid
+    if driver_name not in _UNMATCHED_DRIVERS_LOGGED:
+        _UNMATCHED_DRIVERS_LOGGED.add(driver_name)
+        logger.warning(
+            "driver_contacts has no entry for driver '%s' (keys must match the fleet's "
+            "driver names, e.g. 'Pengemudi Sim 01'); alerts go to the default chat",
+            driver_name,
+        )
+    return default_chat_id()
+
+
 def get_truck_info(truck_code: str) -> dict:
     from app.fleet.data import get_dynamic_trucks
 
@@ -131,7 +155,9 @@ def post_whatsapp_contacts(payload: dict, _role: str = Depends(require_permissio
 
 
 @router.get("/api/whatsapp/status")
-def whatsapp_status() -> dict:
+def whatsapp_status(
+    _role: str = Depends(require_any_permission("dashboard:read", "dispatch:create")),
+) -> dict:
     client = OpenWAClient.from_env()
     health = client.health()
     return {
@@ -145,13 +171,15 @@ def whatsapp_status() -> dict:
     }
 
 
+# The pairing QR links a WhatsApp account to this gateway and the group list
+# exposes chat IDs: administrator only.
 @router.get("/api/whatsapp/qr")
-def whatsapp_qr() -> dict:
+def whatsapp_qr(_role: str = Depends(require_permission("admin:manage"))) -> dict:
     return OpenWAClient.from_env().qr()
 
 
 @router.get("/api/whatsapp/groups")
-def whatsapp_groups() -> dict:
+def whatsapp_groups(_role: str = Depends(require_permission("admin:manage"))) -> dict:
     return OpenWAClient.from_env().groups()
 
 
@@ -176,7 +204,7 @@ def whatsapp_alert(
 
     # 1. Send to Driver
     if config.get("send_to_driver", True):
-        driver_jid = config.get("drivers", {}).get(driver_name) or default_chat_id()
+        driver_jid = driver_chat_id(config, driver_name)
         driver_msg = (
             f"Yth. Bapak {driver_name} (Supir Unit {payload.truck_code} / {plate_number}),\n"
             f"Anda terdeteksi mengalami kendala: {payload.issue}.\n"

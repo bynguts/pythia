@@ -109,6 +109,25 @@ def test_driver_cannot_create_dispatch_but_can_confirm(api_client, auth_headers)
     assert res.status_code == 404
 
 
+@pytest.mark.parametrize("path", ["/api/whatsapp/qr", "/api/whatsapp/groups"])
+def test_whatsapp_pairing_endpoints_are_administrator_only(api_client, auth_headers, path):
+    assert api_client.get(path).status_code == 401
+    assert api_client.get(path, headers=auth_headers("dispatcher")).status_code == 403
+    assert api_client.get(path, headers=auth_headers("supervisor")).status_code == 403
+    res = api_client.get(path, headers=auth_headers("administrator"))
+    assert res.status_code == 200, res.text[:200]
+    assert isinstance(res.json(), dict)
+
+
+def test_whatsapp_status_requires_an_operator_session(api_client, auth_headers):
+    assert api_client.get("/api/whatsapp/status").status_code == 401
+    assert api_client.get("/api/whatsapp/status", headers=auth_headers("driver")).status_code == 403
+    for role in ("dispatcher", "supervisor", "administrator"):
+        res = api_client.get("/api/whatsapp/status", headers=auth_headers(role))
+        assert res.status_code == 200, f"{role}: {res.text[:200]}"
+        assert "connected" in res.json()
+
+
 def test_contacts_refuses_to_shrink(api_client, auth_headers):
     res = api_client.post(
         "/api/whatsapp/contacts", json={"drivers": {}}, headers=auth_headers("administrator")
