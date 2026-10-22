@@ -7,6 +7,9 @@
   .\scripts\dev.ps1              # API + web app
   .\scripts\dev.ps1 -WhatsApp    # also the WhatsApp gateway (scan the QR in its window)
   .\scripts\dev.ps1 -Install     # install Python and npm dependencies first
+
+.NOTES
+  To demo on a real phone over HTTPS (driver AR, /xr), use scripts\phone-demo.ps1.
 #>
 param(
     [switch]$WhatsApp,

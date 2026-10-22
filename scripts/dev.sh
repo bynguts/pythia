@@ -5,6 +5,8 @@
 #   ./scripts/dev.sh               # API + web app
 #   ./scripts/dev.sh --whatsapp    # also the WhatsApp gateway
 #   ./scripts/dev.sh --install     # install Python and npm dependencies first
+#
+# To demo on a real phone over HTTPS (driver AR, /xr), use scripts/phone-demo.sh.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
