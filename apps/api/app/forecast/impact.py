@@ -9,15 +9,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.fleet.queue_simulation import simulate_queue
+from app.fleet.queue_simulation import queue_minutes_per_truck
 
 
 def _tpa_wait_reduction() -> dict[str, Any]:
-    """Baseline (all trucks in peak hour) vs staggered (60%), from the sim."""
-    peak_trucks = 32
-    baseline = simulate_queue(peak_trucks, weighbridges=2, service_rate_per_hour=30.0, seed=42)
-    staggered = simulate_queue(round(peak_trucks * 0.6), weighbridges=2, service_rate_per_hour=30.0, seed=42)
-    b, s = baseline["mean_wait_minutes"], staggered["mean_wait_minutes"]
+    """Unstaggered vs staggered dispatch, read from the one TPA queue metric."""
+    metric = queue_minutes_per_truck() or {"baseline_mean": 0.0, "staggered_mean": 0.0, "source": ""}
+    b, s = metric["baseline_mean"], metric["staggered_mean"]
     reduction = round(((b - s) / b) * 100, 1) if b > 0 else 0.0
     return {
         "name": "tpa_wait_reduction",
@@ -25,7 +23,7 @@ def _tpa_wait_reduction() -> dict[str, Any]:
         "baseline": b,
         "pythia": s,
         "delta": reduction,
-        "source": "queue_simulation seeded (arrival=32 peak, 2 weighbridges @30/h)",
+        "source": f"TPA queue metric (minutes per truck). {metric['source']}",
         "classification": "simulated",
     }
 

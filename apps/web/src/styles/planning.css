@@ -272,6 +272,13 @@
   color: var(--text);
 }
 
+.tpa-status-card small {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--fs-caption);
+  color: var(--ui-muted);
+}
+
 .text-danger {
   color: var(--red) !important;
 }

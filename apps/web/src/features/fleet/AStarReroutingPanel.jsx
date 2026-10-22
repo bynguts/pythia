@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "../../shared/api/client.js";
+import { useLanguage } from "../../shared/i18n/index.jsx";
 
 export function AiNotificationFeed({ events, onAck }) {
+  const { t } = useLanguage();
   if (!events.length) {
-    return <div className="ai-feed-empty">Belum ada event AI.</div>;
+    return <div className="ai-feed-empty">{t("ai_feed_empty")}</div>;
   }
   const latestFirst = events
     .map((e, i) => ({ ...e, _index: e._serverIndex ?? i }))
@@ -20,10 +22,10 @@ export function AiNotificationFeed({ events, onAck }) {
           <div className="ai-feed-title">{e.title}</div>
           {e.status === "new" ? (
             <button className="ai-ack-btn" onClick={() => onAck(e._index)}>
-              Setujui
+              {t("ai_feed_ack")}
             </button>
           ) : (
-            <span className="ai-ack-done">✓ acknowledged</span>
+            <span className="ai-ack-done">{t("ai_feed_acked")}</span>
           )}
         </div>
       ))}
@@ -32,6 +34,7 @@ export function AiNotificationFeed({ events, onAck }) {
 }
 
 export function AStarReroutingPanel({ jamActive, aiEvents, onAckEvent }) {
+  const { t } = useLanguage();
   const [info, setInfo] = useState(null);
 
   useEffect(() => {
@@ -49,47 +52,53 @@ export function AStarReroutingPanel({ jamActive, aiEvents, onAckEvent }) {
     .map((e, serverIndex) => ({ ...e, _serverIndex: serverIndex }))
     .filter((e) => e.event_type === "auto_reroute" || e.event_type === "jam_cleared");
   const diverted = info?.diversion_applied;
-  const dist = info?.active_route?.distance_km ?? 12.7;
-  const eta = info?.active_route?.eta_minutes ?? 17;
+  // No route payload yet: show a dash, never a made-up distance or ETA.
+  const dist = info?.active_route?.distance_km;
+  const eta = info?.active_route?.eta_minutes;
 
   return (
-    <section className="panel astar-panel">
+    <section className="panel astar-panel" data-testid="astar-panel">
       <div className="panel-title">
         <div>
-          <h2>AI Traffic Monitor</h2>
-          <p>Deteksi & reroute otomatis oleh AI Engine</p>
+          <h2>
+            {t("astar_monitor_title")}{" "}
+            <span className="pill" data-testid="astar-sim-badge">
+              {t("honesty_sim_badge")}
+            </span>
+          </h2>
+          <p>{t("astar_subtitle")}</p>
         </div>
         <span className={`traffic-status-badge ${jamActive ? "congested" : "clear"}`}>
           <span className={`status-dot ${jamActive ? "danger" : "success"}`} />
-          {jamActive ? "JAM TERDETEKSI AI" : "KORIDOR NORMAL"}
+          {jamActive ? t("astar_status_jam") : t("astar_status_clear")}
         </span>
       </div>
 
       <div className="astar-info-card">
         <div className="astar-stats">
           <div className="astar-stat-col">
-            <span>Distance</span>
-            <strong>{Number(dist).toFixed(1)} km</strong>
+            <span>{t("astar_dist")}</span>
+            <strong>{dist == null ? "—" : `${Number(dist).toFixed(1)} km`}</strong>
           </div>
           <div className="astar-stat-col">
-            <span>ETA</span>
-            <strong>{Math.round(eta)} min</strong>
+            <span>{t("astar_eta")}</span>
+            <strong>{eta == null ? "—" : `${Math.round(eta)} min`}</strong>
           </div>
           <div className="astar-stat-col">
-            <span>Status</span>
+            <span>{t("astar_status")}</span>
             <strong className={diverted ? "text-diverted" : "text-normal"}>
-              {diverted ? "Diverted (A*)" : "Primary"}
+              {diverted ? t("astar_diverted") : t("astar_primary")}
             </strong>
           </div>
         </div>
 
         <div className="astar-reroute-details">
           <div className="astar-route-step">
-            <span>Koridor Utama:</span>
+            <span>{t("astar_corridor_label")}</span>
             <strong>Daan Mogot ⇄ Bantargebang</strong>
           </div>
           <div className="astar-route-step">
-            <span>Mesin Reroute:</span>
+            <span>{t("astar_engine_label")}</span>
             <strong>A* Heuristic (OSRM Grid)</strong>
           </div>
         </div>

@@ -22,7 +22,7 @@ test.beforeEach(async ({ page }) => signIn(page));
 
 test("operations context exposes the AI traffic monitor without a simulate button", async ({ page }) => {
   await page.getByTestId("deck-tools-toggle").click();
-  await expect(page.getByText("AI Traffic Monitor")).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText("Pemantau Reroute")).toBeVisible({ timeout: 15000 });
   await expect(page.locator(".astar-toggle-btn")).toHaveCount(0);
 });
 
@@ -39,7 +39,7 @@ test("planning flow exposes the seven-day outlook", async ({ page }) => {
 
 test("carbon evidence shows data or an honest placeholder", async ({ page }) => {
   await page.locator(".records-doc-link", { hasText: "Jejak Karbon" }).click();
-  await expect(page.getByText(/Reference factors|Menunggu engine AI/)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/Faktor referensi|Menunggu mesin AI/)).toBeVisible({ timeout: 15000 });
 });
 
 test("unlicensed collector surface reads the AI flags endpoint", async ({ page }) => {

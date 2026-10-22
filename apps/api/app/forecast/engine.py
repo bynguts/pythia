@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from functools import lru_cache
 from math import asin, cos, radians, sin, sqrt
 from typing import Any
@@ -304,44 +304,63 @@ def estimate_tpa_queue_wait(waiting_trucks: int, throughput_per_hour: int = 30) 
     }
 
 
-def simulate_staggered_dispatch(
-    active_trucks: int, weighbridges: int = 2, service_rate_per_hour: float = 4.5
-) -> dict[str, Any]:
-    from app.fleet.queue_simulation import simulate_queue
+def simulate_staggered_dispatch(active_trucks: int | None = None) -> dict[str, Any]:
+    """Staggered-dispatch impact, read from the one TPA queue metric (gsc P0-5).
 
-    sim_trucks = 47 if active_trucks <= 5 else active_trucks
-    baseline = simulate_queue(sim_trucks, weighbridges, service_rate_per_hour, seed=42)
-    staggered_peak = max(1, round(sim_trucks * 0.53))
-    staggered = simulate_queue(staggered_peak, weighbridges, service_rate_per_hour, seed=42)
+    The wait figures are the cached daily Bantargebang simulation (real daily
+    arrival count, labelled assumptions). `active_trucks` only sizes the
+    departure-slot plan; it defaults to one shift's share of the daily arrivals.
+    """
+    from app.fleet.queue_simulation import (
+        FIRST_SHIFT_START_HOUR,
+        SHIFTS_PER_DAY,
+        queue_minutes_per_truck,
+        stagger_slot_count,
+    )
 
-    stagger_intervals_minutes = 15
+    metric = queue_minutes_per_truck()
+    if metric is None:
+        metric = queue_minutes_per_truck(max(1, active_trucks or 1))
+    fleet = (
+        active_trucks if active_trucks and active_trucks > 0 else metric["trucks_per_day"] // SHIFTS_PER_DAY
+    )
+    slot_minutes = metric["recommended_stagger_minutes"]
+    slots = stagger_slot_count()
     schedule = []
-    today = datetime.now()
-    for i in range(active_trucks):
-        dept_time = (today + timedelta(minutes=i * stagger_intervals_minutes)).strftime("%H:%M")
+    for k in range(min(slots, fleet)):
+        departure = FIRST_SHIFT_START_HOUR * 60 + k * slot_minutes
         schedule.append(
             {
-                "truck_index": i + 1,
-                "suggested_departure": dept_time,
-                "slot_status": "assigned",
-                "tpa_wait_est_minutes": staggered["mean_wait_minutes"],
+                "slot_index": k + 1,
+                "suggested_departure": f"{departure // 60:02d}:{departure % 60:02d}",
+                "trucks_in_slot": fleet // slots + (1 if k < fleet % slots else 0),
+                "slot_status": "planned",
+                "tpa_wait_est_minutes": metric["staggered_mean"],
             }
         )
 
-    b_wait = baseline["mean_wait_minutes"]
-    s_wait = staggered["mean_wait_minutes"]
+    b_wait = metric["baseline_mean"]
+    s_wait = metric["staggered_mean"]
     reduction = round(((b_wait - s_wait) / b_wait) * 100, 1) if b_wait > 0 else 0.0
     return {
         "baseline_wait_minutes": b_wait,
-        "baseline_p95_minutes": baseline["p95_wait_minutes"],
-        "baseline_queue_trucks": baseline["max_queue"],
+        "baseline_p95_minutes": metric["baseline_p95"],
+        "baseline_queue_trucks": metric["baseline_max_queue"],
         "optimized_wait_minutes": s_wait,
-        "optimized_p95_minutes": staggered["p95_wait_minutes"],
-        "optimized_queue_trucks": staggered["max_queue"],
+        "optimized_p95_minutes": metric["staggered_p95"],
+        "optimized_queue_trucks": metric["staggered_max_queue"],
         "queue_reduction_percent": reduction,
-        "recommended_stagger_minutes": stagger_intervals_minutes,
-        "wait_ci95": staggered["wait_ci95"],
+        "recommended_stagger_minutes": slot_minutes,
+        "wait_ci95": metric["staggered_ci95"],
+        "baseline_ci95": metric["baseline_ci95"],
+        "trucks_per_day": metric["trucks_per_day"],
+        "fleet_per_shift": fleet,
+        "seed": metric["seed"],
+        "replications": metric["replications"],
+        "classification": metric["classification"],
+        "source": metric["source"],
         "method": "seeded discrete-event queue simulation",
+        "minutes_per_truck": metric,
         "dispatch_slots": schedule,
     }
 

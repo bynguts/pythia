@@ -3,6 +3,7 @@ from unittest import mock
 
 from app.ai.forecasters.queue_predictor import TpaQueuePredictor
 from app.fleet.astar_routing import NODES
+from app.fleet.queue_simulation import WEIGHBRIDGE_LANES, WEIGHBRIDGE_TRUCKS_PER_HOUR
 
 _tpa = NODES["TPA_BANTARGEBANG"]
 TPA_LAT, TPA_LNG = _tpa[0], _tpa[1]  # NODES values are (lat, lng, label) tuples
@@ -49,7 +50,9 @@ class TpaQueuePredictorTests(unittest.TestCase):
             snap = pred.update(src)
         self.assertEqual(snap["trucks_in_queue"], 1)
         sim.assert_called_once()
-        self.assertEqual(sim.call_args.kwargs["weighbridges"], 2)
+        # The shared weighbridge assumptions, not a private 2-lane copy.
+        self.assertEqual(sim.call_args.kwargs["weighbridges"], WEIGHBRIDGE_LANES)
+        self.assertEqual(sim.call_args.kwargs["service_rate_per_hour"], WEIGHBRIDGE_TRUCKS_PER_HOUR)
 
     def test_moving_truck_inside_geofence_is_arriving_not_queued(self):
         src = FakeSource([_truck("T-002", TPA_LAT + 0.001, TPA_LNG, 30.0)])

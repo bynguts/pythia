@@ -31,8 +31,13 @@ keputusan operasional. Ini adalah sumber jawaban utama Ana saat ditanya "kenapa 
 
 ## D. Simulasi Staggered Dispatch
 
-- Interval keberangkatan 15 menit antar truk; simulasi antrian ber-seed.
-- Output utama: `queue_reduction_percent` (perbandingan baseline_wait vs optimized_wait).
+- Simulasi ber-seed satu hari operasi di jembatan timbang Bantargebang (`queue_simulation.queue_minutes_per_truck`):
+  baseline = semua truk satu shift berangkat di awal shift; bertahap = keberangkatan dibagi ke slot 15 menit.
+- Jumlah kedatangan truk per hari = median ritasi harian dari data penimbangan Bantargebang (data.go.id);
+  jumlah jalur timbang, durasi timbang dan durasi ritase adalah asumsi model, bukan pengukuran fasilitas.
+- Metrik utama: "menit antre TPA per truk" (rata-rata, P95, CI 95% dari replikasi ber-seed), berlabel SIMULATED,
+  tersedia di `GET /api/tpa/queue-metric` dan `landfill_queue.minutes_per_truck` pada scene twin Jakarta.
+- `queue_reduction_percent` diturunkan dari metrik yang sama (baseline_wait vs optimized_wait).
 - Tujuannya mereduksi antrean TPA pada jam sibuk dengan meratakan kedatangan.
 
 ## E. Deteksi Deviasi Rute (Case 1)

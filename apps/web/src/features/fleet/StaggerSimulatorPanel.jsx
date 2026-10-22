@@ -1,115 +1,182 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import { RefreshCcw, Clock, ArrowRight } from "lucide-react";
 
-export function StaggerSimulatorPanel() {
-  const { t, lang } = useLanguage();
-  const [result, setResult] = useState({
-    baseline_wait_minutes: 116,
-    baseline_queue_trucks: 47,
-    optimized_wait_minutes: 48,
-    optimized_queue_trucks: 19,
-    queue_reduction_percent: 58.6,
-    recommended_stagger_minutes: 15,
-    dispatch_slots: [
-      { truck_index: 1, suggested_departure: "08:00", slot_status: "assigned", tpa_wait_est_minutes: 48 },
-      { truck_index: 2, suggested_departure: "08:15", slot_status: "assigned", tpa_wait_est_minutes: 48 },
-      { truck_index: 3, suggested_departure: "08:30", slot_status: "assigned", tpa_wait_est_minutes: 48 },
-      { truck_index: 4, suggested_departure: "08:45", slot_status: "assigned", tpa_wait_est_minutes: 48 },
-      { truck_index: 5, suggested_departure: "09:00", slot_status: "assigned", tpa_wait_est_minutes: 48 },
-    ],
-  });
-  const [loading, setLoading] = useState(false);
+// gsc P0-5: the one metric, read from GET /api/tpa/queue-metric (seeded, cached, SIMULATED).
+export function QueueMetricHeadline({ metric, loading, testId }) {
+  const { t } = useLanguage();
+  if (!metric) {
+    return (
+      <p className="tpa-scenario-note" data-testid={`${testId}-status`}>
+        {loading ? t("qm_loading") : t("qm_unavailable")}
+      </p>
+    );
+  }
+  // gsc n20: every detail field is optional; a missing one reads "—", never "undefined".
+  const shown = (value) => (value === undefined || value === null ? "—" : String(value));
+  const [lo, hi] = metric.staggered_ci95 || [];
+  const detail = t("qm_detail")
+    .replace("{bp95}", shown(metric.baseline_p95))
+    .replace("{sp95}", shown(metric.staggered_p95))
+    .replace("{lo}", shown(lo))
+    .replace("{hi}", shown(hi))
+    .replace("{n}", shown(metric.replications))
+    .replace("{seed}", shown(metric.seed))
+    .replace("{trucks}", shown(metric.trucks_per_day));
+  return (
+    <div
+      className="queue-metric-headline"
+      data-testid={testId}
+      style={{ display: "grid", gap: "var(--space-1)", margin: "0 0 var(--space-3)" }}
+    >
+      <span className="stagger-label">
+        {t("qm_label")}{" "}
+        <span className="pill" data-testid={`${testId}-sim-badge`}>
+          {t("honesty_sim_badge")}
+        </span>
+      </span>
+      <strong>
+        {metric.baseline_mean} → {metric.staggered_mean} {t("qm_min")}
+      </strong>
+      <small>{detail}</small>
+    </div>
+  );
+}
 
-  async function runSimulation() {
+// Roles holding operations:plan (app/core/auth.py ROLES); only they may POST the slot plan.
+const PLAN_ROLES = ["dispatcher", "administrator"];
+
+function mayPlan() {
+  try {
+    return PLAN_ROLES.includes(localStorage.getItem("pythia_role"));
+  } catch {
+    return false;
+  }
+}
+
+export function StaggerSimulatorPanel() {
+  const { t } = useLanguage();
+  const [metric, setMetric] = useState(null);
+  const [plan, setPlan] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const runSimulation = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await apiFetch("/simulator/stagger?active_trucks=5", { method: "POST" });
-      if (response.ok) {
-        const data = await response.json();
-        setResult(data);
+      const metricRes = await apiFetch("/tpa/queue-metric");
+      if (metricRes.ok) setMetric(await metricRes.json());
+      // gsc n19: the slot plan needs operations:plan; other roles skip the POST
+      // (it would only 403) and still see the metric.
+      if (mayPlan()) {
+        const planRes = await apiFetch("/simulator/stagger", { method: "POST" });
+        if (planRes.ok) setPlan(await planRes.json());
       }
     } catch {
-      // API unreachable: leave the previous simulation result in place
+      // API unreachable: keep whatever simulation result is already shown (never invented numbers)
     }
     setLoading(false);
-  }
+  }, []);
+
+  useEffect(() => {
+    runSimulation();
+  }, [runSimulation]);
+
+  const slots = plan?.dispatch_slots || [];
 
   return (
-    <section className="panel wide stagger-panel">
+    <section className="panel wide stagger-panel" data-testid="stagger-panel">
       <div className="panel-title">
         <div>
-          <h2>{t("stagger_title")}</h2>
+          <h2>
+            {t("stagger_title")}{" "}
+            <span className="pill" data-testid="stagger-sim-badge">
+              {t("honesty_sim_badge")}
+            </span>
+          </h2>
           <p>{t("stagger_subtitle")}</p>
         </div>
         <button
           className="primary-button"
           onClick={runSimulation}
           disabled={loading}
-          style={{ width: "auto", minHeight: "36px", height: "36px", padding: "0 16px", fontSize: "12.5px" }}
+          style={{ width: "auto", padding: "0 16px", fontSize: "12.5px" }}
         >
-          <RefreshCcw size={14} />{" "}
-          {loading ? (lang === "id" ? "Mengoptimalkan..." : "Optimizing...") : t("btn_rerun_optimizer")}
+          <RefreshCcw size={14} /> {loading ? t("stagger_running") : t("btn_rerun_optimizer")}
         </button>
       </div>
 
-      <div className="stagger-compare" style={{ marginBottom: "20px" }}>
-        <div className="stagger-col before">
-          <span className="stagger-label">{t("stagger_uncoord")}</span>
-          <strong>{result.baseline_wait_minutes} min</strong>
-          <small>
-            {result.baseline_queue_trucks} {lang === "id" ? "truk mengantre" : "queued trucks"}
-          </small>
-        </div>
-        <div
-          className="stagger-arrow"
-          style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
-        >
-          <ArrowRight size={18} />
-        </div>
-        <div className="stagger-col after">
-          <span className="stagger-label">{t("stagger_pythia")}</span>
-          <strong>{result.optimized_wait_minutes} min</strong>
-          <small>
-            {result.optimized_queue_trucks} {lang === "id" ? "truk mengantre" : "queued trucks"}
-          </small>
-        </div>
-        <div className="stagger-badge">
-          -{result.queue_reduction_percent}% {t("stagger_delay_badge")}
-        </div>
-      </div>
+      <QueueMetricHeadline metric={metric} loading={loading} testId="stagger-queue-metric" />
 
-      {result.dispatch_slots && result.dispatch_slots.length > 0 && (
+      {metric && (
+        <div className="stagger-compare" style={{ marginBottom: "var(--space-5)" }}>
+          <div className="stagger-col before">
+            <span className="stagger-label">{t("stagger_uncoord")}</span>
+            <strong>
+              {metric.baseline_mean} {t("qm_min")}
+            </strong>
+            <small>
+              {metric.baseline_max_queue} {t("stagger_queued")}
+            </small>
+          </div>
+          <div
+            className="stagger-arrow"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+            <ArrowRight size={18} />
+          </div>
+          <div className="stagger-col after">
+            <span className="stagger-label">{t("stagger_pythia")}</span>
+            <strong>
+              {metric.staggered_mean} {t("qm_min")}
+            </strong>
+            <small>
+              {metric.staggered_max_queue} {t("stagger_queued")}
+            </small>
+          </div>
+          {/* gsc n21: the reduction is only shown next to the baseline it is measured against. */}
+          {metric.baseline_mean > 0 && metric.assumptions?.baseline && (
+            <div className="stagger-badge" data-testid="stagger-reduction-badge">
+              -
+              {Math.round(((metric.baseline_mean - metric.staggered_mean) / metric.baseline_mean) * 1000) /
+                10}
+              % {t("stagger_delay_badge")}
+            </div>
+          )}
+        </div>
+      )}
+      {metric?.baseline_mean > 0 && metric.assumptions?.baseline && (
+        <p className="tpa-scenario-note" data-testid="stagger-baseline-assumption">
+          {t("stagger_baseline_assumption")}
+        </p>
+      )}
+
+      {slots.length > 0 && (
         <div className="stagger-schedule-wrap">
           <h3 style={{ fontSize: "13px", fontWeight: 700, margin: "0 0 10px", color: "var(--ui-ink)" }}>
-            {lang === "id"
-              ? "Rekomendasi Jadwal Keberangkatan Bertahap:"
-              : "Recommended Staggered Departure Slots:"}
+            {t("stagger_slots_title")}
           </h3>
+          <p className="tpa-scenario-note" data-testid="stagger-fleet-note">
+            {t("stagger_fleet_note")
+              .replace("{fleet}", plan.fleet_per_shift)
+              .replace("{trucks}", plan.trucks_per_day)}
+          </p>
           <div className="table-wrap">
             <table className="audit-table">
               <thead>
                 <tr>
-                  <th scope="col" style={{ width: "25%" }}>
-                    {lang === "id" ? "ID Truk" : "Truck ID"}
-                  </th>
-                  <th scope="col" style={{ width: "25%" }}>
-                    {lang === "id" ? "Saran Jam Berangkat" : "Recommended Departure"}
-                  </th>
-                  <th scope="col" style={{ width: "25%" }}>
-                    {lang === "id" ? "Estimasi Antre TPA" : "Est. Landfill Wait"}
-                  </th>
-                  <th scope="col" style={{ width: "25%" }}>
-                    {lang === "id" ? "Status Jadwal" : "Slot Status"}
-                  </th>
+                  <th scope="col">{t("stagger_th_slot")}</th>
+                  <th scope="col">{t("stagger_th_departure")}</th>
+                  <th scope="col">{t("stagger_th_trucks")}</th>
+                  <th scope="col">{t("stagger_th_wait")}</th>
+                  <th scope="col">{t("stagger_th_status")}</th>
                 </tr>
               </thead>
               <tbody>
-                {result.dispatch_slots.slice(0, 10).map((slot, i) => (
-                  <tr key={i}>
+                {slots.slice(0, 10).map((slot) => (
+                  <tr key={slot.slot_index}>
                     <td>
-                      <span className="plate-badge">T-00{slot.truck_index}</span>
+                      <span className="plate-badge">S-{String(slot.slot_index).padStart(2, "0")}</span>
                     </td>
                     <td>
                       <span style={{ fontFamily: "var(--mono, monospace)", fontWeight: 600 }}>
@@ -120,14 +187,14 @@ export function StaggerSimulatorPanel() {
                         {slot.suggested_departure} WIB
                       </span>
                     </td>
+                    <td>{slot.trucks_in_slot}</td>
                     <td>
-                      <span className="speed-badge">{slot.tpa_wait_est_minutes} min</span>
+                      <span className="speed-badge">
+                        {slot.tpa_wait_est_minutes} {t("qm_min")}
+                      </span>
                     </td>
                     <td>
-                      <span className="pill success">
-                        <span className="status-dot success" />
-                        {slot.slot_status.toUpperCase()}
-                      </span>
+                      <span className="pill">{t("stagger_slot_planned")}</span>
                     </td>
                   </tr>
                 ))}

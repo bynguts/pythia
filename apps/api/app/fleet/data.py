@@ -260,9 +260,11 @@ def _assigned_reference_path(truck_code: str) -> list[tuple[float, float]]:
     perfectly on-route). The cached OSRM corridor geometry is the true
     reference; the polyline is only a fallback when the cache is absent.
     """
-    from app.field.spj import active_path_for
+    from app.field.spj import active_path_for, active_spj_is_demo
 
-    spj_path = active_path_for(truck_code)
+    # A DEMO SPJ path is not an operational route (gsc C1): keep the corridor.
+    # An unknown status (lookup failed, None) also keeps the corridor.
+    spj_path = active_path_for(truck_code) if active_spj_is_demo(truck_code) is False else None
     if spj_path:
         return spj_path
     try:
@@ -300,9 +302,25 @@ def _truck(
 ) -> dict[str, Any]:
     lat, lng, speed = get_dynamic_position(truck_code)
     deviation = detect_route_deviation(_assigned_reference_path(truck_code), (lat, lng), speed_kmh=speed)
-    from app.fleet.deviation_state import apply_hysteresis
+    from app.fleet.deviation_state import DEMO_SUPPRESSION_MESSAGE, apply_hysteresis, deviation_suppression
 
-    latched = apply_hysteresis(truck_code, deviation["distance_meters"])
+    suppressed = deviation_suppression(truck_code)
+    if suppressed:
+        # gsc C1: the active SPJ has DEMO stops at an operator's phone, far from
+        # this simulated truck. Deviation is not measured (no alert, no replay),
+        # and the reason is labelled instead of silently reading "on route".
+        deviation = {
+            **deviation,
+            "violated": False,
+            "distance_meters": 0.0,
+            "rule_flags": [],
+            "severity": "normal",
+            "deviation_suppressed": suppressed,
+            "message": DEMO_SUPPRESSION_MESSAGE,
+        }
+        latched = False
+    else:
+        latched = apply_hysteresis(truck_code, deviation["distance_meters"])
     if latched and not deviation["violated"]:
         deviation = {
             **deviation,
@@ -384,10 +402,16 @@ def get_dynamic_trucks() -> list[dict[str, Any]]:
     from app.fleet.fleet_generator import get_generated_fleet
 
     curated = [
-        _truck("T-001", "B 1234 CD", "Budi Santoso", "Jakarta Utara", "active", False, "Dump Truck Besar"),
-        _truck("T-047", "B 5678 EF", "Agus Pratama", "Jakarta Barat", "deviation", False, "Compactor Besar"),
-        _truck("T-088", "B 9012 GH", "Joko Wijaya", "Jakarta Selatan", "active", False, "Arm Roll Besar"),
-        _truck("T-112", "B 4410 KL", "Rizky Maulana", "Jakarta Timur", "active", True, "Compactor Kecil"),
+        _truck(
+            "T-001", "B 1234 CD", "Pengemudi Sim 01", "Jakarta Utara", "active", False, "Dump Truck Besar"
+        ),
+        _truck(
+            "T-047", "B 5678 EF", "Pengemudi Sim 02", "Jakarta Barat", "deviation", False, "Compactor Besar"
+        ),
+        _truck(
+            "T-088", "B 9012 GH", "Pengemudi Sim 03", "Jakarta Selatan", "active", False, "Arm Roll Besar"
+        ),
+        _truck("T-112", "B 4410 KL", "Pengemudi Sim 04", "Jakarta Timur", "active", True, "Compactor Kecil"),
     ]
     _fleet_cache["payload"] = curated + get_generated_fleet()
     _fleet_cache["ts"] = now
@@ -665,9 +689,7 @@ def _route_b_osrm() -> dict[str, Any]:
 def command_center_snapshot(
     dispatches: list[dict[str, Any]], weather: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    import time
-
-    from app.fleet.queue_simulation import simulate_queue
+    from app.fleet.queue_simulation import WEIGHBRIDGE_LANES, WEIGHBRIDGE_TRUCKS_PER_HOUR
 
     predictions = build_predictions()
     critical_predictions = [item for item in predictions if item["risk_level"] in {"critical", "high"}]
@@ -679,10 +701,10 @@ def command_center_snapshot(
         default={},
     )
 
-    hour = time.localtime().tm_hour
-    base_trucks = 47 if (8 <= hour <= 10 or 14 <= hour <= 16) else 14
-    sim = simulate_queue(base_trucks, weighbridges=2, service_rate_per_hour=4.5, seed=42)
-    wait_time = int(sim["mean_wait_minutes"])
+    # Same modelled clock hour as the TPA panel (one queue model, gsc C1).
+    live_queue = tpa_queue_status_payload(scenario="live")
+    base_trucks = live_queue["queue_trucks_max"]  # trucks queued, not arrivals/hour
+    wait_time = int(live_queue["avg_wait_minutes"])
     tpa_status = "red" if wait_time >= 90 else "yellow" if wait_time >= 45 else "green"
     tpa_rec = (
         "Delay departures of non-essential trucks by 30-45 minutes to relieve Bantargebang gridlock."
@@ -738,7 +760,7 @@ def command_center_snapshot(
             "status": tpa_status,
             "trucks_waiting": base_trucks,
             "estimated_wait_minutes": wait_time,
-            "throughput_trucks_per_hour": 30,
+            "throughput_trucks_per_hour": round(WEIGHBRIDGE_LANES * WEIGHBRIDGE_TRUCKS_PER_HOUR),
             "recommendation": tpa_rec,
         },
         "trucks": list(TRUCKS),
@@ -756,10 +778,10 @@ def command_center_snapshot(
 
 
 _CURATED_DRIVERS = {
-    "T-001": "Budi Santoso",
-    "T-047": "Agus Pratama",
-    "T-088": "Joko Wijaya",
-    "T-112": "Rizky Maulana",
+    "T-001": "Pengemudi Sim 01",
+    "T-047": "Pengemudi Sim 02",
+    "T-088": "Pengemudi Sim 03",
+    "T-112": "Pengemudi Sim 04",
 }
 
 _FUEL_L_PER_KM = 0.42  # compactor-truck diesel factor (reference constant)
@@ -781,11 +803,16 @@ def _curated_trip_record(code: str, driver: str, t_date: str) -> dict[str, Any]:
         mm = int(minute_offset % 60)
         points.append({"lat": la, "lng": ln, "timestamp": f"{t_date}T{hh:02d}:{mm:02d}:00Z"})
 
+    from app.fleet.deviation_state import deviation_suppression
+
+    suppressed = deviation_suppression(code)
     deviation_hits = 0
-    for la, ln in actual[1:]:
-        res = detect_route_deviation(_assigned_reference_path(code), (la, ln), speed_kmh=speed)
-        if res["violated"]:
-            deviation_hits += 1
+    if not suppressed:
+        reference = _assigned_reference_path(code)
+        for la, ln in actual[1:]:
+            if detect_route_deviation(reference, (la, ln), speed_kmh=speed)["violated"]:
+                deviation_hits += 1
+    extra = {"deviation_suppressed": suppressed} if suppressed else {}
 
     return {
         "truck_code": code,
@@ -798,6 +825,7 @@ def _curated_trip_record(code: str, driver: str, t_date: str) -> dict[str, Any]:
         "deviations_count": deviation_hits,
         "record_type": "system_generated_from_corridor_model",
         "record_note": "Reconstructed by the routing engine from corridor geometry; not archived AVL telemetry.",
+        **extra,
     }
 
 
@@ -863,20 +891,34 @@ def fleet_history_payload(truck_code: str | None = None, date: str | None = None
 def tpa_queue_status_payload(scenario: str = "live") -> dict[str, Any]:
     import time
 
-    from app.fleet.queue_simulation import simulate_queue
+    from app.fleet.queue_simulation import (
+        WEIGHBRIDGE_ASSUMPTION,
+        WEIGHBRIDGE_LANES,
+        WEIGHBRIDGE_TRUCKS_PER_HOUR,
+        hourly_queue_profile,
+    )
 
-    # Service rate 4.5 trucks/h per weighbridge (~13 min weighbridge+dump cycle)
-    # reproduces the documented DLH observation: 47 peak arrivals -> ~117 min
-    # mean wait. One rate is used across every queue surface (consistency).
+    # gsc C1: one queue model. The hour comes from the daily TPA metric's baseline
+    # day (real median daily ritasi + the shared weighbridge assumptions), so
+    # this panel and the minutes-per-truck metric cannot disagree. The peak is
+    # a MODELLED peak hour (most queue-minutes), not a documented DLH count.
+    profile = hourly_queue_profile()
     if scenario == "peak":
-        base_trucks = 47
-        arrival_profile = "peak_hour_scenario (documented DLH peak: 47 trucks/h)"
+        sim = max(profile, key=lambda r: r["arrivals"] * r["mean_wait_minutes"]) if profile else None
+        arrival_profile = "peak_hour_scenario (modelled from real daily ritasi; not a measured peak)"
     else:
         hour = time.localtime().tm_hour
-        base_trucks = 47 if (8 <= hour <= 10 or 14 <= hour <= 16) else 14
+        sim = profile[hour] if profile else None
         arrival_profile = "live_clock"
-
-    sim = simulate_queue(base_trucks, weighbridges=2, service_rate_per_hour=4.5, seed=42)
+    sim = sim or {
+        "arrivals": 0,
+        "queue_trucks_mean": 0.0,
+        "mean_wait_minutes": 0.0,
+        "p95_wait_minutes": 0.0,
+        "max_queue": 0,
+        "utilization": 0.0,
+        "wait_ci95": [0.0, 0.0],
+    }
     wait_time = sim["mean_wait_minutes"]
     status_label = (
         "CRITICAL (Antrian Padat)"
@@ -887,7 +929,12 @@ def tpa_queue_status_payload(scenario: str = "live") -> dict[str, Any]:
     )
 
     return {
-        "trucks_in_queue": base_trucks,
+        # Trucks waiting for a weighbridge, not arrivals: the modelled hour's
+        # queue ahead of an arriving truck (mean) and its peak (max).
+        "queue_trucks_mean": sim["queue_trucks_mean"],
+        "queue_trucks_max": sim["max_queue"],
+        "arrivals_per_hour": sim["arrivals"],
+        "trucks_in_queue": sim["max_queue"],  # compatibility alias of queue_trucks_max
         "lat": -6.3310,
         "lng": 106.9910,
         "facility_name": "TPST Bantargebang",
@@ -897,10 +944,13 @@ def tpa_queue_status_payload(scenario: str = "live") -> dict[str, Any]:
         "utilization": sim["utilization"],
         "wait_ci95": sim["wait_ci95"],
         "weighbridge_status": "OPERATIONAL" if wait_time < 80 else "DEGRADED (Overload)",
-        "processing_rate_tph": 120,
+        "processing_rate_tph": round(WEIGHBRIDGE_LANES * WEIGHBRIDGE_TRUCKS_PER_HOUR),
         "status_label": status_label,
         "scenario": scenario,
         "arrival_profile": arrival_profile,
+        "clock_hour": sim.get("hour"),
+        "weighbridge_basis": WEIGHBRIDGE_ASSUMPTION,
+        "classification": "SIMULATED",
         "method": "seeded discrete-event queue simulation",
         "scale_logs": [
             {"time": "15:30", "truck": "T-088", "weight_ton": 18.2, "status": "Cleared"},

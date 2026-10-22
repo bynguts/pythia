@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 
 from app.ai.base import GpsDataSource
 from app.fleet.astar_routing import NODES
-from app.fleet.queue_simulation import simulate_queue
+from app.fleet.queue_simulation import WEIGHBRIDGE_LANES, WEIGHBRIDGE_TRUCKS_PER_HOUR, simulate_queue
 
 # NODES values are (lat, lng, label) tuples; only the coordinates are needed here.
 TPA_LAT, TPA_LNG = NODES["TPA_BANTARGEBANG"][0], NODES["TPA_BANTARGEBANG"][1]
@@ -41,8 +41,9 @@ class TpaQueuePredictor:
         geofence_radius_m: float = 800.0,
         stopped_kmh: float = 3.0,
         eta_window_min: float = 30.0,
-        weighbridges: int = 2,
-        service_rate_per_hour: float = 30.0,
+        # The shared weighbridge assumptions (fleet/queue_simulation.py).
+        weighbridges: int = WEIGHBRIDGE_LANES,
+        service_rate_per_hour: float = WEIGHBRIDGE_TRUCKS_PER_HOUR,
         trend_window: int = 20,
     ) -> None:
         self._radius_km = geofence_radius_m / 1000.0

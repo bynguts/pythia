@@ -157,7 +157,8 @@ def approve_operations_plan(
 
 @router.post("/api/simulator/stagger")
 def post_stagger_simulation(
-    active_trucks: int = 5, _role: str = Depends(require_permission("operations:plan"))
+    active_trucks: int | None = Query(None, ge=1, le=5000),
+    _role: str = Depends(require_permission("operations:plan")),
 ) -> dict[str, Any]:
     return simulate_staggered_dispatch(active_trucks)
 

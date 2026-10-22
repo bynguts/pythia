@@ -32,6 +32,7 @@ from app.fleet.data import (
 from app.fleet.gps_feed import latest_breadcrumbs
 from app.fleet.map_truth import _snapped_for, build_map_truth
 from app.fleet.osrm import fetch_osrm_route
+from app.fleet.queue_simulation import scenario_queue_metric
 from app.forecast.engine import simulate_staggered_dispatch
 from app.forecast.real_data import load_fleet_composition
 from app.forecast.weather import fetch_jakarta_weather_forecast
@@ -166,7 +167,23 @@ def fleet_carbon() -> dict[str, Any]:
         "carbon_saved_today_kg": 17.6,  # Saving achieved by route optimization on T-047 (Route B instead of deviant A)
         "fuel_saved_equivalent_liters": round(17.6 / 2.68, 1),
         "compliance_rate_percent": 80.0,
+        # gsc P0-4: every figure here is a fixed demo constant (distance, saving,
+        # compliance), not route telemetry; the per-trip estimate is /api/ai/carbon-live.
+        "classification": "DEMO_CONSTANT",
+        "source": (
+            "Fixed demo constants over the simulated pilot fleet (distance, carbon saving, "
+            "compliance rate) - not measured and not computed from telemetry"
+        ),
     }
+
+
+@router.get("/api/tpa/queue-metric")
+def tpa_queue_metric() -> dict[str, Any]:
+    """The one metric: TPA queue minutes per truck, unstaggered vs staggered (SIMULATED), normal day."""
+    metric = scenario_queue_metric()
+    if metric is None:
+        raise HTTPException(status_code=503, detail="No daily arrival data to simulate the TPA queue.")
+    return metric
 
 
 @router.get("/api/fleet/astar-reroute")
