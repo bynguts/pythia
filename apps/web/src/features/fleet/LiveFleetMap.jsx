@@ -23,6 +23,8 @@ const MAP_STYLE = {
 // corresponding basemap. Playwright sets navigator.webdriver, so e2e keeps
 // the deterministic flat style above (remote tiles break load-event timing).
 const STREETS_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+// How long the street style document may take before the flat style stands in.
+const STREETS_STYLE_TIMEOUT_MS = 20000;
 const IS_AUTOMATION = typeof navigator !== "undefined" && Boolean(navigator.webdriver);
 function resolveStreetsStyle() {
   return IS_AUTOMATION ? MAP_STYLE : STREETS_STYLE_URL;
@@ -454,12 +456,49 @@ export function LiveFleetMap({
 
     // Offline safety net: if the remote street style cannot load (venue wifi),
     // degrade once to the flat offline style instead of showing a blank canvas.
-    map.on("error", () => {
-      if (IS_AUTOMATION || streetsFallbackRef.current || basemapRef.current !== "streets") return;
+    // Only a failed style document (or a style that never loads) counts: tile,
+    // source, sprite and glyph errors are transient and MapLibre retries them.
+    // gsc n31: a slow venue network gets STREETS_STYLE_TIMEOUT_MS, and after a
+    // fallback the streets style is tried again when the browser comes back
+    // online; its (late) style.load returns the map to streets.
+    let streetsStyleLoaded = false;
+    let loadingStreets = !IS_AUTOMATION;
+    let streetsStyleTimer = null;
+    const fallBackToFlat = () => {
+      if (IS_AUTOMATION || streetsStyleLoaded || streetsFallbackRef.current) return;
+      if (basemapRef.current !== "streets") return;
+      clearTimeout(streetsStyleTimer);
       streetsFallbackRef.current = true;
+      loadingStreets = false;
       setStreetsOffline(true);
       map.setStyle(MAP_STYLE);
+    };
+    const armStreetsTimer = () => {
+      clearTimeout(streetsStyleTimer);
+      streetsStyleTimer = IS_AUTOMATION ? null : setTimeout(fallBackToFlat, STREETS_STYLE_TIMEOUT_MS);
+    };
+    armStreetsTimer();
+    map.on("error", (event) => {
+      if (streetsStyleLoaded || event?.sourceId || event?.tile) return;
+      const url = event?.error?.url;
+      if (url && url !== STREETS_STYLE_URL) return;
+      fallBackToFlat();
     });
+    map.on("style.load", () => {
+      if (!loadingStreets) return;
+      loadingStreets = false;
+      streetsStyleLoaded = true;
+      clearTimeout(streetsStyleTimer);
+      setStreetsOffline(false);
+    });
+    const retryStreets = () => {
+      if (!streetsFallbackRef.current || basemapRef.current !== "streets") return;
+      streetsFallbackRef.current = false;
+      loadingStreets = true;
+      map.setStyle(STREETS_STYLE_URL);
+      armStreetsTimer();
+    };
+    window.addEventListener("online", retryStreets);
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     map.addControl(new maplibregl.FullscreenControl(), "top-right");
@@ -522,6 +561,8 @@ export function LiveFleetMap({
     });
 
     return () => {
+      clearTimeout(streetsStyleTimer);
+      window.removeEventListener("online", retryStreets);
       Object.values(activeMarkersRef.current).forEach((m) => {
         m.popup?.remove();
         m.marker.remove();

@@ -14,6 +14,11 @@
   --twin-overlay-ink: #ffffff;
   --twin-overlay-muted: #a9bdb3;
   --twin-overlay-accent: #ff9875;
+  /* gsc n29: overlay control colours as tokens (city-base toggle, imagery credit). */
+  --twin-overlay-line-soft: rgba(255, 255, 255, 0.18);
+  --twin-overlay-line-strong: rgba(255, 255, 255, 0.4);
+  --twin-overlay-ink-soft: #dce8e2;
+  --twin-overlay-highlight: #f3c77a;
   --twin-panel-width: 340px;
 }
 
@@ -134,7 +139,8 @@
 .twin-tooltip,
 .twin-status,
 .twin-tour-caption,
-.twin-present-hud {
+.twin-present-hud,
+.twin-present-scenario {
   color: var(--twin-overlay-ink);
   background: var(--twin-overlay);
   border: 1px solid var(--twin-overlay-line);
@@ -770,7 +776,7 @@
   border-radius: 0;
 }
 .twin-workspace.is-present .twin-legend {
-  top: 78px;
+  top: 134px;
   width: min(380px, calc(100% - 96px));
 }
 .twin-workspace.is-present .twin-timeline {
@@ -805,6 +811,28 @@
 .twin-present-hud span {
   padding-left: var(--space-4);
   border-left: 1px solid var(--twin-overlay-line);
+}
+/* Cause → effect line under the HUD: scenario inputs, then the queue headline. */
+.twin-present-scenario {
+  position: absolute;
+  z-index: 3;
+  top: calc(var(--space-3) + 62px);
+  left: var(--space-3);
+  max-width: calc(100% - 96px);
+  min-height: var(--tap-min);
+  padding: 8px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  border-radius: 10px;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.twin-present-scenario strong {
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--twin-overlay-line);
+  color: var(--twin-overlay-accent);
 }
 
 @media (max-width: 1180px) {
@@ -964,6 +992,74 @@
   }
   .twin-legend-risk {
     gap: 4px 10px;
+  }
+}
+
+/* ---- city base: satellite + relief toggle and imagery credit -------------- */
+.twin-base-toggle {
+  min-height: var(--tap-min);
+  padding: 6px var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: var(--space-2);
+  border: 1px solid var(--twin-overlay-line-soft);
+  border-radius: var(--ui-radius-control);
+  color: var(--twin-overlay-ink-soft);
+  background: transparent;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.twin-base-toggle:hover:not(:disabled) {
+  border-color: var(--twin-overlay-line-strong);
+}
+.twin-base-toggle[aria-pressed="true"] {
+  color: var(--ui-ink);
+  background: var(--twin-overlay-ink);
+  border-color: var(--twin-overlay-ink);
+}
+.twin-base-toggle:disabled {
+  color: var(--twin-overlay-muted);
+  cursor: not-allowed;
+}
+/* Licence credit for the imagery: always on the map while it is shown. */
+.twin-imagery-credit {
+  position: absolute;
+  z-index: 2;
+  top: 10px;
+  right: calc(var(--twin-panel-width) + 24px + 10px + var(--tap-min) + var(--space-2));
+  max-width: min(360px, max(160px, calc(100% - var(--twin-panel-width) - 440px)));
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: 6px;
+  color: var(--twin-overlay-ink);
+  background: var(--twin-overlay);
+  font-size: 11px;
+  line-height: 1.35;
+  pointer-events: none;
+}
+.twin-imagery-credit strong {
+  color: var(--twin-overlay-highlight);
+}
+.twin-workspace.is-present .twin-imagery-credit {
+  top: auto;
+  bottom: var(--space-3);
+  right: calc(var(--space-3) + var(--tap-min));
+  max-width: min(420px, calc(100% - 96px));
+}
+@media (max-width: 920px) {
+  .twin-imagery-credit {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: calc(var(--tap-min) + var(--space-2));
+    max-width: none;
+    border-radius: 0 6px 0 0;
   }
 }
 

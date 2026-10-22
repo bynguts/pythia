@@ -7,13 +7,12 @@ present modelled or simulated data as live observations.
 
 from __future__ import annotations
 
-import math
 from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
-from app.core.units import TRUCK_CAPACITY_TONS
-from app.forecast.cities import City
+from app.core.units import CREW_SIZE_WORKERS, TRUCK_CAPACITY_TONS, resource_requirements
+from app.forecast.cities import VENUES, City
 
 # Risk = spike against the district's own normal day: the same model, same date,
 # no rain and no event. (The TPS capacity column is a proxy that 40 of 42
@@ -97,12 +96,14 @@ def _with_risk(district: dict[str, Any], normal_series: list[float] | None) -> d
     series = []
     for i, row in enumerate(district["series"]):
         normal = normal_series[i] if normal_series else row["predicted_tons"]
+        resources = resource_requirements(row["predicted_tons"])
         series.append(
             {
                 **row,
                 "normal_tons": normal,
                 "risk": classify_risk(row["predicted_tons"], normal),
-                "trucks_required": math.ceil(row["predicted_tons"] / TRUCK_CAPACITY_TONS),
+                "trucks_required": resources["trucks_required"],
+                "crews_required": resources["crews_required"],
             }
         )
     peak = max(series, key=lambda row: row["predicted_tons"])
@@ -170,19 +171,28 @@ def build_scene(
     daily_totals = [
         round(sum(d["series"][i]["predicted_tons"] for d in districts), 1) for i in range(len(dates))
     ]
+    daily_trucks = [sum(d["series"][i]["trucks_required"] for d in districts) for i in range(len(dates))]
+    daily_crews = [sum(d["series"][i]["crews_required"] for d in districts) for i in range(len(dates))]
     peak_index = max(range(len(dates)), key=daily_totals.__getitem__) if dates else 0
     landfill = next((f for f in facilities if f.get("kind") == "landfill"), None)
     return {
         "city": asdict(city),
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
-        "horizon": {"days": len(dates), "dates": dates, "daily_total_tons": daily_totals},
+        "horizon": {
+            "days": len(dates),
+            "dates": dates,
+            "daily_total_tons": daily_totals,
+            "daily_trucks_required": daily_trucks,
+            "daily_crews_required": daily_crews,
+        },
         "scenario": scenario,
         "summary": {
             "total_tons_today": daily_totals[0] if daily_totals else 0.0,
             "peak_date": dates[peak_index] if dates else None,
             "peak_total_tons": daily_totals[peak_index] if daily_totals else 0.0,
             "districts_at_risk": sum(1 for d in districts if d["risk"] in ("high", "critical")),
-            "trucks_required_today": sum(d["series"][0]["trucks_required"] for d in districts),
+            "trucks_required_today": daily_trucks[0] if daily_trucks else 0,
+            "crews_required_today": daily_crews[0] if daily_crews else 0,
         },
         "districts": districts,
         "facilities": facilities,
@@ -190,9 +200,11 @@ def build_scene(
         "trucks": truck_layer(trucks or []),
         "flows": flow_layer(districts, landfill),
         "landfill_queue": landfill_queue,
+        "venues": [asdict(venue) for venue in VENUES.get(city.id, ())],
         "provenance": PROVENANCE[city.id],
         "units": {
             "tons": "metric tonnes per day",
             "trucks_required": f"trucks at {TRUCK_CAPACITY_TONS:g} t per shift",
+            "crews_required": f"crew teams of {CREW_SIZE_WORKERS} workers, 1 team per truck per shift",
         },
     }

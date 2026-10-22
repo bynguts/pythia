@@ -8,12 +8,20 @@
       // language switch persisted as pythia_lang. The href is built from a
       // fixed allowlist (no user input reaches the DOM write), and
       // document.createElement is used instead of document.write/innerHTML.
+      // ?lang=en|id on any route wins and is persisted like the language switch.
       (function () {
         var lang = "id";
+        var param = null;
         try {
+          param = new URLSearchParams(window.location.search).get("lang");
+        } catch (e) {
+          param = null;
+        }
+        try {
+          if (param === "en" || param === "id") localStorage.setItem("pythia_lang", param);
           lang = localStorage.getItem("pythia_lang") === "en" ? "en" : "id";
         } catch (e) {
-          lang = "id";
+          lang = param === "en" ? "en" : "id";
         }
         document.documentElement.lang = lang;
         var link = document.createElement("link");

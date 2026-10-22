@@ -88,6 +88,33 @@ HCMC_POPULATION_2019 = 8_993_082
 HCMC_DAILY_TONS = 13_000.0
 HCMC_LANDFILL = {"name": "Da Phuoc Waste Treatment Complex", "lat": 10.6596, "lng": 106.6702}
 
+
+@dataclass(frozen=True)
+class Venue:
+    id: str
+    name: str
+    lat: float
+    lng: float
+
+
+# Event venue presets — the one backend source for the twin, Ana and the XR
+# deep links. The first venue per city is the default. Approximate centroids.
+VENUES: dict[str, tuple[Venue, ...]] = {
+    "jakarta": (
+        Venue("gbk", "GBK", -6.2183, 106.8022),
+        Venue("jis", "JIS", -6.1246, 106.8584),
+        Venue("monas", "Monas", -6.1754, 106.8272),
+    ),
+    "hcmc": (Venue("d1", "District 1", 10.7769, 106.7009),),
+}
+
+
+def get_venue(city_id: str, key: str | None) -> Venue | None:
+    """A city's venue by id or display name (case-insensitive); None if unknown."""
+    wanted = str(key or "").strip().lower()
+    return next((v for v in VENUES.get(city_id, ()) if wanted in (v.id, v.name.lower())), None)
+
+
 # Scenario sensitivities for the demo allocation (assumptions, labelled as such).
 WEEKEND_UPLIFT = 0.04
 RAIN_UPLIFT_PER_MM = 0.0015

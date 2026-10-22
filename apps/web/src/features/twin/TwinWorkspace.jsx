@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { MapboxOverlay } from "@deck.gl/mapbox";
@@ -10,10 +11,12 @@ import {
   Clapperboard,
   CloudRain,
   Glasses,
+  MapPin,
   Pause,
   Play,
   RefreshCw,
   Square,
+  Satellite,
   Users,
 } from "lucide-react";
 import { MetricStrip } from "../../shared/ui/MetricStrip.jsx";
@@ -30,6 +33,21 @@ import {
 } from "./twinLayers.js";
 import { buildTour, overviewCamera, runTour } from "./tour.js";
 import { TWIN_DAYS, useTwinScene } from "./useTwinScene.js";
+import {
+  TWIN_CITIES,
+  TWIN_EVENT_PRESETS,
+  TWIN_VENUES,
+  readTwinParams,
+  twinVenues,
+  withTwinParams,
+} from "./twinLinks.js";
+import {
+  IMAGERY_CREDIT,
+  RELIEF_CREDIT,
+  applyCityBase,
+  enhanceStreets,
+  isCityBaseSource,
+} from "./cityBase3d.js";
 import "./twin.css";
 
 // Same determinism contract as LiveFleetMap: Playwright sets
@@ -40,7 +58,11 @@ const IS_AUTOMATION = typeof navigator !== "undefined" && Boolean(navigator.webd
 const QUERY =
   typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
 const PRESENT = QUERY.get("present") === "1";
-const USE_STREETS = !IS_AUTOMATION || PRESENT || QUERY.get("basemap") === "streets";
+// ?basemap=satellite also opens on the satellite base (recorded footage).
+const SATELLITE_FIRST = QUERY.get("basemap") === "satellite";
+const USE_STREETS = !IS_AUTOMATION || PRESENT || QUERY.get("basemap") === "streets" || SATELLITE_FIRST;
+// Imagery or relief tile failures before the satellite base gives up.
+const CITY_BASE_ERROR_LIMIT = 8;
 const ANIMATE_UNDER_AUTOMATION = PRESENT || QUERY.get("motion") === "on";
 const STREETS_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 const OFFLINE_STYLE = {
@@ -48,16 +70,8 @@ const OFFLINE_STYLE = {
   sources: {},
   layers: [{ id: "twin-offline-bg", type: "background", paint: { "background-color": "#e4e9e5" } }],
 };
-const CITIES = ["jakarta", "hcmc"];
-const VENUES = {
-  jakarta: { name: "GBK", lat: -6.2183, lng: 106.8022 },
-  hcmc: { name: "District 1", lat: 10.7769, lng: 106.7009 },
-};
-const EVENT_PRESETS = [
-  { id: "none", attendance: 0 },
-  { id: "50k", attendance: 50000 },
-  { id: "100k", attendance: 100000 },
-];
+const CITIES = TWIN_CITIES;
+const EVENT_PRESETS = TWIN_EVENT_PRESETS;
 const PLAY_STEP_MS = 1800;
 // Keyboard path into the map: the panel lists this many districts by risk.
 const RISK_LIST_SIZE = 5;
@@ -79,11 +93,6 @@ function useMediaQuery(query) {
   return matches;
 }
 
-function initialCity() {
-  const city = QUERY.get("city");
-  return CITIES.includes(city) ? city : "jakarta";
-}
-
 export function TwinWorkspace({ onCityChange }) {
   const { t } = useLanguage();
   const locale = t("twin_locale");
@@ -91,32 +100,57 @@ export function TwinWorkspace({ onCityChange }) {
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const animate = !reducedMotion && (!IS_AUTOMATION || ANIMATE_UNDER_AUTOMATION);
 
-  const [city, setCity] = useState(initialCity);
+  // Deep link (/twin?city=&rain=&event=&venue=&day=): read once, on mount.
+  const [initial] = useState(() =>
+    readTwinParams(typeof window !== "undefined" ? window.location.search : ""),
+  );
+  const [city, setCity] = useState(initial.city);
   // The shell header names the city, so it must follow the twin's city switch.
   useEffect(() => {
     onCityChange?.(city);
   }, [city, onCityChange]);
-  const [rainfall, setRainfall] = useState(0);
-  const [eventPreset, setEventPreset] = useState("none");
-  const [day, setDay] = useState(0);
+  const [rainfall, setRainfall] = useState(initial.rain);
+  const [eventPreset, setEventPreset] = useState(initial.event);
+  const [venueId, setVenueId] = useState(initial.venue);
+  const [day, setDay] = useState(initial.day);
   const [playing, setPlaying] = useState(false);
+  // The scene's queue metric follows the selected day, but not every step of
+  // timeline playback (that would refetch the scene once per animation frame).
+  const [queueDay, setQueueDay] = useState(initial.day);
+  useEffect(() => {
+    if (!playing) setQueueDay(day);
+  }, [day, playing]);
   const [selectedId, setSelectedId] = useState(null);
   const [hover, setHover] = useState(null);
   const [tour, setTour] = useState(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [basemapOffline, setBasemapOffline] = useState(false);
+  const [satellite, setSatellite] = useState(SATELLITE_FIRST);
+  const [cityBaseFailed, setCityBaseFailed] = useState(false);
+  // The satellite base needs the online street style: never under automation
+  // (unless opted in) and never on the offline fallback.
+  const cityBaseAvailable = USE_STREETS && !basemapOffline && !cityBaseFailed;
+  const satelliteOn = satellite && cityBaseAvailable;
 
   const preset = EVENT_PRESETS.find((p) => p.id === eventPreset) || EVENT_PRESETS[0];
-  const venue = VENUES[city];
+  // The scene's venue list wins when it has one; ids are shared with TWIN_VENUES.
+  const [sceneVenues, setSceneVenues] = useState(null);
+  const venues = twinVenues(city, sceneVenues?.city === city ? sceneVenues.list : null);
+  const venue = venues.find((v) => v.id === venueId) || venues[0];
   const request = {
     city,
     rainfall,
     attendance: preset.attendance,
     eventLat: preset.attendance ? venue.lat : null,
     eventLng: preset.attendance ? venue.lng : null,
+    day: queueDay,
   };
   const { scene, loading, error, settled, retry } = useTwinScene(request);
+  useEffect(() => {
+    if (Array.isArray(scene?.venues) && scene.venues.length && scene.city?.id)
+      setSceneVenues({ city: scene.city.id, list: scene.venues });
+  }, [scene]);
   const prepared = useMemo(() => (scene ? prepareScene(scene) : null), [scene]);
   const dayCount = scene?.horizon?.dates?.length || TWIN_DAYS;
   const safeDay = Math.min(day, dayCount - 1);
@@ -138,6 +172,11 @@ export function TwinWorkspace({ onCityChange }) {
   const ready = mapReady && settled && scene?.city?.id === city;
 
   const number = useMemo(() => new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }), [locale]);
+  const compactNumber = useMemo(
+    () => new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 0 }),
+    [locale],
+  );
+  const minutesNumber = useMemo(() => new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }), [locale]);
   const dateFormat = useMemo(
     () => new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short" }),
     [locale],
@@ -222,7 +261,15 @@ export function TwinWorkspace({ onCityChange }) {
         if (layer.type === "fill" && /park|landuse|landcover|wood|grass|forest/.test(layer.id))
           map.setPaintProperty(layer.id, "fill-opacity", 0.35);
       }
+      enhanceStreets(map);
       setMapReady(true);
+    });
+    // Satellite imagery or relief host down: drop back to the street base
+    // once instead of leaving holes under the columns.
+    let cityBaseErrors = 0;
+    map.on("error", (event) => {
+      if (isCityBaseSource(event?.sourceId) && ++cityBaseErrors === CITY_BASE_ERROR_LIMIT)
+        setCityBaseFailed(true);
     });
     // Attribution stays one tap away (the "i" control) instead of opening
     // over the bottom of small map windows.
@@ -242,6 +289,13 @@ export function TwinWorkspace({ onCityChange }) {
       overlayRef.current = null;
     };
   }, []);
+
+  // ---- city base: streets or satellite + relief -----------------------------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !USE_STREETS || basemapOffline) return;
+    applyCityBase(map, satelliteOn ? "satellite" : "streets");
+  }, [satelliteOn, mapReady, basemapOffline]);
 
   // Keep the city centred in the part of the stage the panel leaves visible.
   useEffect(() => {
@@ -330,6 +384,31 @@ export function TwinWorkspace({ onCityChange }) {
     if (selectedId && scene && !scene.districts.some((d) => d.id === selectedId)) setSelectedId(null);
   }, [scene, selectedId]);
 
+  // ---- shareable URL --------------------------------------------------------
+  // Once the scenario moves off what the page opened with, mirror it into the
+  // query string (replace, not push) so the address bar is always a deep link.
+  const navigate = useNavigate();
+  const urlScenarioRef = useRef(initial);
+  useEffect(() => {
+    const scenario = { city, rain: rainfall, event: eventPreset, venue: venue.id, day };
+    const last = urlScenarioRef.current;
+    if (
+      last.city === city &&
+      last.rain === rainfall &&
+      last.event === eventPreset &&
+      last.venue === venue.id &&
+      last.day === day
+    )
+      return undefined;
+    const timer = setTimeout(() => {
+      urlScenarioRef.current = scenario;
+      const search = withTwinParams(window.location.search, scenario);
+      if (search !== window.location.search)
+        navigate({ pathname: window.location.pathname, search }, { replace: true });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [city, rainfall, eventPreset, venue.id, day, navigate]);
+
   // ---- tour -----------------------------------------------------------------
   const stopTour = useCallback(() => {
     tourRef.current?.abort();
@@ -383,6 +462,7 @@ export function TwinWorkspace({ onCityChange }) {
       selectedDay: safeDay,
       selectedDate: summary.date,
       scenario: scene?.scenario ?? null,
+      venue: venue.id,
       districtsAtRisk: summary.atRisk,
       totalTons: summary.tons,
       landfillLabel,
@@ -393,8 +473,9 @@ export function TwinWorkspace({ onCityChange }) {
       setCity,
       setRainfall,
       setEventPreset,
+      setVenue: setVenueId,
     };
-  }, [ready, scene, safeDay, summary, tour, startTour, stopTour, landfillLabel]);
+  }, [ready, scene, safeDay, summary, tour, startTour, stopTour, landfillLabel, venue.id]);
   useEffect(
     () => () => {
       delete window.__pythiaTwin;
@@ -462,6 +543,33 @@ export function TwinWorkspace({ onCityChange }) {
     }
     return `/xr?${params}`;
   })();
+  // Presentation HUD: the scenario (cause) next to the queue headline (effect).
+  const scenarioText = [
+    rainfall > 0 ? t("twin_hud_rain").replace("{n}", number.format(rainfall)) : t("twin_hud_no_rain"),
+    preset.attendance
+      ? t("twin_hud_event")
+          .replace("{n}", compactNumber.format(preset.attendance))
+          .replace("{venue}", venue.name)
+      : t("twin_hud_no_event"),
+    safeDay === 0 ? t("twin_today") : t("twin_hud_day").replace("{n}", number.format(safeDay)),
+  ].join(" · ");
+  // Optional field: only Jakarta scenes carry the simulated per-truck queue time.
+  const queueMetric = queue?.minutes_per_truck;
+  // When the backend scaled the queue to the scenario/day, the normal day sits next to it.
+  const normalDay = queueMetric?.normal_day;
+  const queueScaled =
+    queueMetric?.scenario_scaled === true &&
+    Number.isFinite(normalDay?.baseline_mean) &&
+    Number.isFinite(normalDay?.staggered_mean);
+  const queueMetricText =
+    queueMetric && Number.isFinite(queueMetric.baseline_mean) && Number.isFinite(queueMetric.staggered_mean)
+      ? t(queueScaled ? "twin_hud_queue_scenario" : "twin_hud_queue")
+          .replace("{from}", minutesNumber.format(queueMetric.baseline_mean))
+          .replace("{to}", minutesNumber.format(queueMetric.staggered_mean))
+          .replace("{normal_from}", queueScaled ? minutesNumber.format(normalDay.baseline_mean) : "")
+          .replace("{normal_to}", queueScaled ? minutesNumber.format(normalDay.staggered_mean) : "")
+          .replace("{class}", classLabel(queueMetric.classification || queueClass || "SIMULATED"))
+      : null;
   const totals = scene?.horizon?.daily_total_tons || [];
   const maxTotal = Math.max(1, ...totals);
   const minTotal = Math.min(...totals, maxTotal);
@@ -547,9 +655,19 @@ export function TwinWorkspace({ onCityChange }) {
               ref={containerRef}
               className="twin-map"
               data-testid="twin-map"
+              data-city-base={
+                !USE_STREETS || basemapOffline ? "offline" : satelliteOn ? "satellite" : "streets"
+              }
               role="region"
               aria-label={t("twin_map_label").replace("{city}", scene?.city?.name || "")}
             />
+
+            {satelliteOn && (
+              <p className="twin-imagery-credit" data-testid="twin-imagery-credit">
+                <strong>{t("twin_base_imagery_note")}</strong> {t("twin_base_imagery")}: {IMAGERY_CREDIT} ·{" "}
+                {t("twin_base_relief")}: {RELIEF_CREDIT}
+              </p>
+            )}
 
             {PRESENT && scene && (
               <div className="twin-present-hud" aria-hidden="true">
@@ -558,6 +676,22 @@ export function TwinWorkspace({ onCityChange }) {
                 <span>{number.format(summary.tons)} t</span>
                 <span>{t("twin_present_risk").replace("{n}", number.format(summary.atRisk))}</span>
                 {queueClassText && <span data-testid="twin-present-queue">{queueClassText}</span>}
+              </div>
+            )}
+
+            {PRESENT && scene && (
+              <div
+                className="twin-present-scenario"
+                role="note"
+                aria-label={t("twin_hud_scenario_label")}
+                data-testid="twin-scenario-chip"
+              >
+                <span data-testid="twin-scenario-text">{scenarioText}</span>
+                {queueMetricText && (
+                  <strong data-testid="twin-present-queue-metric" title={queueMetric.source || undefined}>
+                    {queueMetricText}
+                  </strong>
+                )}
               </div>
             )}
 
@@ -655,6 +789,19 @@ export function TwinWorkspace({ onCityChange }) {
               ))}
             </ul>
             {basemapOffline && <small className="twin-legend-note">{t("twin_offline_basemap")}</small>}
+            <button
+              type="button"
+              className="twin-base-toggle"
+              data-testid="twin-base-toggle"
+              aria-pressed={satelliteOn}
+              disabled={!cityBaseAvailable}
+              title={cityBaseAvailable ? t("twin_base_satellite_hint") : t("twin_base_needs_online")}
+              onClick={() => setSatellite((on) => !on)}
+            >
+              <Satellite size={16} aria-hidden="true" />
+              {t("twin_base_satellite")}
+            </button>
+            {cityBaseFailed && <small className="twin-legend-note">{t("twin_base_unavailable")}</small>}
           </div>
 
           <div className="twin-timeline" data-testid="twin-timeline">
@@ -743,6 +890,7 @@ export function TwinWorkspace({ onCityChange }) {
                         aria-pressed={city === id}
                         onClick={() => {
                           setCity(id);
+                          setVenueId(TWIN_VENUES[id][0].id);
                           setSelectedId(null);
                         }}
                       >
@@ -792,6 +940,27 @@ export function TwinWorkspace({ onCityChange }) {
                               .replace("{n}", number.format(p.attendance))
                               .replace("{venue}", venue.name)
                           : t("twin_event_none")}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="twin-field-label" id="twin-venue-label">
+                    <MapPin size={15} aria-hidden="true" /> {t("twin_venue")}
+                  </span>
+                  <div
+                    className={`twin-choice${venues.length >= 3 ? " twin-choice-3" : ""}`}
+                    role="group"
+                    aria-labelledby="twin-venue-label"
+                    data-testid="twin-venues"
+                  >
+                    {venues.map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        data-testid={`twin-venue-${v.id}`}
+                        aria-pressed={venue.id === v.id}
+                        onClick={() => setVenueId(v.id)}
+                      >
+                        {v.name}
                       </button>
                     ))}
                   </div>
