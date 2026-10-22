@@ -20,7 +20,7 @@ class ToolRegistryTests(unittest.TestCase):
             "get_fleet_status",
             "get_fleet_history",
             "get_truck_breadcrumbs",
-            "get_route_options",
+            "run_scenario",
             "simulate_astar_reroute",
             "get_predictions",
             "get_ml_model_info",

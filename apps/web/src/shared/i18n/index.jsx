@@ -4,6 +4,11 @@ import { id } from "./locales/id.js";
 
 const translations = { en, id };
 
+// gsc n30: the one BCP-47 locale per UI language for numbers, dates and speech.
+export function localeFor(lang) {
+  return lang === "en" ? "en-GB" : "id-ID";
+}
+
 // Catalog lookup for one locale, falling back to English and then to the key.
 export function translate(lang, key) {
   return translations[lang]?.[key] || translations.en?.[key] || key;

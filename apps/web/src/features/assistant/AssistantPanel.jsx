@@ -1,9 +1,18 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { apiFetch } from "../../shared/api/client.js";
-import { useLanguage } from "../../shared/i18n/index.jsx";
-import { Send, X, Bot, Paperclip } from "lucide-react";
+import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
+import { Send, X, Bot, Paperclip, Mic, MicOff } from "lucide-react";
+import { ScenarioCard } from "./ScenarioCard.jsx";
+import "./assistant.css";
+
+// gsc-2026 P1-9: voice input through the browser's own Web Speech API — no
+// Pythia or third-party service; the mic is hidden where the API is missing.
+function speechRecognitionApi() {
+  if (typeof window === "undefined") return null;
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
 
 // #76: every interface string rides the locale catalog, the file-only
 // fallback question is localized, and the chosen language is sent on the
@@ -16,6 +25,42 @@ export function AssistantPanel() {
   const [loading, setLoading] = useState(false);
   const [attachedFile, setAttachedFile] = useState(null);
   const fileInputRef = useRef(null);
+  const questionRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const [listening, setListening] = useState(false);
+  const SpeechRecognition = speechRecognitionApi();
+
+  useEffect(() => () => recognitionRef.current?.abort(), []);
+
+  function toggleVoice() {
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = localeFor(lang);
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map((result) => result[0]?.transcript || "")
+        .join(" ")
+        .trim();
+      if (transcript) {
+        setQuestion(transcript);
+        questionRef.current?.focus();
+      }
+    };
+    recognition.onend = () => setListening(false);
+    recognition.onerror = () => setListening(false);
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      setListening(true);
+    } catch {
+      setListening(false);
+    }
+  }
 
   // Resolve the greeting lazily so it follows live locale switches.
   const greeting =
@@ -83,6 +128,7 @@ export function AssistantPanel() {
           provider: data.provider || "unknown",
           model: data.model || "",
           toolsUsed: data.tools_used || [],
+          scenario: data.scenario?.links ? data.scenario : null,
         },
       ]);
     } catch {
@@ -151,6 +197,7 @@ export function AssistantPanel() {
                 className="assistant-formatted-answer"
                 dangerouslySetInnerHTML={{ __html: renderAssistantText(message.text) }}
               />
+              {message.scenario && <ScenarioCard scenario={message.scenario} />}
             </div>
           </article>
         ))}
@@ -175,10 +222,19 @@ export function AssistantPanel() {
         <button type="button" disabled={loading} onClick={() => askAssistant(t("asst_prompt2_q"))}>
           {t("asst_prompt2")}
         </button>
+        <button
+          type="button"
+          className="assistant-quick-prompt-scenario"
+          data-testid="assistant-prompt-scenario"
+          disabled={loading}
+          onClick={() => askAssistant(t("asst_prompt3_q"))}
+        >
+          {t("asst_prompt3")}
+        </button>
       </div>
 
       <form
-        className="assistant-chat-input"
+        className={`assistant-chat-input${SpeechRecognition ? " has-voice" : ""}`}
         onSubmit={(event) => {
           event.preventDefault();
           askAssistant();
@@ -209,14 +265,36 @@ export function AssistantPanel() {
         >
           <Paperclip size={18} />
         </button>
+        {/* The mic sits before the question box: the question stays the last enabled
+            control, so Shift+Tab from the close button wraps straight back to it. */}
+        {SpeechRecognition && (
+          <button
+            type="button"
+            className="assistant-voice-button"
+            data-testid="assistant-voice"
+            aria-pressed={listening}
+            aria-label={listening ? t("asst_voice_stop") : t("asst_voice_start")}
+            title={listening ? t("asst_voice_stop") : t("asst_voice_start")}
+            onClick={toggleVoice}
+          >
+            {listening ? <MicOff size={18} /> : <Mic size={18} />}
+          </button>
+        )}
         <label className="sr-only" htmlFor="assistant-question">
           {t("asst_input_label")}
         </label>
         <input
+          ref={questionRef}
           id="assistant-question"
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
-          placeholder={attachedFile ? t("asst_placeholder_file") : t("asst_placeholder")}
+          placeholder={
+            listening
+              ? t("asst_voice_listening")
+              : attachedFile
+                ? t("asst_placeholder_file")
+                : t("asst_placeholder")
+          }
           autoComplete="off"
         />
         <button

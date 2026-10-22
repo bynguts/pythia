@@ -1,0 +1,152 @@
+/* gsc-2026 P1-9: Ana what-if result and voice input.
+   Selectors are scoped under .assistant-chat-shell so they outrank the global
+   cascade (styles/index.css loads after feature stylesheets). */
+
+.assistant-chat-shell .assistant-quick-prompts .assistant-quick-prompt-scenario {
+  grid-column: 1 / -1;
+}
+
+.assistant-chat-shell .assistant-chat-input.has-voice {
+  grid-template-columns: 42px var(--tap-min) minmax(0, 1fr) 42px;
+}
+
+.assistant-chat-shell .assistant-voice-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  padding: 0;
+  cursor: pointer;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface);
+  color: var(--ui-muted);
+}
+.assistant-chat-shell .assistant-voice-button:hover {
+  color: var(--ui-primary);
+  border-color: var(--ui-primary);
+}
+.assistant-chat-shell .assistant-voice-button[aria-pressed="true"] {
+  color: var(--ui-accent-foreground);
+  border-color: var(--ui-accent);
+  background: var(--ui-accent);
+}
+.assistant-chat-shell .assistant-voice-button:focus-visible {
+  outline: none;
+  box-shadow: var(--ui-focus);
+}
+
+/* Scenario result: a section of the answer bubble, not a nested card. */
+.assistant-chat-shell .assistant-scenario {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--ui-border-strong);
+  font-size: var(--fs-caption);
+  color: var(--ui-ink);
+  min-width: 0;
+}
+.assistant-chat-shell .assistant-scenario h3,
+.assistant-chat-shell .assistant-scenario h4 {
+  margin: 0;
+  color: var(--ui-ink);
+}
+.assistant-chat-shell .assistant-scenario h3 {
+  font-size: 14px;
+}
+.assistant-chat-shell .assistant-scenario h4 {
+  font-size: var(--fs-caption);
+  font-weight: 700;
+}
+.assistant-chat-shell .assistant-scenario-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.assistant-chat-shell .assistant-scenario-badge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--ui-ink-soft);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ui-ink);
+  white-space: nowrap;
+}
+.assistant-chat-shell .assistant-scenario-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+.assistant-chat-shell .assistant-scenario-metrics div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.assistant-chat-shell .assistant-scenario-metrics dt {
+  color: var(--ui-muted);
+}
+.assistant-chat-shell .assistant-scenario-metrics dd {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.assistant-chat-shell .assistant-scenario-districts,
+.assistant-chat-shell .assistant-scenario-note {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.assistant-chat-shell .assistant-scenario-note {
+  color: var(--ui-muted);
+}
+.assistant-chat-shell .assistant-scenario-plan,
+.assistant-chat-shell .assistant-scenario-sources {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+.assistant-chat-shell .assistant-scenario-sources {
+  padding-left: 0;
+  list-style: none;
+}
+.assistant-chat-shell .assistant-scenario-sources li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
+}
+.assistant-chat-shell .assistant-scenario-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.assistant-chat-shell .assistant-scenario-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--ui-primary);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface);
+  color: var(--ui-primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+.assistant-chat-shell .assistant-scenario-actions a:first-child {
+  background: var(--ui-primary);
+  color: var(--ui-accent-foreground);
+}
+.assistant-chat-shell .assistant-scenario-actions a:focus-visible {
+  outline: none;
+  box-shadow: var(--ui-focus);
+}

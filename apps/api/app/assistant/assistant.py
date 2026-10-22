@@ -7,6 +7,7 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 from app.assistant.rag import format_rag_context
+from app.assistant.scenario import parse_scenario_question, question_language, scenario_answer
 from app.assistant.tools import TOOL_SCHEMAS, ToolContext, execute_tool, run_tools_pass
 
 _GATEWAY_TIMEOUT = 18
@@ -48,7 +49,10 @@ SYSTEM_PROMPT = (
     "rute. Bedakan kota, kecamatan, dan kelurahan; nyatakan keterbatasan sumber atau kegagalan tool.\n"
     "Pilih paling banyak dua tool yang relevan jika pertanyaan memerlukan data; jangan panggil tool "
     "untuk sapaan atau penjelasan umum. Jika butuh prakiraan kecamatan, minta include_kecamatan=true "
-    "pada get_predictions; untuk prakiraan kota saja, jangan minta itu. Semua tool bersifat baca-saja: "
+    "pada get_predictions; untuk prakiraan kota saja, jangan minta itu. Untuk pertanyaan what-if "
+    "(hujan mm, event/konser + jumlah pengunjung, venue, hari), panggil run_scenario dan sebutkan bahwa "
+    "angkanya MODEL OUTPUT, bukan pengamatan; jika scenario.snapped_to_twin_presets bernilai true, "
+    "katakan bahwa nilai diminta (scenario.requested) disesuaikan ke preset twin. Semua tool bersifat baca-saja: "
     "jangan klaim telah dispatch, approve, atau mengirim WhatsApp. Tolak permintaan di luar Pythia dengan "
     "sopan. Jangan tampilkan JSON mentah atau nama field teknis kecuali diminta."
 )
@@ -107,6 +111,8 @@ def _knowledge_context(question: str, images: list[str] | None = None) -> str:
 
 def _required_live_tools(question: str) -> set[str]:
     q = question.lower()
+    if parse_scenario_question(question):
+        return {"run_scenario"}
     if re.search(r"\b(apa itu|how does|bagaimana cara)\b", q) or "sumber data" in q:
         return set()
     if any(term in q for term in ("prediksi", "forecast", "prakiraan ton", "timbulan")):
@@ -122,7 +128,6 @@ def _required_live_tools(question: str) -> set[str]:
             "get_fleet_status",
             "get_fleet_history",
             "get_truck_breadcrumbs",
-            "get_route_options",
             "simulate_astar_reroute",
             "get_command_center_snapshot",
         }
@@ -162,6 +167,7 @@ def _answer_locally(
     snapshot: dict[str, Any],
     tool_ctx: ToolContext | None = None,
     images: list[str] | None = None,
+    language: str = "id",
 ) -> dict[str, Any]:
     """No-key fallback: use only data from a tool matching the question."""
     if images:
@@ -171,6 +177,23 @@ def _answer_locally(
             "tools_used": [],
             "answer": "Mode lokal aktif (asisten LLM tidak dikonfigurasi). Analisis foto/PDF memerlukan layanan AI.",
         }
+    scenario = parse_scenario_question(question) if tool_ctx is not None else None
+    if scenario:
+        result = execute_tool("run_scenario", scenario, tool_ctx)
+        if "error" not in result:
+            lang = question_language(question, language)
+            prefix = (
+                "Local mode (no LLM assistant configured)."
+                if lang == "en"
+                else "Mode lokal aktif (asisten LLM tidak dikonfigurasi)."
+            )
+            return {
+                "provider": "local",
+                "mode": "local",
+                "answer": f"{prefix}\n\n{scenario_answer(result, lang)}",
+                "tools_used": ["run_scenario"],
+                "scenario": result,
+            }
     q = question.lower()
     answer = None
     used: list[str] = []
@@ -259,7 +282,7 @@ def answer_with_openai_if_configured(
 ) -> dict[str, Any]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return _answer_locally(question, snapshot, tool_ctx, images)
+        return _answer_locally(question, snapshot, tool_ctx, images, language)
 
     rag_context = _knowledge_context(question, images)
     base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
@@ -312,6 +335,7 @@ def answer_with_openai_if_configured(
         message = call_gateway().get("choices", [{}])[0].get("message", {})
         tool_calls = message.get("tool_calls") or []
         tools_used: list[str] = []
+        scenario: dict[str, Any] | None = None
         if tool_calls and tool_ctx is not None:
             messages.append(message)
             tool_messages = run_tools_pass(tool_calls, tool_ctx, max_calls=_MAX_TOOL_CALLS)
@@ -322,6 +346,8 @@ def answer_with_openai_if_configured(
                     name = tool_message["name"]
                     if name not in tools_used:
                         tools_used.append(name)
+                    if name == "run_scenario" and scenario is None:
+                        scenario = result
             payload["messages"] = messages
             payload.pop("tools", None)
             payload.pop("tool_choice", None)
@@ -334,6 +360,9 @@ def answer_with_openai_if_configured(
             answer = (
                 "Saya belum dapat memverifikasi data operasional yang sesuai pertanyaan dari tool Pythia."
             )
-        return {"provider": "openai", "model": model, "answer": answer, "tools_used": tools_used}
+        response = {"provider": "openai", "model": model, "answer": answer, "tools_used": tools_used}
+        if scenario is not None:
+            response["scenario"] = scenario
+        return response
     except Exception as error:
         return {"provider": "error", "error": str(error), "answer": ""}

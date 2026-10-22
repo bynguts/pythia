@@ -12,6 +12,7 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+from app.assistant.scenario import run_scenario
 from app.fleet.astar_routing import (
     is_traffic_jam_active,
     reroute_payload,
@@ -25,7 +26,6 @@ from app.fleet.data import (
     unlicensed_collectors_payload,
 )
 from app.fleet.gps_feed import latest_breadcrumbs
-from app.fleet.osrm import fetch_osrm_route
 from app.forecast.engine import (
     list_hybrid_models,
     predict_waste_hybrid,
@@ -100,14 +100,6 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "get_route_options",
-            "description": "Opsi rute pemulihan (Route B - Daan Mogot Recovery) dengan ETA dan geometri dari OSRM public routing.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "simulate_astar_reroute",
             "description": "Simulasi baca-saja rerouting A* untuk satu truk berdasarkan kondisi kemacetan saat ini.",
             "parameters": {
@@ -161,7 +153,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "get_tpa_queue",
-            "description": "Status antrean TPA Bantargebang: jumlah truk, waktu tunggu rata-rata/p95, status label, dan recommended action. Skenario 'live' (jam berjalan) atau 'peak' (puncak terdokumentasi DLH 47 truk/jam).",
+            "description": "Status antrean TPA Bantargebang: jumlah truk, waktu tunggu rata-rata/p95, status label, dan recommended action. SIMULASI: skenario 'live' (jam berjalan) atau 'peak' (jam puncak termodelkan dari median ritasi harian Bantargebang + asumsi jembatan timbang; bukan hitungan puncak terdokumentasi).",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -215,6 +207,34 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "parameters": {"type": "object", "properties": {}},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_scenario",
+            "description": (
+                "Skenario what-if baca-saja (hujan mm, event + jumlah pengunjung, venue, hari ke-N) pada "
+                "prakiraan kecamatan yang sama dengan Twin: kecamatan paling berisiko, tonase tambahan, "
+                "truk/kru, metrik antrean TPA, rencana, sumber data, dan tautan Twin/XR. MODEL OUTPUT."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "city": {"type": "string", "enum": ["jakarta", "hcmc"], "description": "Default jakarta"},
+                    "rainfall_mm": {"type": "number", "description": "Curah hujan skenario, 0-300 mm"},
+                    "event_attendance": {
+                        "type": "integer",
+                        "description": "Jumlah pengunjung event, 0 = tanpa event",
+                    },
+                    "venue": {
+                        "type": "string",
+                        "enum": ["GBK", "JIS", "Monas", "District 1"],
+                        "description": "Lokasi event; District 1 untuk hcmc",
+                    },
+                    "day": {"type": "integer", "description": "0 = hari ini, 1 = besok, ... maks 6"},
+                },
+            },
+        },
+    },
 ]
 
 
@@ -247,7 +267,6 @@ def _fleet_status_tool(args: dict) -> dict[str, Any]:
         slim.append(
             {
                 "truck_code": t["truck_code"],
-                "driver_name": t["driver_name"],
                 "zone": t["assigned_zone"],
                 "vehicle_type": t.get("vehicle_type"),
                 "status": t["status"],
@@ -294,9 +313,6 @@ _TOOLS_IMPL: dict[str, Any] = {
             for b in latest_breadcrumbs(args["truck_code"])
         ],
     },
-    "get_route_options": lambda args, ctx: fetch_osrm_route(
-        "Route B - Daan Mogot Recovery", origin=(-6.1649, 106.7415), destination=(-6.1753, 106.7988)
-    ),
     "simulate_astar_reroute": lambda args, ctx: _simulate_reroute(args),
     "get_predictions": lambda args, ctx: _predictions_payload(args),
     "get_ml_model_info": lambda args, ctx: {
@@ -317,6 +333,7 @@ _TOOLS_IMPL: dict[str, Any] = {
         "openwa": OpenWAClient.from_env().health(),
         "note": "STATUS ONLY - Ana must not claim a send.",
     },
+    "run_scenario": lambda args, ctx: run_scenario(args),
     "get_data_provenance": lambda args, ctx: {
         "provenance": data_provenance(),
         "records": build_provenance_records(),
