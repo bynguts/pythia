@@ -18,6 +18,8 @@ async function signIn(page, lang = "id") {
       localStorage.setItem("pythia_lang", lang);
       localStorage.setItem("pythia_token", token);
       localStorage.setItem("pythia_role", role);
+      // gsc M1: /driver keeps its own session key.
+      localStorage.setItem("pythia_field_token", token);
     },
     { ...principal, lang },
   );

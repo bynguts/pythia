@@ -149,6 +149,7 @@ def add_spj_stop(
         body.lat,
         body.lng,
         body.location_type,
+        body.demo,
     )
 
 

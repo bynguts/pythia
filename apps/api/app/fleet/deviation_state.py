@@ -29,5 +29,20 @@ def apply_hysteresis(truck_code: str, distance_m: float) -> bool:
     return state
 
 
+DEMO_SUPPRESSION_MESSAGE = "Deviation not measured: the active SPJ is a DEMO work order."
+
+
+def deviation_suppression(truck_code: str) -> str | None:
+    """Why deviation is not measured for this truck right now, or None.
+
+    The one decision every deviation surface (_truck, map truth, trip
+    history) reads, so they cannot disagree (gsc C1). A failed SPJ lookup
+    is not a DEMO SPJ: deviation stays measured against the corridor.
+    """
+    from app.field.spj import active_spj_is_demo
+
+    return "demo_spj" if active_spj_is_demo(truck_code) is True else None
+
+
 def reset_hysteresis() -> None:
     _states.clear()

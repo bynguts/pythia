@@ -10,12 +10,16 @@ import {
   Route,
   UserRound,
 } from "lucide-react";
-import { apiFetch } from "../../shared/api/client.js";
+import { apiFetch, FIELD_ROLE_KEY, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 
-export function LoginPage({ onLogin }) {
+// `initialUsername` / `notice` let a surface gate (RoleGate) pre-fill the role
+// it needs and say why sign-in is required. `fieldSession` stores the token
+// under the field surfaces' own keys and never marks the command center as
+// signed in (gsc M1); the gate then receives the principal to check its role.
+export function LoginPage({ onLogin, initialUsername = "", notice = "", fieldSession = false }) {
   const { lang, setLang, t } = useLanguage();
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState(initialUsername);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -33,10 +37,15 @@ export function LoginPage({ onLogin }) {
       });
       if (!res.ok) throw new Error("bad creds");
       const principal = await res.json();
-      localStorage.setItem("pythia_auth", "true");
-      localStorage.setItem("pythia_role", principal.role);
-      localStorage.setItem("pythia_token", principal.token);
-      onLogin();
+      if (fieldSession) {
+        localStorage.setItem(FIELD_TOKEN_KEY, principal.token);
+        localStorage.setItem(FIELD_ROLE_KEY, principal.role);
+      } else {
+        localStorage.setItem("pythia_auth", "true");
+        localStorage.setItem("pythia_role", principal.role);
+        localStorage.setItem("pythia_token", principal.token);
+      }
+      onLogin(principal);
     } catch {
       setError(t("login_error"));
     } finally {
@@ -112,6 +121,11 @@ export function LoginPage({ onLogin }) {
             <span className="login-eyebrow">{t("login_eyebrow")}</span>
             <h2 id="login-title">{t("login_card_title")}</h2>
             <p>{t("login_card_sub")}</p>
+            {notice && (
+              <p className="login-notice" data-testid="login-notice">
+                {notice}
+              </p>
+            )}
           </header>
           <form className="login-form" onSubmit={submit}>
             <label>

@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { enqueueDriverOperation, flushDriverOutbox, readDriverOutbox } from "./DriverOutbox.js";
 import "./driver.css";
-import { apiFetch } from "../../shared/api/client.js";
+import { apiFetch, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 
 // the AR navigator is its own chunk; drivers who never open it
@@ -84,7 +84,7 @@ function getPosition(stop) {
 // #45: a network-level failure (fetch rejected / no response) is queueable;
 // an HTTP error response is a permanent failure the driver must act on.
 async function post(path, data) {
-  const res = await apiFetch(path, { method: "POST", body: data });
+  const res = await apiFetch(path, { method: "POST", body: data, tokenKey: FIELD_TOKEN_KEY });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     const fallback = currentLang() === "en" ? `Request failed (${res.status})` : `Gagal (${res.status})`;
@@ -920,7 +920,7 @@ export default function DriverApp() {
   };
 
   useEffect(() => {
-    apiFetch("/fleet")
+    apiFetch("/fleet", { tokenKey: FIELD_TOKEN_KEY })
       .then((r) => r.json())
       .then((body) => setFleet(Array.isArray(body) ? body : body.trucks || []))
       .catch(() => setOnline(false));
@@ -936,7 +936,7 @@ export default function DriverApp() {
 
   const loadSpj = useCallback(() => {
     if (!driver) return;
-    apiFetch("/spj?status=aktif")
+    apiFetch("/spj?status=aktif", { tokenKey: FIELD_TOKEN_KEY })
       .then((r) => r.json())
       .then((body) => {
         const mine = (body.spj || []).find((s) => s.truck_code === driver.truck_code);
@@ -944,7 +944,7 @@ export default function DriverApp() {
         setOnline(true);
       })
       .catch(() => setOnline(false));
-    apiFetch("/spj?status=selesai")
+    apiFetch("/spj?status=selesai", { tokenKey: FIELD_TOKEN_KEY })
       .then((r) => r.json())
       // The API orders completed SPJs newest first; the pending-receipt task is
       // chosen from that order and the server-side receipt field, not from
@@ -970,7 +970,7 @@ export default function DriverApp() {
   useEffect(() => {
     if (!driver) return;
     setPretripDone(null);
-    apiFetch(`/pretrip/today/${driver.truck_code}`)
+    apiFetch(`/pretrip/today/${driver.truck_code}`, { tokenKey: FIELD_TOKEN_KEY })
       .then((r) => r.json())
       .then((body) => setPretripDone(Boolean(body.done)))
       // Offline or unreachable: show the form; a submission queues in the outbox.

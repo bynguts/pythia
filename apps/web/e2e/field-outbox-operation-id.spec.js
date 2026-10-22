@@ -30,7 +30,7 @@ test("a retried field confirmation re-sends the operation id it was queued with"
   const dispatch = await create.json();
 
   await page.goto("/field");
-  await page.evaluate((value) => localStorage.setItem("pythia_token", value), token);
+  await page.evaluate((value) => localStorage.setItem("pythia_field_token", value), token);
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.getByTestId("truck-select").selectOption("T-001");
   await expect(page.getByTestId("active-dispatch")).toContainText(instruction, { timeout: 10000 });

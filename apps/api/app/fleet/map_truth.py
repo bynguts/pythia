@@ -206,14 +206,25 @@ def build_map_truth(truck: dict[str, Any]) -> dict[str, Any]:
         if assigned_line
         else 0.0
     )
-    violated = deviation_m > DEVIATION_THRESHOLD_M
-    if not (code == "T-047" and jam_active and abandoned_route):
-        from app.fleet.deviation_state import apply_hysteresis
+    from app.fleet.deviation_state import DEMO_SUPPRESSION_MESSAGE, apply_hysteresis, deviation_suppression
 
+    suppressed = deviation_suppression(code)
+    violated = deviation_m > DEVIATION_THRESHOLD_M
+    if suppressed:
+        # Same decision as the fleet table: a DEMO SPJ is not measured (gsc C1).
+        violated = False
+        deviation_m = 0.0
+    elif not (code == "T-047" and jam_active and abandoned_route):
         violated = apply_hysteresis(code, deviation_m)
 
     breadcrumbs = latest_breadcrumbs(code)
+    if suppressed:
+        recommendation = DEMO_SUPPRESSION_MESSAGE
+    else:
+        recommendation = "Redirect to assigned corridor." if violated else "On corridor; no action."
+    extra = {"deviation_suppressed": suppressed} if suppressed else {}
     return {
+        **extra,
         "truck_code": code,
         "raw_gps": raw,
         "snapped_gps": snapped,
@@ -223,7 +234,7 @@ def build_map_truth(truck: dict[str, Any]) -> dict[str, Any]:
         "abandoned_route": abandoned_route,
         "deviation_m": round(float(deviation_m), 1),
         "deviation_segments": ["violation"] if violated else [],
-        "recommendation": ("Redirect to assigned corridor." if violated else "On corridor; no action."),
+        "recommendation": recommendation,
         "traffic": {"jam_active": jam_active, "source": "SIMULATED CONGESTION"},
         "permit": {"source": "SIMULATED PERMIT CONSTRAINT"},
         "provenance": {

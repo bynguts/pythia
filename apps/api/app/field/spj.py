@@ -40,6 +40,25 @@ SUPPORTED_FRACTIONS = ("Residu", "Organik", "Anorganik")
 # Greater Jakarta operational region; loose enough for reroutes.
 JAKARTA_LAT_RANGE = (-7.5, -5.5)
 JAKARTA_LNG_RANGE = (105.5, 107.5)
+# gsc P0-3: a DEMO stop is placed at the operator's own phone position so a
+# stop can be completed live wherever the demo runs. It is stored with this
+# location_type and a DEMO-prefixed name, so it is never mistaken for an
+# operational TPS; only its arrival geotag is exempt from the Jakarta range.
+DEMO_LOCATION_TYPE = "DEMO"
+WORLD_LAT_RANGE = (-90.0, 90.0)
+WORLD_LNG_RANGE = (-180.0, 180.0)
+
+
+def demo_stop_name(name: str) -> str:
+    name = name.strip()
+    return name if name.upper().startswith("DEMO") else f"DEMO · {name}"
+
+
+def _reject_spoofed_demo(location_type, demo: bool, field: str) -> None:
+    # The DEMO exemptions (world-wide geotag, straight-line activation, no
+    # deviation alert) follow the stored location_type, so only demo=true may set it.
+    if not demo and isinstance(location_type, str) and location_type.strip().upper() == DEMO_LOCATION_TYPE:
+        raise ValueError(f"{field}='{DEMO_LOCATION_TYPE}' is reserved; send demo=true for a DEMO stop")
 
 
 def _require_text(value, field: str) -> None:
@@ -67,7 +86,7 @@ def _require_coord(value, field: str, rng: tuple[float, float]) -> None:
 TABLE = "pythia_spj"
 
 
-def _validate_evidence(evidence: dict) -> None:
+def _validate_evidence(evidence: dict, demo: bool = False) -> None:
     """Server-side evidence contract for stop completion (#54).
 
     A filename alone is NOT evidence: the arrival record needs image data
@@ -84,8 +103,8 @@ def _validate_evidence(evidence: dict) -> None:
         raise ValueError("evidence.arrival is required")
     _require_photo(arrival.get("photo_name"), "arrival.photo_name")
     _require_photo(arrival.get("photo_b64"), "arrival.photo_b64")
-    _require_coord(arrival.get("lat"), "arrival.lat", JAKARTA_LAT_RANGE)
-    _require_coord(arrival.get("lng"), "arrival.lng", JAKARTA_LNG_RANGE)
+    _require_coord(arrival.get("lat"), "arrival.lat", WORLD_LAT_RANGE if demo else JAKARTA_LAT_RANGE)
+    _require_coord(arrival.get("lng"), "arrival.lng", WORLD_LNG_RANGE if demo else JAKARTA_LNG_RANGE)
 
     weighing = evidence.get("weighing")
     if weighing is None:
@@ -492,6 +511,9 @@ class SpjStore:
                 raise ValueError(f"stops[{position}].{coord} must be a number") from None
             if not (-90.0 <= number <= 90.0 if coord == "lat" else -180.0 <= number <= 180.0):
                 raise ValueError(f"stops[{position}].{coord}={number} out of range")
+        _reject_spoofed_demo(
+            stop.get("location_type"), bool(stop.get("demo")), f"stops[{position}].location_type"
+        )
 
     def create_with_stops(
         self,
@@ -554,6 +576,7 @@ class SpjStore:
                                 ),
                             )
                             for idx, stop in enumerate(stops):
+                                demo = bool(stop.get("demo"))
                                 connection.execute(
                                     "INSERT INTO spj_stops (spj_id, idx, name, kecamatan, "
                                     "address, lat, lng, location_type, status) "
@@ -561,12 +584,14 @@ class SpjStore:
                                     (
                                         spj_id,
                                         idx,
-                                        stop["name"].strip(),
+                                        demo_stop_name(stop["name"]) if demo else stop["name"].strip(),
                                         stop["kecamatan"].strip(),
                                         stop["address"].strip(),
                                         float(stop["lat"]),
                                         float(stop["lng"]),
-                                        stop.get("location_type", "Pemukiman Kelas Menengah"),
+                                        DEMO_LOCATION_TYPE
+                                        if demo
+                                        else stop.get("location_type", "Pemukiman Kelas Menengah"),
                                         "pending",
                                     ),
                                 )
@@ -699,7 +724,13 @@ class SpjStore:
         lat: float,
         lng: float,
         location_type: str = "Pemukiman Kelas Menengah",
+        demo: bool = False,
     ) -> Spj:
+        _reject_spoofed_demo(location_type, demo, "location_type")
+        if demo:
+            name = demo_stop_name(name)
+            location_type = DEMO_LOCATION_TYPE
+
         def mutate(connection):
             row = self._fetch_status(connection, spj_id)
             if row["status"] != "draft":
@@ -742,9 +773,10 @@ class SpjStore:
 
             # #58: resolve road-following geometry for the whole path.
             stops = connection.execute(
-                "SELECT lat, lng FROM spj_stops WHERE spj_id=? ORDER BY idx", (spj_id,)
+                "SELECT lat, lng, location_type FROM spj_stops WHERE spj_id=? ORDER BY idx", (spj_id,)
             ).fetchall()
             waypoints = [(s["lat"], s["lng"]) for s in stops]
+            demo_points = [s["location_type"] == DEMO_LOCATION_TYPE for s in stops]
             dest = route_ground_truth(row["destination"])
             if dest is None:
                 raise ValueError(
@@ -754,6 +786,7 @@ class SpjStore:
                 )
             if not waypoints or waypoints[-1] != dest:
                 waypoints.append(dest)
+                demo_points.append(False)
             route = (
                 road_route(waypoints)
                 if len(waypoints) >= 2
@@ -765,7 +798,30 @@ class SpjStore:
                 }
             )
             source = route.get("source", "FALLBACK_DEGRADED")
-            if source == "FALLBACK_DEGRADED":
+            # gsc P0-3: a DEMO stop may sit where no road links it to the
+            # Jakarta destination, so only legs touching a DEMO stop are exempt:
+            # every other leg must still resolve on the road network.
+            demo_exempt = (
+                source == "FALLBACK_DEGRADED"
+                and any(demo_points)
+                and all(
+                    road_route([waypoints[i], waypoints[i + 1]]).get("source") != "FALLBACK_DEGRADED"
+                    for i in range(len(waypoints) - 1)
+                    if not (demo_points[i] or demo_points[i + 1])
+                )
+            )
+            if demo_exempt:
+                # The straight line stays labelled FALLBACK_DEGRADED and the
+                # audit trail names the DEMO cause.
+                self._audit(
+                    connection,
+                    spj_id,
+                    "demo_straight_fallback",
+                    row["created_by"],
+                    reason="DEMO stop: activated with unresolved road geometry",
+                    payload={"source": source},
+                )
+            elif source == "FALLBACK_DEGRADED":
                 if getenv("SPJ_STRAIGHT_FALLBACK", "off").lower() != "on":
                     raise ValueError(
                         "cannot activate: road-following geometry could not be "
@@ -810,7 +866,7 @@ class SpjStore:
             if row["status"] != "aktif":
                 raise ValueError("stops can only be completed on an active SPJ")
             stops = connection.execute(
-                "SELECT idx, status FROM spj_stops WHERE spj_id=? ORDER BY idx", (spj_id,)
+                "SELECT idx, status, location_type FROM spj_stops WHERE spj_id=? ORDER BY idx", (spj_id,)
             ).fetchall()
             if not 0 <= index < len(stops):
                 raise ValueError(f"stop index {index} out of range")
@@ -844,7 +900,7 @@ class SpjStore:
                     payload={"stop_index": index},
                 )
             else:
-                _validate_evidence(evidence)
+                _validate_evidence(evidence, demo=stops[index]["location_type"] == DEMO_LOCATION_TYPE)
                 connection.execute(
                     "UPDATE spj_stops SET status='completed', completed_at=?, "
                     "evidence=? WHERE spj_id=? AND idx=?",
@@ -1107,6 +1163,22 @@ def active_path_for(truck_code: str) -> list[tuple[float, float]] | None:
         return None
 
 
+def active_spj_is_demo(truck_code: str) -> bool | None:
+    """True when the truck's active SPJ has a DEMO stop (placed at an operator's phone).
+
+    Such a path is not an operational route: the simulated truck is nowhere
+    near it, so deviation detection must not measure against it (gsc C1).
+    None when the lookup failed: callers must then neither suppress deviation
+    nor trust an SPJ path, and fall back to the corridor reference.
+    """
+    try:
+        spj = SPJ_STORE.active_for_truck(truck_code)
+    except Exception:  # noqa: BLE001
+        logger.exception("active_spj_is_demo(%s) failed", truck_code)
+        return None
+    return spj is not None and any(stop.location_type == DEMO_LOCATION_TYPE for stop in spj.stops)
+
+
 def destination_provenance(destination: str) -> dict:
     """Provenance record for one destination (surfaced by the API)."""
     return provenance_payload(destination)
@@ -1116,7 +1188,7 @@ def _maybe_seed(store: SpjStore) -> None:
     if len(store.list()) > 0 or getenv("SPJ_SEED", "on") == "off":
         return
     seed = store.create(
-        driver_name="Joko Wijaya",
+        driver_name="Pengemudi Sim 03",
         truck_code="T-088",
         destination="TPST Bantargebang",
         weigh_on_site=True,

@@ -16,9 +16,16 @@ export function apiUrl(path) {
   return `${API_URL}${path}`;
 }
 
-function storedToken() {
+// gsc M1: the command center and the public field surfaces (/driver, /field)
+// keep separate sessions, so a driver signing in on the same browser never
+// replaces (or logs out) the supervisor's token, and vice versa.
+export const COMMAND_TOKEN_KEY = "pythia_token";
+export const FIELD_TOKEN_KEY = "pythia_field_token";
+export const FIELD_ROLE_KEY = "pythia_field_role";
+
+function storedToken(tokenKey) {
   try {
-    return localStorage.getItem("pythia_token");
+    return localStorage.getItem(tokenKey);
   } catch {
     return null;
   }
@@ -37,9 +44,13 @@ function isRawBody(body) {
 // Returns the raw Response, so callers can branch on status and read headers
 // (e.g. the service worker's X-Pythia-Stale). A network failure rejects with
 // fetch's own TypeError and an abort with its AbortError — never wrapped, so
-// offline queues can tell "unreachable" from "HTTP error".
-export function apiFetch(path, { method, body, headers, signal, auth = true } = {}) {
-  const token = auth ? storedToken() : null;
+// offline queues can tell "unreachable" from "HTTP error". `tokenKey` picks
+// the stored session (FIELD_TOKEN_KEY for the field surfaces).
+export function apiFetch(
+  path,
+  { method, body, headers, signal, auth = true, tokenKey = COMMAND_TOKEN_KEY } = {},
+) {
+  const token = auth ? storedToken(tokenKey) : null;
   const hasBody = body !== undefined && body !== null;
   const jsonBody = hasBody && !isRawBody(body);
   return fetch(apiUrl(path), {

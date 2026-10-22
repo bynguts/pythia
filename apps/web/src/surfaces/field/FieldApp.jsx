@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, Route, Send, ShieldCheck, Truck, X } from "lucide-react";
-import { apiFetch } from "../../shared/api/client.js";
+import { apiFetch, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import { readOutbox, enqueue, flushOutbox } from "./OfflineOutbox.js";
 import "./field.css";
@@ -169,7 +169,7 @@ export default function FieldApp() {
 
   async function loadDispatches() {
     try {
-      const response = await apiFetch(`/dispatch/${truckCode}`);
+      const response = await apiFetch(`/dispatch/${truckCode}`, { tokenKey: FIELD_TOKEN_KEY });
       if (!response.ok) throw new Error("no api");
       // #46: a stale (cache-served) response still parses, but its metadata
       // marks it as not-live so operators never confuse it with fresh data.
@@ -203,6 +203,7 @@ export default function FieldApp() {
       const res = await apiFetch(`/dispatch/${dispatchId}/confirm`, {
         method: "POST",
         body: { status: value, note },
+        tokenKey: FIELD_TOKEN_KEY,
       });
       if (!res.ok) throw new Error("send failed");
       setStatus(value === "READY" ? "receivedStatus" : "issueStatus");

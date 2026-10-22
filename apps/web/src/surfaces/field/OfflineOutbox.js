@@ -1,7 +1,7 @@
 // OfflineOutbox: queues field confirmations in localStorage when offline and
 // replays them when connectivity returns. Keeps the field workflow auditable
 // even without a live connection (Task 7 offline requirement).
-import { apiFetch } from "../../shared/api/client.js";
+import { apiFetch, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
 
 const KEY = "pythia_field_outbox";
 
@@ -61,6 +61,7 @@ export async function flushOutbox() {
         method: "POST",
         // Entries queued before operation ids existed replay without one.
         body: { status: item.status, note: item.note, operation_id: item.operation_id },
+        tokenKey: FIELD_TOKEN_KEY,
       });
       if (!res.ok) throw new Error("send failed");
       flushed += 1;

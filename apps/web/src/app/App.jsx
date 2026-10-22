@@ -5,6 +5,7 @@ import { Navigate, Outlet, Route, Routes, useLocation, useParams } from "react-r
 import FieldApp from "../surfaces/field/FieldApp.jsx";
 import DriverApp from "../surfaces/driver/DriverApp.jsx";
 import { LoginPage } from "../surfaces/login/LoginPage.jsx";
+import { RoleGate } from "../surfaces/login/RoleGate.jsx";
 import { SupervisorView } from "../surfaces/supervisor/SupervisorView.jsx";
 import { useLanguage } from "../shared/i18n/index.jsx";
 import { CommandCenter } from "./CommandCenter.jsx";
@@ -59,8 +60,23 @@ export function App() {
   return (
     <Routes>
       <Route path="/xr/*" element={<XrRoute />} />
-      <Route path="/field/*" element={<FieldApp />} />
-      <Route path="/driver/*" element={<DriverApp />} />
+      {/* gsc P0-2: field surfaces ask for a driver sign-in in place before any write. */}
+      <Route
+        path="/field/*"
+        element={
+          <RoleGate>
+            <FieldApp />
+          </RoleGate>
+        }
+      />
+      <Route
+        path="/driver/*"
+        element={
+          <RoleGate>
+            <DriverApp />
+          </RoleGate>
+        }
+      />
       <Route element={<LoginGate authenticated={authenticated} onLogin={() => setAuthenticated(true)} />}>
         <Route path="/pengawas/*" element={<SupervisorView />} />
         <Route path="/:workspace" element={<WorkspaceRoute onLogout={logout} />} />

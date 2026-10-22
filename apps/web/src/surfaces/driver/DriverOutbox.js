@@ -6,7 +6,7 @@
 // idempotent: the server treats a repeated stop completion as a no-op, a
 // repeated pre-trip as the same daily record, and receipts carry
 // operation_id-based dedup — so flushing twice can never double-record.
-import { apiFetch } from "../../shared/api/client.js";
+import { apiFetch, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
 
 const KEY = "pythia_driver_outbox";
 
@@ -84,6 +84,7 @@ async function doFlushDriverOutbox() {
         method: "POST",
         headers: { "X-Operation-Id": item.op_id },
         body: item.data,
+        tokenKey: FIELD_TOKEN_KEY,
       });
       // 2xx = recorded. A 409 on these endpoints means the server state
       // already matches the queued intent (e.g. pre-trip already saved

@@ -22,7 +22,8 @@ class DeviationTrigger:
         for truck in source.current_positions():
             code = truck["truck_code"]
             deviation = truck.get("deviation") or {}
-            violated = bool(deviation.get("violated"))
+            # A truck on a DEMO SPJ is never measured (deviation_suppressed="demo_spj").
+            violated = bool(deviation.get("violated")) and not deviation.get("deviation_suppressed")
             was = self._prev.get(code, False)
             self._prev[code] = violated
             if not violated or was:

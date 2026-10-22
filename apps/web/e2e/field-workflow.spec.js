@@ -16,7 +16,7 @@ async function authenticatedApi() {
 
 async function openAuthorizedField(page, token) {
   await page.goto("/field");
-  await page.evaluate((value) => localStorage.setItem("pythia_token", value), token);
+  await page.evaluate((value) => localStorage.setItem("pythia_field_token", value), token);
   await page.reload({ waitUntil: "domcontentloaded" });
 }
 
@@ -78,7 +78,10 @@ test("same-millisecond dispatches preserve ISO microsecond ordering", async ({ p
     });
   });
 
-  await page.goto("/field");
+  // gsc-2026 P0-2: /field signs in first; the stubbed dispatch list needs a valid token.
+  const { api, token } = await authenticatedApi();
+  await api.dispose();
+  await openAuthorizedField(page, token);
   const active = page.getByTestId("active-dispatch");
   await expect(active).toContainText("Newest microsecond instruction");
   await expect(active).not.toContainText("Older microsecond instruction");
@@ -119,13 +122,13 @@ test("offline confirmation queues, reports sync failure, and recovers in ID and 
     await context.setOffline(true);
     await page.getByTestId("btn-ready").click();
     await expect(page.getByTestId("queued-count")).toContainText(copy.queued);
-    await page.evaluate(() => localStorage.setItem("pythia_token", "invalid"));
+    await page.evaluate(() => localStorage.setItem("pythia_field_token", "invalid"));
     await context.setOffline(false);
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
     await expect(page.getByTestId("field-status")).toContainText(copy.failed, { timeout: 10000 });
     await expect(page.getByTestId("queued-count")).toBeVisible();
 
-    await page.evaluate((value) => localStorage.setItem("pythia_token", value), token);
+    await page.evaluate((value) => localStorage.setItem("pythia_field_token", value), token);
     await page.getByRole("button", { name: lang === "id" ? "Sinkronkan sekarang" : "Sync now" }).click();
     await expect(page.getByTestId("field-status")).toContainText(copy.synced, { timeout: 10000 });
     await expect(page.getByTestId("queued-count")).toBeHidden();
@@ -136,13 +139,13 @@ test("offline confirmation queues, reports sync failure, and recovers in ID and 
 test("field app has no mobile overflow and all workflow controls meet minimum touch targets", async ({
   page,
 }) => {
-  const { api } = await authenticatedApi();
+  const { api, token } = await authenticatedApi();
   await api.post(`${API}/dispatch`, {
     data: { truck_code: "T-112", instruction: "E2E mobile touch target", manager_id: "e2e" },
   });
 
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto("/field");
+  await openAuthorizedField(page, token);
   await page.getByTestId("truck-select").selectOption("T-112");
 
   const ready = page.getByTestId("btn-ready");
@@ -162,16 +165,20 @@ test("field app has no mobile overflow and all workflow controls meet minimum to
 });
 
 test("field brand remains a minimum touch target at tablet width", async ({ page }) => {
+  const { api, token } = await authenticatedApi();
+  await api.dispose();
   await page.setViewportSize({ width: 768, height: 1024 });
-  await page.goto("/field");
+  await openAuthorizedField(page, token);
   await expectMinimumTouchTarget(page.locator(".field-brand"));
 });
 
 test("field brand and workflow controls meet minimum touch targets at the 860px boundary", async ({
   page,
 }) => {
+  const { api, token } = await authenticatedApi();
+  await api.dispose();
   await page.setViewportSize({ width: 860, height: 1024 });
-  await page.goto("/field");
+  await openAuthorizedField(page, token);
 
   for (const control of [
     page.locator(".field-brand"),

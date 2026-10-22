@@ -29,14 +29,16 @@ class HysteresisTests(unittest.TestCase):
 class TpaQueueScenarioTests(unittest.TestCase):
     def test_peak_scenario_shows_bottleneck(self):
         peak = tpa_queue_status_payload(scenario="peak")
-        self.assertEqual(peak["trucks_in_queue"], 47)
         self.assertEqual(peak["scenario"], "peak")
         self.assertIn("peak_hour_scenario", peak["arrival_profile"])
-        self.assertGreater(
-            peak["avg_wait_minutes"],
-            60,
-            "documented DLH peak (47 trucks/h) must reproduce the ~117 min bottleneck",
-        )
+        # The peak is modelled from real daily ritasi, never called a documented count.
+        self.assertIn("modelled", peak["arrival_profile"])
+        self.assertNotIn("documented", peak["arrival_profile"])
+        self.assertEqual(peak["classification"], "SIMULATED")
+        # More trucks reach the gate in the modelled peak hour than the lanes clear.
+        self.assertGreater(peak["utilization"], 1.0)
+        self.assertGreater(peak["avg_wait_minutes"], 60, "the modelled peak hour is a bottleneck")
+        self.assertEqual(peak["status_label"], "CRITICAL (Antrian Padat)")
 
     def test_live_scenario_uses_clock(self):
         live = tpa_queue_status_payload(scenario="live")

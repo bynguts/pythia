@@ -77,7 +77,7 @@ test("offline stop submission queues durably, survives reload, and syncs on reco
     await page.goto("/");
     await page.evaluate((token) => {
       localStorage.setItem("pythia_lang", "en");
-      localStorage.setItem("pythia_token", token);
+      localStorage.setItem("pythia_field_token", token);
       localStorage.removeItem("pythia_driver");
     }, principal.token);
     await page.goto("/driver");

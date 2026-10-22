@@ -81,6 +81,8 @@ class SpjStopBody(BaseModel):
     lat: float
     lng: float
     location_type: str = "Pemukiman Kelas Menengah"
+    # gsc P0-3: a DEMO stop at the operator's position (stored DEMO-labelled).
+    demo: bool = False
 
 
 class SpjCreateBody(BaseModel):

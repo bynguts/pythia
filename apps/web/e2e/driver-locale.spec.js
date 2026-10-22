@@ -23,12 +23,16 @@ async function apiLogin() {
 }
 
 test("driver gate and brand follow the stored locale", async ({ page }) => {
+  // gsc-2026 P0-2: /driver asks for a sign-in first; this test is about the
+  // truck picker, so it starts with a valid token.
+  const principal = await apiLogin();
   await page.goto("/");
-  await page.evaluate(() => {
+  await page.evaluate((token) => {
+    localStorage.setItem("pythia_field_token", token);
     localStorage.setItem("pythia_lang", "en");
     localStorage.setItem("pythia_driver", JSON.stringify(null));
     localStorage.removeItem("pythia_driver");
-  });
+  }, principal.token);
   await page.goto("/driver");
   await expect(page.getByRole("heading", { name: "Who is on duty?" })).toBeVisible();
   await expect(page.getByText("Driver PWA")).toBeVisible();
@@ -79,10 +83,11 @@ test("driver pretrip, stop and receipt surfaces localize end to end", async ({ p
     await context.grantPermissions(["geolocation"]);
     await context.setGeolocation({ latitude: -6.29, longitude: 106.79 });
     await page.goto("/");
-    await page.evaluate(() => {
+    await page.evaluate((token) => {
+      localStorage.setItem("pythia_field_token", token);
       localStorage.setItem("pythia_lang", "en");
       localStorage.removeItem("pythia_driver");
-    });
+    }, principal.token);
     await page.goto("/driver");
     await page.locator(`[data-testid="pick-${TEST_TRUCK}"]`).click();
 

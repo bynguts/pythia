@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 
 from app.api.schemas import LoginRequest
 from app.api.state import _AI_ENGINE_STATE, history_store
-from app.core.auth import ROLES, authenticate, token_for
+from app.core.auth import ROLES, authenticate, role_for_token, token_for
 from app.core.env import getenv
 from app.core.paths import MODELS_DIR, REAL_DIR
 from app.forecast.engine import hybrid_models_loadable
@@ -74,6 +74,19 @@ def auth_login(payload: LoginRequest) -> dict[str, Any]:
         "permissions": sorted(ROLES[principal["role"]]),
         "token": token_for(principal),
     }
+
+
+@router.get("/api/auth/session")
+def auth_session(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    """gsc P0-2: lets the public driver/field surfaces check that a stored token
+    is still valid (tokens live in memory and are lost on a backend restart)."""
+    token = ""
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+    role = role_for_token(token) if token else None
+    if role is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token.")
+    return {"role": role, "permissions": sorted(ROLES[role])}
 
 
 @router.get("/api/data/provenance")

@@ -14,13 +14,17 @@ const FIELD = "/field";
 async function signInAsField(page, truckCode = "T-047") {
   await page.addInitScript(
     ({ code }) => {
-      localStorage.setItem("pythia_auth", "true");
-      localStorage.setItem("pythia_token", "e2e-field-token");
-      localStorage.setItem("pythia_role", "field");
+      localStorage.setItem("pythia_field_token", "e2e-field-token");
+      localStorage.setItem("pythia_field_role", "driver");
       localStorage.setItem("pythia_field_truck", code);
       localStorage.setItem("pythia_lang", "id");
     },
     { code: truckCode },
+  );
+  // gsc-2026 P0-2: the /field sign-in gate validates the stored token; this
+  // scenario stubs the backend, so the session check is stubbed too.
+  await page.route("**/api/auth/session", (route) =>
+    route.fulfill({ json: { role: "driver", permissions: ["dispatch:confirm"] } }),
   );
 }
 

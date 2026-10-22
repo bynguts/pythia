@@ -16,6 +16,8 @@ async function signIn(page) {
     localStorage.setItem("pythia_lang", "id");
     localStorage.setItem("pythia_token", token);
     localStorage.setItem("pythia_role", role);
+    // gsc M1: /driver keeps its own session key.
+    localStorage.setItem("pythia_field_token", token);
   }, principal);
   return { Authorization: `Bearer ${principal.token}` };
 }
@@ -69,7 +71,7 @@ test("driver runs full SPJ flow: pretrip, stop evidence, receipt", async ({ page
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation({ latitude: -6.29, longitude: 106.79 });
 
-  // ── Gate: pick driver (Slamet Riyadi drives multiple trucks — target T-220) ──
+  // ── Gate: pick driver (Pengemudi Sim 05 drives multiple trucks — target T-220) ──
   await page.goto("/driver");
   const pretripLoaded = page.waitForResponse((response) =>
     response.url().includes(`/pretrip/today/${TEST_TRUCK}`),

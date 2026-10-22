@@ -1,4 +1,5 @@
 import { Fragment, useState, useEffect, useCallback } from "react";
+import { LocateFixed } from "lucide-react";
 import { apiGet, apiPost } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 
@@ -170,7 +171,7 @@ const initialForm = {
 };
 
 export function SpjCreateForm({ onCreated }) {
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
   const words = copy[lang] || copy.id;
   const [fleet, setFleet] = useState([]);
   const [sites, setSites] = useState([]);
@@ -184,6 +185,7 @@ export function SpjCreateForm({ onCreated }) {
   const [sitesError, setSitesError] = useState("");
   const [loadingFleet, setLoadingFleet] = useState(true);
   const [loadingSites, setLoadingSites] = useState(true);
+  const [locating, setLocating] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -245,6 +247,44 @@ export function SpjCreateForm({ onCreated }) {
     setError(null);
   };
 
+  // gsc P0-3: a DEMO stop at this device's GPS fix, so a judge can complete a
+  // stop wherever the demo runs. The backend stores it DEMO-labelled.
+  const addDemoStop = () => {
+    if (!navigator.geolocation) {
+      setError({ demoKey: "spj_demo_unavailable" });
+      return;
+    }
+    setLocating(true);
+    setError(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude: lat, longitude: lng } = position.coords;
+        // gsc n17: stop names must be unique within an SPJ, so a second DEMO
+        // stop gets its number (the first keeps the plain name).
+        setStops((prev) => {
+          const ordinal = prev.filter((stop) => stop.demo).length + 1;
+          return [
+            ...prev,
+            {
+              name: `DEMO · ${t("spj_demo_name")}${ordinal > 1 ? ` ${ordinal}` : ""}`,
+              kecamatan: "DEMO",
+              address: `DEMO · ${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+              lat,
+              lng,
+              demo: true,
+            },
+          ];
+        });
+        setLocating(false);
+      },
+      (geoError) => {
+        setLocating(false);
+        setError({ demoKey: geoError.code === 1 ? "spj_demo_denied" : "spj_demo_unavailable" });
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  };
+
   const save = async () => {
     if (saving) return;
     if (!pendingDraft && (!form.truck_code || !stops.length)) {
@@ -268,7 +308,10 @@ export function SpjCreateForm({ onCreated }) {
           destination: form.destination,
           weigh_on_site: form.weigh_on_site,
           priority: form.priority,
-          note: form.note,
+          note:
+            stops.some((stop) => stop.demo) && !form.note.includes("DEMO")
+              ? `${form.note} [DEMO]`.trim()
+              : form.note,
         });
         if (!spj.spj_id) throw new Error("Missing SPJ ID");
         draft = { id: spj.spj_id, stops: [...stops] };
@@ -371,11 +414,29 @@ export function SpjCreateForm({ onCreated }) {
           {words.addStop}
         </button>
       </div>
+      <div className="spj-demo-stop">
+        <button
+          type="button"
+          className="compact-enforce-btn"
+          data-testid="spj-demo-stop"
+          onClick={addDemoStop}
+          disabled={locating || !!pendingDraft}
+        >
+          <LocateFixed size={16} aria-hidden="true" />
+          {locating ? t("spj_demo_locating") : t("spj_demo_stop")}
+        </button>
+        <p className="spj-hint">{t("spj_demo_hint")}</p>
+      </div>
       {stops.length > 0 && (
         <ul className="spj-stop-list">
           {stops.map((s, i) => (
             <li key={i}>
               {i + 1}. {s.name} ({s.kecamatan})
+              {s.demo && (
+                <span className="pill" data-testid="spj-demo-badge">
+                  {t("spj_demo_badge")}
+                </span>
+              )}
               <button
                 type="button"
                 aria-label={`${words.removeStop}: ${s.name}`}
@@ -402,7 +463,9 @@ export function SpjCreateForm({ onCreated }) {
         <p className="spj-form-error" role="alert">
           {error.key
             ? words[error.key]
-            : `${errorMessage(error.cause, words[error.label], words)}${error.created ? ` ${words.retryStops}` : ""}`}
+            : error.demoKey
+              ? t(error.demoKey)
+              : `${errorMessage(error.cause, words[error.label], words)}${error.created ? ` ${words.retryStops}` : ""}`}
         </p>
       )}
       <button type="button" className="compact-enforce-btn" disabled={saving} onClick={save}>
