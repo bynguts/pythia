@@ -44,7 +44,10 @@ test("cold Fleet load reuses aggregate map truth for route playback", async ({ p
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.getByTestId("deck-tools-toggle").click();
   const playback = page.getByRole("combobox", { name: "Putar ulang perjalanan" });
-  await expect(playback.locator('option[value="T-047"]')).toHaveCount(1);
+  // beforeEach's jam reset invalidates the map-truth cache, so this first
+  // fetch is a cold OSRM-bound rebuild (3-7 s measured): wait like the other
+  // map-truth checks in this file instead of the 5 s default.
+  await expect(playback.locator('option[value="T-047"]')).toHaveCount(1, { timeout: 30000 });
   expect(breadcrumbRequests).toEqual([]);
   await playback.selectOption("T-047");
   await expect(page.locator(".playback-marker")).toBeVisible();

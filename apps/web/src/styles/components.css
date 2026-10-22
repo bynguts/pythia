@@ -1823,7 +1823,8 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .text-warning {
-  color: #d97706 !important;
+  /* --ui-warning keeps 4.5:1 text contrast on white (axe). */
+  color: var(--ui-warning) !important;
 }
 
 .assignments-container {
