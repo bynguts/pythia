@@ -147,3 +147,203 @@ export function cardinal(deg, lang = "id") {
       : ["U", "TL", "T", "TG", "S", "BD", "B", "BL"];
   return labels[Math.round(wrap360(deg) / 45) % 8];
 }
+
+// ── Route following (gsc P1-11) ──
+// The arrow follows the leg the plan actually routed instead of a straight
+// line through buildings. Distances are local-equirectangular inside one
+// segment (exact enough below a few km) and great-circle along the path.
+
+/** The arrow aims at the next route vertex, kept inside this look-ahead window. */
+export const LOOKAHEAD_MIN_M = 25;
+export const LOOKAHEAD_MAX_M = 40;
+/** Further than this from the planned leg the crew is off-route: straight bearing. */
+export const OFF_ROUTE_M = 50;
+
+function clamp(value, lo, hi) {
+  return Math.min(hi, Math.max(lo, value));
+}
+
+function lerpPoint(a, b, t) {
+  return { lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t };
+}
+
+/** Closest point to p on segment a–b: { t in [0, 1], point, distance (m) }. */
+export function projectToSegment(p, a, b) {
+  const kx = Math.cos(a.lat * DEG);
+  const bx = (b.lng - a.lng) * kx;
+  const by = b.lat - a.lat;
+  const px = (p.lng - a.lng) * kx;
+  const py = p.lat - a.lat;
+  const len2 = bx * bx + by * by;
+  const t = len2 === 0 ? 0 : clamp((px * bx + py * by) / len2, 0, 1);
+  const point = lerpPoint(a, b, t);
+  return { t, point, distance: haversineMeters(p, point) };
+}
+
+/** Along-path distance (m) from the first vertex to each vertex. */
+export function cumulativeLengths(path) {
+  const cum = [0];
+  for (let i = 1; i < path.length; i += 1) cum.push(cum[i - 1] + haversineMeters(path[i - 1], path[i]));
+  return cum;
+}
+
+/**
+ * Snap p to the nearest point of the polyline, searching segments
+ * [from, to]. Returns { segment, t, point, offset (cross-track m), along (m
+ * from the path start) }, or null for a path without segments.
+ */
+export function snapToPath(path, p, { from = 0, to = path.length - 2, cum = cumulativeLengths(path) } = {}) {
+  let best = null;
+  for (let i = Math.max(0, from); i <= Math.min(to, path.length - 2); i += 1) {
+    const proj = projectToSegment(p, path[i], path[i + 1]);
+    if (best === null || proj.distance < best.offset) {
+      best = {
+        segment: i,
+        t: proj.t,
+        point: proj.point,
+        offset: proj.distance,
+        along: cum[i] + (cum[i + 1] - cum[i]) * proj.t,
+      };
+    }
+  }
+  return best;
+}
+
+/** The point `along` metres from the path start, clamped to its ends. */
+export function pointAlong(path, along, cum = cumulativeLengths(path)) {
+  if (along <= 0) return { lat: path[0].lat, lng: path[0].lng };
+  const last = path.length - 1;
+  if (along >= cum[last]) return { lat: path[last].lat, lng: path[last].lng };
+  let i = 0;
+  while (cum[i + 1] < along) i += 1;
+  const seg = cum[i + 1] - cum[i];
+  return lerpPoint(path[i], path[i + 1], seg === 0 ? 0 : (along - cum[i]) / seg);
+}
+
+/**
+ * The planned leg to stop `index`: from the previous stop's snap to this
+ * stop's snap on the SPJ path. Stops are snapped in visiting order, each no
+ * earlier than the one before, so a road that passes a later stop early is
+ * not mistaken for the leg. null when there is no leg to follow: the first
+ * stop (the planned route starts there), a missing coordinate, or a leg
+ * shorter than a metre.
+ */
+export function legToStop(path, stops, index) {
+  if (!Array.isArray(path) || path.length < 2 || !Array.isArray(stops)) return null;
+  if (!Number.isInteger(index) || index < 1 || index >= stops.length) return null;
+  const cum = cumulativeLengths(path);
+  let prev = null;
+  for (let i = 0; i <= index; i += 1) {
+    if (!hasCoordinate(stops[i])) return null;
+    const point = { lat: Number(stops[i].lat), lng: Number(stops[i].lng) };
+    const snap = snapToPath(path, point, { from: prev ? prev.segment : 0, cum });
+    if (i === index) {
+      if (snap.along - prev.along < 1) return null;
+      return {
+        path,
+        cum,
+        startSegment: prev.segment,
+        endSegment: snap.segment,
+        startAlong: prev.along,
+        endAlong: snap.along,
+        stopOffset: snap.offset,
+      };
+    }
+    prev = snap;
+  }
+  return null;
+}
+
+/**
+ * Where the AR arrow should aim on a planned leg, or null when the fix is
+ * more than OFF_ROUTE_M from it (the caller falls back to the straight
+ * bearing and says so). The aim is the next route vertex ahead, held inside
+ * [LOOKAHEAD_MIN_M, LOOKAHEAD_MAX_M] along the path; once that window reaches
+ * the stop the aim is the stop itself. `remaining` is the distance to the
+ * stop along the path, never less than the straight-line distance.
+ */
+export function routeTarget(leg, fix, stop) {
+  if (!leg || !fix) return null;
+  const snap = snapToPath(leg.path, fix, { from: leg.startSegment, to: leg.endSegment, cum: leg.cum });
+  if (!snap || snap.offset > OFF_ROUTE_M) return null;
+  const along = clamp(snap.along, leg.startAlong, leg.endAlong);
+  let next = leg.endAlong;
+  for (let i = snap.segment + 1; i <= leg.endSegment; i += 1) {
+    if (leg.cum[i] > along + 0.5) {
+      next = Math.min(leg.cum[i], leg.endAlong);
+      break;
+    }
+  }
+  const aimAlong = clamp(next, along + LOOKAHEAD_MIN_M, along + LOOKAHEAD_MAX_M);
+  const target =
+    aimAlong >= leg.endAlong ? { lat: stop.lat, lng: stop.lng } : pointAlong(leg.path, aimAlong, leg.cum);
+  const remaining = Math.max(leg.endAlong - along + leg.stopOffset, haversineMeters(fix, stop));
+  return { target, remaining, offset: snap.offset, along };
+}
+
+// ── Safety lock (gsc P1-11) ──
+// AR is for crews on foot. Moving faster than a brisk walk for several fixes
+// in a row means the phone is in a vehicle, and the AR view locks.
+
+/** Brisk walking tops out around 6 km/h; anything faster is a vehicle. */
+export const SPEED_LOCK_KMH = 6;
+/** Consecutive fixes needed to lock (and, at walking pace, to unlock). */
+export const SPEED_LOCK_FIXES = 3;
+// A derived speed needs at least this much time between fixes, and the
+// first few metres of displacement are treated as GPS jitter.
+const MIN_SPEED_DT_MS = 1000;
+const GPS_JITTER_M = 5;
+
+/**
+ * Speed (m/s) of a new fix: the device's own `speed` when it reports one,
+ * otherwise derived from the previous fix. null when it cannot be judged.
+ * Fixes are { lat, lng, at (ms), speed? }.
+ */
+export function fixSpeed(prev, fix) {
+  if (typeof fix?.speed === "number" && Number.isFinite(fix.speed) && fix.speed >= 0) return fix.speed;
+  if (!prev || !fix) return null;
+  const dt = fix.at - prev.at;
+  if (!(dt >= MIN_SPEED_DT_MS)) return null;
+  return Math.max(0, haversineMeters(prev, fix) - GPS_JITTER_M) / (dt / 1000);
+}
+
+/**
+ * Advance the lock by one fix. State is { locked, fast, slow, ref, speed };
+ * pass null to start. Locks after SPEED_LOCK_FIXES consecutive fixes above
+ * SPEED_LOCK_KMH and releases after as many at or below it, so a single GPS
+ * jump never locks and a red light never unlocks. The speed baseline `ref`
+ * is kept until a speed can be measured, so 5 Hz fixes still span ≥ 1 s.
+ */
+export function stepSpeedLock(state, fix) {
+  const s = state || { locked: false, fast: 0, slow: 0, ref: null, speed: null };
+  const speed = fixSpeed(s.ref, fix);
+  const age = s.ref ? fix.at - s.ref.at : null;
+  const ref = speed === null && age !== null && age >= 0 && age < MIN_SPEED_DT_MS ? s.ref : fix;
+  if (speed === null) return { ...s, ref, speed: null };
+  if (speed * 3.6 > SPEED_LOCK_KMH) {
+    const fast = s.fast + 1;
+    return { locked: s.locked || fast >= SPEED_LOCK_FIXES, fast, slow: 0, ref, speed };
+  }
+  const slow = s.slow + 1;
+  return { locked: s.locked && slow < SPEED_LOCK_FIXES, fast: 0, slow, ref, speed };
+}
+
+// ── TPA spotter mode (gsc P1-11) ──
+
+/** Spotter mode applies within this distance of the TPA facility point. */
+export const TPA_SPOTTER_RADIUS_M = 1500;
+/**
+ * Daily rain above this is a no-go for crews on the tipping face: BMKG
+ * classes 20–50 mm/day as moderate rain, when the waste slope turns slick.
+ */
+export const RAIN_NO_GO_MM = 20;
+
+/** Today's forecast day (else the first one) and whether its rain is a no-go. */
+export function rainNoGo(forecast, todayIso, threshold = RAIN_NO_GO_MM) {
+  if (!Array.isArray(forecast) || forecast.length === 0) return null;
+  const day = forecast.find((d) => d?.date === todayIso) || forecast[0];
+  if (day?.rainfall_mm === null || day?.rainfall_mm === undefined) return null;
+  const mm = Number(day.rainfall_mm);
+  if (!Number.isFinite(mm)) return null;
+  return { date: day.date ?? null, mm, noGo: mm > threshold };
+}

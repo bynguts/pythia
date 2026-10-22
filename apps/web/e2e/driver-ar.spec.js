@@ -80,7 +80,7 @@ async function openDriver(page, principal, truck, lang = "id") {
   await page.evaluate(
     ({ token, driver, lang }) => {
       localStorage.setItem("pythia_lang", lang);
-      localStorage.setItem("pythia_token", token);
+      localStorage.setItem("pythia_field_token", token);
       localStorage.setItem("pythia_driver", JSON.stringify(driver));
       localStorage.removeItem("pythia_driver_outbox");
     },
@@ -202,8 +202,13 @@ test.describe("AR navigator with camera + compass", () => {
       await expect(nav).toHaveAttribute("data-view", "camera", { timeout: 15000 });
       await expect.poll(() => page.getByTestId("ar-video").evaluate((v) => v.videoWidth)).toBeGreaterThan(0);
       await expect(page.getByTestId("ar-honest")).toHaveText(
-        "Panduan AR memakai GPS + kompas ponsel; akurasi ±10–30 m",
+        "AR untuk petugas berjalan kaki: GPS + kompas ponsel, akurasi ±10–30 m; terkunci saat kendaraan melaju",
       );
+      // The first stop has no planned leg (the route starts there): the
+      // arrow is a straight bearing and says so.
+      await expect(page.getByTestId("ar-route-mode")).toHaveAttribute("data-reason", "first", {
+        timeout: 15000,
+      });
       await expect(page.getByTestId("ar-accuracy")).toHaveText("GPS ±12 m");
 
       const distance = page.getByTestId("ar-distance");
@@ -374,7 +379,7 @@ test.describe("AR navigator fallbacks", () => {
       const bearing = initialBearing(fixOf(FAR), STOP);
       await expect.poll(() => arrowAngle(page)).toBe(Math.round(bearing));
       await expect(page.getByTestId("ar-honest")).toHaveText(
-        "AR guidance uses phone GPS + compass; accuracy ±10–30 m",
+        "AR for crews on foot: phone GPS + compass, accuracy ±10–30 m; locks while the vehicle moves",
       );
 
       // Focus stays inside the dialog while it is open.
@@ -425,7 +430,8 @@ test.describe("AR navigator fallbacks", () => {
     await page.route(/\/api\/spj\?status=selesai$/, (route) =>
       route.fulfill({ json: { spj: [], count: 0 } }),
     );
-    await openDriver(page, { token: "" }, truck);
+    // The /driver sign-in gate needs a valid field session even when the data is stubbed.
+    await openDriver(page, await apiLogin(), truck);
     await page.getByTestId("stop-0").getByTestId("ar-nav-open").click();
     await expect(page.getByTestId("ar-no-coordinate")).toContainText("Titik ini belum punya koordinat");
     await expect(page.getByTestId("ar-arrow")).toHaveCount(0);

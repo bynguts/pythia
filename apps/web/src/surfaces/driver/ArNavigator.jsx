@@ -1,28 +1,55 @@
-// AR navigation to the active SPJ stop for field crews.
+// AR navigation to the active SPJ stop for crews on foot (TPS loaders,
+// spotters at the TPA tipping area) — not for a driver in a moving truck.
 //
 // Camera passthrough (getUserMedia) + phone GPS (watchPosition) + compass
 // (deviceorientationabsolute / iOS webkitCompassHeading) drive a floor arrow
-// toward the stop. Inside ARRIVAL_RADIUS_M the driver captures the current
-// camera frame, stamped with time + GPS + accuracy, and it is handed back to
-// the stop's normal arrival-evidence flow — same validation, outbox and API.
+// toward the stop. When the SPJ has a road-resolved plan the arrow follows
+// that planned leg (look-ahead on the path) and the distance is measured
+// along it; otherwise the arrow is a straight bearing and says why. Inside
+// ARRIVAL_RADIUS_M the crew captures the current camera frame, stamped with
+// time + GPS + accuracy, and it is handed back to the stop's normal
+// arrival-evidence flow — same validation, outbox and API.
 //
 // Fallbacks are explicit, never guessed: no camera or no live compass → 2D
 // compass card (a north-up arrow, explained); a GPS fix older than
 // FIX_STALE_MS → capture disabled until a fresh fix arrives; no stop
-// coordinate → an honest "no coordinate" state with no arrow at all.
-import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Camera, CheckCircle2, Compass, LocateFixed, MapPinOff, X } from "lucide-react";
-import { useLanguage } from "../../shared/i18n/index.jsx";
+// coordinate → an honest "no coordinate" state with no arrow at all; vehicle
+// speed for several fixes → the AR view locks until the phone is on foot.
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  Camera,
+  CheckCircle2,
+  CloudRain,
+  Compass,
+  Gauge,
+  HardHat,
+  LocateFixed,
+  MapPinOff,
+  Route,
+  Truck,
+  X,
+} from "lucide-react";
+import { apiGet, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
+import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import {
   ARRIVAL_RADIUS_M,
+  OFF_ROUTE_M,
+  RAIN_NO_GO_MM,
+  SPEED_LOCK_KMH,
+  TPA_SPOTTER_RADIUS_M,
   cardinal,
   formatDistance,
   hasCoordinate,
   haversineMeters,
   headingFromOrientation,
   initialBearing,
+  legToStop,
   pushHeadingSample,
+  rainNoGo,
   relativeAngle,
+  routeTarget,
+  stepSpeedLock,
   unwrapAngle,
 } from "./arMath.js";
 import "./ar.css";
@@ -54,6 +81,19 @@ function stampTime(date) {
     `UTC${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
   );
 }
+
+function localIsoDate(date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+// Why the arrow is a straight bearing instead of following the planned leg.
+const ROUTE_REASON_KEYS = {
+  first: "drv_ar_route_why_first",
+  geometry: "drv_ar_route_why_geometry",
+  none: "drv_ar_route_why_none",
+  off: "drv_ar_route_why_off",
+  loading: "drv_ar_route_why_loading",
+};
 
 function turnText(t, angle) {
   const abs = Math.abs(angle);
@@ -127,6 +167,63 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
   const [busy, setBusy] = useState(false);
   const [captureError, setCaptureError] = useState("");
   const [now, setNow] = useState(() => Date.now());
+  // Safety lock: AR is for crews on foot, so vehicle speed locks the view.
+  const speedRef = useRef(null);
+  const [speedLock, setSpeedLock] = useState({ locked: false, speed: null });
+  // Planned path of the truck's active SPJ: null = not loaded, [] = none.
+  const [activePath, setActivePath] = useState(null);
+  // TPA spotter mode: simulated queue + rain forecast at the tipping area.
+  const [spotter, setSpotter] = useState(false);
+  const [site, setSite] = useState({ status: "idle", queue: null, weather: null });
+  const truckCode = spj?.truck_code || "";
+  // Only a road-resolved plan is worth following; a legacy or straight-line
+  // fallback SPJ keeps the straight bearing, and the first stop has no
+  // planned leg because the route starts there.
+  const routeEligible = hasTarget && index > 0 && spj?.route_source === "LIVE_EXTERNAL" && Boolean(truckCode);
+
+  useEffect(() => {
+    if (!routeEligible) return undefined;
+    let cancelled = false;
+    apiGet(`/spj/active-path/${encodeURIComponent(truckCode)}`, { tokenKey: FIELD_TOKEN_KEY })
+      .then((body) => {
+        if (cancelled) return;
+        const points =
+          body?.has_reference_path && Array.isArray(body.path)
+            ? body.path.filter(hasCoordinate).map((p) => ({ lat: Number(p.lat), lng: Number(p.lng) }))
+            : [];
+        setActivePath(points);
+      })
+      .catch(() => {
+        if (!cancelled) setActivePath([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [routeEligible, truckCode]);
+
+  useEffect(() => {
+    if (!spotter) return undefined;
+    let cancelled = false;
+    Promise.allSettled([
+      apiGet("/tpa/queue-status", { tokenKey: FIELD_TOKEN_KEY }),
+      apiGet("/weather", { tokenKey: FIELD_TOKEN_KEY }),
+    ]).then(([queue, weather]) => {
+      if (cancelled) return;
+      setSite({
+        status: "ready",
+        queue: queue.status === "fulfilled" ? queue.value : null,
+        weather: weather.status === "fulfilled" ? weather.value : null,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [spotter]);
+
+  const toggleSpotter = () => {
+    if (!spotter) setSite({ status: "loading", queue: null, weather: null });
+    setSpotter(!spotter);
+  };
 
   // Re-evaluate fix freshness even when no new position arrives.
   useEffect(() => {
@@ -187,6 +284,14 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
       (pos) => {
         setGeoError(null);
         setNow(Date.now());
+        const lock = stepSpeedLock(speedRef.current, {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          at: pos.timestamp,
+          speed: pos.coords.speed,
+        });
+        speedRef.current = lock;
+        setSpeedLock((prev) => ({ locked: lock.locked, speed: lock.speed ?? prev.speed }));
         setFix({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
@@ -265,8 +370,28 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
     };
   }, []);
 
+  const stops = spj?.stops;
+  const leg = useMemo(
+    () => (activePath && activePath.length >= 2 ? legToStop(activePath, stops, index) : null),
+    [activePath, stops, index],
+  );
+  // Straight-line distance decides arrival and goes on the evidence stamp.
   const distance = fix && target ? haversineMeters(fix, target) : null;
-  const bearing = fix && target ? initialBearing(fix, target) : null;
+  const route = leg && fix && target ? routeTarget(leg, fix, target) : null;
+  let routeReason = null;
+  if (!route) {
+    if (index === 0) routeReason = "first";
+    else if (spj?.route_source !== "LIVE_EXTERNAL") routeReason = "geometry";
+    else if (!truckCode || (activePath !== null && !leg)) routeReason = "none";
+    else if (activePath === null) routeReason = "loading";
+    else routeReason = "off";
+  }
+  // On the planned leg the arrow aims at the look-ahead point and the
+  // readout is the distance left along the path.
+  const aim = route ? route.target : target;
+  const shownDistance = route ? route.remaining : distance;
+  const bearing = fix && aim ? initialBearing(fix, aim) : null;
+  const speedLocked = hasTarget && speedLock.locked;
   const fixFresh = Boolean(fix) && now - fix.at <= FIX_STALE_MS;
   const compassLive = headingState === "live" && heading !== null;
   // With a compass the arrow is relative to where the phone points; without
@@ -298,6 +423,7 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
 
   const capture = async () => {
     const video = videoRef.current;
+    if (speedRef.current?.locked) return;
     if (!fix || Date.now() - fix.at > FIX_STALE_MS) {
       setCaptureError(t("drv_ar_gps_stale"));
       return;
@@ -390,6 +516,95 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
           : t("drv_ar_heading_map")
               .replace("{dir}", cardinal(bearing, lang))
               .replace("{n}", Math.round(bearing));
+  const routeText = route
+    ? t("drv_ar_route_follow")
+    : t("drv_ar_route_straight").replace(
+        "{reason}",
+        t(ROUTE_REASON_KEYS[routeReason]).replace("{n}", OFF_ROUTE_M),
+      );
+
+  // TPA spotter: the facility point comes from the queue-status payload.
+  const queue = site.queue;
+  const tpaPoint = queue && hasCoordinate(queue) ? { lat: Number(queue.lat), lng: Number(queue.lng) } : null;
+  const tpaDistance = fix && tpaPoint ? haversineMeters(fix, tpaPoint) : null;
+  const nearTpa = tpaDistance !== null && tpaDistance <= TPA_SPOTTER_RADIUS_M;
+  const tpaName = queue?.facility_name || "TPA";
+  const rain = site.weather ? rainNoGo(site.weather.forecast, localIsoDate(new Date())) : null;
+  const rainText = rain
+    ? t(rain.noGo ? "drv_ar_rain_nogo" : "drv_ar_rain_ok")
+        .replace("{mm}", rain.mm.toLocaleString(localeFor(lang), { maximumFractionDigits: 1 }))
+        .replace("{date}", rain.date || "—")
+        .replace("{n}", RAIN_NO_GO_MM)
+    : t("drv_ar_rain_unknown");
+
+  let spotterBody;
+  if (site.status !== "ready") {
+    spotterBody = <p className="ar-spotter-muted">{t("drv_ar_spotter_loading")}</p>;
+  } else if (!tpaPoint) {
+    spotterBody = (
+      <p className="ar-spotter-muted" data-testid="ar-spotter-error">
+        {t("drv_ar_spotter_error")}
+      </p>
+    );
+  } else if (!nearTpa) {
+    spotterBody = (
+      <p className="ar-spotter-muted" data-testid="ar-spotter-far">
+        {t("drv_ar_spotter_far")
+          .replace("{d}", tpaDistance === null ? "—" : formatDistance(tpaDistance, lang))
+          .replace("{name}", tpaName)}
+      </p>
+    );
+  } else {
+    spotterBody = (
+      <>
+        <h2 className="ar-spotter-title">
+          <Truck size={18} aria-hidden="true" /> {t("drv_ar_spotter_title").replace("{name}", tpaName)}
+          <span className="ar-sim-badge" data-testid="ar-spotter-sim">
+            {t("drv_ar_spotter_sim")}
+          </span>
+        </h2>
+        <p className="ar-spotter-muted">{t("drv_ar_spotter_sim_note")}</p>
+        <ul className="ar-spotter-facts" data-testid="ar-spotter-queue">
+          {/* gsc m8: trucks waiting at the weighbridge (modelled peak), and arrivals apart. */}
+          <li>
+            {t("drv_ar_spotter_queue").replace("{n}", queue.queue_trucks_max ?? queue.trucks_in_queue ?? "—")}
+          </li>
+          {queue.arrivals_per_hour != null && (
+            <li data-testid="ar-spotter-arrivals">
+              {t("drv_ar_spotter_arrivals").replace("{n}", queue.arrivals_per_hour)}
+            </li>
+          )}
+          <li>
+            {t("drv_ar_spotter_wait")
+              .replace(
+                "{n}",
+                Number.isFinite(queue.avg_wait_minutes) ? Math.round(queue.avg_wait_minutes) : "—",
+              )
+              .replace(
+                "{p}",
+                Number.isFinite(queue.p95_wait_minutes) ? Math.round(queue.p95_wait_minutes) : "—",
+              )}
+          </li>
+          {queue.weighbridge_status && (
+            <li>{t("drv_ar_spotter_bridge").replace("{s}", queue.weighbridge_status)}</li>
+          )}
+        </ul>
+        <p
+          className={`ar-rain${rain?.noGo ? " is-nogo" : ""}`}
+          role={rain?.noGo ? "alert" : undefined}
+          data-testid="ar-rain"
+          data-no-go={rain?.noGo ? "true" : "false"}
+        >
+          <CloudRain size={16} aria-hidden="true" /> {rainText}
+        </p>
+        {site.weather && (
+          <p className="ar-spotter-muted" data-testid="ar-rain-source">
+            {t(site.weather.source === "open-meteo" ? "drv_ar_rain_src_live" : "drv_ar_rain_src_demo")}
+          </p>
+        )}
+      </>
+    );
+  }
 
   return (
     <div
@@ -403,6 +618,9 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
       data-heading-mode={headingMode}
       data-arrived={arrived ? "true" : "false"}
       data-gps-fresh={fixFresh ? "true" : "false"}
+      data-route-mode={route ? "route" : "straight"}
+      data-speed-locked={speedLocked ? "true" : "false"}
+      data-spotter={spotter ? "true" : "false"}
     >
       <video
         ref={videoRef}
@@ -412,7 +630,7 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
         muted
         autoPlay
         aria-hidden="true"
-        hidden={view !== "camera"}
+        hidden={view !== "camera" || speedLocked}
       />
 
       <header className="ar-top">
@@ -456,6 +674,17 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
           <button type="button" className="ar-btn secondary" onClick={onUseForm}>
             <Camera size={18} /> {t("drv_ar_use_form")}
           </button>
+        </section>
+      ) : speedLocked ? (
+        <section className="ar-empty ar-lock" data-testid="ar-speed-lock">
+          <Gauge size={36} aria-hidden="true" />
+          <h2 role="alert">{t("drv_ar_lock_title")}</h2>
+          <p>{t("drv_ar_lock_desc").replace("{n}", SPEED_LOCK_KMH)}</p>
+          {speedLock.speed !== null && (
+            <p className="ar-empty-address" data-testid="ar-speed-lock-speed">
+              {t("drv_ar_lock_speed").replace("{n}", Math.round(speedLock.speed * 3.6))}
+            </p>
+          )}
         </section>
       ) : (
         <>
@@ -502,20 +731,45 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
                 </div>
               </div>
             )}
-            {distance !== null && (
+            {shownDistance !== null && (
               <div className="ar-readout">
-                <span className="ar-distance" data-testid="ar-distance" data-meters={Math.round(distance)}>
-                  {formatDistance(distance, lang)}
+                <span
+                  className="ar-distance"
+                  data-testid="ar-distance"
+                  data-meters={Math.round(shownDistance)}
+                >
+                  {formatDistance(shownDistance, lang)}
                 </span>
                 <span className="ar-guidance" data-testid="ar-guidance">
                   {guidance}
+                </span>
+                <span
+                  className="ar-route-mode"
+                  data-testid="ar-route-mode"
+                  data-mode={route ? "route" : "straight"}
+                  data-reason={routeReason || ""}
+                >
+                  <Route size={13} aria-hidden="true" /> {routeText}
                 </span>
               </div>
             )}
           </div>
 
           <section className="ar-sheet">
-            {arrived ? (
+            <button
+              type="button"
+              className="ar-mode-toggle"
+              aria-pressed={spotter}
+              data-testid="ar-spotter-toggle"
+              onClick={toggleSpotter}
+            >
+              <HardHat size={16} aria-hidden="true" /> {t("drv_ar_spotter_toggle")}
+            </button>
+            {spotter ? (
+              <div className="ar-spotter" data-testid="ar-spotter" aria-live="polite">
+                {spotterBody}
+              </div>
+            ) : arrived ? (
               <div className="ar-arrived" data-testid="ar-arrived">
                 <h2>
                   <CheckCircle2 size={20} aria-hidden="true" /> {t("drv_ar_arrived_title")}
