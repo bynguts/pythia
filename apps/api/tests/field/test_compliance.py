@@ -86,9 +86,11 @@ def _make_spj(spj_store, driver, truck, complete_with_evidence=True, close_by="o
 class ComplianceScoreTests(unittest.TestCase):
     def test_clean_driver_scores_100_grade_a(self):
         spj, pre, dmg = _fresh_stores()
-        trucks = [{"truck_code": "T-001", "driver_name": "Budi Santoso", "deviation": {"violated": False}}]
+        trucks = [
+            {"truck_code": "T-001", "driver_name": "Pengemudi Sim 01", "deviation": {"violated": False}}
+        ]
         with _Swap(spj, pre, dmg, trucks):
-            result = compute_driver_score("Budi Santoso", ["T-001"], today="2026-09-14")
+            result = compute_driver_score("Pengemudi Sim 01", ["T-001"], today="2026-09-14")
         self.assertEqual(result["score"], 100.0)
         self.assertEqual(result["grade"], "A")
         self.assertEqual(result["classification"], "derived")

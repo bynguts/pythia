@@ -16,8 +16,8 @@ def _store(name="test_damage.json"):
 class DamageReportTests(unittest.TestCase):
     def test_create_and_list_newest_first(self):
         store = _store()
-        store.create("T-112", "Rizky Maulana", "rem", "ringan", "Rem bunyi")
-        store.create("T-112", "Rizky Maulana", "mesin", "berat", "Mesin mati")
+        store.create("T-112", "Pengemudi Sim 04", "rem", "ringan", "Rem bunyi")
+        store.create("T-112", "Pengemudi Sim 04", "mesin", "berat", "Mesin mati")
         reports = store.list()
         self.assertEqual(len(reports), 2)
         self.assertEqual(reports[0].component, "mesin")
@@ -53,12 +53,12 @@ class DamageReportTests(unittest.TestCase):
         try:
             dmg_module.DAMAGE_STORE = store
             truck = _truck(
-                "T-001", "B 1234 CD", "Budi Santoso", "Jakarta Utara", "active", False, "Dump Truck Besar"
+                "T-001", "B 1234 CD", "Pengemudi Sim 01", "Jakarta Utara", "active", False, "Dump Truck Besar"
             )
             self.assertFalse(truck["is_damaged"])
-            store.create("T-001", "Budi Santoso", "mesin", "berat", "Mesin overheat")
+            store.create("T-001", "Pengemudi Sim 01", "mesin", "berat", "Mesin overheat")
             truck = _truck(
-                "T-001", "B 1234 CD", "Budi Santoso", "Jakarta Utara", "active", False, "Dump Truck Besar"
+                "T-001", "B 1234 CD", "Pengemudi Sim 01", "Jakarta Utara", "active", False, "Dump Truck Besar"
             )
             self.assertTrue(truck["is_damaged"])
             self.assertEqual(truck["damage_status"]["state"], "breakdown")

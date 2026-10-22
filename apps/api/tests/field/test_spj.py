@@ -40,7 +40,7 @@ class SpjModelTests(unittest.TestCase):
     def test_create_draft(self):
         store = _store()
         spj = store.create(
-            driver_name="Budi Santoso",
+            driver_name="Pengemudi Sim 01",
             truck_code="T-001",
             destination="TPST Bantargebang",
             weigh_on_site=True,

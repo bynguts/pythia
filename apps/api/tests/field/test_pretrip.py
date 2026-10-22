@@ -18,7 +18,7 @@ ALL_OK = {k: True for k in PRETRIP_ITEMS}
 class PreTripTests(unittest.TestCase):
     def test_submit_all_ok(self):
         store = _store()
-        rec = store.submit("T-088", "Joko Wijaya", dict(ALL_OK))
+        rec = store.submit("T-088", "Pengemudi Sim 03", dict(ALL_OK))
         self.assertEqual(rec.truck_code, "T-088")
         self.assertEqual(len(rec.items), 7)
         self.assertEqual(rec.note, "")

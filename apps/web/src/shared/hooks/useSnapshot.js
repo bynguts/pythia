@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "../api/client.js";
 
+// gsc n28: the offline fallback uses the backend's curated simulated trucks
+// (app/fleet/data.py: same codes, plates and "Pengemudi Sim NN" names).
 export const fallbackSnapshot = {
   kpis: {
     active_trucks: 5,
@@ -21,7 +23,7 @@ export const fallbackSnapshot = {
     {
       truck_code: "T-001",
       plate_number: "B 1234 CD",
-      driver_name: "Budi Santoso",
+      driver_name: "Pengemudi Sim 01",
       assigned_zone: "Jakarta Utara",
       status: "active",
       is_damaged: false,
@@ -36,7 +38,7 @@ export const fallbackSnapshot = {
     {
       truck_code: "T-047",
       plate_number: "B 5678 EF",
-      driver_name: "Agus Pratama",
+      driver_name: "Pengemudi Sim 02",
       assigned_zone: "Jakarta Barat",
       status: "deviation",
       is_damaged: false,
@@ -51,7 +53,7 @@ export const fallbackSnapshot = {
     {
       truck_code: "T-112",
       plate_number: "B 4410 KL",
-      driver_name: "Rizky Maulana",
+      driver_name: "Pengemudi Sim 04",
       assigned_zone: "Jakarta Timur",
       status: "active",
       is_damaged: true,
