@@ -369,6 +369,12 @@ export const id = {
   // Unlicensed Panel
   unlicensed_title: "Deteksi & Penindakan Kolektor Sampah Liar",
   unlicensed_subtitle: "Kendaraan komersial yang beroperasi tanpa izin resmi DLH di wilayah DKI Jakarta.",
+  fleet_live_kicker: "Kendali langsung",
+  fleet_fresh_label: "Diperbarui otomatis",
+  fleet_fresh_interval: "15 dtk",
+  fleet_records_kicker: "Bukti operasional",
+  fleet_records_title: "Detail armada",
+  unlicensed_empty: "Tidak ada flag aktif — pola stop normal.",
   unlicensed_th_plate: "Plat Kendaraan",
   unlicensed_th_loc: "Lokasi Terdeteksi",
   unlicensed_th_coords: "Koordinat GPS",

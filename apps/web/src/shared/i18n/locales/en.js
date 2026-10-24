@@ -369,6 +369,12 @@ export const en = {
   unlicensed_title: "Unlicensed Waste Collector Detection & Enforcement",
   unlicensed_subtitle:
     "Commercial vehicles operating without registered DLH permits inside Jakarta jurisdiction.",
+  fleet_live_kicker: "Live control",
+  fleet_fresh_label: "Auto-refreshed",
+  fleet_fresh_interval: "15 s",
+  fleet_records_kicker: "Operational evidence",
+  fleet_records_title: "Fleet details",
+  unlicensed_empty: "No active flags — normal stop patterns.",
   unlicensed_th_plate: "Vehicle Plate",
   unlicensed_th_loc: "Detected Location",
   unlicensed_th_coords: "GPS Coordinates",

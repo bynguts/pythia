@@ -129,7 +129,7 @@ export function FleetOperations({
       <header className="workspace-heading">
         <div>
           <span className="workspace-kicker">
-            <Radio size={14} /> Kendali langsung
+            <Radio size={14} /> {t("fleet_live_kicker")}
           </span>
           <h1>{lang === "id" ? "Operasi armada hari ini" : "Today’s fleet operations"}</h1>
           <p>
@@ -140,8 +140,8 @@ export function FleetOperations({
         </div>
         <div className="workspace-freshness">
           <Clock3 size={16} />
-          <span>Diperbarui otomatis</span>
-          <strong>15 dtk</strong>
+          <span>{t("fleet_fresh_label")}</span>
+          <strong>{t("fleet_fresh_interval")}</strong>
         </div>
       </header>
 
@@ -257,8 +257,8 @@ export function FleetOperations({
       <section className="fleet-records-surface">
         <div className="records-heading">
           <div>
-            <span className="surface-kicker">Bukti operasional</span>
-            <h2>Detail armada</h2>
+            <span className="surface-kicker">{t("fleet_records_kicker")}</span>
+            <h2>{t("fleet_records_title")}</h2>
           </div>
           <nav
             className="records-doc-links"
@@ -277,7 +277,7 @@ export function FleetOperations({
             ))}
           </nav>
         </div>
-        <div className="workspace-tabs" role="tablist" aria-label="Detail armada">
+        <div className="workspace-tabs" role="tablist" aria-label={t("fleet_records_title")}>
           {primaryTabs.map((tab, index) => (
             <button
               key={tab.id}

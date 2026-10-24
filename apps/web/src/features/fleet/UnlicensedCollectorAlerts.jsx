@@ -50,7 +50,7 @@ export function UnlicensedCollectorAlerts() {
             ? lang === "id"
               ? "Memuat telemetri deteksi..."
               : "Loading detection telemetry..."
-            : "Tidak ada flag aktif — pola stop normal."}
+            : t("unlicensed_empty")}
         </div>
       </section>
     );
