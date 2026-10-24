@@ -1,10 +1,13 @@
 /* driver AR navigator. Full-screen over the driver PWA; the
-   camera feed sits behind translucent forest panels so text keeps contrast on
-   any street scene. Tokens from styles/tokens.css. */
+   camera feed sits behind translucent panels (white glass for the top bar,
+   ink glass for the distance readout) so text keeps contrast on any street
+   scene. Tokens from styles/tokens.css. */
 
 .ar-nav {
-  --ar-glass: rgba(19, 33, 29, 0.78);
+  --ar-glass: rgba(29, 35, 32, 0.74);
   --ar-glass-line: rgba(255, 255, 255, 0.2);
+  --ar-glass-light: rgba(255, 255, 255, 0.92);
+  --ar-ring-fill: rgba(15, 59, 35, 0.3);
   /* gsc n29: secondary text on the glass panels. */
   --ar-ink-soft: rgba(255, 255, 255, 0.82);
   position: fixed;
@@ -54,16 +57,17 @@
   height: var(--tap-min);
   display: grid;
   place-items: center;
-  border-radius: 999px;
-  border: 1px solid var(--ar-glass-line);
-  background: var(--ar-glass);
-  color: #ffffff;
+  border-radius: var(--ui-radius-pill);
+  border: 1px solid var(--ui-border);
+  background: var(--ar-glass-light);
+  color: var(--ui-ink);
+  box-shadow: var(--ui-shadow-float);
   cursor: pointer;
 }
 
 .ar-icon-btn:focus-visible,
 .ar-btn:focus-visible {
-  outline: 3px solid #ffffff;
+  outline: 3px solid var(--ui-forest-500);
   outline-offset: 2px;
 }
 
@@ -72,10 +76,12 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  padding: 6px var(--space-3);
-  border-radius: var(--ui-radius-card);
-  border: 1px solid var(--ar-glass-line);
-  background: var(--ar-glass);
+  padding: 6px var(--space-4);
+  border-radius: var(--ui-radius-pill);
+  border: 1px solid var(--ui-border);
+  background: var(--ar-glass-light);
+  color: var(--ui-ink);
+  box-shadow: var(--ui-shadow-float);
 }
 
 .ar-top-title strong {
@@ -87,11 +93,12 @@
 }
 
 .ar-top-kicker {
+  font-family: var(--mono);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--ui-muted);
 }
 
 .ar-chip {
@@ -101,18 +108,21 @@
   gap: 5px;
   min-height: 32px;
   padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--ar-glass-line);
-  background: var(--ar-glass);
+  border-radius: var(--ui-radius-pill);
+  border: 1px solid var(--ui-border);
+  background: var(--ar-glass-light);
+  color: var(--ui-ink);
+  font-family: var(--mono);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .ar-chip.is-weak {
-  color: #ffd8a8;
-  border-color: rgba(255, 216, 168, 0.5);
+  color: var(--ui-warning);
+  border-color: var(--ui-warning);
+  background: var(--ui-warning-soft);
 }
 
 /* ── Stage: arrow + distance ── */
@@ -159,7 +169,7 @@
 }
 
 .ar-floor-ring {
-  fill: rgba(19, 33, 29, 0.28);
+  fill: var(--ar-ring-fill);
   stroke: rgba(255, 255, 255, 0.85);
   stroke-width: 2.5;
 }
@@ -182,7 +192,7 @@
 }
 
 .is-arrived .ar-floor-ring {
-  stroke: #7fe0b5;
+  stroke: var(--ui-forest-500);
   stroke-width: 3.5;
 }
 
@@ -226,8 +236,8 @@
 }
 
 .ar-arrow-side path {
-  fill: #6f240f;
-  stroke: #6f240f;
+  fill: var(--ui-forest-900);
+  stroke: var(--ui-forest-900);
   stroke-width: 3;
   stroke-linejoin: round;
 }
@@ -237,7 +247,7 @@
 }
 
 .ar-arrow-face path {
-  fill: var(--ui-accent);
+  fill: var(--ui-forest-500);
   stroke: #ffffff;
   stroke-width: 3;
   stroke-linejoin: round;
@@ -262,7 +272,7 @@
   border-radius: 50%;
   border: 1px solid var(--ar-glass-line);
   background: var(--ar-glass);
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--ar-ink-soft);
 }
 
 .ar-readout {
@@ -278,17 +288,18 @@
 }
 
 .ar-distance {
+  font-family: var(--font-head);
   font-size: 40px;
   line-height: 1.1;
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.03em;
 }
 
 .ar-guidance {
   font-size: 15px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+  color: var(--ar-ink-soft);
 }
 
 /* ── 2D compass fallback (no camera, or no live compass) ── */
@@ -327,7 +338,7 @@
 .ar-compass-mark.m0 {
   left: 50%;
   top: 9%;
-  color: #ffb59c;
+  color: var(--ui-forest-500);
 }
 .ar-compass-mark.m1 {
   left: 91%;
@@ -356,7 +367,7 @@
 }
 
 .ar-compass-arrow path {
-  fill: var(--ui-accent);
+  fill: var(--ui-forest-500);
   stroke: #ffffff;
   stroke-width: 3;
   stroke-linejoin: round;
@@ -367,17 +378,19 @@
 .ar-sheet {
   width: min(100%, 560px);
   margin: 0 auto;
-  padding: var(--space-4) var(--space-4) max(env(safe-area-inset-bottom), var(--space-4));
-  border-radius: var(--ui-radius-elevated) var(--ui-radius-elevated) 0 0;
+  padding: var(--space-5) var(--space-5) max(env(safe-area-inset-bottom), var(--space-5));
+  border-radius: 28px 28px 0 0;
   background: var(--ui-surface);
   color: var(--ui-ink);
-  box-shadow: 0 -8px 28px rgba(16, 32, 26, 0.22);
+  box-shadow: var(--ui-shadow-float);
 }
 
 .ar-sheet-kicker {
   margin: 0;
-  font-size: 16px;
+  font-family: var(--font-head);
+  font-size: 22px;
   font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .ar-sheet-address {
@@ -391,7 +404,9 @@
   align-items: center;
   gap: var(--space-2);
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   color: var(--ui-success);
 }
 
@@ -408,7 +423,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  border-radius: var(--ui-radius-control);
+  border-radius: var(--ui-radius-pill);
   border: 1px solid transparent;
   font: inherit;
   font-size: 15px;
@@ -416,13 +431,16 @@
   cursor: pointer;
 }
 
+/* The arrival action: a 56 px dark-forest pill. */
 .ar-btn.primary {
-  background: var(--ui-accent);
+  min-height: 56px;
+  background: var(--ui-accent-strong);
   color: var(--ui-accent-foreground);
+  font-size: 17px;
 }
 
 .ar-btn.primary:hover:not(:disabled) {
-  background: var(--ui-accent-hover);
+  background: var(--ui-accent);
 }
 
 .ar-btn.secondary {
@@ -545,7 +563,7 @@
   justify-content: center;
   gap: var(--space-2);
   margin-bottom: var(--space-3);
-  border-radius: var(--ui-radius-control);
+  border-radius: var(--ui-radius-pill);
   border: 1px solid var(--ui-border-strong);
   background: var(--ui-surface);
   color: var(--ui-ink);
@@ -579,14 +597,16 @@
   font-size: 16px;
 }
 
+/* Provenance chip: outlined mono, amber-brown for simulated. */
 .ar-sim-badge {
   padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--ui-border-strong);
-  background: var(--ui-surface-muted);
-  color: var(--ui-ink-soft);
+  border-radius: var(--ui-radius-pill);
+  border: 1px solid var(--ui-warning);
+  background: var(--ui-warning-soft);
+  color: var(--ui-warning);
+  font-family: var(--mono);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.06em;
 }
 
@@ -609,7 +629,7 @@
   gap: 6px;
   margin: 0;
   padding: var(--space-2) var(--space-3);
-  border-radius: var(--ui-radius-control);
+  border-radius: var(--ui-radius-card);
   border: 1px solid var(--ui-border);
   font-size: 14px;
   color: var(--ui-ink-soft);

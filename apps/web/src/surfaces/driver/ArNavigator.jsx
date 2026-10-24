@@ -464,7 +464,7 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
       ctx.fillStyle = "rgba(19, 33, 29, 0.78)";
       ctx.fillRect(0, height - band, width, band);
       ctx.fillStyle = "#ffffff";
-      ctx.font = `600 ${fontPx}px "Plus Jakarta Sans", system-ui, sans-serif`;
+      ctx.font = `600 ${fontPx}px "Inter Tight", Inter, system-ui, sans-serif`;
       ctx.textBaseline = "top";
       lines.forEach((line, i) => {
         ctx.fillText(

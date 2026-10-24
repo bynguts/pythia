@@ -62,9 +62,9 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--ui-warning);
-  background: var(--amber-light, #fffbeb);
+  background: var(--ui-warning-soft);
   border: 1px solid var(--ui-warning);
-  border-radius: 999px;
+  border-radius: var(--ui-radius-pill);
   padding: 3px 10px;
 }
 
@@ -75,10 +75,10 @@
   gap: 4px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--ui-accent, #1d4ed8);
-  background: var(--blue-light, #eff6ff);
-  border: 1px solid var(--ui-accent, #1d4ed8);
-  border-radius: 999px;
+  color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+  border: 1px solid var(--ui-accent);
+  border-radius: var(--ui-radius-pill);
   padding: 3px 10px;
 }
 
@@ -124,8 +124,9 @@
 
 .driver-kicker {
   margin: 0;
+  font-family: var(--mono);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ui-accent);
@@ -151,7 +152,7 @@
 
 .driver-badge.done {
   color: var(--ui-success);
-  background: var(--green-light, #edf7f3);
+  background: var(--ui-accent-soft);
   border: 1px solid var(--ui-success);
 }
 
@@ -198,7 +199,7 @@
 .pretrip-choice {
   border: 1px solid var(--ui-border-strong);
   background: var(--ui-surface);
-  border-radius: var(--ui-radius-control);
+  border-radius: var(--ui-radius-pill);
   padding: 6px 14px;
   font-size: 13px;
   font-weight: 600;
@@ -208,13 +209,13 @@
 .pretrip-choice.ok.active {
   background: var(--ui-success);
   border-color: var(--ui-success);
-  color: #fff;
+  color: var(--ui-on-dark);
 }
 
 .pretrip-choice.tidak.active {
   background: var(--ui-danger);
   border-color: var(--ui-danger);
-  color: #fff;
+  color: var(--ui-on-dark);
 }
 
 /* ── Controls ── */
@@ -271,7 +272,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: var(--ui-radius-control);
+  border-radius: var(--ui-radius-pill);
   padding: 10px 16px;
   font-size: 14px;
   font-weight: 600;
@@ -507,7 +508,7 @@
   min-height: 100dvh;
   padding: 0 0 64px;
   gap: 16px;
-  background: #eef2ef;
+  background: var(--ui-canvas);
 }
 
 .driver-header {
@@ -515,45 +516,58 @@
   max-width: none;
   min-height: 72px;
   padding: 0 max(20px, calc((100vw - 560px) / 2));
-  color: #ffffff;
-  background: var(--ui-primary);
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-ink);
+  background: var(--ui-surface);
 }
 
 .driver-brand-mark {
   width: 38px;
   height: 38px;
-  color: #ffffff;
-  background: var(--ui-accent);
+  color: var(--ui-accent-foreground);
+  background: var(--ui-accent-strong);
+}
+
+.driver-brand strong {
+  font-family: var(--font-head);
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .driver-brand small {
-  color: #8fa59b;
+  color: var(--ui-muted);
 }
 
 .driver-link {
   min-height: 36px;
-  padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 7px;
-  color: #ffffff;
+  padding: 0 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-ink);
 }
 
 .driver-card {
   width: min(520px, calc(100% - 32px));
   margin-inline: auto;
   padding: 22px;
-  border: 0;
-  border-radius: 14px;
-  box-shadow: 0 8px 30px rgba(20, 32, 28, 0.07);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-elevated);
+  box-shadow: none;
 }
 
 .driver-shell > .driver-card:first-of-type {
   margin-top: 4px;
 }
 
+.driver-card h1,
+.driver-card h2 {
+  font-family: var(--font-head);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
 .driver-card h2 {
   font-size: 18px;
-  letter-spacing: -0.02em;
 }
 
 .driver-pick-list {
@@ -591,17 +605,22 @@
 }
 
 .driver-identity {
-  color: #ffffff;
-  background: var(--ui-primary);
+  border-color: var(--ui-accent-strong);
+  color: var(--ui-on-dark);
+  background: var(--ui-accent-strong);
+}
+
+.driver-identity .driver-kicker {
+  color: var(--ui-forest-100);
 }
 
 .driver-identity h1 {
-  color: #ffffff;
+  color: var(--ui-on-dark);
   font-size: 28px;
 }
 
 .driver-identity .driver-muted {
-  color: #91a39b;
+  color: var(--ui-on-dark-muted);
 }
 
 .driver-progress {
@@ -624,12 +643,12 @@
 }
 
 .driver-btn.primary {
-  color: #ffffff;
-  background: var(--ui-accent);
+  color: var(--ui-accent-foreground);
+  background: var(--ui-accent-strong);
 }
 
 .driver-btn.primary:hover:not(:disabled) {
-  background: var(--ui-accent-hover);
+  background: var(--ui-accent);
 }
 
 /* the AR-captured arrival frame inside the stop form. */
