@@ -433,7 +433,7 @@ export function SpjCreateForm({ onCreated }) {
             <li key={i}>
               {i + 1}. {s.name} ({s.kecamatan})
               {s.demo && (
-                <span className="pill" data-testid="spj-demo-badge">
+                <span className="pill provenance-sim" data-testid="spj-demo-badge">
                   {t("spj_demo_badge")}
                 </span>
               )}

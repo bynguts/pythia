@@ -63,7 +63,7 @@ export function TpaQueuePanel() {
         <div>
           <h2>
             {t("tpa_panel_title")}{" "}
-            <span className="pill" data-testid="tpa-sim-badge">
+            <span className="pill provenance-sim" data-testid="tpa-sim-badge">
               {t("honesty_sim_badge")}
             </span>
           </h2>

@@ -32,7 +32,7 @@ export function QueueMetricHeadline({ metric, loading, testId }) {
     >
       <span className="stagger-label">
         {t("qm_label")}{" "}
-        <span className="pill" data-testid={`${testId}-sim-badge`}>
+        <span className="pill provenance-sim" data-testid={`${testId}-sim-badge`}>
           {t("honesty_sim_badge")}
         </span>
       </span>
@@ -90,7 +90,7 @@ export function StaggerSimulatorPanel() {
         <div>
           <h2>
             {t("stagger_title")}{" "}
-            <span className="pill" data-testid="stagger-sim-badge">
+            <span className="pill provenance-sim" data-testid="stagger-sim-badge">
               {t("honesty_sim_badge")}
             </span>
           </h2>

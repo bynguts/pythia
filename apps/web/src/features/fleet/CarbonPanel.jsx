@@ -26,7 +26,7 @@ export function CarbonPanel() {
         <div>
           <h2>
             {t("carbon_title")}{" "}
-            <span className="pill" data-testid="carbon-sim-badge">
+            <span className="pill provenance-sim" data-testid="carbon-sim-badge">
               {t("honesty_sim_badge")}
             </span>
           </h2>

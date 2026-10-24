@@ -207,7 +207,7 @@
 
 .side-logout:hover {
   color: var(--ui-danger);
-  background: #fff1f1;
+  background: var(--ui-danger-soft);
 }
 
 .app-shell {
@@ -456,7 +456,7 @@
 }
 
 .assistant-formatted-answer code {
-  font-family: var(--ui-mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: var(--fs-caption);
   padding: 1px 4px;
   border-radius: 5px;
@@ -705,7 +705,7 @@
 
 .assistant-chat-input input:focus {
   border-color: var(--ui-accent);
-  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.16);
+  box-shadow: var(--ui-focus);
 }
 
 .assistant-chat-input .primary-button {

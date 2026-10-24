@@ -31,7 +31,7 @@
     flex-direction: column;
     flex-wrap: nowrap;
     padding: 16px 12px;
-    border-right: 1px solid #e8eaf0;
+    border-right: 1px solid var(--ui-border);
     border-bottom: 0;
     background: #ffffff;
     transform: translateX(-100%);
@@ -45,7 +45,7 @@
   .professional-shell .side-brand {
     padding: 4px 6px 14px;
     border-right: 0;
-    border-bottom: 1px solid #e8eaf0;
+    border-bottom: 1px solid var(--ui-border);
   }
 
   .professional-shell .nav-section-label {
@@ -141,7 +141,7 @@
   .login-shell .login-proof {
     display: flex;
     padding: 24px 28px;
-    border-top: 1px solid #e8eaf0;
+    border-top: 1px solid var(--ui-border);
     border-left: 0;
   }
 
@@ -195,7 +195,7 @@
   .professional-shell .metric-cell {
     min-height: 88px;
     padding: 12px;
-    border-top: 1px solid #e8eaf0;
+    border-top: 1px solid var(--ui-border);
   }
 
   .professional-shell .metric-cell:nth-child(odd) {
@@ -203,7 +203,7 @@
   }
 
   .professional-shell .metric-cell:nth-child(even) {
-    border-left: 1px solid #e8eaf0;
+    border-left: 1px solid var(--ui-border);
   }
 
   .professional-shell .metric-cell:nth-child(-n + 2) {

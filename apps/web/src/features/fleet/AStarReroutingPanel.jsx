@@ -62,7 +62,7 @@ export function AStarReroutingPanel({ jamActive, aiEvents, onAckEvent }) {
         <div>
           <h2>
             {t("astar_monitor_title")}{" "}
-            <span className="pill" data-testid="astar-sim-badge">
+            <span className="pill provenance-sim" data-testid="astar-sim-badge">
               {t("honesty_sim_badge")}
             </span>
           </h2>

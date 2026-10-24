@@ -5,14 +5,7 @@
 html {
   color: var(--ui-ink);
   background: var(--ui-canvas);
-  font-family:
-    "Geist Sans",
-    "Plus Jakarta Sans",
-    Inter,
-    IBM Plex Sans,
-    ui-sans-serif,
-    system-ui,
-    sans-serif;
+  font-family: var(--font-body);
   letter-spacing: 0;
   color-scheme: light;
   font-synthesis: none;
@@ -58,17 +51,17 @@ h3 {
 }
 
 h1 {
-  font-family: "Plus Jakarta Sans", "Geist Sans", Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-head);
   font-size: 28px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.15;
   letter-spacing: -0.022em;
 }
 
 h2 {
-  font-family: "Plus Jakarta Sans", "Geist Sans", Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-head);
   font-size: 20px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.015em;
 }
@@ -84,6 +77,7 @@ label {
 }
 
 h3 {
+  font-family: var(--font-head);
   font-size: 15px;
   font-weight: 500;
   line-height: 1.35;

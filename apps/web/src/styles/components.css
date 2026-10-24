@@ -69,18 +69,18 @@
   background: var(--ui-accent);
   color: #ffffff;
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(180, 83, 9, 0.2);
+  box-shadow: none;
 }
 
 .primary-button:hover {
   background: var(--ui-accent-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(180, 83, 9, 0.25);
+  box-shadow: none;
 }
 
 .primary-button:active {
   transform: translateY(0) scale(0.98);
-  box-shadow: 0 1px 2px rgba(180, 83, 9, 0.2);
+  box-shadow: none;
 }
 
 .danger-button {
@@ -305,9 +305,9 @@ td .cell-subtext {
   letter-spacing: 0.03em;
   padding: 3px 8px;
   border-radius: 6px;
-  background: #1e293b;
+  background: var(--ui-ink);
   color: #f8fafc;
-  border: 1px solid #0f172a;
+  border: 1px solid var(--ui-ink);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
   white-space: nowrap;
 }
@@ -336,11 +336,11 @@ td .cell-subtext {
   align-items: center;
   padding: 2px 8px;
   border-radius: 6px;
-  background: #f1f5f9;
-  color: #334155;
+  background: var(--ui-surface-muted);
+  color: var(--ui-ink-soft);
   font-size: var(--fs-caption);
   font-weight: 600;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--ui-border);
 }
 
 .speed-badge {
@@ -373,37 +373,37 @@ td .cell-subtext {
 
 .pill.success,
 .status-pill.success {
-  color: #15803d;
-  background: #f0fdf4;
-  border-color: #bbf7d0;
+  color: var(--ui-success);
+  background: var(--ui-accent-soft);
+  border-color: var(--ui-success-line);
 }
 
 .pill.warning,
 .status-pill.warning {
-  color: #b45309;
-  background: #fffbeb;
-  border-color: #fde68a;
+  color: var(--ui-warning);
+  background: var(--ui-warning-soft);
+  border-color: var(--ui-warning-line);
 }
 
 .pill.danger,
 .status-pill.danger {
-  color: #b91c1c;
-  background: #fef2f2;
-  border-color: #fecaca;
+  color: var(--ui-danger);
+  background: var(--ui-danger-soft);
+  border-color: var(--ui-danger-line);
 }
 
 .pill.info,
 .status-pill.info {
-  color: #0369a1;
-  background: #f0f9ff;
-  border-color: #bae6fd;
+  color: var(--ui-info);
+  background: var(--ui-info-soft);
+  border-color: var(--ui-info-line);
 }
 
 .pill.live,
 .status-pill.live {
   color: var(--ui-accent);
   background: var(--ui-accent-soft);
-  border-color: rgba(217, 119, 87, 0.3);
+  border-color: var(--ui-success-line);
 }
 
 .status-dot {
@@ -413,13 +413,13 @@ td .cell-subtext {
   flex-shrink: 0;
 }
 .status-dot.success {
-  background: #16a34a;
+  background: var(--ui-success);
 }
 .status-dot.warning {
-  background: #d97706;
+  background: var(--ui-warning);
 }
 .status-dot.danger {
-  background: #dc2626;
+  background: var(--ui-danger);
 }
 .status-dot.live {
   background: var(--ui-accent);
@@ -543,7 +543,7 @@ textarea {
 }
 
 .metric-cell.metric-warning strong {
-  color: #b45309;
+  color: var(--ui-warning);
 }
 .metric-cell.metric-danger strong {
   color: var(--ui-danger);
@@ -595,8 +595,8 @@ textarea {
 }
 
 .segmented-control button:disabled {
-  color: #4f5d6b;
-  background: #e9edf2;
+  color: var(--ui-ink-soft);
+  background: var(--ui-surface-muted);
   cursor: not-allowed;
 }
 
@@ -661,14 +661,14 @@ textarea:focus-visible {
 .professional-shell .side-rail {
   gap: 14px;
   padding: 16px 12px;
-  border-color: #e8eaf0;
+  border-color: var(--ui-border);
   box-shadow: none;
 }
 
 .professional-shell .side-brand {
   min-height: 56px;
   padding: 4px 6px 14px;
-  border-color: #e8eaf0;
+  border-color: var(--ui-border);
 }
 
 .professional-shell .brand-mark,
@@ -709,7 +709,7 @@ textarea:focus-visible {
 
 .professional-shell .topbar {
   min-height: 72px;
-  border-color: #e8eaf0;
+  border-color: var(--ui-border);
   box-shadow: none;
   background: var(--ui-canvas);
 }
@@ -722,7 +722,7 @@ textarea:focus-visible {
 .professional-shell .ghost-button,
 .professional-shell .icon-button {
   min-height: var(--tap-min);
-  border: 1px solid #e8eaf0;
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
   box-shadow: none;
 }
@@ -1062,7 +1062,7 @@ textarea:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  border-bottom: 1px solid #e8eaf0;
+  border-bottom: 1px solid var(--ui-border);
 }
 
 .field-brand {
@@ -1103,7 +1103,7 @@ textarea:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid #e8eaf0;
+  border: 1px solid var(--ui-border);
   border-radius: 6px;
   background: #ffffff;
   font-size: var(--fs-caption);
@@ -1112,15 +1112,15 @@ textarea:focus-visible {
 
 .field-app-header .pill.live {
   color: var(--ui-success);
-  border-color: #b9e2d1;
-  background: #f2fbf6;
+  border-color: var(--ui-success-line);
+  background: var(--ui-accent-soft);
 }
 
 .field-shell .field-card {
   width: min(680px, 100%);
   margin: 0 auto;
   padding: 24px;
-  border: 1px solid #e8eaf0;
+  border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-card);
   background: #ffffff;
   box-shadow: var(--ui-shadow);
@@ -1130,7 +1130,7 @@ textarea:focus-visible {
   align-items: center;
   margin-bottom: 18px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #e8eaf0;
+  border-bottom: 1px solid var(--ui-border);
 }
 
 .field-shell .field-head h1 {
@@ -1140,7 +1140,7 @@ textarea:focus-visible {
 
 .field-duty-label {
   color: var(--ui-accent);
-  background: #fafaff;
+  background: var(--ui-canvas);
 }
 
 .field-shell .field-label {
@@ -1154,7 +1154,7 @@ textarea:focus-visible {
 .field-shell .field-card select,
 .field-shell .field-input {
   min-height: 44px;
-  border-color: #dfe2ea;
+  border-color: var(--ui-border);
   border-radius: 6px;
   background: #ffffff;
   font-size: var(--fs-caption);
@@ -1164,10 +1164,10 @@ textarea:focus-visible {
   min-height: 40px;
   margin-bottom: 16px;
   padding: 0 12px;
-  border: 1px solid #e8eaf0;
+  border: 1px solid var(--ui-border);
   border-radius: 6px;
   color: var(--ui-accent);
-  background: #fafaff;
+  background: var(--ui-canvas);
   font-size: var(--fs-caption);
   font-weight: 600;
 }
@@ -1177,8 +1177,8 @@ textarea:focus-visible {
   justify-content: space-between;
   gap: 12px;
   color: var(--ui-warning);
-  border-color: #ecd5a4;
-  background: #fffaf0;
+  border-color: var(--ui-warning-line);
+  background: var(--ui-warning-soft);
 }
 
 .field-shell .field-queue-status .primary-button {
@@ -1189,9 +1189,9 @@ textarea:focus-visible {
 .field-shell .instruction {
   margin-bottom: 18px;
   padding: 16px;
-  border-color: #d8d9f5;
+  border-color: var(--ui-info-line);
   border-radius: 8px;
-  background: #fafaff;
+  background: var(--ui-canvas);
 }
 
 .field-shell .instruction .alert-head svg {
@@ -1227,9 +1227,9 @@ textarea:focus-visible {
 
 .field-shell .empty-instruction,
 .field-shell .field-timeline {
-  border: 1px solid #e8eaf0;
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
-  background: #fafbfc;
+  background: var(--ui-canvas);
 }
 
 .field-shell .field-timeline {
@@ -1699,10 +1699,10 @@ textarea:focus-visible {
 
 .exec-impact {
   margin-top: 14px;
-  border: 1px solid #cbd5df;
+  border: 1px solid var(--ui-border-strong);
   border-radius: 8px;
   padding: 14px;
-  background: #fbfcfd;
+  background: var(--ui-canvas);
 }
 
 .exec-impact-head {
@@ -1727,7 +1727,7 @@ textarea:focus-visible {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #526170;
+  color: var(--ui-muted);
 }
 
 .exec-impact-col strong {
@@ -1735,20 +1735,20 @@ textarea:focus-visible {
 }
 
 .exec-impact-col small {
-  color: #526170;
+  color: var(--ui-muted);
 }
 
 .exec-impact-arrow {
   font-size: 20px;
-  color: #526170;
+  color: var(--ui-muted);
 }
 
 .exec-impact-delta strong {
   display: block;
   padding: 6px 10px;
   border-radius: 6px;
-  background: #dcfce7;
-  color: #166534;
+  background: var(--ui-accent-soft);
+  color: var(--ui-success);
   font-size: 14px;
   white-space: nowrap;
 }
@@ -1762,7 +1762,7 @@ textarea:focus-visible {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #526170;
+  color: var(--ui-muted);
   margin: 0 0 8px;
 }
 
@@ -1839,11 +1839,11 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .status-overcapacity {
-  color: #d92d20;
+  color: var(--ui-danger);
   font-weight: 700;
 }
 
 .status-normal {
-  color: #039855;
+  color: var(--ui-success);
   font-weight: 700;
 }

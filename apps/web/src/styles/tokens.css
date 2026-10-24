@@ -1,33 +1,60 @@
 :root {
-  --ui-primary: #13211d;
-  --ui-primary-hover: #20342e;
-  --ui-accent: #b53b1a;
-  --ui-accent-hover: #9c3215;
+  /* Forest palette (clean redesign): warm canvas, one forest accent. */
+  --ui-forest-900: #0f3b23;
+  --ui-forest-700: #16613a;
+  --ui-forest-500: #2fb36a;
+  --ui-forest-100: #ddf3e4;
+  --ui-cream: #f4ede3;
+
+  --ui-primary: #1d2320;
+  --ui-primary-hover: #343c38;
+  --ui-accent: var(--ui-forest-700);
+  --ui-accent-hover: var(--ui-forest-900);
+  --ui-accent-strong: var(--ui-forest-900);
   --ui-accent-foreground: #ffffff;
-  --ui-accent-soft: #fff0e9;
-  --ui-canvas: #f2f5f3;
+  --ui-accent-soft: var(--ui-forest-100);
+  --ui-canvas: #fbf9f5;
   --ui-surface: #ffffff;
-  --ui-surface-muted: #e9eeeb;
-  --ui-surface-dark: #13211d;
-  --ui-border: #dce3df;
-  --ui-border-strong: #bdc8c2;
-  --ui-ink: #14201c;
-  --ui-ink-soft: #33443e;
-  --ui-muted: #52635c;
+  --ui-surface-muted: var(--ui-cream);
+  --ui-surface-dark: #1d2320;
+  --ui-border: #e6e0d6;
+  --ui-border-strong: #cdc5b8;
+  --ui-ink: #1d2320;
+  --ui-ink-soft: #4a524e;
+  /* Darkened from the mock's #6b736f so captions pass AA on cream (5.24:1). */
+  --ui-muted: #5c6460;
+  --ui-on-dark: #ffffff;
+  --ui-on-dark-muted: #c9d6cf;
   --fs-body: 15px;
   --fs-caption: 13px;
   --fs-kpi: 28px;
   --tap-min: 44px;
-  --ui-success: #177a57;
+  --ui-success: var(--ui-forest-700);
   --ui-warning: #99500d;
+  --ui-warning-soft: #fff1de;
   --ui-danger: #b42f2b;
+  --ui-danger-soft: #fbe7e5;
   --ui-info: #1b6f84;
-  --ui-radius: 8px;
-  --ui-radius-card: 12px;
-  --ui-radius-elevated: 16px;
-  --ui-radius-control: 8px;
-  --ui-shadow: 0 1px 2px rgba(16, 32, 26, 0.05), 0 8px 24px rgba(16, 32, 26, 0.035);
-  --ui-shadow-hover: 0 12px 32px rgba(16, 32, 26, 0.09);
+  --ui-info-soft: #e2f0f3;
+  /* Hairlines for status-tinted chips and notes (outlined, never filled heavy). */
+  --ui-success-line: #b7dcc4;
+  --ui-warning-line: #ebcb9f;
+  --ui-danger-line: #efc2bf;
+  --ui-info-line: #b4d6df;
+  --ui-radius: 10px;
+  --ui-radius-card: 16px;
+  --ui-radius-elevated: 20px;
+  --ui-radius-control: 10px;
+  --ui-radius-pill: 999px;
+  --ui-shadow: 0 1px 2px rgba(29, 35, 32, 0.04);
+  --ui-shadow-hover: 0 10px 28px rgba(29, 35, 32, 0.08);
+  /* Floating map HUD cards only: translucent white over the map. */
+  --ui-glass: rgba(255, 255, 255, 0.9);
+  --ui-glass-blur: blur(14px);
+  --ui-shadow-float: 0 1px 2px rgba(29, 35, 32, 0.06), 0 12px 32px rgba(29, 35, 32, 0.12);
+  --ui-scrim: rgba(29, 35, 32, 0.38);
+  --font-head: "Inter Tight", Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-body: Inter, ui-sans-serif, system-ui, sans-serif;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -38,7 +65,7 @@
   --space-8: 64px;
   --ui-sidebar-width: 232px;
   --ui-topbar-height: 68px;
-  --ui-focus: 0 0 0 3px rgba(181, 59, 26, 0.32);
+  --ui-focus: 0 0 0 3px rgba(22, 97, 58, 0.35);
   --z-dropdown: 20;
   --z-sticky: 30;
   --z-modal-backdrop: 40;
@@ -47,12 +74,12 @@
   --z-tooltip: 70;
 
   --green: var(--ui-success);
-  --green-light: #eaf5f0;
-  --green-dark: #0f6547;
+  --green-light: var(--ui-forest-100);
+  --green-dark: var(--ui-forest-900);
   --red: var(--ui-danger);
-  --red-light: #fcedeb;
+  --red-light: var(--ui-danger-soft);
   --amber: var(--ui-warning);
-  --amber-light: #fff4e4;
+  --amber-light: var(--ui-warning-soft);
   --purple: var(--ui-accent);
   --purple-light: var(--ui-accent-soft);
   --bg: var(--ui-canvas);
@@ -65,6 +92,7 @@
   --border-strong: var(--ui-border-strong);
   --radius: var(--ui-radius);
   --mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+  --font-mono: var(--mono);
   --shadow: var(--ui-shadow);
   --shadow-hover: var(--ui-shadow-hover);
 }

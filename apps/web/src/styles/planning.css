@@ -8,7 +8,7 @@
 .summary-panel ul {
   margin: 0 0 18px;
   padding-left: 18px;
-  color: #344452;
+  color: var(--ui-ink-soft);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -18,10 +18,10 @@
 }
 
 .queue-box {
-  border: 1px solid #cbd5df;
+  border: 1px solid var(--ui-border-strong);
   border-radius: 8px;
   padding: 14px;
-  background: #fbfcfd;
+  background: var(--ui-canvas);
 }
 
 .queue-box strong {
@@ -31,7 +31,7 @@
 .queue-box span {
   display: block;
   font-size: 13px;
-  color: #526170;
+  color: var(--ui-muted);
   margin-top: 2px;
 }
 
@@ -52,21 +52,21 @@
   display: block;
   font-size: 12px;
   font-weight: 800;
-  color: #526170;
+  color: var(--ui-muted);
   margin-bottom: 4px;
 }
 
 .scenario-panel input {
   width: 100%;
   border-radius: 8px;
-  border: 1px solid #cbd5df;
+  border: 1px solid var(--ui-border-strong);
   padding: 10px 12px;
   min-height: 44px;
 }
 
 .scenario-result {
-  border: 1px solid #d8d9f5;
-  background: #f5f5ff;
+  border: 1px solid var(--ui-info-line);
+  background: var(--ui-canvas);
   border-radius: 8px;
   padding: 12px;
   text-align: center;
@@ -98,7 +98,7 @@
   padding: 10px;
   border-radius: 8px;
   text-align: center;
-  border: 1px solid #d8d9f5;
+  border: 1px solid var(--ui-info-line);
 }
 
 .req-chip b {
@@ -117,7 +117,7 @@
   align-items: center;
   justify-content: space-around;
   margin-top: 16px;
-  background: #f8fafc;
+  background: var(--ui-canvas);
   padding: 16px;
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -316,8 +316,8 @@
 }
 
 .status-badge.weighing {
-  background: #fef3c7;
-  color: #b45309;
+  background: var(--ui-warning-soft);
+  color: var(--ui-warning);
 }
 
 /* Operations Optimizer UI styling */
@@ -384,7 +384,7 @@
 
 .unmet-reasons-box {
   background: var(--red-light);
-  border: 1px solid rgba(180, 35, 24, 0.2);
+  border: 1px solid var(--ui-danger-line);
   border-radius: 6px;
   padding: 10px;
   margin-bottom: 14px;
@@ -456,7 +456,7 @@
 
 .optimizer-success {
   background: var(--green-light);
-  border: 1px solid rgba(23, 107, 84, 0.2);
+  border: 1px solid var(--ui-success-line);
   border-radius: 6px;
   padding: 10px;
   margin-top: 14px;
@@ -514,11 +514,11 @@
 }
 
 .traffic-status-badge.clear {
-  border: 1px solid #bbf7d0;
+  border: 1px solid var(--ui-success-line);
 }
 
 .traffic-status-badge.congested {
-  border: 1px solid #fecaca;
+  border: 1px solid var(--ui-danger-line);
 }
 
 .astar-info-card {
@@ -528,13 +528,13 @@
 }
 
 .astar-msg-icon.congested {
-  background: #fef2f2;
-  color: #dc2626;
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
 }
 
 .astar-msg-icon.clear {
-  background: #f0fdf4;
-  color: #16a34a;
+  background: var(--ui-accent-soft);
+  color: var(--ui-success);
 }
 
 .astar-stats {

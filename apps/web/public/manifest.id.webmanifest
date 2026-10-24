@@ -6,8 +6,8 @@
   "dir": "ltr",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#eef2f6",
-  "theme_color": "#176b54",
+  "background_color": "#fbf9f5",
+  "theme_color": "#fbf9f5",
   "icons": [
     {
       "src": "/pythia-icon.svg",
