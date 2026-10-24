@@ -36,7 +36,30 @@ self.addEventListener("message", (event) => {
     self.__breakCachePut = true;
     event.ports[0].postMessage("put-broken");
   }
+  // Assets the page loaded before this worker controlled it (the first visit,
+  // including lazy chunks such as the fleet map) never passed through the
+  // fetch handler; cache them now so they are available offline after one load.
+  if (event.data?.type === "CACHE_ASSETS" && Array.isArray(event.data.urls)) {
+    event.waitUntil(cacheAssets(event.data.urls));
+  }
 });
+
+function isAssetUrl(url) {
+  return url.origin === self.location.origin && url.pathname.startsWith("/assets/");
+}
+
+function cacheAssets(urls) {
+  const assets = urls.map((raw) => new URL(raw, self.location.origin)).filter(isAssetUrl);
+  return caches
+    .open(CACHE_NAME)
+    .then((cache) =>
+      Promise.all(
+        assets.map((url) =>
+          cache.match(url.href).then((hit) => hit || cache.add(url.href).catch(() => null)),
+        ),
+      ),
+    );
+}
 
 function cachePut(request, response) {
   if (response.ok) {
@@ -115,15 +138,22 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Scripts, styles and other assets: cache-first. An uncached one that cannot
+  // be fetched is a network error, never the HTML shell — a module script
+  // answered with HTML fails its MIME check and takes the route down with it.
+  // Only navigations (above) fall back to the shell. Hashed /assets/* are
+  // immutable by name, so a `Vary: Origin` from the static server (vite
+  // preview sends one) must not turn a cached copy into a miss just because
+  // the request that stored it and the one asking differ in their Origin header.
   event.respondWith(
-    caches.match(request).then((cached) => {
+    caches.match(request, { ignoreVary: isAssetUrl(url) }).then((cached) => {
       if (cached) return cached;
       return fetch(request)
         .then((response) => {
           event.waitUntil(cachePut(request, response));
           return response;
         })
-        .catch(() => caches.match("/"));
+        .catch(() => Response.error());
     }),
   );
 });

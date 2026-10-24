@@ -20,15 +20,28 @@ async function cleanSlate(page) {
   });
 }
 
+// page.waitForFunction does not await an async predicate: the Promise it returns is
+// truthy, so the wait passed at once and the test raced the worker's activation.
+// Poll page.evaluate instead until a worker whose script URL contains `scriptPart` is active.
+async function waitForActiveWorker(page, scriptPart = "") {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          (part) =>
+            navigator.serviceWorker
+              .getRegistrations()
+              .then((regs) => regs.some((r) => r.active !== null && r.active.scriptURL.includes(part))),
+          scriptPart,
+        ),
+      { timeout: 15000 },
+    )
+    .toBe(true);
+}
+
 async function installWorker(page) {
   await page.evaluate(() => navigator.serviceWorker.register("/sw.js"));
-  await page.waitForFunction(
-    async () => {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      return regs.some((r) => r.active !== null);
-    },
-    { timeout: 15000 },
-  );
+  await waitForActiveWorker(page);
 }
 
 test("first install caches the app shell and controls subsequent loads", async ({ page }) => {
@@ -92,13 +105,7 @@ test("a new build version replaces the old cache on activation", async ({ page }
     caches.open("pythia-stale-previous-build").then((c) => c.put("/", Response.json({ stale: true }))),
   );
   await page.evaluate(() => navigator.serviceWorker.register("/sw.js?v=next-build"));
-  await page.waitForFunction(
-    async () => {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      return regs.some((r) => r.active?.scriptURL.includes("v=next-build"));
-    },
-    { timeout: 15000 },
-  );
+  await waitForActiveWorker(page, "v=next-build");
 
   // Activation evicts the previous version's cache but keeps the live one.
   const keys = await page.evaluate(async () => {

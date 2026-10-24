@@ -106,33 +106,42 @@ test("logout clears the stored session and keeps the workspace URL for the next 
 test("offline navigation to a deep link falls back to the cached app shell", async ({ page, context }) => {
   await page.goto("/");
   await storeSession(page);
+  await page.reload();
+  // First visit: the fleet map's lazy chunk loads before any worker exists.
+  await expect(page.getByTestId("fleet-workspace")).toBeVisible();
+  await page.waitForFunction(() =>
+    performance
+      .getEntriesByType("resource")
+      .some((entry) => /\/assets\/LiveFleetMap-[^/]+\.js$/.test(entry.name)),
+  );
   // The app skips SW registration under automation; register the real worker.
+  // It claims this page, and the page hands over the assets it already loaded.
   await page.evaluate(() => navigator.serviceWorker.register("/sw.js"));
-  await page.waitForFunction(
-    async () => {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      return regs.some((r) => r.active !== null);
-    },
-    { timeout: 15000 },
-  );
-  await page.reload({ waitUntil: "domcontentloaded" });
-  // The worker controls the page and has finished caching every startup asset
-  // (entry script, preloaded vendor chunk, stylesheets) — runtime cache writes
-  // settle after the response, and the vendor chunk is large.
-  await page.waitForFunction(
-    async () => {
-      const assets = [
-        ...document.querySelectorAll(
-          'script[type="module"][src], link[rel="modulepreload"], link[rel="stylesheet"][href^="/assets/"]',
-        ),
-      ].map((element) => element.src || element.href);
-      if (!navigator.serviceWorker.controller || !assets.length) return false;
-      const cached = await Promise.all(assets.map((url) => caches.match(url)));
-      return cached.every(Boolean);
-    },
-    null,
-    { timeout: 15000 },
-  );
+  // Every startup asset (entry script, preloaded vendor chunk, stylesheets) and
+  // the lazy chunk loaded before the worker took control are cached without a
+  // second load. Polled with expect.poll: page.waitForFunction does not await an
+  // async predicate, so its returned Promise counted as "ready" at once and the
+  // test went offline before anything was cached (the old intermittent failure).
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const assets = [
+            ...document.querySelectorAll(
+              'script[type="module"][src], link[rel="modulepreload"], link[rel="stylesheet"][href^="/assets/"]',
+            ),
+          ].map((element) => element.src || element.href);
+          const lazy = performance
+            .getEntriesByType("resource")
+            .map((entry) => entry.name)
+            .filter((name) => /\/assets\/LiveFleetMap-[^/]+\.js$/.test(name));
+          if (!navigator.serviceWorker.controller || !assets.length || !lazy.length) return false;
+          const cached = await Promise.all([...assets, ...lazy].map((url) => caches.match(url)));
+          return cached.every(Boolean);
+        }),
+      { timeout: 15000 },
+    )
+    .toBe(true);
 
   await context.setOffline(true);
   try {
@@ -140,6 +149,15 @@ test("offline navigation to a deep link falls back to the cached app shell", asy
     expect(response?.ok() ?? true).toBeTruthy();
     await expect(page.getByTestId("forecast-workspace")).toBeVisible();
     await expect(navButton(page, "Prediksi")).toHaveAttribute("aria-current", "page");
+    // Only navigations fall back to the shell: an uncached script offline is a
+    // network error, never the HTML shell under a .js URL.
+    const uncached = await page.evaluate(() =>
+      fetch(`/assets/not-cached-${Date.now()}.js`).then(
+        (res) => `answered ${res.status} ${res.headers.get("content-type")}`,
+        () => "network-error",
+      ),
+    );
+    expect(uncached).toBe("network-error");
   } finally {
     await context.setOffline(false);
     await page.evaluate(async () => {

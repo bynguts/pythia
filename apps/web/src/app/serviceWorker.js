@@ -49,6 +49,20 @@ if (typeof window !== "undefined") {
   window.pythiaShowUpdatePrompt = () => showUpdateBanner(navigator.serviceWorker?.controller || {});
 }
 
+// The first visit loads its scripts (lazy chunks included) before the worker
+// controls the page, so none of them passed through its cache. When it takes
+// control, hand it the asset URLs this page already loaded so an offline deep
+// link has them after one load. Listening is harmless without a worker.
+if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    const urls = performance
+      .getEntriesByType("resource")
+      .map((entry) => entry.name)
+      .filter((name) => name.startsWith(`${location.origin}/assets/`));
+    navigator.serviceWorker.controller?.postMessage({ type: "CACHE_ASSETS", urls });
+  });
+}
+
 if (import.meta.env.PROD && !IS_AUTOMATION && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker

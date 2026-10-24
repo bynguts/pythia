@@ -5,6 +5,21 @@ import { expect, test } from "@playwright/test";
 // failed cache write must never fail the live response.
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
+// page.waitForFunction does not await an async predicate: the Promise it returns is
+// truthy, so the wait passed at once and the test raced the worker's activation.
+// Poll page.evaluate instead until a worker is active.
+async function waitForActiveWorker(page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() =>
+          navigator.serviceWorker.getRegistrations().then((regs) => regs.some((r) => r.active !== null)),
+        ),
+      { timeout: 15000 },
+    )
+    .toBe(true);
+}
+
 test("fetched shell and API resources are actually cached once the fetch settles", async ({ page }) => {
   await page.goto("/field");
 
@@ -12,15 +27,8 @@ test("fetched shell and API resources are actually cached once the fetch settles
   // must see live network traffic), so this suite registers the real
   // worker explicitly before asserting on its runtime caching behavior.
   await page.evaluate(() => navigator.serviceWorker.register("/sw.js"));
-  // The service worker registers itself via the app; give it time to activate.
-  const swReady = await page.waitForFunction(
-    async () => {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      return regs.some((r) => r.active !== null);
-    },
-    { timeout: 15000 },
-  );
-  expect(swReady).toBeTruthy();
+  // Give the worker time to activate.
+  await waitForActiveWorker(page);
 
   // Reload so the fetch handler actually serves this navigation.
   await page.reload({ waitUntil: "networkidle" });
@@ -55,13 +63,7 @@ test("a cache write failure does not fail the live response", async ({ page }) =
   await page.goto("/");
   // Explicit registration for the same automation reason as above.
   await page.evaluate(() => navigator.serviceWorker.register("/sw.js"));
-  await page.waitForFunction(
-    async () => {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      return regs.some((r) => r.active !== null);
-    },
-    { timeout: 15000 },
-  );
+  await waitForActiveWorker(page);
 
   // Break `cache.put` inside the live SW, then confirm a normal fetch still
   // succeeds — the live response must never depend on the cache write.
