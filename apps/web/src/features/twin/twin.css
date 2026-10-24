@@ -1,6 +1,10 @@
 /* Pythia Twin — 3D digital twin workspace.
-   The map is the desk; instruments (legend, timeline, controls) float on it
-   as translucent white HUD cards, matching the Fleet decision overlay. */
+   Composition: the city is the hero. On desktop the map runs full-bleed to
+   the right of one side column (Ask Pythia, then the scenario controls);
+   instruments float on the map as slim glass pieces at its edges — legend
+   card top-left, tools top-right, timeline bottom-left — so the districts
+   keep the middle of the frame. Footage mode (?present=1) drops the shell
+   and the column and keeps the HUD, scenario chip and provenance on screen. */
 
 .twin-workspace {
   /* Risk palette mirrors RISK_COLORS in src/twin/twinLayers.js: tokens.css
@@ -19,9 +23,28 @@
   --twin-overlay-line-strong: var(--ui-border-strong);
   --twin-overlay-ink-soft: var(--ui-ink-soft);
   --twin-overlay-highlight: var(--ui-warning);
-  --twin-panel-width: 340px;
+  /* Side column (Ask Pythia + controls); 0 on phones and in footage mode. */
+  --twin-rail-width: 0px;
+  /* Gap between floating instruments and the canvas edge. */
+  --twin-edge: var(--space-3);
+  /* The MapLibre zoom column (44 px buttons, 10 px control margin). */
+  --twin-nav-clear: calc(var(--tap-min) + 10px + var(--space-3));
+  --twin-timeline-width: 560px;
+  /* Cool wash over the map while a rain scenario is shown. */
+  --twin-rain-wash: rgb(38 62 84 / 0.08);
+}
+@media (min-width: 921px) {
+  .twin-workspace:not(.is-present) {
+    --twin-rail-width: 312px;
+  }
+}
+@media (min-width: 1181px) {
+  .twin-workspace:not(.is-present) {
+    --twin-rail-width: 340px;
+  }
 }
 
+/* ---- focused header: title and metrics share one slim row ---------------- */
 .twin-workspace .workspace-heading {
   min-height: 0;
   margin-bottom: var(--space-3);
@@ -34,17 +57,64 @@
   margin-bottom: 0;
 }
 .twin-workspace .metric-cell {
-  min-height: 74px;
-  padding: 12px 16px;
+  min-height: 0;
+  padding: 10px 16px;
+}
+.twin-workspace .metric-cell span {
+  font-size: 12px;
 }
 .twin-workspace .metric-cell strong {
-  margin: 2px 0 1px;
-  font-size: 24px;
+  margin: 2px 0;
+  display: block;
+  font-size: 22px;
+  line-height: 1.15;
   font-variant-numeric: tabular-nums;
+}
+.twin-workspace .metric-cell small {
+  display: block;
+  line-height: 1.35;
 }
 .twin-workspace .workspace-freshness {
   flex: none;
   gap: var(--space-2);
+}
+
+@media (min-width: 921px) {
+  /* The twin gets the canvas: less shell padding above and below the deck. */
+  .command-canvas:has(.twin-workspace:not(.is-present)) {
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+  .twin-workspace:not(.is-present) > .twin-heading {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-end;
+    gap: var(--space-2);
+  }
+  .twin-workspace:not(.is-present) > .twin-heading h1 {
+    margin: 6px 0 0;
+  }
+  .twin-workspace:not(.is-present) > .twin-heading p {
+    display: none;
+  }
+  .twin-workspace:not(.is-present) .workspace-freshness {
+    min-height: 32px;
+    padding: 0 12px;
+  }
+}
+@media (min-width: 1181px) {
+  .twin-workspace:not(.is-present) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--space-6);
+    align-items: end;
+  }
+  .twin-workspace:not(.is-present) > .twin-heading {
+    margin: 0;
+  }
+  .twin-workspace:not(.is-present) > .twin-deck {
+    grid-column: 1 / -1;
+  }
 }
 
 /* ---- deck ---------------------------------------------------------------- */
@@ -53,7 +123,7 @@
   margin-top: var(--space-3);
   display: flex;
   flex-direction: column;
-  height: clamp(520px, calc(100dvh - 318px), 980px);
+  height: clamp(540px, calc(100dvh - var(--ui-topbar-height) - 154px), 1080px);
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-elevated);
   overflow: hidden;
@@ -100,7 +170,7 @@
 }
 .twin-viewport {
   position: absolute;
-  inset: 0;
+  inset: 0 0 0 var(--twin-rail-width);
   overflow: hidden;
 }
 .twin-map {
@@ -112,7 +182,7 @@
   outline-offset: -3px;
 }
 
-/* Map chrome: 44px targets, kept clear of the control panel. */
+/* Map chrome: 44px targets. */
 .twin-map .maplibregl-ctrl-group button {
   width: var(--tap-min);
   height: var(--tap-min);
@@ -120,9 +190,6 @@
 .twin-map .maplibregl-ctrl-group {
   border-radius: var(--ui-radius-card);
   box-shadow: var(--ui-shadow-float);
-}
-.twin-map .maplibregl-ctrl-top-right {
-  right: calc(var(--twin-panel-width) + 24px);
 }
 .twin-map .maplibregl-ctrl-attrib.maplibregl-compact {
   min-height: 24px;
@@ -134,9 +201,8 @@
 }
 
 /* Shared instrument surface */
-.twin-legend,
+.twin-legend-bar,
 .twin-timeline,
-.twin-panel,
 .twin-tooltip,
 .twin-status,
 .twin-tour-caption,
@@ -156,24 +222,13 @@
   outline-offset: 2px;
 }
 
-/* ---- legend + provenance ------------------------------------------------- */
-.twin-legend {
-  position: absolute;
-  z-index: 3;
-  top: var(--space-3);
-  left: var(--space-3);
-  width: min(330px, calc(100% - var(--twin-panel-width) - 96px));
-  padding: var(--space-3) var(--space-4);
+/* ---- legend card: risk key + one-line provenance summary ----------------- */
+.twin-legend-bar {
   display: grid;
-  gap: var(--space-2);
   border-radius: var(--ui-radius-card);
 }
-.twin-legend > small {
-  color: var(--twin-overlay-muted);
-  font-size: 12px;
-  line-height: 1.35;
-}
 .twin-legend-risk {
+  padding: 10px 14px 8px;
   display: flex;
   flex-wrap: wrap;
   gap: 6px 12px;
@@ -204,18 +259,83 @@
   background: var(--twin-risk-critical);
 }
 
-.twin-provenance {
-  margin: 0;
-  padding: var(--space-2) 0 0;
+.twin-provenance-toggle {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 0 10px 0 14px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  border: 0;
+  border-top: 1px solid var(--twin-overlay-line);
+  border-radius: 0 0 var(--ui-radius-card) var(--ui-radius-card);
+  color: var(--twin-overlay-ink);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.twin-provenance-toggle:hover {
+  background: var(--ui-surface-muted);
+}
+.twin-provenance-summary {
+  min-width: 0;
+  flex: 1;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 2px 12px;
+}
+.twin-provenance-summary b,
+.twin-chip b {
+  font-family: var(--mono);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ui-ink-soft);
+}
+.twin-provenance-summary b {
+  font-size: 10.5px;
+}
+.twin-provenance-summary b::before,
+.twin-chip b::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  display: inline-block;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 1px;
+}
+.twin-provenance-toggle small {
+  color: var(--twin-overlay-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.twin-provenance-chevron {
+  flex: none;
+  color: var(--twin-overlay-muted);
+  transition: transform 0.18s ease;
+}
+.twin-provenance-toggle[aria-expanded="true"] .twin-provenance-chevron {
+  transform: rotate(180deg);
+}
+
+.twin-provenance {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   list-style: none;
-  border-top: 1px solid var(--twin-overlay-line);
+}
+.twin-provenance[hidden] {
+  display: none;
 }
 .twin-chip {
-  min-height: 24px;
-  padding: 2px 9px;
+  min-height: 26px;
+  padding: 2px 10px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -229,59 +349,125 @@
 .twin-chip span {
   color: var(--twin-overlay-muted);
 }
-.twin-chip b {
-  font-family: var(--mono);
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ui-ink-soft);
-}
-.twin-chip b::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  margin-right: 5px;
-  display: inline-block;
-  border-radius: 50%;
-  background: currentColor;
-  vertical-align: 1px;
-}
 .twin-chip.class-real {
-  border-color: var(--ui-success);
+  border-color: var(--ui-success-line);
 }
-.twin-chip.class-real b {
+.twin-chip.class-real b,
+.twin-provenance-summary .class-real {
   color: var(--ui-success);
 }
 .twin-chip.class-model_output {
-  border-color: var(--ui-info);
+  border-color: var(--ui-info-line);
 }
-.twin-chip.class-model_output b {
+.twin-chip.class-model_output b,
+.twin-provenance-summary .class-model_output {
   color: var(--ui-info);
 }
 .twin-chip.class-simulated,
 .twin-chip.class-simulated_demo_city,
 .twin-chip.class-approximate {
-  border-color: var(--ui-warning);
+  border-color: var(--ui-warning-line);
 }
 .twin-chip.class-simulated b,
 .twin-chip.class-simulated_demo_city b,
-.twin-chip.class-approximate b {
+.twin-chip.class-approximate b,
+.twin-provenance-summary :is(.class-simulated, .class-simulated_demo_city, .class-approximate) {
   color: var(--ui-warning);
 }
-.twin-chip.class-unavailable b {
+.twin-chip.class-unavailable b,
+.twin-provenance-summary .class-unavailable {
   color: var(--twin-overlay-muted);
 }
 .twin-legend-note {
-  color: var(--ui-warning) !important;
+  padding: 0 14px 10px;
+  color: var(--ui-warning);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* ---- map tools: city base + (footage mode) Ask Pythia ---------------------- */
+.twin-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.twin-base-toggle,
+.twin-ask-toggle {
+  min-height: var(--tap-min);
+  padding: 0 var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--twin-overlay-line);
+  border-radius: var(--ui-radius-pill);
+  color: var(--twin-overlay-ink);
+  background: var(--twin-overlay);
+  box-shadow: var(--ui-shadow-float);
+  backdrop-filter: var(--ui-glass-blur);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.twin-base-toggle:hover:not(:disabled),
+.twin-ask-toggle:hover {
+  border-color: var(--twin-overlay-line-strong);
+}
+.twin-base-toggle[aria-pressed="true"] {
+  color: var(--ui-on-dark);
+  background: var(--ui-primary);
+  border-color: var(--ui-primary);
+}
+.twin-base-toggle:disabled {
+  color: var(--twin-overlay-muted);
+  cursor: not-allowed;
+}
+.twin-tools .twin-legend-note {
+  flex-basis: 100%;
+  max-width: 300px;
+  margin-left: auto;
+  padding: 6px 12px;
+  border-radius: var(--ui-radius-control);
+  background: var(--twin-overlay);
+  text-align: right;
+}
+
+/* Licence credit for the imagery: always on the map while it is shown. */
+.twin-imagery-credit {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--twin-edge) + var(--tap-min) + var(--space-2));
+  right: var(--twin-nav-clear);
+  max-width: min(340px, calc(100% - 420px));
+  min-width: 200px;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: var(--ui-radius-control);
+  color: var(--twin-overlay-ink);
+  background: var(--twin-overlay);
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: right;
+  pointer-events: none;
+}
+.twin-imagery-credit strong {
+  color: var(--twin-overlay-highlight);
 }
 
 /* ---- status / tooltip / tour --------------------------------------------- */
 .twin-status {
   position: absolute;
   z-index: 4;
-  top: var(--space-3);
-  left: calc((100% - var(--twin-panel-width) - 12px) / 2);
+  top: 108px;
+  left: 50%;
   transform: translateX(-50%);
+  max-width: calc(100% - 24px);
   min-height: 36px;
   padding: 6px 14px;
   display: inline-flex;
@@ -373,10 +559,10 @@
 .twin-tour-caption {
   position: absolute;
   z-index: 5;
-  bottom: 104px;
-  left: calc((100% - var(--twin-panel-width) - 12px) / 2);
+  bottom: 100px;
+  left: 50%;
   transform: translateX(-50%);
-  max-width: calc(100% - var(--twin-panel-width) - 48px);
+  max-width: calc(100% - 48px);
   padding: 6px 6px 6px 16px;
   display: flex;
   align-items: center;
@@ -413,11 +599,6 @@
 
 /* ---- timeline ------------------------------------------------------------ */
 .twin-timeline {
-  position: absolute;
-  z-index: 3;
-  left: var(--space-3);
-  right: calc(var(--twin-panel-width) + 24px);
-  bottom: var(--space-3);
   padding: 6px;
   display: flex;
   align-items: stretch;
@@ -453,17 +634,17 @@
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 4px;
+  gap: 2px;
 }
 .twin-day {
   min-width: 0;
-  min-height: 62px;
-  padding: 6px 4px 5px;
+  min-height: 54px;
+  padding: 5px 4px 4px;
   display: grid;
   grid-template-rows: 1fr auto;
-  gap: 4px;
+  gap: 3px;
   border: 1px solid transparent;
-  border-radius: 22px;
+  border-radius: 20px;
   color: var(--ui-ink-soft);
   background: transparent;
   cursor: pointer;
@@ -481,13 +662,13 @@
   border-color: var(--ui-primary);
 }
 .twin-day-bar {
-  height: 26px;
+  height: 20px;
   display: flex;
   align-items: flex-end;
   justify-content: center;
 }
 .twin-day-bar i {
-  width: min(100%, 18px);
+  width: min(100%, 16px);
   border-radius: 4px 4px 0 0;
   background: var(--ui-border-strong);
 }
@@ -511,17 +692,27 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- control panel ------------------------------------------------------- */
-.twin-panel {
+/* ---- side column: Ask Pythia, then the scenario controls ----------------- */
+.twin-side {
   position: absolute;
   z-index: 4;
-  top: var(--space-3);
-  right: var(--space-3);
-  bottom: 44px;
-  width: var(--twin-panel-width);
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--twin-rail-width);
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border-radius: var(--ui-radius-elevated);
+  scrollbar-width: thin;
+  color: var(--ui-ink);
+  background: var(--ui-surface);
+  border-right: 1px solid var(--ui-border);
+}
+
+.twin-panel {
+  border-top: 1px solid var(--ui-border);
+  background: var(--ui-surface);
 }
 .twin-sheet-toggle {
   display: none;
@@ -655,6 +846,7 @@
 
 .twin-actions {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
 }
 .twin-btn {
@@ -668,6 +860,7 @@
   font-size: 14px;
   font-weight: 600;
   text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     background-color 0.15s ease,
@@ -780,6 +973,252 @@
   box-shadow: 0 0 0 2px var(--ui-primary);
 }
 
+/* ---- Ask Pythia ----------------------------------------------------------- */
+.twin-ask {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  color: var(--ui-ink);
+  background: var(--ui-surface);
+}
+.twin-ask-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.twin-ask-head .twin-panel-title {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ui-accent);
+}
+.twin-ask-form textarea {
+  width: 100%;
+  min-height: 68px;
+  padding: 11px 14px;
+  display: block;
+  resize: vertical;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  color: var(--ui-ink);
+  background: var(--ui-surface-muted);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.twin-ask-form textarea::placeholder {
+  color: var(--ui-muted);
+}
+.twin-ask-form textarea:focus-visible {
+  outline: 2px solid var(--twin-overlay-accent);
+  outline-offset: 2px;
+}
+.twin-ask-actions {
+  margin-top: var(--space-2);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+/* The send action is always the solid forest pill; while Ana runs it dims. */
+.twin-btn.primary.twin-ask-send {
+  min-width: 104px;
+  color: var(--ui-accent-foreground);
+  background: var(--ui-accent-strong);
+}
+.twin-btn.primary.twin-ask-send:hover {
+  background: var(--ui-accent);
+}
+.twin-btn.primary.twin-ask-send:disabled {
+  opacity: 0.8;
+  cursor: progress;
+}
+.twin-ask-icon {
+  width: var(--tap-min);
+  height: var(--tap-min);
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-ink-soft);
+  background: var(--ui-surface);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.twin-ask-icon[aria-pressed="true"] {
+  color: var(--ui-accent-foreground);
+  border-color: var(--ui-accent);
+  background: var(--ui-accent);
+}
+.twin-ask > .twin-note {
+  margin: 0;
+}
+/* The asked question reads as the operator's chat bubble, not as input. */
+.twin-ask-question {
+  max-width: 92%;
+  margin: 0 0 0 auto;
+  padding: 9px 14px;
+  border-radius: 16px 16px 4px 16px;
+  color: var(--ui-ink);
+  background: var(--ui-accent-soft);
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.twin-ask-result {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.twin-ask-result .assistant-scenario {
+  margin-top: 0;
+}
+.twin-ask-applied-block {
+  padding-left: 10px;
+  display: grid;
+  gap: 4px;
+  border-left: 3px solid var(--ui-forest-500);
+}
+.twin-ask-applied {
+  margin: 0;
+  color: var(--ui-success);
+  font-size: var(--fs-caption);
+  font-weight: 650;
+  line-height: 1.4;
+}
+/* The twin's queue headline for the applied scenario, band and class included. */
+.twin-ask-queue {
+  margin: 0;
+  color: var(--ui-ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+.twin-ask-error {
+  margin: 0;
+  color: var(--ui-danger);
+  font-size: var(--fs-caption);
+}
+
+/* ---- landfill tag + rain overlay ------------------------------------------ */
+/* The beacon's tag is DOM, placed beside the beacon top and clamped inside the canvas. */
+.twin-landfill-tag {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  max-width: 248px;
+  padding: 6px 10px 7px 11px;
+  display: grid;
+  gap: 1px;
+  visibility: hidden;
+  border-left: 3px solid var(--ui-forest-500);
+  border-radius: 4px var(--ui-radius-control) var(--ui-radius-control) 4px;
+  color: var(--ui-on-dark);
+  background: var(--ui-primary);
+  box-shadow: var(--ui-shadow-float);
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: left;
+  pointer-events: none;
+}
+.twin-landfill-tag[data-side="left"] {
+  padding: 6px 11px 7px 10px;
+  border-left: 0;
+  border-right: 3px solid var(--ui-forest-500);
+  border-radius: var(--ui-radius-control) 4px 4px var(--ui-radius-control);
+  text-align: right;
+}
+.twin-landfill-tag .is-name {
+  font-size: 12px;
+  font-weight: 650;
+}
+.twin-landfill-tag .is-hour::first-letter {
+  text-transform: uppercase;
+}
+.twin-landfill-tag .is-class {
+  color: var(--ui-on-dark-muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.twin-viewport.is-raining::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: var(--twin-rain-wash);
+  pointer-events: none;
+}
+/* Scenario rain is an assumption, never shown as observed weather. */
+.twin-rain-label {
+  position: absolute;
+  z-index: 2;
+  left: var(--twin-edge);
+  bottom: 92px;
+  margin: 0;
+  padding: 4px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--twin-overlay-line);
+  border-radius: var(--ui-radius-pill);
+  color: var(--twin-overlay-ink);
+  background: var(--twin-overlay);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* ---- desktop: instruments float at the map's edges ------------------------ */
+@media (min-width: 921px) {
+  /* The legend wrapper adds no box: its card and tools place themselves. */
+  .twin-legend {
+    display: contents;
+  }
+  .twin-legend-bar {
+    position: absolute;
+    z-index: 3;
+    top: var(--twin-edge);
+    left: calc(var(--twin-rail-width) + var(--twin-edge));
+    width: max-content;
+    max-width: min(400px, calc(100% - var(--twin-rail-width) - 300px));
+  }
+  /* Full provenance list: a popover under the card, one tap away. */
+  .twin-legend-bar .twin-provenance {
+    position: absolute;
+    top: calc(100% + var(--space-2));
+    left: 0;
+    width: max-content;
+    max-width: min(460px, calc(100vw - var(--twin-rail-width) - 320px));
+    padding: var(--space-3);
+    border: 1px solid var(--twin-overlay-line);
+    border-radius: var(--ui-radius-card);
+    background: var(--ui-surface);
+    box-shadow: var(--ui-shadow-float);
+  }
+  .twin-tools {
+    position: absolute;
+    z-index: 3;
+    top: var(--twin-edge);
+    right: var(--twin-nav-clear);
+    max-width: 320px;
+  }
+  .twin-timeline {
+    position: absolute;
+    z-index: 3;
+    left: calc(var(--twin-rail-width) + var(--twin-edge));
+    bottom: var(--twin-edge);
+    width: min(var(--twin-timeline-width), calc(100% - var(--twin-rail-width) - 2 * var(--twin-edge)));
+  }
+}
+
 /* ---- presentation mode (?present=1): clean footage, provenance kept ------ */
 .twin-workspace.is-present > .workspace-heading,
 .twin-workspace.is-present > .metric-strip {
@@ -794,39 +1233,34 @@
   border: 0;
   border-radius: 0;
 }
-.twin-workspace.is-present .twin-legend {
-  top: 134px;
-  width: min(380px, calc(100% - 96px));
-}
-.twin-workspace.is-present .twin-timeline {
-  right: var(--space-3);
-  width: min(760px, calc(100% - 24px));
-}
-.twin-workspace.is-present .twin-status,
-.twin-workspace.is-present .twin-tour-caption {
-  left: 50%;
-  max-width: calc(100% - 48px);
-}
+/* Footage frame: no zoom column; the canvas is still draggable and keyboard-focusable. */
 .twin-workspace.is-present .twin-map .maplibregl-ctrl-top-right {
-  right: 0;
+  display: none;
+}
+.twin-workspace.is-present {
+  --twin-nav-clear: var(--twin-edge);
+  --twin-timeline-width: 600px;
+  --twin-present-card: 440px;
 }
 .twin-present-hud {
   position: absolute;
   z-index: 3;
-  top: var(--space-3);
-  left: var(--space-3);
+  top: var(--twin-edge);
+  left: var(--twin-edge);
+  max-width: calc(100% - var(--twin-present-card) - 3 * var(--twin-edge));
   min-height: 54px;
-  padding: 10px 16px;
+  padding: 10px 18px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-4);
-  border-radius: var(--ui-radius-pill);
-  font-size: 15px;
+  gap: 4px var(--space-4);
+  border-radius: var(--ui-radius-card);
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 .twin-present-hud strong {
   font-family: var(--font-head);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
@@ -838,28 +1272,80 @@
 .twin-present-scenario {
   position: absolute;
   z-index: 3;
-  top: calc(var(--space-3) + 62px);
-  left: var(--space-3);
-  max-width: calc(100% - 96px);
+  top: calc(var(--twin-edge) + 62px);
+  left: var(--twin-edge);
+  max-width: min(760px, calc(100% - var(--twin-present-card) - 3 * var(--twin-edge)));
   min-height: var(--tap-min);
-  padding: 8px 16px;
+  padding: 8px 18px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1) var(--space-4);
   border-radius: var(--ui-radius-card);
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .twin-present-scenario strong {
   padding-left: var(--space-4);
   border-left: 1px solid var(--twin-overlay-line);
   color: var(--twin-overlay-accent);
+  font-weight: 650;
 }
-
-@media (max-width: 1180px) {
-  .twin-workspace {
-    --twin-panel-width: 312px;
+@media (min-width: 921px) {
+  /* Legend card: top right under the tools, provenance listed in full. */
+  .twin-workspace.is-present .twin-legend-bar {
+    top: calc(var(--twin-edge) + var(--tap-min) + var(--space-2));
+    left: auto;
+    right: var(--twin-edge);
+    width: var(--twin-present-card);
+    max-width: calc(100% - 2 * var(--twin-edge));
+  }
+  .twin-workspace.is-present .twin-legend-bar .twin-provenance {
+    position: static;
+    width: auto;
+    max-width: none;
+    padding: 0 14px 12px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .twin-workspace.is-present .twin-provenance-toggle[aria-expanded="true"] {
+    border-radius: 0;
+    margin-bottom: var(--space-2);
+  }
+  .twin-workspace.is-present .twin-tools {
+    right: var(--twin-edge);
+    max-width: none;
+    flex-wrap: nowrap;
+  }
+  /* Asking in footage mode: the rail opens on the right, the legend steps left. */
+  .twin-workspace.is-present .twin-side {
+    top: calc(var(--twin-edge) + var(--tap-min) + var(--space-2));
+    left: auto;
+    right: var(--twin-edge);
+    bottom: calc(var(--twin-edge) + 84px);
+    width: min(360px, calc(100% - 2 * var(--twin-edge)));
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-elevated);
+    box-shadow: var(--ui-shadow-float);
+  }
+  .twin-workspace.is-present.has-ask .twin-legend-bar {
+    right: calc(min(360px, 100% - 2 * var(--twin-edge)) + 2 * var(--twin-edge));
+  }
+  .twin-workspace.is-present.has-ask :is(.twin-present-hud, .twin-present-scenario) {
+    max-width: calc(100% - 360px - var(--twin-present-card) - 4 * var(--twin-edge));
+  }
+  .twin-workspace.is-present .twin-imagery-credit {
+    top: auto;
+    bottom: var(--twin-edge);
+    right: calc(var(--tap-min) + var(--space-5));
+    max-width: max(220px, calc(100% - var(--twin-timeline-width) - 112px));
+    min-width: 0;
+  }
+  .twin-workspace.is-present .twin-status {
+    top: calc(var(--twin-edge) + 128px);
   }
 }
 
@@ -889,7 +1375,7 @@
     position: relative;
     inset: auto;
     height: 56dvh;
-    min-height: 340px;
+    min-height: 320px;
     border: 1px solid var(--ui-border);
     border-radius: var(--ui-radius-card);
     background: var(--ui-surface-muted);
@@ -897,40 +1383,66 @@
   .twin-map .maplibregl-ctrl-top-right {
     right: 0;
   }
-  .twin-legend,
-  .twin-timeline {
-    position: static;
-    width: auto;
-    box-shadow: none;
+  /* The side column dissolves: Ask and the controls take their places in the page flow. */
+  .twin-side {
+    display: contents;
+  }
+  .twin-workspace:not(.is-present) .twin-ask {
+    order: 3;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-card);
   }
   .twin-legend {
-    order: 3;
+    order: 5;
+    display: grid;
+    gap: var(--space-2);
   }
+  .twin-legend-bar {
+    box-shadow: none;
+  }
+  .twin-legend-bar .twin-provenance {
+    padding: 0 14px 12px;
+  }
+  .twin-provenance-toggle[aria-expanded="true"] {
+    border-radius: 0;
+    margin-bottom: var(--space-2);
+  }
+  .twin-tools {
+    justify-content: flex-start;
+  }
+  .twin-tools .twin-legend-note {
+    margin-left: 0;
+    text-align: left;
+  }
+  /* Docked above the fixed bottom nav (62 px + 10 px inset) so the nav never
+     covers the day buttons while the map is in view. */
   .twin-timeline {
+    position: sticky;
+    z-index: 5;
     order: 2;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   }
   .twin-status,
   .twin-tour-caption {
-    left: 50%;
     max-width: calc(100% - 24px);
+  }
+  .twin-status {
+    top: var(--twin-edge);
   }
   .twin-tour-caption {
     top: 56px;
     bottom: auto;
   }
+  .twin-rain-label {
+    bottom: var(--twin-edge);
+  }
 
+  /* The controls sheet sits in the page flow under the timeline: a fixed
+     dock covered the day buttons on phones. */
   .twin-panel {
-    position: fixed;
-    z-index: 35;
-    top: auto;
-    left: 10px;
-    right: 10px;
-    bottom: 82px;
-    width: auto;
-    max-height: calc(100dvh - 180px);
-    border-radius: var(--ui-radius-elevated);
-    background: var(--ui-surface);
-    box-shadow: var(--ui-shadow-float);
+    order: 4;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-card);
   }
   .twin-sheet-toggle {
     position: sticky;
@@ -944,6 +1456,7 @@
     gap: var(--space-3);
     border: 0;
     border-bottom: 1px solid var(--twin-overlay-line);
+    border-radius: var(--ui-radius-card) var(--ui-radius-card) 0 0;
     color: var(--ui-ink);
     background: var(--ui-surface);
     font-size: 14px;
@@ -962,6 +1475,17 @@
   }
   .twin-panel:not(.is-open) .twin-sheet-toggle {
     border-bottom: 0;
+    border-radius: var(--ui-radius-card);
+  }
+  .twin-imagery-credit {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: calc(var(--tap-min) + var(--space-2));
+    max-width: none;
+    min-width: 0;
+    border-radius: 0 6px 0 0;
+    text-align: left;
   }
 }
 
@@ -985,31 +1509,32 @@
     order: 2;
     margin-top: var(--space-3);
   }
+  /* Map and timeline fit the first screen above the bottom nav. */
   .twin-viewport {
-    height: 52dvh;
+    height: clamp(300px, calc(100dvh - 400px), 520px);
   }
+  /* One row: play beside the week. Day buttons keep a 44 px target; on the
+     narrowest phones the week scrolls inside the timeline instead of
+     shrinking or overflowing. */
   .twin-timeline {
-    flex-wrap: wrap;
-  }
-  .twin-timeline {
+    padding: 4px;
+    gap: 4px;
     border-radius: var(--ui-radius-card);
   }
   .twin-play {
-    width: 100%;
+    width: var(--tap-min);
   }
-  /* Day buttons keep a 44 px target; on the narrowest phones the week
-     scrolls inside the timeline instead of shrinking or overflowing. */
   .twin-days {
-    flex-basis: 100%;
-    gap: 2px;
+    gap: 0;
     grid-template-columns: repeat(7, minmax(var(--tap-min), 1fr));
     overflow-x: auto;
     overscroll-behavior-x: contain;
     scrollbar-width: thin;
   }
   .twin-day {
-    min-height: 56px;
+    min-height: 54px;
     padding-inline: 2px;
+    border-radius: 14px;
   }
   .twin-day-label {
     flex-direction: column;
@@ -1018,74 +1543,6 @@
   }
   .twin-legend-risk {
     gap: 4px 10px;
-  }
-}
-
-/* ---- city base: satellite + relief toggle and imagery credit -------------- */
-.twin-base-toggle {
-  min-height: var(--tap-min);
-  padding: 6px var(--space-4);
-  display: inline-flex;
-  align-items: center;
-  justify-self: start;
-  gap: var(--space-2);
-  border: 1px solid var(--twin-overlay-line-soft);
-  border-radius: var(--ui-radius-pill);
-  color: var(--twin-overlay-ink-soft);
-  background: transparent;
-  font-size: var(--fs-caption);
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease;
-}
-.twin-base-toggle:hover:not(:disabled) {
-  border-color: var(--twin-overlay-line-strong);
-}
-.twin-base-toggle[aria-pressed="true"] {
-  color: var(--ui-on-dark);
-  background: var(--ui-primary);
-  border-color: var(--ui-primary);
-}
-.twin-base-toggle:disabled {
-  color: var(--twin-overlay-muted);
-  cursor: not-allowed;
-}
-/* Licence credit for the imagery: always on the map while it is shown. */
-.twin-imagery-credit {
-  position: absolute;
-  z-index: 2;
-  top: 10px;
-  right: calc(var(--twin-panel-width) + 24px + 10px + var(--tap-min) + var(--space-2));
-  max-width: min(360px, max(160px, calc(100% - var(--twin-panel-width) - 440px)));
-  margin: 0;
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--ui-radius-pill);
-  color: var(--twin-overlay-ink);
-  background: var(--twin-overlay);
-  font-size: 11px;
-  line-height: 1.35;
-  pointer-events: none;
-}
-.twin-imagery-credit strong {
-  color: var(--twin-overlay-highlight);
-}
-.twin-workspace.is-present .twin-imagery-credit {
-  top: auto;
-  bottom: var(--space-3);
-  right: calc(var(--space-3) + var(--tap-min));
-  max-width: min(420px, calc(100% - 96px));
-}
-@media (max-width: 920px) {
-  .twin-imagery-credit {
-    top: auto;
-    bottom: 0;
-    left: 0;
-    right: calc(var(--tap-min) + var(--space-2));
-    max-width: none;
-    border-radius: 0 6px 0 0;
   }
 }
 

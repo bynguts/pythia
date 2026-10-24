@@ -8,7 +8,7 @@ from fastapi import APIRouter, Query
 
 from app.api.routers.fleet import command_center
 from app.api.routers.forecast import predictions_kecamatan
-from app.api.routers.operations import get_tpa_queue_status
+from app.fleet.data import tpa_queue_status_payload
 from app.fleet.facilities import FACILITIES
 from app.fleet.queue_simulation import scenario_queue_metric
 from app.forecast.cities import HCMC_LANDFILL, VENUES, get_city, get_venue, hcmc_district_forecasts
@@ -44,7 +44,8 @@ def twin_scene(
     `venue` (a preset id from `forecast/cities.py`, ignored when it belongs to
     another city) places the event when no explicit coordinates are given;
     `scenario.venue` names it only when the event sits on the preset's coordinates.
-    `day` selects the horizon day the scenario-scaled TPA queue metric describes.
+    `day` selects the horizon day the scenario-scaled TPA queue metric describes;
+    the landfill beacon shows the modelled peak hour of that same day.
     """
     preset = get_venue(city, venue)
     if preset and event_attendance and event_lat is None and event_lng is None:
@@ -100,6 +101,10 @@ def twin_scene(
     def day_tons(rows: list[dict[str, Any]]) -> float:
         return sum(d["series"][day]["predicted_tons"] for d in rows if len(d["series"]) > day)
 
+    # gsc P0-5: the one metric, scaled to this scenario's selected day (cached per
+    # trucks/day, deterministic for its seed). The beacon fields beside it are
+    # that same day's modelled peak hour, so beacon and headline share day and model.
+    metric = scenario_queue_metric(day_tons(districts), day_tons(normal_days))
     return build_twin_scene(
         get_city("jakarta"),
         districts,
@@ -109,9 +114,7 @@ def twin_scene(
         trucks=command_center()["trucks"],
         tps=load_real_tps_coordinates(),
         landfill_queue={
-            **get_tpa_queue_status(scenario="live"),
-            # gsc P0-5: the one metric, scaled to this scenario's selected day
-            # (cached per trucks/day, deterministic for its seed).
-            "minutes_per_truck": scenario_queue_metric(day_tons(districts), day_tons(normal_days)),
+            **tpa_queue_status_payload(trucks_per_day=metric["trucks_per_day"] if metric else None),
+            "minutes_per_truck": metric,
         },
     )

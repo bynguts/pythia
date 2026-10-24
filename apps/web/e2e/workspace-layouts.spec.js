@@ -90,6 +90,43 @@ test("mobile fleet collapses the decision into a bottom sheet without overflow",
   await expect(sheet.getByTestId("action-card")).toBeVisible();
 });
 
+// #6 (gsc-2026 teardown): at 390 px the landfill tag ran off the canvas and the
+// controls dock covered the timeline.
+test("mobile twin keeps the landfill tag inside the canvas and the controls off the timeline", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/twin");
+  await page.waitForFunction(() => window.__pythiaTwin?.ready, null, { timeout: 45000 });
+  const tag = page.getByTestId("twin-landfill-tag");
+  await expect(tag).toBeVisible();
+  const [mapBox, tagBox] = await Promise.all([page.getByTestId("twin-map").boundingBox(), tag.boundingBox()]);
+  expect(tagBox.x).toBeGreaterThanOrEqual(mapBox.x);
+  expect(tagBox.y).toBeGreaterThanOrEqual(mapBox.y);
+  expect(tagBox.x + tagBox.width).toBeLessThanOrEqual(mapBox.x + mapBox.width);
+  expect(tagBox.y + tagBox.height).toBeLessThanOrEqual(mapBox.y + mapBox.height);
+
+  // Scrolled to the timeline, nothing floats over its day buttons.
+  const timeline = page.getByTestId("twin-timeline");
+  await timeline.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  const covered = await page.evaluate(
+    () =>
+      [...document.querySelectorAll("[data-testid=twin-timeline] button")].filter((button) => {
+        const r = button.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return hit && !button.contains(hit);
+      }).length,
+  );
+  expect(covered).toBe(0);
+  const [toggleBox, timelineBox] = await Promise.all([
+    page.getByTestId("twin-sheet-toggle").boundingBox(),
+    timeline.boundingBox(),
+  ]);
+  expect(toggleBox.y).toBeGreaterThanOrEqual(timelineBox.y + timelineBox.height);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+
 test("map layers panel opens inside the deck and lists controls", async ({ page }) => {
   await page.getByTestId("deck-tools-toggle").click();
   const panel = page.getByTestId("deck-tools-panel");

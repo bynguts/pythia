@@ -1,4 +1,5 @@
-import { Box, Glasses } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Box, ClipboardCheck, Glasses } from "lucide-react";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { findTwinVenue, twinHref } from "../twin/twinLinks.js";
 
@@ -31,26 +32,84 @@ function scenarioTwinHref(scenario) {
   });
 }
 
-export function ScenarioCard({ scenario }) {
+/** What a trace step ran on, in one short line (inputs, model scope, output). */
+function traceDetail(step, t, number) {
+  const d = step.detail || {};
+  if (step.step === "parse_scenario" || step.step === "run_scenario")
+    return t("asst_trace_inputs")
+      .replace("{rain}", number.format(d.rainfall_mm ?? 0))
+      .replace("{crowd}", number.format(d.event_attendance ?? 0))
+      .replace("{venue}", d.venue ? String(d.venue).toUpperCase() : "—")
+      .replace("{day}", number.format(d.day ?? 0));
+  if (step.step === "forecast_model")
+    return t("asst_trace_districts")
+      .replace("{n}", number.format(d.districts ?? 0))
+      .replace("{date}", d.date || "");
+  if (step.step === "resource_rule")
+    return t("asst_trace_trucks").replace("{n}", number.format(d.trucks_required ?? 0));
+  if (step.step === "queue_simulation")
+    return t("asst_trace_queue").replace("{n}", number.format(d.trucks_per_day ?? 0));
+  return null;
+}
+
+/** Who turned the question into tool calls: an LLM (named) or the local rule parser. */
+export function providerLabel(provider, model, t) {
+  if (provider === "local") return t("asst_provider_local");
+  if (!provider) return null;
+  return `LLM: ${provider}${model ? ` · ${model}` : ""}`;
+}
+
+// `inTwin`: the card sits in the Twin's rail, which already shows the scenario,
+// so it links on to approval and XR instead of back into the Twin.
+export function ScenarioCard({ scenario, provider, model, inTwin = false }) {
   const { t, lang } = useLanguage();
   const number = new Intl.NumberFormat(localeFor(lang), { maximumFractionDigits: 1 });
   const { summary, queue_minutes_per_truck: queue } = scenario;
+  // Equal truck and crew counts are the one-crew-per-truck planning rule, not a bug: say so.
+  const crewRule =
+    summary.extra_crews === summary.extra_trucks && Number.isFinite(summary.crew_size_workers)
+      ? t("units_crew_per_truck").replace("{n}", number.format(summary.crew_size_workers))
+      : null;
   const metrics = [
     ["asst_scn_extra_tons", `+${number.format(Math.max(0, summary.extra_tons))} t`],
     ["asst_scn_extra_trucks", `+${number.format(summary.extra_trucks)}`],
-    ["asst_scn_extra_crews", `+${number.format(summary.extra_crews)}`],
+    [
+      "asst_scn_extra_crews",
+      `+${number.format(summary.extra_crews)}`,
+      undefined,
+      crewRule && { text: crewRule, testId: "assistant-scenario-crew-rule" },
+    ],
     ["asst_scn_at_risk", number.format(summary.districts_at_risk)],
   ];
   if (queue?.baseline_mean != null && queue?.staggered_mean != null) {
+    // The unstaggered figure carries its departure-spread band, as on the Twin HUD.
+    const band =
+      Array.isArray(queue.baseline_band) &&
+      queue.baseline_band.length === 2 &&
+      queue.baseline_band.every(Number.isFinite)
+        ? queue.baseline_band
+        : null;
     metrics.push([
       "asst_scn_queue",
-      `${number.format(queue.baseline_mean)} → ${number.format(queue.staggered_mean)}${
-        queue.scenario_scaled ? ` · ${t("asst_scn_queue_scaled")}` : ""
-      }`,
+      `${number.format(queue.baseline_mean)}${
+        band ? ` (${number.format(band[0])}–${number.format(band[1])})` : ""
+      } → ${number.format(queue.staggered_mean)}${queue.scenario_scaled ? ` · ${t("asst_scn_queue_scaled")}` : ""}`,
+      "is-queue",
+      band && {
+        text: t("asst_scn_queue_band")
+          .replace("{low}", number.format(band[0]))
+          .replace("{high}", number.format(band[1])),
+        testId: "assistant-scenario-queue-band",
+      },
     ]);
   }
   // gsc m9: Ana runs what the Twin/XR links can show; say when the asked values were snapped.
   const asked = scenario.scenario?.snapped_to_twin_presets ? scenario.scenario.requested : null;
+  const assumedCrowd = scenario.scenario?.attendance_assumed
+    ? t("asst_scn_assumed_crowd").replace("{n}", number.format(scenario.scenario.event_attendance))
+    : null;
+  const trace = Array.isArray(scenario.trace) ? scenario.trace : null;
+  const providerText = providerLabel(provider, model, t);
   const snappedNote = asked
     ? t("asst_scn_snapped")
         .replace("{asked_rain}", number.format(asked.rainfall_mm ?? 0))
@@ -64,12 +123,27 @@ export function ScenarioCard({ scenario }) {
         <span className="assistant-scenario-badge" data-testid="assistant-scenario-badge">
           {classLabel(scenario.classification)}
         </span>
+        {providerText && (
+          <span className="assistant-scenario-badge" data-testid="assistant-provider-badge">
+            {providerText}
+          </span>
+        )}
       </div>
+      {assumedCrowd && (
+        <p className="assistant-scenario-note" data-testid="assistant-scenario-assumed">
+          {assumedCrowd}
+        </p>
+      )}
       <dl className="assistant-scenario-metrics">
-        {metrics.map(([key, value]) => (
-          <div key={key}>
+        {metrics.map(([key, value, className, note]) => (
+          <div key={key} className={className}>
             <dt>{t(key)}</dt>
             <dd>{value}</dd>
+            {note && (
+              <dd className="assistant-scenario-metric-note" data-testid={note.testId}>
+                {note.text}
+              </dd>
+            )}
           </div>
         ))}
       </dl>
@@ -82,23 +156,47 @@ export function ScenarioCard({ scenario }) {
             .join(" · ")}
         </p>
       )}
-      <h4>{t("asst_scn_plan")}</h4>
-      <ol className="assistant-scenario-plan" data-testid="assistant-scenario-plan">
-        {scenario.plan
-          .filter((step) => PLAN_STEPS.includes(step))
-          .map((step) => (
-            <li key={step}>{t(`asst_scn_step_${step}`)}</li>
-          ))}
-      </ol>
-      <h4>{t("asst_scn_sources")}</h4>
-      <ul className="assistant-scenario-sources" data-testid="assistant-scenario-sources">
-        {scenario.sources.map((source) => (
-          <li key={source.id}>
-            <span className="assistant-scenario-badge">{classLabel(source.class)}</span>
-            <span>{source.source}</span>
-          </li>
-        ))}
-      </ul>
+      {trace ? (
+        <>
+          <h4>{t("asst_trace_title")}</h4>
+          {/* The steps Ana actually ran, each with its source and provenance class. */}
+          <ol className="assistant-scenario-trace" data-testid="assistant-scenario-trace">
+            {trace.map((step) => {
+              const detail = traceDetail(step, t, number);
+              return (
+                <li key={step.step} data-testid={`assistant-trace-${step.step}`}>
+                  <span className="assistant-scenario-trace-head">
+                    {t(`asst_trace_step_${step.step}`)}
+                    <span className="assistant-scenario-badge">{classLabel(step.class)}</span>
+                  </span>
+                  {detail && <code>{detail}</code>}
+                  <small>{step.source}</small>
+                </li>
+              );
+            })}
+          </ol>
+        </>
+      ) : (
+        <>
+          <h4>{t("asst_scn_plan")}</h4>
+          <ol className="assistant-scenario-plan" data-testid="assistant-scenario-plan">
+            {scenario.plan
+              .filter((step) => PLAN_STEPS.includes(step))
+              .map((step) => (
+                <li key={step}>{t(`asst_scn_step_${step}`)}</li>
+              ))}
+          </ol>
+          <h4>{t("asst_scn_sources")}</h4>
+          <ul className="assistant-scenario-sources" data-testid="assistant-scenario-sources">
+            {scenario.sources.map((source) => (
+              <li key={source.id}>
+                <span className="assistant-scenario-badge">{classLabel(source.class)}</span>
+                <span>{source.source}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {snappedNote && (
         <p className="assistant-scenario-note" data-testid="assistant-scenario-snapped">
           {snappedNote}
@@ -106,10 +204,17 @@ export function ScenarioCard({ scenario }) {
       )}
       <p className="assistant-scenario-note">{t("asst_scn_note")}</p>
       <div className="assistant-scenario-actions">
-        <a href={scenarioTwinHref(scenario)} data-testid="assistant-open-twin">
-          <Box size={16} aria-hidden="true" />
-          {t("asst_scn_open_twin")}
-        </a>
+        {inTwin ? (
+          <Link to="/planning" data-testid="assistant-review-plan">
+            <ClipboardCheck size={16} aria-hidden="true" />
+            {t("asst_scn_review_plan")}
+          </Link>
+        ) : (
+          <a href={scenarioTwinHref(scenario)} data-testid="assistant-open-twin">
+            <Box size={16} aria-hidden="true" />
+            {t("asst_scn_open_twin")}
+          </a>
+        )}
         <a href={scenario.links.xr} data-testid="assistant-open-xr">
           <Glasses size={16} aria-hidden="true" />
           {t("asst_scn_open_xr")}

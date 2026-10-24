@@ -38,7 +38,7 @@
 }
 
 /* Scenario result: a section of the answer bubble, not a nested card. */
-.assistant-chat-shell .assistant-scenario {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario {
   display: grid;
   gap: var(--space-2);
   margin-top: var(--space-3);
@@ -48,26 +48,26 @@
   color: var(--ui-ink);
   min-width: 0;
 }
-.assistant-chat-shell .assistant-scenario h3,
-.assistant-chat-shell .assistant-scenario h4 {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario h3,
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario h4 {
   margin: 0;
   color: var(--ui-ink);
 }
-.assistant-chat-shell .assistant-scenario h3 {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario h3 {
   font-size: 14px;
 }
-.assistant-chat-shell .assistant-scenario h4 {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario h4 {
   font-size: var(--fs-caption);
   font-weight: 700;
 }
-.assistant-chat-shell .assistant-scenario-head {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
 }
-.assistant-chat-shell .assistant-scenario-badge {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-badge {
   display: inline-block;
   padding: 2px var(--space-2);
   border: 1px solid var(--ui-ink-soft);
@@ -78,58 +78,68 @@
   color: var(--ui-ink);
   white-space: nowrap;
 }
-.assistant-chat-shell .assistant-scenario-metrics {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: var(--space-2);
   margin: 0;
 }
-.assistant-chat-shell .assistant-scenario-metrics div {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-metrics div {
   display: grid;
   gap: 2px;
   min-width: 0;
 }
-.assistant-chat-shell .assistant-scenario-metrics dt {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-metrics dt {
   color: var(--ui-muted);
 }
-.assistant-chat-shell .assistant-scenario-metrics dd {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-metrics .is-queue {
+  grid-column: 1 / -1;
+}
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-metrics dd {
   margin: 0;
   font-size: var(--fs-body);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.assistant-chat-shell .assistant-scenario-districts,
-.assistant-chat-shell .assistant-scenario-note {
+/* The rule or band behind a figure (1 crew per truck; queue sensitivity range). */
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-metrics .assistant-scenario-metric-note {
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-districts,
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-note {
   margin: 0;
   overflow-wrap: anywhere;
 }
-.assistant-chat-shell .assistant-scenario-note {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-note {
   color: var(--ui-muted);
 }
-.assistant-chat-shell .assistant-scenario-plan,
-.assistant-chat-shell .assistant-scenario-sources {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-plan,
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-sources {
   display: grid;
   gap: var(--space-1);
   margin: 0;
   padding-left: var(--space-5);
 }
-.assistant-chat-shell .assistant-scenario-sources {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-sources {
   padding-left: 0;
   list-style: none;
 }
-.assistant-chat-shell .assistant-scenario-sources li {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-sources li {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--space-2);
   overflow-wrap: anywhere;
 }
-.assistant-chat-shell .assistant-scenario-actions {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
 }
-.assistant-chat-shell .assistant-scenario-actions a {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-actions a {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
@@ -142,11 +152,60 @@
   font-weight: 700;
   text-decoration: none;
 }
-.assistant-chat-shell .assistant-scenario-actions a:first-child {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-actions a:first-child {
   background: var(--ui-primary);
   color: var(--ui-accent-foreground);
 }
-.assistant-chat-shell .assistant-scenario-actions a:focus-visible {
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-actions a:focus-visible {
   outline: none;
   box-shadow: var(--ui-focus);
+}
+/* Tool trace: what Ana ran, in order, with each step's source and provenance. */
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-trace {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: trace;
+}
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-trace li {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding-left: var(--space-5);
+  overflow-wrap: anywhere;
+  counter-increment: trace;
+}
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-trace li::before {
+  content: counter(trace);
+  position: absolute;
+  top: 1px;
+  left: 0;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ui-surface-muted);
+  color: var(--ui-ink-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-trace-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-weight: 650;
+}
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-trace small {
+  color: var(--ui-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+:is(.assistant-chat-shell, .twin-ask) .assistant-scenario-trace code {
+  color: var(--ui-ink-soft);
+  font-family: var(--mono);
+  font-size: 11px;
 }

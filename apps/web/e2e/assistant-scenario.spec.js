@@ -38,6 +38,7 @@ const SCENARIO = {
     baseline_p95: 90,
     staggered_p95: 35,
     replications: 30,
+    baseline_band: [31.2, 47.9],
     classification: "SIMULATED",
     source: "Seeded discrete-event queue simulation",
     scenario_specific: false,
@@ -109,6 +110,13 @@ test("what-if answer shows plan, sources, provenance and opens the twin with the
   await expect(page.getByTestId("assistant-scenario-sources")).toContainText("SIMULATED");
   await expect(page.getByTestId("assistant-scenario-sources")).toContainText("Prophet + XGBoost");
   await expect(card).toContainText("Tanah Abang");
+  // The queue figure keeps its sensitivity band, labelled simulated, like the Twin HUD;
+  // equal truck and crew counts name the one-crew-per-truck rule from the payload's crew size.
+  await expect(card.locator(".is-queue dd").first()).toHaveText("42.5 (31.2–47.9) → 18");
+  await expect(page.getByTestId("assistant-scenario-queue-band")).toHaveText(
+    "Range 31.2–47.9: unstaggered wait across departure spreads (SIMULATED)",
+  );
+  await expect(page.getByTestId("assistant-scenario-crew-rule")).toHaveText("1 crew per truck (4 workers)");
   await expect(page.getByTestId("assistant-scenario-snapped")).toHaveCount(0);
   await expect(page.getByTestId("assistant-open-xr")).toHaveAttribute("href", SCENARIO.links.xr);
   const twin = page.getByTestId("assistant-open-twin");

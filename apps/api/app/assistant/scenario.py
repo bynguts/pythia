@@ -44,6 +44,12 @@ _WHAT_IF = re.compile(
     r"\b(what if|what happens if|suppose|imagine|kalau|kalo|jika|bagaimana jika|gimana kalau|"
     r"seandainya|andaikan|andai|skenario|scenario|simulasikan|simulate)\b"
 )
+# A named venue plus an event word with no crowd size ("the JIS concert") runs the
+# smallest crowd preset, and the answer says the size was assumed.
+_EVENT_WORDS = re.compile(
+    r"\b(concert|konser|event|acara|match|pertandingan|festival|show|pertunjukan|rally|demo|demonstrasi)\b"
+)
+ASSUMED_ATTENDANCE = 50_000
 _HCMC = re.compile(r"\b(hcmc|ho chi minh|hồ chí minh|saigon|sai gon|tp\.? ?hcm)\b")
 _RAIN = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:mm|milimeter|millimet(?:er|re)s?)\b")
 _DAYS: tuple[tuple[re.Pattern[str], int | None], ...] = (
@@ -125,14 +131,18 @@ def parse_scenario_question(question: str) -> dict[str, Any] | None:
         return None
 
     venues = VENUES[city]
-    venue = next((v for v in venues if re.search(VENUE_PATTERNS[v.id], q)), venues[0])
-    return {
+    named = next((v for v in venues if re.search(VENUE_PATTERNS[v.id], q)), None)
+    venue = named or venues[0]
+    parsed = {
         "city": city,
         "rainfall_mm": rain or 0.0,
         "event_attendance": attendance or 0,
         "venue": venue.name,
         "day": day,
     }
+    if not attendance and named and _EVENT_WORDS.search(q):
+        parsed.update(event_attendance=ASSUMED_ATTENDANCE, attendance_assumed=True)
+    return parsed
 
 
 def _venue(city: str, key: str | None) -> Venue:
@@ -190,6 +200,9 @@ def _queue_metric(scene: dict[str, Any]) -> dict[str, Any] | None:
     )
     return {
         **{k: metric.get(k) for k in keep},
+        # The unstaggered mean's departure-spread sensitivity band (same simulated day),
+        # so the card shows "65.2 (42.9-74.2) -> 9.7" like the Twin HUD, not a bare point.
+        "baseline_band": (metric.get("sensitivity") or {}).get("baseline_band"),
         "classification": metric.get("classification", "SIMULATED"),
         "source": metric.get("source"),
         "scenario_scaled": bool(metric.get("scenario_scaled")),
@@ -252,11 +265,50 @@ def run_scenario(args: dict[str, Any]) -> dict[str, Any]:
         {"id": "resource_units", "class": "PLANNING_RULE", "source": resource_basis()},
     ]
     plan = ["parse_scenario", "district_forecast", "normal_day_baseline", "resource_units"]
+    # What the tool actually ran, in order, with each step's source and provenance.
+    # The caller prepends the parse step (local parser or LLM tool call).
+    trace = [
+        {
+            "step": "run_scenario",
+            "class": "READ_ONLY_TOOL",
+            "source": "run_scenario: the /api/twin/scene forecast, snapped to the twin presets",
+            "detail": {
+                "rainfall_mm": rain,
+                "event_attendance": attendance,
+                "venue": venue.id if attendance else None,
+                "day": day,
+                "snapped": snapped,
+            },
+        },
+        {
+            "step": "forecast_model",
+            "class": provenance["districts"]["class"],
+            "source": provenance["districts"]["source"],
+            "detail": {"districts": len(rows), "date": dates[day]},
+        },
+        {
+            "step": "resource_rule",
+            "class": "PLANNING_RULE",
+            "source": resource_basis(),
+            "detail": {"trucks_required": resources["trucks_required"]},
+        },
+    ]
     if queue:
         sources.append(
             {"id": "landfill_queue", "class": queue["classification"], "source": queue["source"] or ""}
         )
         plan.append("queue_metric")
+        trace.append(
+            {
+                "step": "queue_simulation",
+                "class": queue["classification"],
+                "source": queue["source"] or "",
+                "detail": {
+                    "trucks_per_day": queue["trucks_per_day"],
+                    "scenario_scaled": queue["scenario_scaled"],
+                },
+            }
+        )
     return {
         "tool": "run_scenario",
         "classification": provenance["districts"]["class"],
@@ -270,6 +322,7 @@ def run_scenario(args: dict[str, Any]) -> dict[str, Any]:
             "date": dates[day],
             "requested": requested,
             "snapped_to_twin_presets": snapped,
+            "attendance_assumed": bool(args.get("attendance_assumed")) and attendance > 0,
         },
         "summary": {
             "total_tons": round(total, 1),
@@ -287,12 +340,35 @@ def run_scenario(args: dict[str, Any]) -> dict[str, Any]:
         "queue_minutes_per_truck": queue,
         "plan": plan,
         "sources": sources,
+        "trace": trace,
         "links": scenario_links(city, rain, attendance, day, venue),
         "note": (
             "Scenario forecast, not an observation. Read-only: Ana recommends, the operator "
             "decides; nothing is dispatched, approved or sent."
         ),
     }
+
+
+def with_parse_step(result: dict[str, Any], parser: str, model: str | None = None) -> dict[str, Any]:
+    """Prepend how the question became tool arguments: `local_parser` or `llm_tool_call`."""
+    requested = result["scenario"].get("requested") or {}
+    source = (
+        f"LLM tool call ({model})"
+        if parser == "llm_tool_call"
+        else "Deterministic local parser (rules, no LLM): rain mm, crowd size, venue, day"
+    )
+    step = {
+        "step": "parse_scenario",
+        "class": "LLM" if parser == "llm_tool_call" else "LOCAL_PARSER",
+        "source": source,
+        "detail": {
+            "rainfall_mm": requested.get("rainfall_mm"),
+            "event_attendance": requested.get("event_attendance"),
+            "venue": result["scenario"].get("venue_id"),
+            "day": result["scenario"].get("day"),
+        },
+    }
+    return {**result, "trace": [step, *result.get("trace", [])]}
 
 
 def _fmt(value: float) -> str:
@@ -328,6 +404,11 @@ def scenario_answer(result: dict[str, Any], language: str) -> str:
             f"**Scenario ({label}, not an observation):** {what}, {city}, {when}.",
             f"- Total {_fmt(s['total_tons'])} t vs {_fmt(s['normal_tons'])} t on a normal day ({delta} t).",
         ]
+        if sc.get("attendance_assumed"):
+            lines.insert(
+                1,
+                f"- Crowd size not given: assumed {_fmt(sc['event_attendance'])} (the twin's smallest preset).",
+            )
         if sc.get("snapped_to_twin_presets"):
             lines.insert(
                 1,
@@ -364,6 +445,11 @@ def scenario_answer(result: dict[str, Any], language: str) -> str:
             f"**Skenario ({label}, bukan pengamatan):** {what}, {city}, {when}.",
             f"- Total {_fmt(s['total_tons'])} t vs {_fmt(s['normal_tons'])} t pada hari normal ({delta} t).",
         ]
+        if sc.get("attendance_assumed"):
+            lines.insert(
+                1,
+                f"- Jumlah pengunjung tidak disebut: diasumsikan {_fmt(sc['event_attendance'])} (preset twin terkecil).",
+            )
         if sc.get("snapped_to_twin_presets"):
             lines.insert(
                 1,

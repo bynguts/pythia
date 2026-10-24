@@ -7,6 +7,7 @@ import pytest
 
 from app.api.routers.twin import MAX_TWIN_DAYS
 from app.core.paths import REPO_ROOT
+from app.core.units import CREW_SIZE_WORKERS
 from app.forecast.cities import (
     HCMC_DAILY_TONS,
     HCMC_DISTRICTS,
@@ -101,6 +102,8 @@ def test_scene_carries_crews_next_to_trucks(api_client):
     assert horizon["daily_trucks_required"][0] == summary["trucks_required_today"]
     assert horizon["daily_crews_required"][0] == summary["crews_required_today"] > 0
     assert "crews_required" in scene["units"]
+    # Equal counts are the one-crew-per-truck rule; the UI names it from this canonical size.
+    assert summary["crew_size_workers"] == CREW_SIZE_WORKERS
 
 
 def test_scene_exposes_the_backend_venue_presets(api_client):

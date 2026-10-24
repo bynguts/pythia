@@ -15,7 +15,7 @@ from app.assistant.scenario import (
     snap_to_twin,
 )
 from app.assistant.tools import _TOOLS_IMPL, TOOL_SCHEMAS, ToolContext, execute_tool
-from app.core.units import TRUCK_CAPACITY_TONS
+from app.core.units import CREW_SIZE_WORKERS, TRUCK_CAPACITY_TONS
 from app.forecast.cities import get_venue
 
 GBK = get_venue("jakarta", "gbk")
@@ -67,6 +67,7 @@ def _fake_twin_scene(
                 "source": "Seeded discrete-event queue simulation",
                 "scenario_scaled": True,
                 "normal_day": {"trucks_per_day": 1233, "baseline_mean": 30.0, "staggered_mean": 6.0},
+                "sensitivity": {"baseline_band": [28.9, 47.1], "rows": []},
             }
         },
         "scenario": {"rainfall_mm": rainfall_mm, "event_attendance": event_attendance},
@@ -195,6 +196,7 @@ def test_run_scenario_payload_is_compact_labelled_and_reuses_the_twin_forecast(f
         "date": "2026-10-23",
         "requested": {"rainfall_mm": 80.0, "event_attendance": 50_000},
         "snapped_to_twin_presets": False,
+        "attendance_assumed": False,
     }
     summary = result["summary"]
     assert summary["extra_tons"] == pytest.approx(45.0)
@@ -263,6 +265,31 @@ def test_local_answer_says_when_the_scenario_was_snapped(fake_scene):
     assert "Disesuaikan ke preset twin" in id_ and "Anda meminta 83 mm hujan + event 70,000 orang" in id_
     exact = execute_tool("run_scenario", {"rainfall_mm": 80, "event_attendance": 50_000}, _ctx())
     assert "Snapped" not in scenario_answer(exact, "en")
+
+
+def test_run_scenario_keeps_the_queue_sensitivity_band(fake_scene):
+    # The card showed "42.5 -> 18" without the band the Twin HUD prints next to it.
+    queue = execute_tool("run_scenario", {"rainfall_mm": 80}, _ctx())["queue_minutes_per_truck"]
+    assert queue["baseline_band"] == [28.9, 47.1]
+    assert queue["baseline_band"][0] <= queue["baseline_mean"] <= queue["baseline_band"][1]
+    assert queue["classification"] == "SIMULATED"
+
+    def scene(**kwargs):
+        payload = _fake_twin_scene(**kwargs)
+        del payload["landfill_queue"]["minutes_per_truck"]["sensitivity"]
+        return payload
+
+    with patch("app.api.routers.twin.twin_scene", side_effect=scene):
+        bare = execute_tool("run_scenario", {"rainfall_mm": 80}, _ctx())["queue_minutes_per_truck"]
+    assert bare["baseline_band"] is None
+
+
+def test_extra_crews_equal_extra_trucks_by_the_one_crew_per_truck_rule(fake_scene):
+    summary = execute_tool("run_scenario", {"rainfall_mm": 80}, _ctx())["summary"]
+    # Not a copy-paste bug: one crew team operates one truck per shift (core/units).
+    assert summary["extra_crews"] == summary["extra_trucks"] > 0
+    assert summary["crew_size_workers"] == CREW_SIZE_WORKERS
+    assert summary["extra_workers"] == summary["extra_crews"] * CREW_SIZE_WORKERS
 
 
 def test_run_scenario_without_queue_metric_omits_the_queue_step():
@@ -369,6 +396,62 @@ def test_gateway_path_attaches_the_scenario_payload(fake_scene):
     assert result["tools_used"] == ["run_scenario"]
     assert result["scenario"]["summary"]["extra_trucks"] == 3
     assert len(calls) == 2
+    # The trace names the LLM as the parser, then the steps the tool ran.
+    trace = result["scenario"]["trace"]
+    assert trace[0]["step"] == "parse_scenario" and trace[0]["class"] == "LLM"
+    assert "gpt-4.1-mini" in trace[0]["source"]
+
+
+def test_run_scenario_returns_a_tool_trace_with_sources_and_provenance(fake_scene):
+    result = execute_tool(
+        "run_scenario", {"rainfall_mm": 120, "event_attendance": 50_000, "venue": "JIS", "day": 1}, _ctx()
+    )
+    trace = result["trace"]
+    assert [s["step"] for s in trace] == [
+        "run_scenario",
+        "forecast_model",
+        "resource_rule",
+        "queue_simulation",
+    ]
+    assert trace[0]["detail"] == {
+        "rainfall_mm": 120.0,
+        "event_attendance": 50_000,
+        "venue": "jis",
+        "day": 1,
+        "snapped": False,
+    }
+    assert trace[1]["class"] == "MODEL_OUTPUT" and "Prophet + XGBoost" in trace[1]["source"]
+    assert trace[2]["class"] == "PLANNING_RULE"
+    assert trace[3]["class"] == "SIMULATED" and trace[3]["detail"]["trucks_per_day"] == 1400
+    assert all(step["source"] for step in trace)
+    assert len(json.dumps(result)) < 8000  # still fits the LLM tool message
+
+
+def test_named_venue_concert_without_a_crowd_size_assumes_the_smallest_preset(fake_scene):
+    question = "what if 120 mm of rain hits during the JIS concert tomorrow"
+    parsed = parse_scenario_question(question)
+    assert parsed == {
+        "city": "jakarta",
+        "rainfall_mm": 120.0,
+        "event_attendance": 50_000,
+        "venue": "JIS",
+        "day": 1,
+        "attendance_assumed": True,
+    }
+    # No venue named, or no event word: nothing is assumed.
+    assert parse_scenario_question("what if 120 mm of rain hits tomorrow")["event_attendance"] == 0
+    assert parse_scenario_question("what if 120 mm of rain hits JIS tomorrow")["event_attendance"] == 0
+    with patch.dict("os.environ", {}, clear=True):
+        result = answer_with_openai_if_configured(question, {}, tool_ctx=_ctx(), language="en")
+    scenario = result["scenario"]
+    assert scenario["scenario"]["attendance_assumed"] is True
+    assert scenario["scenario"]["venue_id"] == "jis" and scenario["scenario"]["day"] == 1
+    assert scenario["links"]["twin"] == "/twin?city=jakarta&rain=120&event=50k&venue=jis&day=1&present=1"
+    assert "Crowd size not given: assumed 50,000" in result["answer"]
+    steps = [s["step"] for s in scenario["trace"]]
+    assert steps == ["parse_scenario", "run_scenario", "forecast_model", "resource_rule", "queue_simulation"]
+    assert scenario["trace"][0]["class"] == "LOCAL_PARSER"
+    assert result["provider"] == "local"
 
 
 def test_fleet_status_tool_never_sends_driver_names_to_the_llm():

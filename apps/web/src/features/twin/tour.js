@@ -53,7 +53,7 @@ export function overviewCamera(scene, map) {
   // so step in to keep the city filling the frame (more when side panels
   // pad the view, less in the unpadded full-screen presentation view).
   const padded = map.getPadding?.().right > 0;
-  return { ...camera, center: [fit.center.lng, fit.center.lat], zoom: fit.zoom + (padded ? 0.5 : 0.2) };
+  return { ...camera, center: [fit.center.lng, fit.center.lat], zoom: fit.zoom + (padded ? 0.65 : 0.45) };
 }
 
 /** Tour stops for a scene. Durations are milliseconds. */

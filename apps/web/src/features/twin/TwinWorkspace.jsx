@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { MapboxOverlay } from "@deck.gl/mapbox";
+import { WebMercatorViewport } from "@deck.gl/core";
 import {
   AlertTriangle,
   Box,
@@ -17,11 +18,13 @@ import {
   RefreshCw,
   Square,
   Satellite,
+  Sparkles,
   Users,
 } from "lucide-react";
 import { MetricStrip } from "../../shared/ui/MetricStrip.jsx";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import {
+  DISTRICT_LAYER_IDS,
   RISK_ORDER,
   TRUCK_PERIOD,
   buildTwinLayers,
@@ -32,6 +35,7 @@ import {
   prepareView,
 } from "./twinLayers.js";
 import { buildTour, overviewCamera, runTour } from "./tour.js";
+import { TwinAskRail } from "./TwinAskRail.jsx";
 import { TWIN_DAYS, useTwinScene } from "./useTwinScene.js";
 import {
   TWIN_CITIES,
@@ -78,6 +82,63 @@ const RISK_LIST_SIZE = 5;
 // Truck clock speed: one full ping-pong period every ~9 s.
 const TRUCK_UNITS_PER_MS = TRUCK_PERIOD / 9000;
 const DESKTOP_QUERY = "(min-width: 921px)";
+// Gap kept between floating map labels and the canvas edge.
+const CANVAS_MARGIN = 8;
+const RAIN_STEP_MM = 5;
+const RAIN_MAX_MM = 150;
+// Map padding: the camera frames the city in the part of the canvas the
+// floating instruments leave clear (legend bar on top, timeline below, zoom
+// column on the right; in footage mode the HUD stack and the legend card).
+const NO_PADDING = { top: 0, left: 0, right: 0, bottom: 0 };
+const WORKSPACE_PADDING = { top: 64, left: 0, right: 56, bottom: 96 };
+const PRESENT_PADDING = { top: 120, left: 0, right: 0, bottom: 88 };
+// Gap between the landfill beacon and its tag, and what the tag must not cover.
+const TAG_GAP = 14;
+const TAG_OBSTACLES = [
+  ".twin-legend-bar",
+  ".twin-tools",
+  ".twin-timeline",
+  ".twin-rain-label",
+  ".twin-present-hud",
+  ".twin-present-scenario",
+  ".twin-imagery-credit",
+  ".maplibregl-ctrl-top-right",
+].join(",");
+
+/**
+ * Top-left for a w×h box near (x, y), clamped inside a width×height canvas
+ * minus `inset` (the map padding the floating panels cover).
+ */
+function clampBox(x, y, w, h, width, height, inset = {}) {
+  const left = (inset.left || 0) + CANVAS_MARGIN;
+  const top = (inset.top || 0) + CANVAS_MARGIN;
+  const right = width - (inset.right || 0) - w - CANVAS_MARGIN;
+  const bottom = height - (inset.bottom || 0) - h - CANVAS_MARGIN;
+  return [Math.round(Math.max(left, Math.min(x, right))), Math.round(Math.max(top, Math.min(y, bottom)))];
+}
+
+/** Attribution stays one tap away (the "i" control) instead of opening over the map. */
+function collapseAttribution(map) {
+  map.getContainer().querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
+}
+
+/**
+ * MapLibre opens its compact credit the moment sources first bring one (the
+ * street style or the satellite base, after load). Fold it at that transition
+ * only; the reader's own taps on the "i" control are left alone.
+ */
+function keepAttributionFolded(map) {
+  const control = map.getContainer().querySelector(".maplibregl-ctrl-attrib");
+  if (!control || typeof MutationObserver === "undefined") return () => {};
+  let compact = control.classList.contains("maplibregl-compact");
+  const observer = new MutationObserver(() => {
+    const now = control.classList.contains("maplibregl-compact");
+    if (now && !compact) control.classList.remove("maplibregl-compact-show");
+    compact = now;
+  });
+  observer.observe(control, { attributes: true, attributeFilter: ["class"] });
+  return () => observer.disconnect();
+}
 
 function useMediaQuery(query) {
   const [matches, setMatches] = useState(
@@ -128,6 +189,11 @@ export function TwinWorkspace({ onCityChange }) {
   const [basemapOffline, setBasemapOffline] = useState(false);
   const [satellite, setSatellite] = useState(SATELLITE_FIRST);
   const [cityBaseFailed, setCityBaseFailed] = useState(false);
+  // Ask Pythia rail: always open in the workspace, collapsed in footage mode.
+  const [askOpen, setAskOpen] = useState(!PRESENT);
+  // Provenance: a one-line summary over the map, the full list one tap away.
+  // Footage mode opens it, so every layer's class stays on screen.
+  const [provenanceOpen, setProvenanceOpen] = useState(PRESENT);
   // The satellite base needs the online street style: never under automation
   // (unless opted in) and never on the offline fallback.
   const cityBaseAvailable = USE_STREETS && !basemapOffline && !cityBaseFailed;
@@ -219,12 +285,12 @@ export function TwinWorkspace({ onCityChange }) {
       interleaved: true,
       layers: [],
       onHover: (info) => {
-        if (info.layer?.id === "twin-districts" && info.object)
+        if (DISTRICT_LAYER_IDS.includes(info.layer?.id) && info.object)
           setHover({ x: info.x, y: info.y, id: info.object.id });
         else setHover(null);
       },
       onClick: (info) => {
-        if (info.layer?.id === "twin-districts" && info.object) setSelectedId(info.object.id);
+        if (DISTRICT_LAYER_IDS.includes(info.layer?.id) && info.object) setSelectedId(info.object.id);
         else setSelectedId(null);
       },
       getCursor: ({ isHovering, isDragging }) => (isDragging ? "grabbing" : isHovering ? "pointer" : "grab"),
@@ -273,16 +339,13 @@ export function TwinWorkspace({ onCityChange }) {
     });
     // Attribution stays one tap away (the "i" control) instead of opening
     // over the bottom of small map windows.
-    const collapseAttribution = () =>
-      map
-        .getContainer()
-        .querySelector(".maplibregl-ctrl-attrib")
-        ?.classList.remove("maplibregl-compact-show");
-    map.once("load", collapseAttribution);
-    map.once("idle", collapseAttribution);
+    map.once("load", () => collapseAttribution(map));
+    map.once("idle", () => collapseAttribution(map));
+    const releaseAttribution = keepAttributionFolded(map);
 
     return () => {
       clearTimeout(styleTimer);
+      releaseAttribution();
       tourRef.current?.abort();
       map.remove();
       mapRef.current = null;
@@ -297,18 +360,11 @@ export function TwinWorkspace({ onCityChange }) {
     applyCityBase(map, satelliteOn ? "satellite" : "streets");
   }, [satelliteOn, mapReady, basemapOffline]);
 
-  // Keep the city centred in the part of the stage the panel leaves visible.
+  // Keep the city centred in the part of the canvas the instruments leave clear.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const sidePanel = desktop && !PRESENT;
-    // Leave room for the legend (top-left), timeline (bottom) and panel (right).
-    map.setPadding({
-      top: sidePanel ? 40 : 0,
-      left: 0,
-      right: sidePanel ? 368 : 0,
-      bottom: sidePanel ? 92 : 0,
-    });
+    map.setPadding(!desktop ? NO_PADDING : PRESENT ? PRESENT_PADDING : WORKSPACE_PADDING);
   }, [desktop, mapReady]);
 
   // ---- camera follows the city ----------------------------------------------
@@ -329,17 +385,30 @@ export function TwinWorkspace({ onCityChange }) {
   const queueClassText =
     queue && queueClass ? t("twin_queue_class").replace("{class}", classLabel(queueClass)) : null;
   const landfillName = prepared?.landfill?.name;
-  const landfillLabel = landfillName
-    ? [
-        landfillName,
-        queue
-          ? `${t("twin_queue_trucks").replace("{n}", number.format(queue.trucks_in_queue ?? 0))} · ${t("twin_queue_wait").replace("{n}", number.format(queue.avg_wait_minutes ?? 0))}`
-          : t("twin_queue_none"),
-        queueClassText,
-      ]
-        .filter(Boolean)
-        .join("\n")
+  // The beacon describes the hour the payload names (the modelled peak hour of
+  // the selected day), never the wall clock, and says so.
+  const queueHour = Number.isInteger(queue?.modelled_hour)
+    ? t("twin_queue_peak_hour").replace("{hour}", `${String(queue.modelled_hour).padStart(2, "0")}:00`)
+    : queue?.hour_label || null;
+  // The peak-hour wait sits next to the same day's average (the HUD/Ask headline),
+  // so "100 min" and "65.2 min/truck" read as peak vs day, not as a contradiction.
+  const queueDayAverage = queue?.minutes_per_truck?.baseline_mean;
+  const queuePeakLine = queueHour
+    ? t("twin_queue_peak")
+        .replace("{peak}", queueHour)
+        .replace("{trucks}", number.format(queue.trucks_in_queue ?? 0))
+        .replace("{wait}", number.format(queue.avg_wait_minutes ?? 0))
     : null;
+  const queueDayLine = Number.isFinite(queueDayAverage)
+    ? t("twin_queue_day_avg").replace("{n}", minutesNumber.format(queueDayAverage))
+    : null;
+  const landfillLines = landfillName
+    ? [landfillName, queue ? queuePeakLine : t("twin_queue_none"), queueDayLine, queueClassText].filter(
+        Boolean,
+      )
+    : [];
+  const queueHourLine = queue ? queueHour : null;
+  const landfillLabel = landfillLines.length ? landfillLines.join("\n") : null;
 
   const draw = useCallback(() => {
     const overlay = overlayRef.current;
@@ -354,10 +423,99 @@ export function TwinWorkspace({ onCityChange }) {
       view,
       animate,
       reducedMotion,
-      labels: { landfill: landfillLabel },
     };
     if (mapReady) draw();
-  }, [scene, prepared, view, animate, reducedMotion, landfillLabel, mapReady, draw]);
+  }, [scene, prepared, view, animate, reducedMotion, mapReady, draw]);
+
+  // ---- floating labels, clamped inside the canvas ---------------------------
+  // The landfill tag follows the beacon top; deck's own viewport math projects
+  // the 3D point exactly as the overlay draws it.
+  const landfillTagRef = useRef(null);
+  const placeLandfillTag = useCallback(() => {
+    const map = mapRef.current;
+    const tag = landfillTagRef.current;
+    const prep = frameRef.current.prepared;
+    if (!map || !tag || !prep?.landfill) return;
+    const width = map.getContainer().clientWidth;
+    const height = map.getContainer().clientHeight;
+    const center = map.getCenter();
+    const viewport = new WebMercatorViewport({
+      width,
+      height,
+      longitude: center.lng,
+      latitude: center.lat,
+      zoom: map.getZoom(),
+      pitch: map.getPitch(),
+      bearing: map.getBearing(),
+      padding: map.getPadding(),
+    });
+    const [x, y] = viewport.project([prep.landfill.lng, prep.landfill.lat, prep.beaconHeight]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      tag.style.visibility = "hidden";
+      return;
+    }
+    // The landfill sits outside the city, so the tag hangs off the beacon away
+    // from the districts: beside its top, else under its base or above it, and
+    // only then towards the city. A spot must stay inside the canvas and clear of the
+    // instruments floating on it (legend, tools, timeline, HUD, zoom column).
+    const [bx, by] = viewport.project([prep.landfill.lng, prep.landfill.lat, 0]);
+    const w = tag.offsetWidth;
+    const h = tag.offsetHeight;
+    const box = map.getContainer().getBoundingClientRect();
+    const stage = map.getContainer().closest(".twin-stage");
+    const obstacles = [...(stage?.querySelectorAll(TAG_OBSTACLES) || [])].map((el) => {
+      const r = el.getBoundingClientRect();
+      return [r.left - box.left, r.top - box.top, r.right - box.left, r.bottom - box.top];
+    });
+    const fits = ([l, t]) =>
+      l >= CANVAS_MARGIN &&
+      t >= CANVAS_MARGIN &&
+      l + w <= width - CANVAS_MARGIN &&
+      t + h <= height - CANVAS_MARGIN &&
+      obstacles.every(([ol, ot, or, ob]) => l + w <= ol || l >= or || t + h <= ot || t >= ob);
+    const below = by + TAG_GAP / 2;
+    const candidates = [
+      ["right", [x + TAG_GAP, y - h / 2]],
+      ["below", [bx - TAG_GAP, below]],
+      ["below", [bx - w + TAG_GAP, below]],
+      // Over the haul arcs, pulled in from the right edge, before it may cover districts.
+      ["above", [Math.min(x - w / 2, width - CANVAS_MARGIN - w), y - h - TAG_GAP]],
+      ["left", [x - TAG_GAP - w, y - h / 2]],
+    ];
+    const [side, spot] = candidates.find(([, spot]) => fits(spot)) || candidates[0];
+    const [left, top] = clampBox(spot[0], spot[1], w, h, width, height);
+    tag.dataset.side = side;
+    tag.style.visibility = "visible";
+    tag.style.transform = `translate(${left}px, ${top}px)`;
+  }, []);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return undefined;
+    map.on("move", placeLandfillTag);
+    map.on("resize", placeLandfillTag);
+    return () => {
+      map.off("move", placeLandfillTag);
+      map.off("resize", placeLandfillTag);
+    };
+  }, [mapReady, placeLandfillTag]);
+  // A passive effect, so it runs after the frame effect above has stored `prepared`.
+  useEffect(() => {
+    placeLandfillTag();
+  }, [landfillLabel, prepared, mapReady, placeLandfillTag]);
+
+  // The district tooltip flips to the other side of the cursor near an edge.
+  const tooltipRef = useRef(null);
+  useLayoutEffect(() => {
+    const tip = tooltipRef.current;
+    const box = containerRef.current;
+    if (!tip || !box || !hover) return;
+    const w = tip.offsetWidth;
+    const h = tip.offsetHeight;
+    const x = hover.x + 14 + w > box.clientWidth ? hover.x - 14 - w : hover.x + 14;
+    const y = hover.y + 14 + h > box.clientHeight ? hover.y - 14 - h : hover.y + 14;
+    const [left, top] = clampBox(x, y, w, h, box.clientWidth, box.clientHeight);
+    tip.style.transform = `translate(${left}px, ${top}px)`;
+  }, [hover]);
 
   useEffect(() => {
     if (!animate || !mapReady || !prepared) return undefined;
@@ -408,6 +566,36 @@ export function TwinWorkspace({ onCityChange }) {
     }, 300);
     return () => clearTimeout(timer);
   }, [city, rainfall, eventPreset, venue.id, day, navigate]);
+
+  // ---- Ask Pythia: apply the scenario Ana ran, in place ----------------------
+  const applyScenario = useCallback(
+    (result) => {
+      const asked = result.scenario || {};
+      const nextCity = CITIES.includes(result.city) ? result.city : city;
+      const attendance = asked.event_attendance || 0;
+      const nextPreset =
+        EVENT_PRESETS.find((p) => p.attendance === attendance) ||
+        EVENT_PRESETS.reduce((best, p) =>
+          Math.abs(p.attendance - attendance) < Math.abs(best.attendance - attendance) ? p : best,
+        );
+      const cityVenues = TWIN_VENUES[nextCity];
+      const nextVenue = cityVenues.some((v) => v.id === asked.venue_id)
+        ? asked.venue_id
+        : nextCity === city
+          ? venueId
+          : cityVenues[0].id;
+      const rain = Math.round((Number(asked.rainfall_mm) || 0) / RAIN_STEP_MM) * RAIN_STEP_MM;
+      tourRef.current?.abort();
+      setPlaying(false);
+      setSelectedId(null);
+      setCity(nextCity);
+      setRainfall(Math.max(0, Math.min(RAIN_MAX_MM, rain)));
+      setEventPreset(nextPreset.id);
+      setVenueId(nextVenue);
+      setDay(Math.max(0, Math.min(TWIN_DAYS - 1, Number(asked.day) || 0)));
+    },
+    [city, venueId],
+  );
 
   // ---- tour -----------------------------------------------------------------
   const stopTour = useCallback(() => {
@@ -466,6 +654,8 @@ export function TwinWorkspace({ onCityChange }) {
       districtsAtRisk: summary.atRisk,
       totalTons: summary.tons,
       landfillLabel,
+      outlinedDistricts: prepared?.outlined.length ?? 0,
+      rainDrops: prepared?.rain.length ?? 0,
       tourActive: Boolean(tour),
       startTour,
       stopTour,
@@ -475,7 +665,7 @@ export function TwinWorkspace({ onCityChange }) {
       setEventPreset,
       setVenue: setVenueId,
     };
-  }, [ready, scene, safeDay, summary, tour, startTour, stopTour, landfillLabel, venue.id]);
+  }, [ready, scene, prepared, safeDay, summary, tour, startTour, stopTour, landfillLabel, venue.id]);
   useEffect(
     () => () => {
       delete window.__pythiaTwin;
@@ -516,6 +706,7 @@ export function TwinWorkspace({ onCityChange }) {
   const selected = selectedId && scene?.districts.find((d) => d.id === selectedId);
   const isDemoCity = scene?.city?.data_class === "SIMULATED_DEMO_CITY";
   const provenance = scene ? Object.entries(scene.provenance || {}) : [];
+  const provenanceClasses = [...new Set(provenance.map(([, info]) => String(info.class)))];
   const generatedAt = scene?.generated_at
     ? new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(
         new Date(scene.generated_at),
@@ -561,10 +752,16 @@ export function TwinWorkspace({ onCityChange }) {
     queueMetric?.scenario_scaled === true &&
     Number.isFinite(normalDay?.baseline_mean) &&
     Number.isFinite(normalDay?.staggered_mean);
+  // The unstaggered figure carries its departure-spread sensitivity band when the payload has one.
+  const baselineBand = queueMetric?.sensitivity?.baseline_band;
+  const bandText =
+    Array.isArray(baselineBand) && baselineBand.length === 2 && baselineBand.every(Number.isFinite)
+      ? ` (${minutesNumber.format(baselineBand[0])}–${minutesNumber.format(baselineBand[1])})`
+      : "";
   const queueMetricText =
     queueMetric && Number.isFinite(queueMetric.baseline_mean) && Number.isFinite(queueMetric.staggered_mean)
       ? t(queueScaled ? "twin_hud_queue_scenario" : "twin_hud_queue")
-          .replace("{from}", minutesNumber.format(queueMetric.baseline_mean))
+          .replace("{from}", `${minutesNumber.format(queueMetric.baseline_mean)}${bandText}`)
           .replace("{to}", minutesNumber.format(queueMetric.staggered_mean))
           .replace("{normal_from}", queueScaled ? minutesNumber.format(normalDay.baseline_mean) : "")
           .replace("{normal_to}", queueScaled ? minutesNumber.format(normalDay.staggered_mean) : "")
@@ -612,11 +809,210 @@ export function TwinWorkspace({ onCityChange }) {
     ];
   };
 
+  // Scenario controls: under Ask Pythia in the side column, a sheet on phones.
+  const controlPanel = (
+    <aside
+      className={`twin-panel${sheetOpen ? " is-open" : ""}`}
+      aria-label={t("twin_panel_label")}
+      data-testid="twin-panel"
+    >
+      <button
+        type="button"
+        className="twin-sheet-toggle"
+        data-testid="twin-sheet-toggle"
+        aria-expanded={sheetOpen}
+        aria-controls="twin-panel-body"
+        onClick={() => setSheetOpen((open) => !open)}
+      >
+        <span>{t("twin_panel_toggle")}</span>
+        <small>{`${number.format(rainfall)} mm · ${preset.attendance ? number.format(preset.attendance) : t("twin_event_none")}`}</small>
+        {sheetOpen ? (
+          <ChevronDown size={18} aria-hidden="true" />
+        ) : (
+          <ChevronUp size={18} aria-hidden="true" />
+        )}
+      </button>
+
+      <div className="twin-panel-body" id="twin-panel-body" hidden={!desktop && !sheetOpen}>
+        <section className="twin-panel-section" aria-labelledby="twin-city-label">
+          <h2 id="twin-city-label" className="twin-panel-title">
+            {t("twin_city_label")}
+          </h2>
+          <div className="twin-choice" role="group" aria-labelledby="twin-city-label">
+            {CITIES.map((id) => (
+              <button
+                key={id}
+                type="button"
+                data-testid={`twin-city-${id}`}
+                aria-pressed={city === id}
+                onClick={() => {
+                  setCity(id);
+                  setVenueId(TWIN_VENUES[id][0].id);
+                  setSelectedId(null);
+                }}
+              >
+                {t(`twin_city_${id}`)}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="twin-panel-section" aria-labelledby="twin-scenario-title">
+          <h2 id="twin-scenario-title" className="twin-panel-title">
+            {t("twin_scenario_title")}
+          </h2>
+          <label className="twin-slider" htmlFor="twin-rainfall">
+            <span>
+              <CloudRain size={15} aria-hidden="true" /> {t("twin_rainfall")}
+            </span>
+            <output htmlFor="twin-rainfall" data-testid="twin-rainfall-value">
+              {number.format(rainfall)} mm
+            </output>
+          </label>
+          <input
+            id="twin-rainfall"
+            data-testid="twin-rainfall"
+            type="range"
+            min="0"
+            max="150"
+            step="5"
+            value={rainfall}
+            aria-valuetext={`${rainfall} mm`}
+            onChange={(e) => setRainfall(Number(e.target.value))}
+          />
+          <span className="twin-field-label" id="twin-event-label">
+            <Users size={15} aria-hidden="true" /> {t("twin_event")}
+          </span>
+          <div className="twin-choice twin-choice-3" role="group" aria-labelledby="twin-event-label">
+            {EVENT_PRESETS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                data-testid={`twin-event-${p.id}`}
+                aria-pressed={eventPreset === p.id}
+                onClick={() => setEventPreset(p.id)}
+              >
+                {p.attendance
+                  ? t("twin_event_preset")
+                      .replace("{n}", number.format(p.attendance))
+                      .replace("{venue}", venue.name)
+                  : t("twin_event_none")}
+              </button>
+            ))}
+          </div>
+          <span className="twin-field-label" id="twin-venue-label">
+            <MapPin size={15} aria-hidden="true" /> {t("twin_venue")}
+          </span>
+          <div
+            className={`twin-choice${venues.length >= 3 ? " twin-choice-3" : ""}`}
+            role="group"
+            aria-labelledby="twin-venue-label"
+            data-testid="twin-venues"
+          >
+            {venues.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                data-testid={`twin-venue-${v.id}`}
+                aria-pressed={venue.id === v.id}
+                onClick={() => setVenueId(v.id)}
+              >
+                {v.name}
+              </button>
+            ))}
+          </div>
+          <p className="twin-note">{t("twin_scenario_note")}</p>
+        </section>
+
+        <section className="twin-panel-section twin-actions">
+          <button
+            type="button"
+            className="twin-btn primary"
+            data-testid="twin-tour"
+            onClick={tour ? stopTour : startTour}
+            disabled={!ready && !tour}
+          >
+            {tour ? <Square size={16} aria-hidden="true" /> : <Clapperboard size={16} aria-hidden="true" />}
+            {tour ? t("twin_tour_stop") : t("twin_tour")}
+          </button>
+          <a className="twin-btn secondary" data-testid="twin-xr-link" href={xrHref}>
+            <Glasses size={16} aria-hidden="true" /> {t("twin_xr")}
+          </a>
+        </section>
+
+        <section className="twin-panel-section" aria-labelledby="twin-risk-list-title">
+          <h2 id="twin-risk-list-title" className="twin-panel-title">
+            {t("twin_risk_list_title")}
+          </h2>
+          <ul className="twin-risk-list" data-testid="twin-risk-list">
+            {riskList.map(({ district, row, delta }) => (
+              <li key={district.id}>
+                <button
+                  type="button"
+                  data-testid={`twin-risk-item-${district.id}`}
+                  aria-pressed={selectedId === district.id}
+                  onClick={() => setSelectedId(district.id)}
+                >
+                  <span className="twin-risk-name">{district.name}</span>
+                  <span className="twin-risk-delta">{formatDelta(delta)}</span>
+                  <span className={`twin-risk-tag risk-${row.risk}`}>
+                    <i aria-hidden="true" />
+                    {t(`twin_risk_${row.risk}`)}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="twin-panel-section" aria-labelledby="twin-detail-title" data-testid="twin-detail">
+          <h2 id="twin-detail-title" className="twin-panel-title">
+            {t("twin_selected_title")}
+          </h2>
+          {selected ? (
+            <div className="twin-detail">
+              <div className="twin-detail-head">
+                <strong>{selected.name}</strong>
+                {selected.admin_area && <small>{selected.admin_area}</small>}
+              </div>
+              <dl>
+                {districtFacts(selected).map(([label, value]) => (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="twin-detail-series" aria-hidden="true">
+                {selected.series.map((row, index) => {
+                  const max = Math.max(...selected.series.map((r) => r.predicted_tons));
+                  return (
+                    <span
+                      key={row.date}
+                      className={`risk-${row.risk}${index === safeDay ? " is-current" : ""}`}
+                    >
+                      <i style={{ height: `${Math.max(12, (row.predicted_tons / max) * 100)}%` }} />
+                    </span>
+                  );
+                })}
+              </div>
+              {selected.event_localized && <p className="twin-note">{t("twin_tt_event")}</p>}
+            </div>
+          ) : (
+            <p className="twin-note">{t("twin_selected_hint")}</p>
+          )}
+        </section>
+      </div>
+    </aside>
+  );
+
   const status = !scene && loading ? "loading" : error ? "error" : loading ? "refreshing" : null;
+  // Rain the scene was computed for (what the overlay draws), not the pending slider value.
+  const sceneRain = scene?.scenario?.rainfall_mm || 0;
 
   return (
     <section
-      className={`twin-workspace workspace-page${PRESENT ? " is-present" : ""}`}
+      className={`twin-workspace workspace-page${PRESENT ? " is-present" : ""}${askOpen ? " has-ask" : ""}`}
       data-testid="twin-workspace"
       aria-labelledby="twin-title"
     >
@@ -650,7 +1046,22 @@ export function TwinWorkspace({ onCityChange }) {
         )}
 
         <div className="twin-stage">
-          <div className="twin-viewport">
+          {(askOpen || !PRESENT) && (
+            // One column beside the map: Ask Pythia first, the scenario controls under it.
+            <div className="twin-side">
+              {askOpen && (
+                <TwinAskRail
+                  onApply={applyScenario}
+                  appliedText={scenarioText}
+                  queueText={queueMetricText}
+                  collapsible={PRESENT}
+                  onCollapse={() => setAskOpen(false)}
+                />
+              )}
+              {!PRESENT && controlPanel}
+            </div>
+          )}
+          <div className={`twin-viewport${sceneRain > 0 ? " is-raining" : ""}`}>
             <div
               ref={containerRef}
               className="twin-map"
@@ -661,6 +1072,39 @@ export function TwinWorkspace({ onCityChange }) {
               role="region"
               aria-label={t("twin_map_label").replace("{city}", scene?.city?.name || "")}
             />
+
+            {sceneRain > 0 && (
+              <p className="twin-rain-label" data-testid="twin-rain-label">
+                <CloudRain size={14} aria-hidden="true" />
+                {t("twin_rain_label").replace("{n}", number.format(sceneRain))}
+              </p>
+            )}
+
+            {landfillLabel && (
+              <div
+                ref={landfillTagRef}
+                className="twin-landfill-tag"
+                data-testid="twin-landfill-tag"
+                aria-hidden="true"
+              >
+                {landfillLines.map((line, index) => (
+                  <span
+                    key={line}
+                    className={
+                      index === 0
+                        ? "is-name"
+                        : line === queuePeakLine
+                          ? "is-hour"
+                          : line === queueClassText
+                            ? "is-class"
+                            : undefined
+                    }
+                  >
+                    {line}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {satelliteOn && (
               <p className="twin-imagery-credit" data-testid="twin-imagery-credit">
@@ -675,6 +1119,7 @@ export function TwinWorkspace({ onCityChange }) {
                 <span>{formatDate(summary.date)}</span>
                 <span>{number.format(summary.tons)} t</span>
                 <span>{t("twin_present_risk").replace("{n}", number.format(summary.atRisk))}</span>
+                {queueHourLine && <span data-testid="twin-present-queue-hour">{queueHourLine}</span>}
                 {queueClassText && <span data-testid="twin-present-queue">{queueClassText}</span>}
               </div>
             )}
@@ -723,6 +1168,7 @@ export function TwinWorkspace({ onCityChange }) {
 
             {hovered && !tour && (
               <div
+                ref={tooltipRef}
                 className="twin-tooltip"
                 data-testid="twin-tooltip"
                 style={{
@@ -762,46 +1208,89 @@ export function TwinWorkspace({ onCityChange }) {
           </div>
 
           <div className="twin-legend" data-testid="twin-legend">
-            <div
-              className="twin-legend-risk"
-              aria-label={t("twin_risk_legend")}
-              title={t("twin_risk_legend")}
-              role="group"
-            >
-              {RISK_ORDER.map((risk) => (
-                <span key={risk} className={`twin-risk-tag risk-${risk}`}>
-                  <i aria-hidden="true" />
-                  {t(`twin_risk_${risk}`)}
-                </span>
-              ))}
-            </div>
-            <ul className="twin-provenance" data-testid="twin-provenance" aria-label={t("twin_layers_title")}>
-              {provenance.map(([layer, info]) => (
-                <li
-                  key={layer}
-                  className={`twin-chip class-${String(info.class).toLowerCase()}`}
-                  title={info.source}
-                  data-testid={`twin-provenance-${layer}`}
+            <div className="twin-legend-bar">
+              <div
+                className="twin-legend-risk"
+                aria-label={t("twin_risk_legend")}
+                title={t("twin_risk_legend")}
+                role="group"
+              >
+                {RISK_ORDER.map((risk) => (
+                  <span key={risk} className={`twin-risk-tag risk-${risk}`}>
+                    <i aria-hidden="true" />
+                    {t(`twin_risk_${risk}`)}
+                  </span>
+                ))}
+              </div>
+              {provenance.length > 0 && (
+                <button
+                  type="button"
+                  className="twin-provenance-toggle"
+                  data-testid="twin-provenance-toggle"
+                  aria-expanded={provenanceOpen}
+                  aria-controls="twin-provenance-list"
+                  title={t("twin_layers_title")}
+                  onClick={() => setProvenanceOpen((open) => !open)}
                 >
-                  <span>{t(`twin_layer_${layer}`)}</span>
-                  <b>{classLabel(info.class)}</b>
-                </li>
-              ))}
-            </ul>
-            {basemapOffline && <small className="twin-legend-note">{t("twin_offline_basemap")}</small>}
-            <button
-              type="button"
-              className="twin-base-toggle"
-              data-testid="twin-base-toggle"
-              aria-pressed={satelliteOn}
-              disabled={!cityBaseAvailable}
-              title={cityBaseAvailable ? t("twin_base_satellite_hint") : t("twin_base_needs_online")}
-              onClick={() => setSatellite((on) => !on)}
-            >
-              <Satellite size={16} aria-hidden="true" />
-              {t("twin_base_satellite")}
-            </button>
-            {cityBaseFailed && <small className="twin-legend-note">{t("twin_base_unavailable")}</small>}
+                  <span className="twin-provenance-summary">
+                    {provenanceClasses.map((value) => (
+                      <b key={value} className={`class-${value.toLowerCase()}`}>
+                        {classLabel(value)}
+                      </b>
+                    ))}
+                  </span>
+                  <small>
+                    {t("twin_provenance_layers").replace("{n}", number.format(provenance.length))}
+                  </small>
+                  <ChevronDown size={16} aria-hidden="true" className="twin-provenance-chevron" />
+                </button>
+              )}
+              <ul
+                id="twin-provenance-list"
+                className="twin-provenance"
+                data-testid="twin-provenance"
+                aria-label={t("twin_layers_title")}
+                hidden={!provenanceOpen}
+              >
+                {provenance.map(([layer, info]) => (
+                  <li
+                    key={layer}
+                    className={`twin-chip class-${String(info.class).toLowerCase()}`}
+                    title={info.source}
+                    data-testid={`twin-provenance-${layer}`}
+                  >
+                    <span>{t(`twin_layer_${layer}`)}</span>
+                    <b>{classLabel(info.class)}</b>
+                  </li>
+                ))}
+              </ul>
+              {basemapOffline && <small className="twin-legend-note">{t("twin_offline_basemap")}</small>}
+            </div>
+            <div className="twin-tools">
+              {!askOpen && (
+                <button
+                  type="button"
+                  className="twin-ask-toggle"
+                  data-testid="twin-ask-toggle"
+                  onClick={() => setAskOpen(true)}
+                >
+                  <Sparkles size={16} aria-hidden="true" /> {t("twin_ask_show")}
+                </button>
+              )}
+              <button
+                type="button"
+                className="twin-base-toggle"
+                data-testid="twin-base-toggle"
+                aria-pressed={satelliteOn}
+                disabled={!cityBaseAvailable}
+                title={cityBaseAvailable ? t("twin_base_satellite_hint") : t("twin_base_needs_online")}
+                onClick={() => setSatellite((on) => !on)}
+              >
+                <Satellite size={16} aria-hidden="true" />
+                {t("twin_base_satellite")}
+              </button>
+              {cityBaseFailed && <small className="twin-legend-note">{t("twin_base_unavailable")}</small>}
+            </div>
           </div>
 
           <div className="twin-timeline" data-testid="twin-timeline">
@@ -852,210 +1341,6 @@ export function TwinWorkspace({ onCityChange }) {
               })}
             </div>
           </div>
-
-          {!PRESENT && (
-            <aside
-              className={`twin-panel${sheetOpen ? " is-open" : ""}`}
-              aria-label={t("twin_panel_label")}
-              data-testid="twin-panel"
-            >
-              <button
-                type="button"
-                className="twin-sheet-toggle"
-                data-testid="twin-sheet-toggle"
-                aria-expanded={sheetOpen}
-                aria-controls="twin-panel-body"
-                onClick={() => setSheetOpen((open) => !open)}
-              >
-                <span>{t("twin_panel_toggle")}</span>
-                <small>{`${number.format(rainfall)} mm · ${preset.attendance ? number.format(preset.attendance) : t("twin_event_none")}`}</small>
-                {sheetOpen ? (
-                  <ChevronDown size={18} aria-hidden="true" />
-                ) : (
-                  <ChevronUp size={18} aria-hidden="true" />
-                )}
-              </button>
-
-              <div className="twin-panel-body" id="twin-panel-body" hidden={!desktop && !sheetOpen}>
-                <section className="twin-panel-section" aria-labelledby="twin-city-label">
-                  <h2 id="twin-city-label" className="twin-panel-title">
-                    {t("twin_city_label")}
-                  </h2>
-                  <div className="twin-choice" role="group" aria-labelledby="twin-city-label">
-                    {CITIES.map((id) => (
-                      <button
-                        key={id}
-                        type="button"
-                        data-testid={`twin-city-${id}`}
-                        aria-pressed={city === id}
-                        onClick={() => {
-                          setCity(id);
-                          setVenueId(TWIN_VENUES[id][0].id);
-                          setSelectedId(null);
-                        }}
-                      >
-                        {t(`twin_city_${id}`)}
-                      </button>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="twin-panel-section" aria-labelledby="twin-scenario-title">
-                  <h2 id="twin-scenario-title" className="twin-panel-title">
-                    {t("twin_scenario_title")}
-                  </h2>
-                  <label className="twin-slider" htmlFor="twin-rainfall">
-                    <span>
-                      <CloudRain size={15} aria-hidden="true" /> {t("twin_rainfall")}
-                    </span>
-                    <output htmlFor="twin-rainfall" data-testid="twin-rainfall-value">
-                      {number.format(rainfall)} mm
-                    </output>
-                  </label>
-                  <input
-                    id="twin-rainfall"
-                    data-testid="twin-rainfall"
-                    type="range"
-                    min="0"
-                    max="150"
-                    step="5"
-                    value={rainfall}
-                    aria-valuetext={`${rainfall} mm`}
-                    onChange={(e) => setRainfall(Number(e.target.value))}
-                  />
-                  <span className="twin-field-label" id="twin-event-label">
-                    <Users size={15} aria-hidden="true" /> {t("twin_event")}
-                  </span>
-                  <div className="twin-choice twin-choice-3" role="group" aria-labelledby="twin-event-label">
-                    {EVENT_PRESETS.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        data-testid={`twin-event-${p.id}`}
-                        aria-pressed={eventPreset === p.id}
-                        onClick={() => setEventPreset(p.id)}
-                      >
-                        {p.attendance
-                          ? t("twin_event_preset")
-                              .replace("{n}", number.format(p.attendance))
-                              .replace("{venue}", venue.name)
-                          : t("twin_event_none")}
-                      </button>
-                    ))}
-                  </div>
-                  <span className="twin-field-label" id="twin-venue-label">
-                    <MapPin size={15} aria-hidden="true" /> {t("twin_venue")}
-                  </span>
-                  <div
-                    className={`twin-choice${venues.length >= 3 ? " twin-choice-3" : ""}`}
-                    role="group"
-                    aria-labelledby="twin-venue-label"
-                    data-testid="twin-venues"
-                  >
-                    {venues.map((v) => (
-                      <button
-                        key={v.id}
-                        type="button"
-                        data-testid={`twin-venue-${v.id}`}
-                        aria-pressed={venue.id === v.id}
-                        onClick={() => setVenueId(v.id)}
-                      >
-                        {v.name}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="twin-note">{t("twin_scenario_note")}</p>
-                </section>
-
-                <section className="twin-panel-section twin-actions">
-                  <button
-                    type="button"
-                    className="twin-btn primary"
-                    data-testid="twin-tour"
-                    onClick={tour ? stopTour : startTour}
-                    disabled={!ready && !tour}
-                  >
-                    {tour ? (
-                      <Square size={16} aria-hidden="true" />
-                    ) : (
-                      <Clapperboard size={16} aria-hidden="true" />
-                    )}
-                    {tour ? t("twin_tour_stop") : t("twin_tour")}
-                  </button>
-                  <a className="twin-btn secondary" data-testid="twin-xr-link" href={xrHref}>
-                    <Glasses size={16} aria-hidden="true" /> {t("twin_xr")}
-                  </a>
-                </section>
-
-                <section className="twin-panel-section" aria-labelledby="twin-risk-list-title">
-                  <h2 id="twin-risk-list-title" className="twin-panel-title">
-                    {t("twin_risk_list_title")}
-                  </h2>
-                  <ul className="twin-risk-list" data-testid="twin-risk-list">
-                    {riskList.map(({ district, row, delta }) => (
-                      <li key={district.id}>
-                        <button
-                          type="button"
-                          data-testid={`twin-risk-item-${district.id}`}
-                          aria-pressed={selectedId === district.id}
-                          onClick={() => setSelectedId(district.id)}
-                        >
-                          <span className="twin-risk-name">{district.name}</span>
-                          <span className="twin-risk-delta">{formatDelta(delta)}</span>
-                          <span className={`twin-risk-tag risk-${row.risk}`}>
-                            <i aria-hidden="true" />
-                            {t(`twin_risk_${row.risk}`)}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-
-                <section
-                  className="twin-panel-section"
-                  aria-labelledby="twin-detail-title"
-                  data-testid="twin-detail"
-                >
-                  <h2 id="twin-detail-title" className="twin-panel-title">
-                    {t("twin_selected_title")}
-                  </h2>
-                  {selected ? (
-                    <div className="twin-detail">
-                      <div className="twin-detail-head">
-                        <strong>{selected.name}</strong>
-                        {selected.admin_area && <small>{selected.admin_area}</small>}
-                      </div>
-                      <dl>
-                        {districtFacts(selected).map(([label, value]) => (
-                          <div key={label}>
-                            <dt>{label}</dt>
-                            <dd>{value}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                      <div className="twin-detail-series" aria-hidden="true">
-                        {selected.series.map((row, index) => {
-                          const max = Math.max(...selected.series.map((r) => r.predicted_tons));
-                          return (
-                            <span
-                              key={row.date}
-                              className={`risk-${row.risk}${index === safeDay ? " is-current" : ""}`}
-                            >
-                              <i style={{ height: `${Math.max(12, (row.predicted_tons / max) * 100)}%` }} />
-                            </span>
-                          );
-                        })}
-                      </div>
-                      {selected.event_localized && <p className="twin-note">{t("twin_tt_event")}</p>}
-                    </div>
-                  ) : (
-                    <p className="twin-note">{t("twin_selected_hint")}</p>
-                  )}
-                </section>
-              </div>
-            </aside>
-          )}
         </div>
       </div>
     </section>

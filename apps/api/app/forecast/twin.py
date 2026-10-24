@@ -7,10 +7,13 @@ present modelled or simulated data as live observations.
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict
 from datetime import UTC, datetime
+from functools import lru_cache
 from typing import Any
 
+from app.core.paths import DISTRICT_OUTLINES
 from app.core.units import CREW_SIZE_WORKERS, TRUCK_CAPACITY_TONS, resource_requirements
 from app.forecast.cities import VENUES, City
 
@@ -26,6 +29,10 @@ PROVENANCE = {
         "districts": {
             "class": "MODEL_OUTPUT",
             "source": "Prophet + XGBoost per kecamatan, SILIKA DLH 2023 baseline",
+        },
+        "boundaries": {
+            "class": "REAL",
+            "source": "Kelurahan boundaries (pararawendy/border-indonesia-geojson, 2020), dissolved by kecamatan",
         },
         "tps": {"class": "REAL", "source": "SILIKA DLH — 1,081 TPS with coordinates"},
         "facilities": {"class": "REAL", "source": "OpenStreetMap (ODbL), verified centroids"},
@@ -62,10 +69,20 @@ def classify_risk(tons: float, normal_tons: float | None) -> str:
     return "normal"
 
 
+@lru_cache(maxsize=1)
+def kecamatan_outlines() -> dict[str, list[list[float]]]:
+    """Closed outer ring ([lng, lat] pairs) per kecamatan slug; empty when the asset is missing."""
+    try:
+        return json.loads(DISTRICT_OUTLINES.read_text(encoding="utf-8"))["outlines"]
+    except (OSError, ValueError, KeyError):
+        return {}
+
+
 def jakarta_districts(kecamatan_payload: dict[str, Any]) -> list[dict[str, Any]]:
     """Map /api/predictions/kecamatan (with horizon) onto twin districts."""
     generated_for = kecamatan_payload.get("generated_for")
     targeted = set(kecamatan_payload.get("scenario", {}).get("targeted_kecamatan") or [])
+    outlines = kecamatan_outlines()
     out = []
     for feature in kecamatan_payload.get("kecamatan", []):
         if feature.get("lat") is None or feature.get("lng") is None:
@@ -87,6 +104,8 @@ def jakarta_districts(kecamatan_payload: dict[str, Any]) -> list[dict[str, Any]]
                 "facility_readiness": feature.get("facility_readiness"),
                 "model_available": feature.get("model_available"),
                 "event_localized": feature["slug"] in targeted,
+                # Drawn boundary (REAL geography), outer ring of the largest part; None if unknown.
+                "outline": outlines.get(feature["slug"]),
             }
         )
     return out
@@ -193,6 +212,9 @@ def build_scene(
             "districts_at_risk": sum(1 for d in districts if d["risk"] in ("high", "critical")),
             "trucks_required_today": daily_trucks[0] if daily_trucks else 0,
             "crews_required_today": daily_crews[0] if daily_crews else 0,
+            # Crews equal trucks by design (one crew team per truck per shift);
+            # the size lets the UI say so with the canonical unit, not a hardcoded 4.
+            "crew_size_workers": CREW_SIZE_WORKERS,
         },
         "districts": districts,
         "facilities": facilities,

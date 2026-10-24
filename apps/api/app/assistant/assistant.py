@@ -7,7 +7,12 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 from app.assistant.rag import format_rag_context
-from app.assistant.scenario import parse_scenario_question, question_language, scenario_answer
+from app.assistant.scenario import (
+    parse_scenario_question,
+    question_language,
+    scenario_answer,
+    with_parse_step,
+)
 from app.assistant.tools import TOOL_SCHEMAS, ToolContext, execute_tool, run_tools_pass
 
 _GATEWAY_TIMEOUT = 18
@@ -192,7 +197,7 @@ def _answer_locally(
                 "mode": "local",
                 "answer": f"{prefix}\n\n{scenario_answer(result, lang)}",
                 "tools_used": ["run_scenario"],
-                "scenario": result,
+                "scenario": with_parse_step(result, "local_parser"),
             }
     q = question.lower()
     answer = None
@@ -347,7 +352,7 @@ def answer_with_openai_if_configured(
                     if name not in tools_used:
                         tools_used.append(name)
                     if name == "run_scenario" and scenario is None:
-                        scenario = result
+                        scenario = with_parse_step(result, "llm_tool_call", model)
             payload["messages"] = messages
             payload.pop("tools", None)
             payload.pop("tool_choice", None)
