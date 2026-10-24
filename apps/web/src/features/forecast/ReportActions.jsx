@@ -71,7 +71,7 @@ export function ReportActions() {
       <ul>
         <li>AI route deviation detection (Isolation Forest + corridor geometry) with follow-up trail (OPEN &rarr; DISPATCHED &rarr; RESOLVED)</li>
         <li>Permit-compliant A* rerouting with computed alternative corridors (JORR bypass, coastal toll)</li>
-        <li>Prophet+XGBoost forecast over real SILIKA/SIPSN/Open-Meteo data; hotspot rank Spearman 0.998</li>
+        <li>Monthly landfill-intake forecast backtested on real Bantargebang data against the strongest simple baseline (see Data &amp; ML Audit); daily per-district forecasts are calibrated-synthetic and carry no accuracy claim</li>
         <li>Field dispatch loop with driver confirmation and offline sync</li>
       </ul>
       <p style="font-size:11px;color:#666;">${data.model_suitability_note || ""}</p>

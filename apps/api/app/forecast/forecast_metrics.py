@@ -2,14 +2,21 @@
 
 Provides WAPE, MAE, MASE, and seasonal-naive baselines so Case 2 forecast
 claims are benchmarked against naive baselines rather than presented in a
-vacuum. suitability_labels() encodes which resolutions Pythia may claim as
-reliable — daily-district is explicitly NOT supported because that target is
-calibrated-synthetic.
+vacuum. suitability_labels() encodes what Pythia may claim per resolution:
+only the monthly landfill/city intake forecast is backtested on REAL data
+(its numbers are read from the training artifact, never hardcoded here);
+every daily or per-district resolution is calibrated-synthetic and carries
+no accuracy claim.
 """
 
 from __future__ import annotations
 
+import json
+import logging
 from collections.abc import Sequence
+from typing import Any
+
+from app.core import paths
 
 
 def _check_same_length(actual: Sequence[float], predicted: Sequence[float]) -> None:
@@ -62,60 +69,170 @@ def mase(actual: Sequence[float], predicted: Sequence[float], seasonal_period: i
     return mae(actual, predicted) / scale
 
 
-def suitability_labels() -> dict[str, str]:
-    """Which forecast resolutions Pythia may present as reliable.
+# Resolutions backtested on a real target; their evidence comes from the artifact.
+REAL_BACKTEST_RESOLUTIONS = ("landfill_month", "city_month")
 
-    Grounded in the multi-resolution evaluation (#18): 'reliable' is only
-    claimed where OBSERVED holdout evidence exists at that resolution.
-    Weekly/monthly per-district metrics are evaluated against the
-    calibrated-synthetic district series (avg daily-district R² -0.033),
-    so they are labeled synthetic-validated, not reliable.
+_BACKTEST_FIELDS = (
+    "target",
+    "target_class",
+    "unit",
+    "period",
+    "model",
+    "strongest_naive",
+    "origins",
+    "first_origin",
+    "last_origin",
+    "horizons_months",
+    "n_forecasts",
+    "n_target_months",
+    "mae_model",
+    "mae_naive",
+    "mape_model_pct",
+    "mape_naive_pct",
+    "skill_pct",
+    "skill_ci90_pct",
+    "ci_method",
+    "calendar_months",
+    "normal_months",
+)
+
+
+def load_forecast_evaluation() -> dict[str, Any] | None:
+    """forecast_evaluation.json written by ml/scripts/train_models.py, or None if absent."""
+    path = paths.FORECAST_EVALUATION
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        logging.getLogger(__name__).exception("forecast evaluation artifact failed to load")
+        return None
+
+
+def monthly_backtest_metrics() -> dict[str, dict[str, Any]]:
+    """Real-data rolling-origin backtest per resolution, read from the artifact.
+
+    Each entry: model vs the strongest naive baseline (MAE, MAPE), skill with its
+    90% cluster-bootstrap interval, origin count and period. Empty when the
+    artifact is missing, so the API then claims nothing.
     """
-    return {
-        "hotspot_rank": "high",
-        "city_day": "reliable",
-        "district_month": "synthetic_validated",
-        "district_week": "synthetic_validated",
-        "district_day": "not_supported",
+    evaluation = load_forecast_evaluation()
+    if not evaluation:
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    for key in REAL_BACKTEST_RESOLUTIONS:
+        res = evaluation.get("resolutions", {}).get(key)
+        if res:
+            out[key] = {k: res[k] for k in _BACKTEST_FIELDS if k in res}
+    return out
+
+
+def beats_naive(metrics: dict[str, Any]) -> bool:
+    """Skill counts only when the whole 90% interval is above zero."""
+    ci = metrics.get("skill_ci90_pct") or [0, 0]
+    return metrics.get("skill_pct", 0) > 0 and ci[0] > 0
+
+
+def suitability_labels() -> dict[str, str]:
+    """What Pythia may claim per forecast resolution.
+
+    'backtested_real' requires a rolling-origin backtest on a real target whose
+    skill interval against the strongest naive baseline is above zero (read from
+    the artifact; 'not_evaluated' otherwise). City-day and every per-district
+    resolution are sums or slices of the calibrated-synthetic series:
+    'synthetic_validated' at most, never 'reliable'. Hotspot ranking reproduces
+    its own SILIKA input ranking, so it is not evidence of skill.
+    """
+    backtest = monthly_backtest_metrics()
+    labels = {
+        key: "backtested_real" if key in backtest and beats_naive(backtest[key]) else "not_evaluated"
+        for key in REAL_BACKTEST_RESOLUTIONS
     }
+    labels.update(
+        {
+            "hotspot_rank": "reproduces_input",
+            "city_day": "synthetic_validated",
+            "district_month": "synthetic_validated",
+            "district_week": "synthetic_validated",
+            "district_day": "not_supported",
+        }
+    )
+    return labels
+
+
+_SYNTHETIC_SAMPLE = "42 kecamatan calibrated-synthetic daily series"
+_SYNTHETIC_BASELINE = "SILIKA 2023 baseline x growth x month index with ~5% noise; not observed ground truth"
 
 
 def suitability_details() -> dict[str, dict]:
-    """Per-resolution validation evidence backing the labels (#18).
+    """Per-resolution validation evidence backing the labels.
 
-    validation_target is 'observed' (real holdout data at that
-    resolution) or 'synthetic' (calibrated-synthetic series). 'reliable'
-    in suitability_labels() requires an observed target here.
+    validation_target is 'real' (rolling-origin backtest on a real series) or
+    'synthetic' (calibrated-synthetic series). evidence_of_skill is True only
+    for a real-target backtest whose 90% skill interval is above zero.
     """
-    return {
-        "hotspot_rank": {
-            "validation_target": "observed",
-            "sample": "42 kecamatan, SILIKA 2023 spatial baseline",
-            "period": "2023",
-            "baseline": "Spearman rank vs per-kecamatan tonnage (rho 0.998)",
-        },
-        "city_day": {
-            "validation_target": "observed",
-            "sample": "DKI daily series anchored to SIPSN city timbulan",
-            "period": "2021-2025",
-            "baseline": "SIPSN yearly per-city timbulan (real)",
-        },
-        "district_week": {
-            "validation_target": "synthetic",
-            "sample": "42 kecamatan calibrated-synthetic daily series",
-            "period": "2016-2026 held-out 20%",
-            "baseline": "SILIKA 2023 baseline with ~8% noise; not observed ground truth",
-        },
-        "district_month": {
-            "validation_target": "synthetic",
-            "sample": "42 kecamatan calibrated-synthetic daily series",
-            "period": "2016-2026 held-out 20%",
-            "baseline": "SILIKA 2023 baseline with ~8% noise; not observed ground truth",
-        },
-        "district_day": {
-            "validation_target": "synthetic",
-            "sample": "42 kecamatan calibrated-synthetic daily series (noise-dominated)",
-            "period": "2016-2026 held-out 20%",
-            "baseline": "avg per-district daily R² -0.033 vs naive",
-        },
-    }
+    backtest = monthly_backtest_metrics()
+    details: dict[str, dict] = {}
+    for key in REAL_BACKTEST_RESOLUTIONS:
+        m = backtest.get(key)
+        if m is None:
+            details[key] = {
+                "validation_target": "real",
+                "sample": "Bantargebang monthly intake (evaluation artifact missing)",
+                "period": "unavailable",
+                "baseline": "unavailable",
+                "evidence_of_skill": False,
+            }
+            continue
+        details[key] = {
+            "validation_target": "real",
+            "sample": f"{m['target']}; {m['origins']} rolling origins, {m['n_forecasts']} forecasts",
+            "period": m["period"],
+            "baseline": f"{m['strongest_naive']} (strongest naive baseline)",
+            "evidence_of_skill": beats_naive(m),
+            "metrics": m,
+        }
+    details.update(
+        {
+            "hotspot_rank": {
+                "validation_target": "synthetic",
+                "sample": "42 kecamatan, means of the calibrated-synthetic series",
+                "period": "2023 baseline",
+                "baseline": (
+                    "Spearman 0.998 (earlier report) against the SILIKA 2023 (modelled) input ranking; "
+                    "the series are built from that ranking, so the score is circular and not "
+                    "evidence of skill"
+                ),
+                "evidence_of_skill": False,
+            },
+            "city_day": {
+                "validation_target": "synthetic",
+                "sample": "sum of the calibrated-synthetic kecamatan series per city",
+                "period": "2021-2026",
+                "baseline": "no observed daily city series exists in the data; not observed ground truth",
+                "evidence_of_skill": False,
+            },
+            "district_week": {
+                "validation_target": "synthetic",
+                "sample": _SYNTHETIC_SAMPLE,
+                "period": "2021-2026 held-out 20%",
+                "baseline": _SYNTHETIC_BASELINE,
+                "evidence_of_skill": False,
+            },
+            "district_month": {
+                "validation_target": "synthetic",
+                "sample": _SYNTHETIC_SAMPLE,
+                "period": "2021-2026 held-out 20%",
+                "baseline": _SYNTHETIC_BASELINE,
+                "evidence_of_skill": False,
+            },
+            "district_day": {
+                "validation_target": "synthetic",
+                "sample": f"{_SYNTHETIC_SAMPLE} (noise-dominated)",
+                "period": "2021-2026 held-out 20%",
+                "baseline": "noise-dominated synthetic target; no accuracy claim",
+                "evidence_of_skill": False,
+            },
+        }
+    )
+    return details

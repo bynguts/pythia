@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, Database, ExternalLink, ShieldCheck, Truck } from "lucide-react";
 import { apiFetch } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { ModelCard } from "./ModelCard.jsx";
 
 const COPY = {
   id: {
@@ -227,8 +228,8 @@ const COPY = {
 const LIMITATIONS_ID = {
   "Yearly per-city daily-average timbulan; no daily or per-kecamatan resolution.":
     "Rata-rata timbulan harian per kota untuk tiap tahun; tidak tersedia resolusi harian atau per kecamatan.",
-  "Monthly landfill intake totals; inconsistent tonase formats normalized on load.":
-    "Total sampah masuk TPA per bulan; format tonase yang tidak konsisten dinormalisasi saat dimuat.",
+  "Monthly landfill intake totals; inconsistent tonase formats normalized on load; two corrupted rows corrected (2024-01 fix inferred, pending DLH confirmation) and the missing month 2023-12 kept as a gap.":
+    "Total sampah masuk TPA per bulan; format tonase yang tidak konsisten dinormalisasi saat dimuat; dua baris rusak dikoreksi (koreksi 2024-01 bersifat dugaan, menunggu konfirmasi DLH) dan bulan 2023-12 yang hilang tetap dicatat sebagai celah.",
   "Vehicle counts per wilayah/type; not live telematics.":
     "Jumlah kendaraan menurut wilayah dan jenis; bukan telemetri langsung.",
   "TPS registry; no operational throughput capacity.": "Registri TPS; tidak memuat kapasitas operasional.",
@@ -260,8 +261,9 @@ function sourceNote(note, lang, copy) {
 }
 
 export function DataAuditWorkspace() {
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
   const copy = COPY[lang] || COPY.id;
+  const resolutionLabel = (key) => copy.resolutions[key] || t(`audit_mc_res_${key}`);
   const locale = lang === "en" ? "en-US" : "id-ID";
   const [audit, setAudit] = useState(null);
   const [scentinel, setScentinel] = useState([]);
@@ -389,6 +391,8 @@ export function DataAuditWorkspace() {
         </div>
       </div>
 
+      <ModelCard suitability={suitability} resolutionLabel={resolutionLabel} />
+
       <div className="audit-layout">
         <section className="audit-registry-surface">
           <div className="section-intro compact">
@@ -509,9 +513,9 @@ export function DataAuditWorkspace() {
               {Object.keys(resolutions).length === 0 && <p>{copy.emptyResolutions}</p>}
               {Object.entries(resolutions).map(([resolution, status]) => (
                 <div key={resolution}>
-                  <code>{copy.resolutions[resolution] || copy.unmapped}</code>
-                  <span className={status === "reliable" || status === "high" ? "good" : "limited"}>
-                    {copy.suitability[status] || copy.freshness.unknown}
+                  <code>{resolutionLabel(resolution)}</code>
+                  <span className={status === "backtested_real" ? "good" : "limited"}>
+                    {copy.suitability[status] || t(`audit_suit_${status}`)}
                   </span>
                 </div>
               ))}

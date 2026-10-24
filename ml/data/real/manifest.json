@@ -1,6 +1,6 @@
 {
   "created": "2026-07-13",
-  "updated": "2026-10-14",
+  "updated": "2026-10-24",
   "note": "Rebuilt from files actually present in data/real/. Every entry classified real/proxy with source_url and limitations.",
   "files": [
     {
@@ -28,7 +28,7 @@
       "as_of": "2026-04",
       "granularity": "landfill-month",
       "classification": "real",
-      "limitations": "Monthly landfill intake totals; inconsistent tonase formats normalized on load.",
+      "limitations": "Monthly landfill intake totals; inconsistent tonase formats normalized on load. Two corrupted rows (2024-04 ritasi/tonase swap; 2024-01 Jakarta Timur suspected x10 typo, inferred, pending DLH confirmation) are corrected and the missing month 2023-12 is kept as a gap, all as listed in bantargebang_corrections.json.",
       "columns": [
         "periode_data",
         "instansi_asal_kendaraan",
@@ -258,6 +258,27 @@
         "lat"
       ],
       "rows": 7884
+    },
+    {
+      "file": "bantargebang_corrections.json",
+      "source_url": "https://data.go.id/dataset/dataset/data-hasil-penimbangan-sampah-masuk-tempat-pengolahan-sampah-terpadu-tpst-bantargebang",
+      "as_of": "2026-10",
+      "granularity": "source-row-correction",
+      "classification": "correction",
+      "limitations": "Pythia-authored correction table for bantargebang_hasil_penimbangan.csv, not a dataset. The 2024-04 swap is evident in the source; the 2024-01 Jakarta Timur x10 fix is an inference from tonnes per trip, pending DLH confirmation.",
+      "corrections": 2,
+      "missing_months": [
+        "202312"
+      ]
+    },
+    {
+      "file": "idul_fitri_dates.json",
+      "source_url": "https://setneg.go.id/baca/index/inilah_skb_3_menteri_libur_nasional_dan_cuti_bersama_2027",
+      "as_of": "2027",
+      "granularity": "national-holiday",
+      "classification": "real",
+      "limitations": "Idul Fitri day 1 per year from the SKB cuti bersama / Kemenag decision. Only 2026 is cross-checked against a repo source (hari_libur_indonesia_2026.json); 2022-2025 are unverified public record and 2027 is the SKB schedule pending the official decision. Each date carries a verified flag.",
+      "rows": 6
     }
   ]
 }

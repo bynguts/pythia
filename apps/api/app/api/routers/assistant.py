@@ -123,8 +123,9 @@ def executive_summary() -> dict:
             "damaged_count": fleet_status["damaged_count"],
         },
         "model_suitability_note": (
-            "District-daily figures are calibrated-synthetic anchored to real SILIKA 2023 "
-            "baselines; weekly/monthly and hotspot-rank resolutions are the supported "
-            "decision levels (see /api/ml/suitability)."
+            "Only the monthly landfill-intake forecast is backtested on real data; daily, "
+            "weekly and monthly per-district figures and the hotspot ranking rest on "
+            "calibrated-synthetic series anchored to SILIKA 2023 baselines and carry no "
+            "accuracy claim (see /api/ml/suitability)."
         ),
     }

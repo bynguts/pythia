@@ -9,11 +9,13 @@ Includes:
 
 from __future__ import annotations
 
+import calendar
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import lru_cache
-from math import asin, cos, radians, sin, sqrt
+from math import asin, cos, exp, radians, sin, sqrt
 from typing import Any
 from uuid import uuid4
 
@@ -21,7 +23,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from app.core.paths import MODELS_DIR, REAL_DIR
+from app.core.paths import MODELS_DIR, MONTHLY_CALENDAR_MODEL, REAL_DIR
 from app.core.units import resource_requirements
 
 # 42 Jakarta kecamatan (matches ml/scripts/train_models.py; models named by slug).
@@ -429,6 +431,16 @@ def forecast_waste_risk(
 # ═════════════════════════════════════════════════════════════════════
 
 
+# Training builds rain_3d as the rolling 3-day rainfall SUM (ml/scripts/train_models.py
+# rain_3d). A scenario holds rainfall constant, so the matching serving value is 3 x rain.
+RAIN_3D_WINDOW_DAYS = 3
+
+
+def scenario_rain_3d(rainfall_mm: float) -> float:
+    """rain_3d for a constant-rain scenario, consistent with the training definition."""
+    return round(float(rainfall_mm) * RAIN_3D_WINDOW_DAYS, 2)
+
+
 @lru_cache(maxsize=1024)
 def predict_waste_hybrid(
     kelurahan: str,
@@ -481,7 +493,7 @@ def predict_waste_hybrid(
                 "month_of_year": pd.Timestamp(target_date).month if target_date else pd.Timestamp.now().month,
                 "day_of_month": pd.Timestamp(target_date).day if target_date else pd.Timestamp.now().day,
                 "is_payday": 0,
-                "rain_3d": round(rainfall_mm * 1.5, 2),
+                "rain_3d": scenario_rain_3d(rainfall_mm),
             },
             "factors": ["Model files missing; loaded robust statistical fallback heuristics for demo."],
             **resources,
@@ -508,7 +520,7 @@ def predict_waste_hybrid(
         "month_of_year": from_date.month,
         "day_of_month": from_date.day,
         "is_payday": int(from_date.day in (1, 2, 25, 26, 27, 28)),
-        "rain_3d": round(rainfall_mm * 1.5, 2),
+        "rain_3d": scenario_rain_3d(rainfall_mm),
     }
     X_features = pd.DataFrame([feature_row])
     residual_pred = xgboost_model.predict(X_features)[0]
@@ -642,7 +654,7 @@ def predict_waste_hybrid_series(
                     "month_of_year": d.month,
                     "day_of_month": d.day,
                     "is_payday": int(d.day in (1, 2, 25, 26, 27, 28)),
-                    "rain_3d": round(rainfall_mm * 1.5, 2),
+                    "rain_3d": scenario_rain_3d(rainfall_mm),
                 }
                 for d, w, h in zip(dates, weekend_flags, holiday_flags, strict=True)
             ]
@@ -705,6 +717,107 @@ def list_hybrid_models() -> list[dict[str, Any]]:
             }
         )
     return results
+
+
+# ═════════════════════════════════════════════════════════════════════
+# 3b. MONTHLY LANDFILL INTAKE (the forecast validated on real data)
+# ═════════════════════════════════════════════════════════════════════
+
+
+@lru_cache(maxsize=1)
+def _monthly_calendar_model() -> dict[str, Any] | None:
+    """monthly_calendar_model.json from ml/scripts/train_models.py, or None if absent."""
+    if not MONTHLY_CALENDAR_MODEL.exists():
+        return None
+    try:
+        return json.loads(MONTHLY_CALENDAR_MODEL.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        logging.getLogger(__name__).exception("monthly calendar model exists but failed to load")
+        return None
+
+
+def monthly_calendar_features(
+    year: int,
+    month: int,
+    eid_dates: list[str],
+    window: tuple[int, int] = (7, 7),
+    ramadan_days: int = 30,
+) -> tuple[float, float]:
+    """(ramadan_fraction, mudik_fraction) of the month's days.
+
+    Mudik = Idul Fitri -before..+after days; Ramadan = the `ramadan_days` before Idul Fitri,
+    minus the mudik window. Mirrors train_models.month_calendar_features (parity-tested).
+    """
+    before, after = window
+    eids = [pd.Timestamp(e) for e in eid_dates]
+    n_days = calendar.monthrange(year, month)[1]
+    ram = mud = 0
+    for day in range(1, n_days + 1):
+        d = pd.Timestamp(year, month, day)
+        if any(e - pd.Timedelta(days=before) <= d <= e + pd.Timedelta(days=after) for e in eids):
+            mud += 1
+        if any(e - pd.Timedelta(days=ramadan_days) <= d < e - pd.Timedelta(days=before) for e in eids):
+            ram += 1
+    return ram / n_days, mud / n_days
+
+
+def forecast_monthly_intake(months: int = 3, start_month: str | None = None) -> dict[str, Any]:
+    """Bantargebang intake forecast in t/day per month (12-month level x calendar factor).
+
+    Deterministic: months are counted from `start_month` (YYYY-MM), by default the month
+    after the last observed month, never from the wall clock. Only horizons 1-3 months
+    after the last observed month were backtested; later months are flagged.
+    """
+    base = {
+        "classification": "MODEL OUTPUT",
+        "validation": "rolling-origin backtest on real Bantargebang intake",
+        "unit": "t/day",
+        "daily_district_suitability": "not_supported_calibrated_synthetic",
+    }
+    model = _monthly_calendar_model()
+    if model is None:
+        return {**base, "available": False, "months": [], "reason": "monthly_calendar_model.json missing"}
+
+    last = pd.Period(model["fitted_through"], freq="M")
+    start = pd.Period(start_month, freq="M") if start_month else last + 1
+    window = tuple(model["mudik_window_days"])
+    eid_records = model["idul_fitri"]
+    eid_dates = [r["date"] for r in eid_records]
+    backtested = model["backtested_horizon_months"]
+    out = []
+    for i in range(max(1, min(int(months), 12))):
+        p = start + i
+        ram, mud = monthly_calendar_features(p.year, p.month, eid_dates, window, model["ramadan_days"])
+        factor = exp(model["a_ramadan"] * ram + model["b_mudik"] * mud)
+        horizon = (p - last).n
+        # Idul Fitri dates whose Ramadan or mudik window touches this month.
+        touching = [
+            r
+            for r in eid_records
+            if monthly_calendar_features(p.year, p.month, [r["date"]], window, model["ramadan_days"])
+            != (0.0, 0.0)
+        ]
+        out.append(
+            {
+                "month": str(p),
+                "tons_per_day": round(exp(model["level_log"]) * factor, 1),
+                "calendar_factor": round(factor, 4),
+                "ramadan_fraction": round(ram, 4),
+                "mudik_fraction": round(mud, 4),
+                "horizon_months": horizon,
+                "within_backtested_horizon": horizon in backtested,
+                "idul_fitri_date_unverified": any(not r["verified"] for r in touching),
+            }
+        )
+    return {
+        **base,
+        "available": True,
+        "model": model["model"],
+        "target": model["target"],
+        "fitted_through": model["fitted_through"],
+        "backtested_horizon_months": backtested,
+        "months": out,
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════

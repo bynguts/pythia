@@ -86,8 +86,8 @@ does not become a deviation-scoring reference path.
 4. **Integrated Planning:**
    - Review constraints and approve the weekly staggered queue plan.
 5. **Data & ML Audit:**
-   - Audit per-Kecamatan model suitability: each resolution (Kecamatan, Kelurahan, RW) carries a suitability label — `reliable`, `synthetic-validated`, or `not supported` — together with the data provenance behind it.
-   - The audit workspace surfaces validation-target classes and provenance for every predicted series, so planners can see exactly which numbers rest on observed data versus synthetic coverage. (Accuracy metrics like WAPE/MAE are computed in `app/forecast/forecast_metrics.py` for offline evaluation but are not part of the current audit UI/API surface.)
+   - Model card: for the monthly landfill-intake forecast (total and per city) it shows the model's error next to the strongest simple baseline on real Bantargebang data (rolling-origin backtest), green when the whole 90% interval of the gain is above zero, red otherwise. The numbers come from `GET /api/ml/suitability` (`monthly_backtest`), which reads `apps/api/data/models/forecast_evaluation.json` written by `ml/scripts/train_models.py`.
+   - Suitability labels per resolution: `backtested_real` (monthly landfill and city intake), `synthetic_validated` (city-day and per-district week/month: sums or slices of the calibrated-synthetic series), `reproduces_input` (hotspot ranking: it reproduces the SILIKA 2023 input ranking, not evidence of skill) and `not_supported` (district-day). No daily or per-district accuracy is claimed.
 
 
 ### Driver weighbridge receipt

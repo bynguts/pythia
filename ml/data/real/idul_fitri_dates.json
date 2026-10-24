@@ -1,0 +1,56 @@
+{
+  "description": "Hari Raya Idul Fitri (1 Syawal) day 1 in Indonesia, as set by the government. Used by the monthly landfill-intake forecaster for the Ramadan and Lebaran-exodus (mudik) calendar features. These dates are published in advance (SKB cuti bersama), so they are known at forecast time.",
+  "source": "SKB Menteri Agama, Menteri Ketenagakerjaan dan Menteri PANRB tentang hari libur nasional dan cuti bersama (one SKB per year); the final 1 Syawal date is set by the Minister of Religious Affairs after sidang isbat.",
+  "verification_note": "verified=true only where the date was cross-checked against a source stored in this repository. Unverified dates are public record but must be checked against the official SKB/Kemenag decision before they are relied on.",
+  "dates": [
+    {
+      "year": 2022,
+      "date": "2022-05-02",
+      "hijri": "1 Syawal 1443 H",
+      "verified": false,
+      "status": "unverified",
+      "note": "Recorded from memory; outside the Bantargebang series (starts 2022-12), so it does not affect any fitted number. Verify before use."
+    },
+    {
+      "year": 2023,
+      "date": "2023-04-22",
+      "hijri": "1 Syawal 1444 H",
+      "verified": false,
+      "status": "public_record_not_verified_in_repo",
+      "note": "Government date (Muhammadiyah observed 2023-04-21). Not cross-checked against an SKB document in this repository."
+    },
+    {
+      "year": 2024,
+      "date": "2024-04-10",
+      "hijri": "1 Syawal 1445 H",
+      "verified": false,
+      "status": "public_record_not_verified_in_repo",
+      "note": "Not cross-checked against an SKB document in this repository."
+    },
+    {
+      "year": 2025,
+      "date": "2025-03-31",
+      "hijri": "1 Syawal 1446 H",
+      "verified": false,
+      "status": "public_record_not_verified_in_repo",
+      "note": "Not cross-checked against an SKB document in this repository."
+    },
+    {
+      "year": 2026,
+      "date": "2026-03-21",
+      "hijri": "1 Syawal 1447 H",
+      "verified": true,
+      "status": "verified_in_repo",
+      "note": "Matches hari_libur_indonesia_2026.json (Hari Raya Idul Fitri 1447 Hijriyah, 2026-03-21)."
+    },
+    {
+      "year": 2027,
+      "date": "2027-03-10",
+      "hijri": "1 Syawal 1448 H",
+      "verified": false,
+      "status": "scheduled_pending_official_decision",
+      "source_url": "https://setneg.go.id/baca/index/inilah_skb_3_menteri_libur_nasional_dan_cuti_bersama_2027",
+      "note": "SKB 2027 (signed 2026-09-15, as reported) schedules the Idul Fitri holiday on 10-11 March 2027; the final date depends on the Minister of Religious Affairs decision. Forecasts that use it are flagged."
+    }
+  ]
+}

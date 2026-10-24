@@ -17,12 +17,17 @@ from app.core.paths import RAW_DIR
 from app.core.units import UNIT_GLOSSARY
 from app.fleet.data import build_predictions
 from app.forecast.engine import (
+    forecast_monthly_intake,
     forecast_waste_risk,
     list_hybrid_models,
     predict_waste_hybrid,
     predict_waste_hybrid_series,
 )
-from app.forecast.forecast_metrics import suitability_details, suitability_labels
+from app.forecast.forecast_metrics import (
+    monthly_backtest_metrics,
+    suitability_details,
+    suitability_labels,
+)
 from app.forecast.impact import build_impact_report
 from app.forecast.real_data import (
     load_kecamatan_map,
@@ -290,16 +295,24 @@ def ml_models_status() -> list[dict[str, Any]]:
 def ml_suitability() -> dict[str, Any]:
     """Honest per-resolution suitability with validation-target classes (#18).
 
-    'reliable' is only claimed for observed holdout targets; resolutions
-    validated against the calibrated-synthetic district series are
-    labeled 'synthetic_validated' with their evidence exposed.
+    Only the monthly landfill/city intake forecast is backtested on real data
+    ('backtested_real', numbers from the training artifact in
+    `monthly_backtest`); resolutions validated against the calibrated-synthetic
+    district series are labeled 'synthetic_validated' with their evidence exposed.
     """
     return {
         # 'resolutions' key retained for existing frontend consumers.
         "resolutions": suitability_labels(),
         "details": suitability_details(),
+        "monthly_backtest": monthly_backtest_metrics(),
         "note": "Daily per-district resolution is calibrated-synthetic and must not be presented as observed accuracy.",
     }
+
+
+@router.get("/api/ml/monthly-intake")
+def ml_monthly_intake(months: int = Query(3, ge=1, le=12)) -> dict[str, Any]:
+    """Monthly Bantargebang intake forecast (t/day), the forecast backtested on real data."""
+    return forecast_monthly_intake(months)
 
 
 @router.get("/api/impact")

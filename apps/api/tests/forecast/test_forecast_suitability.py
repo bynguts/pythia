@@ -1,4 +1,4 @@
-"""#18: synthetic-target validation must not be labeled reliable.
+"""#18: synthetic-target validation must not be labeled reliable (nor city-day observed).
 
 Weekly/monthly per-district metrics are evaluated against a
 calibrated-synthetic district series (avg daily-district R² -0.033),
@@ -41,10 +41,24 @@ class SuitabilityTaxonomyTests(unittest.TestCase):
             missing = required - set(detail.keys())
             self.assertEqual(missing, set(), f"suitability detail for {key} missing {missing}")
 
-    def test_city_day_is_observed(self):
-        # City-level daily has SIPSN-observed city timbulan to validate
-        # against at aggregate level.
-        self.assertEqual(suitability_details()["city_day"]["validation_target"], "observed")
+    def test_city_day_is_synthetic_not_reliable(self):
+        # City-day is a sum of the calibrated-synthetic kecamatan series: no
+        # observed daily city series exists, so it may not be called reliable.
+        self.assertEqual(suitability_details()["city_day"]["validation_target"], "synthetic")
+        self.assertEqual(suitability_labels()["city_day"], "synthetic_validated")
+        self.assertFalse(suitability_details()["city_day"]["evidence_of_skill"])
+
+    def test_hotspot_rank_is_not_evidence_of_skill(self):
+        detail = suitability_details()["hotspot_rank"]
+        self.assertEqual(suitability_labels()["hotspot_rank"], "reproduces_input")
+        self.assertFalse(detail["evidence_of_skill"])
+        self.assertIn("not evidence of skill", detail["baseline"])
+
+    def test_only_real_backtests_carry_evidence_of_skill(self):
+        for key, detail in suitability_details().items():
+            if detail["evidence_of_skill"]:
+                self.assertEqual(detail["validation_target"], "real", key)
+                self.assertEqual(suitability_labels()[key], "backtested_real", key)
 
     def test_district_week_month_are_synthetic(self):
         details = suitability_details()

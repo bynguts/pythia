@@ -73,8 +73,10 @@ people who have to act on it.
 
 > **Prototype honesty.** Fleet positions are simulated (not live GPS), the Ho Chi
 > Minh City data is a labelled demo city, and forecasts are model outputs; the UI
-> labels each of these. Accuracy figures live in the offline evaluation report
-> (`ml/data/processed/hybrid_forecaster_evaluation.md`).
+> labels each of these. Only the monthly landfill-intake forecast is validated on real
+> data (rolling-origin backtest against the strongest simple baseline, shown in the
+> audit model card); daily and per-district forecasts are calibrated-synthetic and carry
+> no accuracy claim. Details: `ml/data/processed/hybrid_forecaster_evaluation.md`.
 
 ---
 
@@ -124,7 +126,7 @@ Every workflow is an auditable loop — `detect → dispatch → acknowledge →
 - **Integrated Planning** — constraint-aware weekly plan (OR-Tools CP-SAT) with an approve/deny flow.
 
 ### Data & ML Audit
-- **Data provenance & model suitability** — every series is labelled observed, proxy or modelled in the dashboard; WAPE / MAE come from the offline evaluation report (`ml/data/processed/hybrid_forecaster_evaluation.md`).
+- **Data provenance & model suitability** — every series is labelled observed, proxy or modelled in the dashboard. A model card shows the monthly landfill-intake forecast's error against the strongest simple baseline on real Bantargebang data (rolling-origin backtest, numbers read from the training pipeline's `forecast_evaluation.json`); daily and per-district resolutions are labelled calibrated-synthetic with no accuracy claim.
 
 ---
 
@@ -254,7 +256,7 @@ Every role's password can be overridden with `PYTHIA_PW_<ROLE>`.
 4. **Run the day (Fleet):** notice `T-047` off-corridor; click **A\* Simulate Jam** → watch it recompute a street-following route to TPA Bantargebang; inspect the landfill queue and staggered slots; click **Send Alert**; confirm the instruction in `/field` (no login) — the dashboard syncs instantly.
 5. **Guide the driver (AR):** open `/driver` on a phone, pick a stop and tap **AR guide** for camera navigation and an in-AR arrival photo.
 6. **Explain it (XR):** open `/xr` for the tabletop city model.
-7. **Audit it:** in **Data & ML Audit**, review provenance, validation classes and model suitability; accuracy (WAPE / MAE) is in the offline evaluation report.
+7. **Audit it:** in **Data & ML Audit**, review provenance, validation classes, model suitability and the model card (monthly forecast vs the strongest simple baseline on real data).
 
 ---
 

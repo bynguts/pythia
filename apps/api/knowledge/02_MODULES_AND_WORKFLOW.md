@@ -25,7 +25,7 @@ forecast sampah, perencanaan dispatch, konfirmasi lapangan, dan pelaporan audit 
 4. **Integrated Planning** — CP-SAT optimizer: demand -> assignment truk, plan approve.
 5. **Dispatch & WhatsApp** — instruksi ke FieldApp + gateway Baileys; status OpenWA live.
 6. **Field App** — halaman `/field`: driver melihat misi, konfirmasi status.
-7. **Model Audit** — `/api/ml/models`, suitability, metrik evaluasi (MAE/WAPE/MASE).
+7. **Model Audit** — `/api/ml/models`, suitability, dan kartu model: galat prakiraan bulanan sampah masuk TPA vs baseline sederhana terkuat pada data riil (uji mundur bergulir); resolusi harian/kecamatan berlabel kalibrasi-sintetik tanpa klaim akurasi.
 8. **History & Reports** — executive summary, export, replay event.
 
 ## Layout Frontend

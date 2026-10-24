@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.fleet.queue_simulation import queue_minutes_per_truck
+from app.forecast.forecast_metrics import monthly_backtest_metrics
 
 
 def _tpa_wait_reduction() -> dict[str, Any]:
@@ -28,6 +29,33 @@ def _tpa_wait_reduction() -> dict[str, Any]:
     }
 
 
+def _monthly_forecast_error() -> list[dict[str, Any]]:
+    """Monthly landfill-intake forecast error vs the strongest naive, from the real backtest.
+
+    Replaces the old hotspot-rank Spearman, which only reproduced its own SILIKA input.
+    Omitted when the evaluation artifact is missing.
+    """
+    m = monthly_backtest_metrics().get("landfill_month")
+    if not m:
+        return []
+    lo, hi = m["skill_ci90_pct"]
+    return [
+        {
+            "name": "forecast_monthly_intake_mae",
+            "unit": "tons_per_day",
+            "baseline": m["mae_naive"],
+            "pythia": m["mae_model"],
+            "delta": m["skill_pct"],
+            "source": (
+                f"Rolling-origin backtest on real Bantargebang intake, {m['origins']} origins, "
+                f"{m['horizons_months'][0]}-{m['horizons_months'][-1]} months ahead, vs {m['strongest_naive']} "
+                f"(strongest naive); 90% interval of the gain {lo:+.1f}% to {hi:+.1f}%"
+            ),
+            "classification": "modeled",
+        }
+    ]
+
+
 def build_impact_report() -> dict[str, Any]:
     """Assemble reproducible impact metrics with per-metric provenance."""
     metrics: list[dict[str, Any]] = [
@@ -40,14 +68,7 @@ def build_impact_report() -> dict[str, Any]:
             "source": "engine.distance_point_to_polyline_m + test_engine geometry suite",
             "classification": "derived",
         },
-        {
-            "name": "forecast_hotspot_rank",
-            "unit": "spearman_rho",
-            "baseline": 0.0,
-            "pythia": 0.998,
-            "source": "hybrid_forecaster_evaluation.md multi-resolution",
-            "classification": "modeled",
-        },
+        *_monthly_forecast_error(),
         {
             "name": "fuel_per_ton",
             "unit": "liters_per_ton",

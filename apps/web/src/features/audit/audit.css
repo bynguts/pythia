@@ -1,0 +1,110 @@
+/* Model card in the Data & ML Audit workspace (features/audit/ModelCard.jsx). */
+.audit-model-card {
+  min-width: 0;
+  margin: 0 0 var(--space-4);
+  padding: 22px;
+}
+.model-card-list,
+.model-card-synthetic {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 1px;
+  background: var(--ui-border);
+}
+.model-card-row {
+  min-width: 0;
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+  background: var(--ui-surface);
+}
+.model-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.model-card-head strong {
+  margin-right: auto;
+  color: var(--ui-ink);
+}
+.model-card-verdict {
+  padding: 3px 9px;
+  border-radius: var(--ui-radius-pill);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+.model-card-verdict.good {
+  border: 1px solid var(--ui-success-line);
+  color: var(--ui-success);
+  background: var(--ui-accent-soft);
+}
+.model-card-verdict.bad {
+  border: 1px solid var(--ui-danger-line);
+  color: var(--ui-danger);
+  background: var(--ui-danger-soft);
+}
+.model-card-model {
+  margin: 0;
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-caption);
+}
+.model-card-metrics {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-2) var(--space-3);
+}
+.model-card-metrics div {
+  min-width: 0;
+}
+.model-card-metrics dt {
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.model-card-metrics dd {
+  margin: 2px 0 0;
+  color: var(--ui-ink);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.model-card-metrics dd.good {
+  color: var(--ui-success);
+  font-weight: 600;
+}
+.model-card-metrics dd.bad {
+  color: var(--ui-danger);
+  font-weight: 600;
+}
+.model-card-row small,
+.model-card-synthetic small {
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.model-card-subhead {
+  margin: var(--space-4) 0 0;
+  font-size: var(--fs-body);
+}
+.model-card-synthetic li {
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--ui-surface);
+}
+.model-card-synthetic li > span:first-child {
+  margin-right: auto;
+  color: var(--ui-ink);
+}
+.model-card-synthetic li small {
+  flex-basis: 100%;
+}
+.model-card-synthetic .classification-badge {
+  border: 1px solid var(--ui-warning-line);
+  color: var(--ui-warning);
+  background: var(--ui-warning-soft);
+}

@@ -1,0 +1,65 @@
+{
+  "schema": "pythia.monthly_calendar_model/1",
+  "model": "ma12_calendar",
+  "target": "Bantargebang landfill intake, mean tonnes per day per month (real, data.go.id)",
+  "unit": "t/day",
+  "classification": "MODEL OUTPUT",
+  "formula": "t/day = exp(level_log + a_ramadan * ramadan_fraction + b_mudik * mudik_fraction)",
+  "intercept": 8.913496,
+  "a_ramadan": 0.129275,
+  "b_mudik": -0.213558,
+  "level_log": 8.888386,
+  "level_months": 12,
+  "ridge_lambda": 0.05,
+  "mudik_window_days": [
+    7,
+    7
+  ],
+  "ramadan_days": 30,
+  "fitted_from": "2022-12",
+  "fitted_through": "2026-04",
+  "n_months": 41,
+  "gap_months": [
+    "2023-12"
+  ],
+  "idul_fitri": [
+    {
+      "date": "2022-05-02",
+      "verified": false,
+      "status": "unverified"
+    },
+    {
+      "date": "2023-04-22",
+      "verified": false,
+      "status": "public_record_not_verified_in_repo"
+    },
+    {
+      "date": "2024-04-10",
+      "verified": false,
+      "status": "public_record_not_verified_in_repo"
+    },
+    {
+      "date": "2025-03-31",
+      "verified": false,
+      "status": "public_record_not_verified_in_repo"
+    },
+    {
+      "date": "2026-03-21",
+      "verified": true,
+      "status": "verified_in_repo"
+    },
+    {
+      "date": "2027-03-10",
+      "verified": false,
+      "status": "scheduled_pending_official_decision"
+    }
+  ],
+  "backtested_horizon_months": [
+    1,
+    2,
+    3
+  ],
+  "validation": "rolling-origin backtest on real Bantargebang intake",
+  "evaluation_file": "forecast_evaluation.json",
+  "generated_by": "ml/scripts/train_models.py"
+}

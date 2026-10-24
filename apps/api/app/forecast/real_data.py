@@ -50,7 +50,11 @@ _DATA_SOURCE_REGISTRY: list[dict[str, Any]] = [
         "as_of": "2026-04",
         "granularity": "landfill-month",
         "classification": "real",
-        "limitations": "Monthly landfill intake totals; inconsistent tonase formats normalized on load.",
+        "limitations": (
+            "Monthly landfill intake totals; inconsistent tonase formats normalized on load; two corrupted "
+            "rows corrected (2024-01 fix inferred, pending DLH confirmation) and the missing month 2023-12 "
+            "kept as a gap."
+        ),
     },
     {
         "name": "data_truk_sampah_dki.csv",

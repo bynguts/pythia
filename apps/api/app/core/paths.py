@@ -22,6 +22,10 @@ API_DIR = Path(__file__).resolve().parents[2]
 REPO_ROOT = API_DIR.parent.parent
 
 MODELS_DIR = API_DIR / "data" / "models"
+# Monthly landfill-intake forecaster and its real-data rolling-origin backtest
+# (both written by ml/scripts/train_models.py).
+MONTHLY_CALENDAR_MODEL = MODELS_DIR / "monthly_calendar_model.json"
+FORECAST_EVALUATION = MODELS_DIR / "forecast_evaluation.json"
 # Product/operations documents the assistant "Ana" retrieves from (RAG).
 KNOWLEDGE_DIR = API_DIR / "knowledge"
 # Non-code assets the service reads at runtime (cached road geometry, YOLO weights,
@@ -29,6 +33,8 @@ KNOWLEDGE_DIR = API_DIR / "knowledge"
 ASSETS_DIR = API_DIR / "data" / "assets"
 ROAD_GEOMETRY_CACHE = ASSETS_DIR / "road_geometry_cache.json"
 YOLO_WEIGHTS = ASSETS_DIR / "yolov8n.pt"
+# Simplified Jakarta kecamatan boundaries for the twin (ml/scripts/build_district_outlines.py).
+DISTRICT_OUTLINES = ASSETS_DIR / "jakarta_kecamatan_outlines.json"
 DEMO_MEDIA_DIR = API_DIR / "data" / "media"
 # Real driver WhatsApp numbers stay local (git-ignored); the example file holds
 # placeholders and is what the API serves when no local file exists.

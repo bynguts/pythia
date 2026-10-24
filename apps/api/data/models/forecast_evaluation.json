@@ -1,0 +1,636 @@
+{
+  "schema": "pythia.forecast_evaluation/1",
+  "generated_by": "ml/scripts/train_models.py",
+  "data_cleaning": {
+    "source_file": "bantargebang_hasil_penimbangan.csv",
+    "corrections_file": "bantargebang_corrections.json",
+    "corrections_applied": [
+      {
+        "id": "202404_ritasi_tonase_swapped",
+        "periode_data": "202404",
+        "action": "swap_ritasi_tonase",
+        "rows": 9,
+        "status": "evident_in_source",
+        "flag": null
+      },
+      {
+        "id": "202401_jakarta_timur_decimal",
+        "periode_data": "202401",
+        "action": "set_tonase",
+        "rows": 1,
+        "status": "inferred_pending_dlh_confirmation",
+        "flag": "suspected_decimal_typo"
+      }
+    ],
+    "missing_months": [
+      "202312"
+    ],
+    "tonnes_per_trip_bounds": [
+      1.5,
+      15.0
+    ]
+  },
+  "resolutions": {
+    "landfill_month": {
+      "target": "Bantargebang landfill intake, t/day per month (total of all sources)",
+      "target_class": "real",
+      "unit": "t/day",
+      "period": "2022-12..2026-04",
+      "model": "ma12_calendar",
+      "strongest_naive": "ma12",
+      "origins": 23,
+      "first_origin": "2024-06",
+      "last_origin": "2026-04",
+      "horizons_months": [
+        1,
+        2,
+        3
+      ],
+      "n_forecasts": 66,
+      "n_target_months": 23,
+      "mae_model": 310.63,
+      "mae_naive": 358.51,
+      "mape_model_pct": 4.32,
+      "mape_naive_pct": 4.98,
+      "skill_pct": 13.4,
+      "skill_ci90_pct": [
+        4.3,
+        22.9
+      ],
+      "ci_method": "cluster bootstrap over target months, 3000 resamples, seed 7",
+      "by_horizon": [
+        {
+          "h": 1,
+          "n_forecasts": 23,
+          "mae_model": 317.62,
+          "mae_naive": 361.31,
+          "skill_pct": 12.1
+        },
+        {
+          "h": 2,
+          "n_forecasts": 22,
+          "mae_model": 318.45,
+          "mae_naive": 367.69,
+          "skill_pct": 13.4
+        },
+        {
+          "h": 3,
+          "n_forecasts": 21,
+          "mae_model": 294.77,
+          "mae_naive": 345.83,
+          "skill_pct": 14.8
+        }
+      ],
+      "calendar_months": {
+        "months": [
+          "2025-03",
+          "2025-04",
+          "2026-02",
+          "2026-03"
+        ],
+        "n_forecasts": 12,
+        "mae_model": 375.31,
+        "mae_naive": 634.37,
+        "skill_pct": 40.8
+      },
+      "normal_months": {
+        "n_forecasts": 54,
+        "mae_model": 296.25,
+        "mae_naive": 297.21,
+        "skill_pct": 0.3
+      },
+      "models": [
+        {
+          "name": "ma12_calendar",
+          "kind": "model",
+          "mae": 310.63,
+          "mape_pct": 4.32,
+          "skill_vs_strongest_naive_pct": 13.4
+        },
+        {
+          "name": "ma12",
+          "kind": "naive",
+          "mae": 358.51,
+          "mape_pct": 4.98,
+          "skill_vs_strongest_naive_pct": 0.0
+        },
+        {
+          "name": "expanding_mean",
+          "kind": "naive",
+          "mae": 363.58,
+          "mape_pct": 5.05,
+          "skill_vs_strongest_naive_pct": -1.4
+        },
+        {
+          "name": "ma6",
+          "kind": "naive",
+          "mae": 405.08,
+          "mape_pct": 5.58,
+          "skill_vs_strongest_naive_pct": -13.0
+        },
+        {
+          "name": "seasonal_naive_12",
+          "kind": "naive",
+          "mae": 408.63,
+          "mape_pct": 5.68,
+          "skill_vs_strongest_naive_pct": -14.0
+        },
+        {
+          "name": "ma3",
+          "kind": "naive",
+          "mae": 444.8,
+          "mape_pct": 6.12,
+          "skill_vs_strongest_naive_pct": -24.1
+        },
+        {
+          "name": "naive_last",
+          "kind": "naive",
+          "mae": 496.87,
+          "mape_pct": 6.85,
+          "skill_vs_strongest_naive_pct": -38.6
+        },
+        {
+          "name": "prophet_previous_config",
+          "kind": "superseded",
+          "mae": 1105.45,
+          "mape_pct": 15.09,
+          "skill_vs_strongest_naive_pct": -208.3
+        }
+      ]
+    },
+    "city_month": {
+      "target": "Bantargebang intake per city (5 Sudin incl. market streams), t/day per month",
+      "target_class": "real",
+      "unit": "t/day",
+      "period": "2024-02..2026-04",
+      "cities": [
+        "PUSAT",
+        "UTARA",
+        "BARAT",
+        "SELATAN",
+        "TIMUR"
+      ],
+      "coefficients": "calendar coefficients pooled from the total series at each cut-off",
+      "independence_note": "Same Lebaran events as landfill_month; not independent evidence.",
+      "model": "ma12_calendar",
+      "strongest_naive": "ma12",
+      "origins": 15,
+      "first_origin": "2025-02",
+      "last_origin": "2026-04",
+      "horizons_months": [
+        1,
+        2,
+        3
+      ],
+      "n_forecasts": 210,
+      "n_target_months": 15,
+      "mae_model": 64.92,
+      "mae_naive": 76.17,
+      "mape_model_pct": 5.25,
+      "mape_naive_pct": 6.1,
+      "skill_pct": 14.8,
+      "skill_ci90_pct": [
+        6.2,
+        23.2
+      ],
+      "ci_method": "cluster bootstrap over target months, 3000 resamples, seed 7",
+      "by_horizon": [
+        {
+          "h": 1,
+          "n_forecasts": 75,
+          "mae_model": 60.83,
+          "mae_naive": 72.84,
+          "skill_pct": 16.5
+        },
+        {
+          "h": 2,
+          "n_forecasts": 70,
+          "mae_model": 64.19,
+          "mae_naive": 76.4,
+          "skill_pct": 16.0
+        },
+        {
+          "h": 3,
+          "n_forecasts": 65,
+          "mae_model": 70.42,
+          "mae_naive": 79.77,
+          "skill_pct": 11.7
+        }
+      ],
+      "calendar_months": {
+        "months": [
+          "2025-03",
+          "2025-04",
+          "2026-02",
+          "2026-03"
+        ],
+        "n_forecasts": 55,
+        "mae_model": 80.6,
+        "mae_naive": 120.74,
+        "skill_pct": 33.2
+      },
+      "normal_months": {
+        "n_forecasts": 155,
+        "mae_model": 59.36,
+        "mae_naive": 60.36,
+        "skill_pct": 1.7
+      },
+      "models": [
+        {
+          "name": "ma12_calendar",
+          "kind": "model",
+          "mae": 64.92,
+          "mape_pct": 5.25,
+          "skill_vs_strongest_naive_pct": 14.8
+        },
+        {
+          "name": "ma12",
+          "kind": "naive",
+          "mae": 76.17,
+          "mape_pct": 6.1,
+          "skill_vs_strongest_naive_pct": 0.0
+        },
+        {
+          "name": "ma6",
+          "kind": "naive",
+          "mae": 82.77,
+          "mape_pct": 6.42,
+          "skill_vs_strongest_naive_pct": -8.7
+        },
+        {
+          "name": "expanding_mean",
+          "kind": "naive",
+          "mae": 84.82,
+          "mape_pct": 6.8,
+          "skill_vs_strongest_naive_pct": -11.3
+        },
+        {
+          "name": "ma3",
+          "kind": "naive",
+          "mae": 87.27,
+          "mape_pct": 6.87,
+          "skill_vs_strongest_naive_pct": -14.6
+        },
+        {
+          "name": "seasonal_naive_12",
+          "kind": "naive",
+          "mae": 92.33,
+          "mape_pct": 7.21,
+          "skill_vs_strongest_naive_pct": -21.2
+        },
+        {
+          "name": "naive_last",
+          "kind": "naive",
+          "mae": 95.46,
+          "mape_pct": 7.53,
+          "skill_vs_strongest_naive_pct": -25.3
+        }
+      ]
+    }
+  },
+  "sensitivity": [
+    {
+      "mudik_window_days": [
+        7,
+        7
+      ],
+      "min_train_months": 12,
+      "origins": 29,
+      "strongest_naive": "ma12",
+      "mae_model": 320.19,
+      "mae_naive": 371.46,
+      "skill_pct": 13.8,
+      "skill_ci90_pct": [
+        4.1,
+        24.0
+      ]
+    },
+    {
+      "mudik_window_days": [
+        7,
+        7
+      ],
+      "min_train_months": 18,
+      "origins": 23,
+      "strongest_naive": "ma12",
+      "mae_model": 310.63,
+      "mae_naive": 358.51,
+      "skill_pct": 13.4,
+      "skill_ci90_pct": [
+        4.3,
+        22.9
+      ]
+    },
+    {
+      "mudik_window_days": [
+        7,
+        7
+      ],
+      "min_train_months": 24,
+      "origins": 17,
+      "strongest_naive": "ma12",
+      "mae_model": 291.35,
+      "mae_naive": 356.71,
+      "skill_pct": 18.3,
+      "skill_ci90_pct": [
+        6.6,
+        30.2
+      ]
+    },
+    {
+      "mudik_window_days": [
+        3,
+        3
+      ],
+      "min_train_months": 12,
+      "origins": 29,
+      "strongest_naive": "ma12",
+      "mae_model": 331.87,
+      "mae_naive": 371.46,
+      "skill_pct": 10.7,
+      "skill_ci90_pct": [
+        4.1,
+        18.4
+      ]
+    },
+    {
+      "mudik_window_days": [
+        3,
+        3
+      ],
+      "min_train_months": 18,
+      "origins": 23,
+      "strongest_naive": "ma12",
+      "mae_model": 321.28,
+      "mae_naive": 358.51,
+      "skill_pct": 10.4,
+      "skill_ci90_pct": [
+        2.7,
+        18.7
+      ]
+    },
+    {
+      "mudik_window_days": [
+        3,
+        3
+      ],
+      "min_train_months": 24,
+      "origins": 17,
+      "strongest_naive": "ma12",
+      "mae_model": 306.0,
+      "mae_naive": 356.71,
+      "skill_pct": 14.2,
+      "skill_ci90_pct": [
+        4.2,
+        25.2
+      ]
+    },
+    {
+      "mudik_window_days": [
+        3,
+        7
+      ],
+      "min_train_months": 12,
+      "origins": 29,
+      "strongest_naive": "ma12",
+      "mae_model": 319.57,
+      "mae_naive": 371.46,
+      "skill_pct": 14.0,
+      "skill_ci90_pct": [
+        5.3,
+        22.9
+      ]
+    },
+    {
+      "mudik_window_days": [
+        3,
+        7
+      ],
+      "min_train_months": 18,
+      "origins": 23,
+      "strongest_naive": "ma12",
+      "mae_model": 306.82,
+      "mae_naive": 358.51,
+      "skill_pct": 14.4,
+      "skill_ci90_pct": [
+        4.5,
+        24.8
+      ]
+    },
+    {
+      "mudik_window_days": [
+        3,
+        7
+      ],
+      "min_train_months": 24,
+      "origins": 17,
+      "strongest_naive": "ma12",
+      "mae_model": 286.12,
+      "mae_naive": 356.71,
+      "skill_pct": 19.8,
+      "skill_ci90_pct": [
+        6.9,
+        33.4
+      ]
+    },
+    {
+      "mudik_window_days": [
+        7,
+        3
+      ],
+      "min_train_months": 12,
+      "origins": 29,
+      "strongest_naive": "ma12",
+      "mae_model": 329.86,
+      "mae_naive": 371.46,
+      "skill_pct": 11.2,
+      "skill_ci90_pct": [
+        3.7,
+        19.5
+      ]
+    },
+    {
+      "mudik_window_days": [
+        7,
+        3
+      ],
+      "min_train_months": 18,
+      "origins": 23,
+      "strongest_naive": "ma12",
+      "mae_model": 321.89,
+      "mae_naive": 358.51,
+      "skill_pct": 10.2,
+      "skill_ci90_pct": [
+        2.9,
+        18.4
+      ]
+    },
+    {
+      "mudik_window_days": [
+        7,
+        3
+      ],
+      "min_train_months": 24,
+      "origins": 17,
+      "strongest_naive": "ma12",
+      "mae_model": 306.84,
+      "mae_naive": 356.71,
+      "skill_pct": 14.0,
+      "skill_ci90_pct": [
+        4.6,
+        24.3
+      ]
+    },
+    {
+      "mudik_window_days": [
+        10,
+        10
+      ],
+      "min_train_months": 12,
+      "origins": 29,
+      "strongest_naive": "ma12",
+      "mae_model": 318.46,
+      "mae_naive": 371.46,
+      "skill_pct": 14.3,
+      "skill_ci90_pct": [
+        3.1,
+        25.6
+      ]
+    },
+    {
+      "mudik_window_days": [
+        10,
+        10
+      ],
+      "min_train_months": 18,
+      "origins": 23,
+      "strongest_naive": "ma12",
+      "mae_model": 307.53,
+      "mae_naive": 358.51,
+      "skill_pct": 14.2,
+      "skill_ci90_pct": [
+        4.6,
+        23.9
+      ]
+    },
+    {
+      "mudik_window_days": [
+        10,
+        10
+      ],
+      "min_train_months": 24,
+      "origins": 17,
+      "strongest_naive": "ma12",
+      "mae_model": 287.08,
+      "mae_naive": 356.71,
+      "skill_pct": 19.5,
+      "skill_ci90_pct": [
+        6.9,
+        31.3
+      ]
+    },
+    {
+      "mudik_window_days": [
+        14,
+        7
+      ],
+      "min_train_months": 12,
+      "origins": 29,
+      "strongest_naive": "ma12",
+      "mae_model": 312.49,
+      "mae_naive": 371.46,
+      "skill_pct": 15.9,
+      "skill_ci90_pct": [
+        5.7,
+        26.6
+      ]
+    },
+    {
+      "mudik_window_days": [
+        14,
+        7
+      ],
+      "min_train_months": 18,
+      "origins": 23,
+      "strongest_naive": "ma12",
+      "mae_model": 302.04,
+      "mae_naive": 358.51,
+      "skill_pct": 15.8,
+      "skill_ci90_pct": [
+        5.1,
+        27.2
+      ]
+    },
+    {
+      "mudik_window_days": [
+        14,
+        7
+      ],
+      "min_train_months": 24,
+      "origins": 17,
+      "strongest_naive": "ma12",
+      "mae_model": 279.54,
+      "mae_naive": 356.71,
+      "skill_pct": 21.6,
+      "skill_ci90_pct": [
+        7.6,
+        35.9
+      ]
+    },
+    {
+      "mudik_window_days": [
+        0,
+        0
+      ],
+      "min_train_months": 12,
+      "origins": 29,
+      "strongest_naive": "ma12",
+      "mae_model": 369.21,
+      "mae_naive": 371.46,
+      "skill_pct": 0.6,
+      "skill_ci90_pct": [
+        -4.6,
+        6.2
+      ]
+    },
+    {
+      "mudik_window_days": [
+        0,
+        0
+      ],
+      "min_train_months": 18,
+      "origins": 23,
+      "strongest_naive": "ma12",
+      "mae_model": 351.67,
+      "mae_naive": 358.51,
+      "skill_pct": 1.9,
+      "skill_ci90_pct": [
+        -5.3,
+        8.3
+      ]
+    },
+    {
+      "mudik_window_days": [
+        0,
+        0
+      ],
+      "min_train_months": 24,
+      "origins": 17,
+      "strongest_naive": "ma12",
+      "mae_model": 347.79,
+      "mae_naive": 356.71,
+      "skill_pct": 2.5,
+      "skill_ci90_pct": [
+        -6.9,
+        11.6
+      ]
+    }
+  ],
+  "caveats": [
+    "Few events: the backtest window holds 3 Lebaran events; one unusual year could erase the gain.",
+    "The Lebaran-exodus hypothesis was chosen after seeing the series; the window was fixed a priori at +/-7 days and every alternative window keeps a positive lower bound, but the bias cannot be ruled out.",
+    "The 2024-01 Jakarta Timur correction is an inference pending DLH confirmation.",
+    "The 2023-2025 Idul Fitri dates are public record not yet cross-checked against the SKB documents (see idul_fitri_dates.json, verified flag).",
+    "Daily and per-district targets are calibrated-synthetic: no accuracy is claimed for them."
+  ]
+}

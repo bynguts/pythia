@@ -1,0 +1,41 @@
+{
+  "source_file": "bantargebang_hasil_penimbangan.csv",
+  "source_url": "https://data.go.id/dataset/dataset/data-hasil-penimbangan-sampah-masuk-tempat-pengolahan-sampah-terpadu-tpst-bantargebang",
+  "purpose": "Explicit, reviewable corrections for corrupted rows in the real Bantargebang monthly intake source. ml/scripts/train_models.py applies exactly these entries (nothing silent) and then requires every row to fall within the tonnes-per-trip sanity bounds, so a new bad drop fails loudly instead of skewing the forecaster.",
+  "sanity_check": {
+    "metric": "tonase / ritasi (tonnes per trip), per source row",
+    "min_tonnes_per_trip": 1.5,
+    "max_tonnes_per_trip": 15.0,
+    "basis": "Every uncorrected row outside 2024-01 Jakarta Timur and 2024-04 runs at about 4-7 t per trip (range after correction 2.5-11.6)."
+  },
+  "corrections": [
+    {
+      "id": "202404_ritasi_tonase_swapped",
+      "periode_data": "202404",
+      "instansi_asal_kendaraan": "*",
+      "action": "swap_ritasi_tonase",
+      "status": "evident_in_source",
+      "reason": "In all 9 rows of 2024-04 the ritasi and tonase columns are swapped (e.g. Jakarta Barat tonase 6612 vs ritasi 43803). Uncorrected, the month reads 1,196 t/day instead of about 7,213 t/day.",
+      "evidence": "Uncorrected tonnes per trip for 2024-04 is 0.10-0.29; after the swap it is 3.5-9.9, in line with every other month."
+    },
+    {
+      "id": "202401_jakarta_timur_decimal",
+      "periode_data": "202401",
+      "instansi_asal_kendaraan": "SUKU DINAS JAKARTA  TIMUR",
+      "action": "set_tonase",
+      "from_tonase": 5261.9,
+      "to_tonase": 52619.0,
+      "flag": "suspected_decimal_typo",
+      "status": "inferred_pending_dlh_confirmation",
+      "reason": "5,261.9 t for 8,617 trips is 0.6 t per trip; neighbouring months put Jakarta Timur at about 1,700-1,900 t/day (about 6 t per trip). A misplaced decimal point (52,619.0) is the most likely cause.",
+      "evidence": "Inference from tonnes per trip only. NOT confirmed by DLH or data.go.id; ask DLH to confirm. The conservative alternative is to exclude 2024-01 from scoring."
+    }
+  ],
+  "missing_months": [
+    {
+      "periode_data": "202312",
+      "status": "absent_from_source",
+      "handling": "Kept as a gap (NaN). Linearly interpolated for model input only; never scored in any backtest."
+    }
+  ]
+}

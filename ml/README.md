@@ -41,6 +41,13 @@ its report in `data/processed/` (`hybrid_forecaster_evaluation.md`,
 `fleet_anomaly_evaluation.md`). Keep the XGBoost feature order in sync with
 `apps/api/app/forecast/engine.py`.
 
+`train_models.py` also writes `monthly_calendar_model.json` and `forecast_evaluation.json`
+(the monthly landfill-intake forecaster and its rolling-origin backtest on the real
+Bantargebang series, which the API and the audit model card read);
+`python ml/scripts/train_models.py --monthly-only` rebuilds just those two. Corrupted
+Bantargebang source rows are fixed only through `data/real/bantargebang_corrections.json`,
+and training stops when a source row falls outside the tonnes-per-trip bounds listed there.
+
 Data acquisition helpers: `ml/scripts/acquire_data.py` (downloads and seed
 files), `scrape_research_sources.py` (Satu Data pages → `data/raw/*.txt`,
 git-ignored; needs `scrapling`) and `generate_research_assets.py`.
