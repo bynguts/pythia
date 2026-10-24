@@ -27,12 +27,18 @@
   Ctrl+C stops the tunnel; close the other windows to stop preview and the API.
   For everyday development use scripts\dev.ps1 instead.
 
+  -Tailscale serves the preview with `tailscale serve` instead: HTTPS on this
+  machine's MagicDNS name (https://<machine>.<tailnet>.ts.net), reachable only
+  from devices in your tailnet. The tailnet needs HTTPS certificates enabled.
+
 .EXAMPLE
   .\scripts\phone-demo.ps1              # build, preview, tunnel
   .\scripts\phone-demo.ps1 -SkipBuild   # reuse the existing apps\web\dist
+  .\scripts\phone-demo.ps1 -Tailscale   # private HTTPS inside your tailnet
 #>
 param(
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$Tailscale
 )
 $ErrorActionPreference = "Stop"
 
@@ -122,6 +128,16 @@ try {
         }
     }
 
+    $tailnetHost = $null
+    if ($Tailscale) {
+        if (-not (Get-Command tailscale -ErrorAction SilentlyContinue)) {
+            throw "tailscale is not on PATH. Install Tailscale and sign in, or run without -Tailscale."
+        }
+        $tailnetHost = ((tailscale status --json | ConvertFrom-Json).Self.DNSName).TrimEnd(".")
+        # vite.config.js accepts extra preview hosts through PYTHIA_TUNNEL_HOSTS.
+        $env:PYTHIA_TUNNEL_HOSTS = (@($env:PYTHIA_TUNNEL_HOSTS, $tailnetHost) | Where-Object { $_ }) -join ","
+    }
+
     Start-PythiaWindow "Pythia preview :5175" $web "npm run preview -- --port 5175 --strictPort"
 
     Write-Host "Waiting for the API (the first start loads 42 forecast models, ~1-2 min)..."
@@ -146,8 +162,13 @@ try {
 
     Write-Host ""
     Write-Host "==================================================================" -ForegroundColor Yellow
-    Write-Host " WARNING: the https URL printed below is PUBLIC. Anyone who has it" -ForegroundColor Yellow
-    Write-Host " reaches this API. Share it only with the demo team; Ctrl+C ends it." -ForegroundColor Yellow
+    if ($Tailscale) {
+        Write-Host " The https URL below reaches this API from every device in your" -ForegroundColor Yellow
+        Write-Host " tailnet. Ctrl+C ends it." -ForegroundColor Yellow
+    } else {
+        Write-Host " WARNING: the https URL printed below is PUBLIC. Anyone who has it" -ForegroundColor Yellow
+        Write-Host " reaches this API. Share it only with the demo team; Ctrl+C ends it." -ForegroundColor Yellow
+    }
     Write-Host "==================================================================" -ForegroundColor Yellow
     if ($startedApi) {
         Write-Host " Sign-in for this run only (username / password):"
@@ -167,7 +188,14 @@ try {
     Write-Host "  /fleet   sign in as dispatcher: 'DEMO stop at my location'"
     Write-Host ""
 
-    if (Get-Command cloudflared -ErrorAction SilentlyContinue) {
+    if ($Tailscale) {
+        Write-Host "Tailnet URL (devices signed in to your tailnet only): https://$tailnetHost/" -ForegroundColor Green
+        try {
+            tailscale serve --https=443 $previewUrl
+        } finally {
+            tailscale serve reset
+        }
+    } elseif (Get-Command cloudflared -ErrorAction SilentlyContinue) {
         cloudflared tunnel --url $previewUrl
     } else {
         Write-Warning ("cloudflared not found. Install it for a stable quick tunnel: " +
