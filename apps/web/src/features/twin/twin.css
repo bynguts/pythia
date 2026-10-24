@@ -1,6 +1,6 @@
 /* Pythia Twin — 3D digital twin workspace.
    The map is the desk; instruments (legend, timeline, controls) float on it
-   in the command-rail colour, matching the Fleet decision overlay. */
+   as translucent white HUD cards, matching the Fleet decision overlay. */
 
 .twin-workspace {
   /* Risk palette mirrors RISK_COLORS in src/twin/twinLayers.js: tokens.css
@@ -9,16 +9,16 @@
   --twin-risk-elevated: rgb(201, 145, 38);
   --twin-risk-high: rgb(214, 104, 32);
   --twin-risk-critical: rgb(180, 47, 43);
-  --twin-overlay: rgba(19, 33, 29, 0.95);
-  --twin-overlay-line: rgba(255, 255, 255, 0.12);
-  --twin-overlay-ink: #ffffff;
-  --twin-overlay-muted: #a9bdb3;
-  --twin-overlay-accent: #ff9875;
+  --twin-overlay: var(--ui-glass);
+  --twin-overlay-line: var(--ui-border);
+  --twin-overlay-ink: var(--ui-ink);
+  --twin-overlay-muted: var(--ui-muted);
+  --twin-overlay-accent: var(--ui-accent);
   /* gsc n29: overlay control colours as tokens (city-base toggle, imagery credit). */
-  --twin-overlay-line-soft: rgba(255, 255, 255, 0.18);
-  --twin-overlay-line-strong: rgba(255, 255, 255, 0.4);
-  --twin-overlay-ink-soft: #dce8e2;
-  --twin-overlay-highlight: #f3c77a;
+  --twin-overlay-line-soft: var(--ui-border);
+  --twin-overlay-line-strong: var(--ui-border-strong);
+  --twin-overlay-ink-soft: var(--ui-ink-soft);
+  --twin-overlay-highlight: var(--ui-warning);
   --twin-panel-width: 340px;
 }
 
@@ -39,7 +39,7 @@
 }
 .twin-workspace .metric-cell strong {
   margin: 2px 0 1px;
-  font-size: 21px;
+  font-size: 24px;
   font-variant-numeric: tabular-nums;
 }
 .twin-workspace .workspace-freshness {
@@ -55,9 +55,9 @@
   flex-direction: column;
   height: clamp(520px, calc(100dvh - 318px), 980px);
   border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-card);
+  border-radius: var(--ui-radius-elevated);
   overflow: hidden;
-  background: #dfe5e1;
+  background: var(--ui-surface-muted);
 }
 
 .twin-demo-banner {
@@ -66,9 +66,9 @@
   align-items: flex-start;
   gap: var(--space-3);
   padding: 10px var(--space-4);
-  border-bottom: 1px solid #ecd3a8;
+  border-bottom: 1px solid var(--ui-warning);
   color: var(--ui-warning);
-  background: var(--amber-light);
+  background: var(--ui-warning-soft);
 }
 .twin-demo-banner svg {
   flex: none;
@@ -81,13 +81,14 @@
   gap: 4px 10px;
 }
 .twin-demo-banner strong {
+  font-family: var(--mono);
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 .twin-demo-banner span {
-  color: #5c3a0e;
+  color: var(--ui-ink-soft);
   font-size: 13px;
   line-height: 1.45;
 }
@@ -117,8 +118,8 @@
   height: var(--tap-min);
 }
 .twin-map .maplibregl-ctrl-group {
-  border-radius: var(--ui-radius-control);
-  box-shadow: 0 6px 18px rgba(16, 32, 26, 0.18);
+  border-radius: var(--ui-radius-card);
+  box-shadow: var(--ui-shadow-float);
 }
 .twin-map .maplibregl-ctrl-top-right {
   right: calc(var(--twin-panel-width) + 24px);
@@ -144,7 +145,8 @@
   color: var(--twin-overlay-ink);
   background: var(--twin-overlay);
   border: 1px solid var(--twin-overlay-line);
-  box-shadow: 0 14px 36px rgba(10, 18, 15, 0.32);
+  box-shadow: var(--ui-shadow-float);
+  backdrop-filter: var(--ui-glass-blur);
 }
 
 .twin-workspace button:focus-visible,
@@ -161,10 +163,10 @@
   top: var(--space-3);
   left: var(--space-3);
   width: min(330px, calc(100% - var(--twin-panel-width) - 96px));
-  padding: 10px var(--space-3);
+  padding: var(--space-3) var(--space-4);
   display: grid;
   gap: var(--space-2);
-  border-radius: 10px;
+  border-radius: var(--ui-radius-card);
 }
 .twin-legend > small {
   color: var(--twin-overlay-muted);
@@ -188,9 +190,9 @@
   width: 10px;
   height: 10px;
   flex: none;
-  border-radius: 3px;
+  border-radius: 50%;
   background: var(--twin-risk-normal);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 0 1px var(--ui-surface);
 }
 .twin-risk-tag.risk-elevated i {
   background: var(--twin-risk-elevated);
@@ -213,12 +215,13 @@
 }
 .twin-chip {
   min-height: 24px;
-  padding: 2px 7px;
+  padding: 2px 9px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid var(--twin-overlay-line);
-  border-radius: 6px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-surface);
   font-size: 11px;
   line-height: 1.2;
   cursor: help;
@@ -227,10 +230,11 @@
   color: var(--twin-overlay-muted);
 }
 .twin-chip b {
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-family: var(--mono);
+  font-weight: 500;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #cfe0d8;
+  color: var(--ui-ink-soft);
 }
 .twin-chip b::before {
   content: "";
@@ -242,22 +246,33 @@
   background: currentColor;
   vertical-align: 1px;
 }
+.twin-chip.class-real {
+  border-color: var(--ui-success);
+}
 .twin-chip.class-real b {
-  color: #8ee0b8;
+  color: var(--ui-success);
+}
+.twin-chip.class-model_output {
+  border-color: var(--ui-info);
 }
 .twin-chip.class-model_output b {
-  color: #9fd6e6;
+  color: var(--ui-info);
+}
+.twin-chip.class-simulated,
+.twin-chip.class-simulated_demo_city,
+.twin-chip.class-approximate {
+  border-color: var(--ui-warning);
 }
 .twin-chip.class-simulated b,
 .twin-chip.class-simulated_demo_city b,
 .twin-chip.class-approximate b {
-  color: #f3c77a;
+  color: var(--ui-warning);
 }
 .twin-chip.class-unavailable b {
   color: var(--twin-overlay-muted);
 }
 .twin-legend-note {
-  color: #f3c77a !important;
+  color: var(--ui-warning) !important;
 }
 
 /* ---- status / tooltip / tour --------------------------------------------- */
@@ -278,17 +293,17 @@
   white-space: nowrap;
 }
 .twin-status-error {
-  color: #ffd9cf;
+  color: var(--ui-danger);
 }
 .twin-status button {
   min-height: var(--tap-min);
   margin: -6px -8px -6px 4px;
-  padding: 0 12px;
+  padding: 0 16px;
   border: 0;
-  border-radius: 999px;
-  color: var(--ui-ink);
-  background: #fff;
-  font-weight: 700;
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-on-dark);
+  background: var(--ui-primary);
+  font-weight: 600;
   cursor: pointer;
 }
 .twin-spin {
@@ -307,7 +322,7 @@
   left: 0;
   width: 248px;
   padding: var(--space-3);
-  border-radius: 10px;
+  border-radius: var(--ui-radius-card);
   pointer-events: none;
 }
 .twin-tooltip > strong {
@@ -321,7 +336,7 @@
 .twin-tooltip > em {
   margin-top: var(--space-2);
   display: block;
-  color: var(--twin-overlay-accent);
+  color: var(--ui-warning);
   font-size: 12px;
   font-style: normal;
   font-weight: 650;
@@ -348,8 +363,9 @@
 .twin-tooltip dd,
 .twin-detail dd {
   margin: 0;
+  font-family: var(--mono);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -386,9 +402,9 @@
   align-items: center;
   gap: 6px;
   border: 1px solid var(--twin-overlay-line);
-  border-radius: 999px;
-  color: #fff;
-  background: transparent;
+  border-radius: var(--ui-radius-pill);
+  color: var(--twin-overlay-ink);
+  background: var(--ui-surface);
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
@@ -406,7 +422,7 @@
   display: flex;
   align-items: stretch;
   gap: 6px;
-  border-radius: 10px;
+  border-radius: var(--ui-radius-pill);
 }
 .twin-play {
   width: 52px;
@@ -415,18 +431,18 @@
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: var(--ui-radius-control);
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-ink);
+  background: var(--ui-surface-muted);
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
 .twin-play:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--ui-border);
 }
 .twin-play[aria-pressed="true"] {
-  color: var(--ui-ink);
-  background: #fff;
+  color: var(--ui-accent-foreground);
+  background: var(--ui-accent-strong);
 }
 .twin-play:disabled {
   opacity: 0.5;
@@ -447,8 +463,8 @@
   grid-template-rows: 1fr auto;
   gap: 4px;
   border: 1px solid transparent;
-  border-radius: var(--ui-radius-control);
-  color: var(--twin-overlay-muted);
+  border-radius: 22px;
+  color: var(--ui-ink-soft);
   background: transparent;
   cursor: pointer;
   transition:
@@ -456,13 +472,13 @@
     color 0.15s ease;
 }
 .twin-day:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--ui-ink);
+  background: var(--ui-surface-muted);
 }
 .twin-day[aria-pressed="true"] {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--ui-on-dark);
+  background: var(--ui-primary);
+  border-color: var(--ui-primary);
 }
 .twin-day-bar {
   height: 26px;
@@ -472,11 +488,11 @@
 }
 .twin-day-bar i {
   width: min(100%, 18px);
-  border-radius: 2px 2px 0 0;
-  background: rgba(255, 255, 255, 0.28);
+  border-radius: 4px 4px 0 0;
+  background: var(--ui-border-strong);
 }
 .twin-day[aria-pressed="true"] .twin-day-bar i {
-  background: var(--twin-overlay-accent);
+  background: var(--ui-forest-500);
 }
 .twin-day-label {
   display: flex;
@@ -484,15 +500,15 @@
   justify-content: center;
   gap: 4px;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
 }
 .twin-day-label small {
+  font-family: var(--mono);
   font-size: 11px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-  opacity: 0.8;
 }
 
 /* ---- control panel ------------------------------------------------------- */
@@ -505,7 +521,7 @@
   width: var(--twin-panel-width);
   overflow-y: auto;
   overscroll-behavior: contain;
-  border-radius: var(--ui-radius-card);
+  border-radius: var(--ui-radius-elevated);
 }
 .twin-sheet-toggle {
   display: none;
@@ -520,9 +536,10 @@
 .twin-panel-title {
   margin: 0 0 var(--space-3);
   color: var(--twin-overlay-muted);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 .twin-field-label {
@@ -545,13 +562,13 @@
 .twin-choice button {
   min-width: 0;
   min-height: var(--tap-min);
-  padding: 6px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: var(--ui-radius-control);
-  color: #dce8e2;
-  background: transparent;
+  padding: 6px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 22px;
+  color: var(--ui-ink);
+  background: var(--ui-surface-muted);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.25;
   cursor: pointer;
   transition:
@@ -560,12 +577,12 @@
     border-color 0.15s ease;
 }
 .twin-choice button:hover {
-  border-color: rgba(255, 255, 255, 0.4);
+  border-color: var(--ui-border-strong);
 }
 .twin-choice button[aria-pressed="true"] {
-  color: var(--ui-ink);
-  background: #fff;
-  border-color: #fff;
+  color: var(--ui-on-dark);
+  background: var(--ui-primary);
+  border-color: var(--ui-primary);
 }
 
 .twin-slider {
@@ -582,8 +599,9 @@
   gap: 6px;
 }
 .twin-slider output {
+  font-family: var(--mono);
   font-size: 18px;
-  font-weight: 700;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 .twin-panel input[type="range"] {
@@ -598,12 +616,12 @@
 .twin-panel input[type="range"]::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--ui-border);
 }
 .twin-panel input[type="range"]::-moz-range-track {
   height: 6px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--ui-border);
 }
 .twin-panel input[type="range"]::-moz-range-progress {
   height: 6px;
@@ -616,7 +634,7 @@
   margin-top: -8px;
   border: 3px solid var(--twin-overlay-accent);
   border-radius: 50%;
-  background: #fff;
+  background: var(--ui-surface);
   -webkit-appearance: none;
   appearance: none;
 }
@@ -625,7 +643,7 @@
   height: 16px;
   border: 3px solid var(--twin-overlay-accent);
   border-radius: 50%;
-  background: #fff;
+  background: var(--ui-surface);
 }
 
 .twin-note {
@@ -646,7 +664,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  border-radius: var(--ui-radius-control);
+  border-radius: var(--ui-radius-pill);
   font-size: 14px;
   font-weight: 600;
   text-decoration: none;
@@ -658,22 +676,22 @@
 .twin-btn.primary {
   border: 0;
   color: var(--ui-accent-foreground);
-  background: var(--ui-accent);
+  background: var(--ui-accent-strong);
 }
 .twin-btn.primary:hover {
-  background: var(--ui-accent-hover);
+  background: var(--ui-accent);
 }
 .twin-btn.primary:disabled {
   opacity: 0.55;
   cursor: default;
 }
 .twin-btn.secondary {
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  color: #fff;
-  background: transparent;
+  border: 1px solid var(--ui-border-strong);
+  color: var(--ui-ink);
+  background: var(--ui-surface);
 }
 .twin-btn.secondary:hover {
-  border-color: rgba(255, 255, 255, 0.5);
+  background: var(--ui-canvas);
 }
 
 /* Keyboard path to a district: the highest-risk districts as buttons. */
@@ -691,10 +709,10 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-control);
-  color: #fff;
-  background: transparent;
+  color: var(--ui-ink);
+  background: var(--ui-surface);
   font-size: 13px;
   text-align: left;
   cursor: pointer;
@@ -703,11 +721,11 @@
     border-color 0.15s ease;
 }
 .twin-risk-list button:hover {
-  border-color: rgba(255, 255, 255, 0.4);
+  border-color: var(--ui-border-strong);
 }
 .twin-risk-list button[aria-pressed="true"] {
-  border-color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--ui-primary);
+  background: var(--ui-surface-muted);
 }
 .twin-risk-name {
   flex: 1;
@@ -719,6 +737,7 @@
 }
 .twin-risk-delta {
   color: var(--twin-overlay-muted);
+  font-family: var(--mono);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
@@ -758,7 +777,7 @@
   background: var(--twin-risk-critical);
 }
 .twin-detail-series .is-current i {
-  box-shadow: 0 0 0 2px #fff;
+  box-shadow: 0 0 0 2px var(--ui-primary);
 }
 
 /* ---- presentation mode (?present=1): clean footage, provenance kept ------ */
@@ -801,12 +820,15 @@
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  border-radius: 10px;
+  border-radius: var(--ui-radius-pill);
   font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
 .twin-present-hud strong {
+  font-family: var(--font-head);
   font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 .twin-present-hud span {
   padding-left: var(--space-4);
@@ -825,7 +847,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1) var(--space-4);
-  border-radius: 10px;
+  border-radius: var(--ui-radius-card);
   font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
@@ -855,8 +877,8 @@
   }
   .twin-demo-banner {
     margin-bottom: var(--space-2);
-    border: 1px solid #ecd3a8;
-    border-radius: 10px;
+    border: 1px solid var(--ui-warning);
+    border-radius: var(--ui-radius-card);
   }
   .twin-stage {
     display: flex;
@@ -869,8 +891,8 @@
     height: 56dvh;
     min-height: 340px;
     border: 1px solid var(--ui-border);
-    border-radius: 10px;
-    background: #dfe5e1;
+    border-radius: var(--ui-radius-card);
+    background: var(--ui-surface-muted);
   }
   .twin-map .maplibregl-ctrl-top-right {
     right: 0;
@@ -906,8 +928,9 @@
     bottom: 82px;
     width: auto;
     max-height: calc(100dvh - 180px);
-    border-radius: 14px;
-    box-shadow: 0 -10px 40px rgba(10, 18, 15, 0.35);
+    border-radius: var(--ui-radius-elevated);
+    background: var(--ui-surface);
+    box-shadow: var(--ui-shadow-float);
   }
   .twin-sheet-toggle {
     position: sticky;
@@ -921,10 +944,10 @@
     gap: var(--space-3);
     border: 0;
     border-bottom: 1px solid var(--twin-overlay-line);
-    color: #fff;
-    background: #13211d;
+    color: var(--ui-ink);
+    background: var(--ui-surface);
     font-size: 14px;
-    font-weight: 700;
+    font-weight: 600;
     cursor: pointer;
   }
   .twin-sheet-toggle small {
@@ -968,6 +991,9 @@
   .twin-timeline {
     flex-wrap: wrap;
   }
+  .twin-timeline {
+    border-radius: var(--ui-radius-card);
+  }
   .twin-play {
     width: 100%;
   }
@@ -998,13 +1024,13 @@
 /* ---- city base: satellite + relief toggle and imagery credit -------------- */
 .twin-base-toggle {
   min-height: var(--tap-min);
-  padding: 6px var(--space-3);
+  padding: 6px var(--space-4);
   display: inline-flex;
   align-items: center;
   justify-self: start;
   gap: var(--space-2);
   border: 1px solid var(--twin-overlay-line-soft);
-  border-radius: var(--ui-radius-control);
+  border-radius: var(--ui-radius-pill);
   color: var(--twin-overlay-ink-soft);
   background: transparent;
   font-size: var(--fs-caption);
@@ -1019,9 +1045,9 @@
   border-color: var(--twin-overlay-line-strong);
 }
 .twin-base-toggle[aria-pressed="true"] {
-  color: var(--ui-ink);
-  background: var(--twin-overlay-ink);
-  border-color: var(--twin-overlay-ink);
+  color: var(--ui-on-dark);
+  background: var(--ui-primary);
+  border-color: var(--ui-primary);
 }
 .twin-base-toggle:disabled {
   color: var(--twin-overlay-muted);
@@ -1035,8 +1061,8 @@
   right: calc(var(--twin-panel-width) + 24px + 10px + var(--tap-min) + var(--space-2));
   max-width: min(360px, max(160px, calc(100% - var(--twin-panel-width) - 440px)));
   margin: 0;
-  padding: var(--space-1) var(--space-2);
-  border-radius: 6px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--ui-radius-pill);
   color: var(--twin-overlay-ink);
   background: var(--twin-overlay);
   font-size: 11px;

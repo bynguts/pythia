@@ -14,14 +14,14 @@ export const RISK_COLORS = {
   critical: [180, 47, 43],
 };
 export const RISK_ORDER = ["normal", "elevated", "high", "critical"];
-const ACCENT = [181, 59, 26];
-const INK = [19, 33, 29];
+const ACCENT = [22, 97, 58];
+const INK = [29, 35, 32];
 const FLOW = [27, 111, 132];
-const TRUCK_COLORS = { normal: [23, 122, 87], deviated: [180, 47, 43], damaged: [201, 145, 38] };
+const TRUCK_COLORS = { normal: [22, 97, 58], deviated: [180, 47, 43], damaged: [201, 145, 38] };
 // Constant props hoisted so per-frame rebuilds pass the same references.
 const DISTRICT_MATERIAL = { ambient: 0.5, diffuse: 0.62, shininess: 28, specularColor: [70, 74, 72] };
 const BEACON_MATERIAL = { ambient: 0.55, diffuse: 0.55, shininess: 40, specularColor: [80, 80, 80] };
-const LABEL_FONT = "Plus Jakarta Sans, Geist Sans, Inter, system-ui, sans-serif";
+const LABEL_FONT = "Inter Tight, Inter, system-ui, sans-serif";
 const NO_TRANSITIONS = {};
 const HIGHLIGHT = [255, 255, 255, 80];
 const COLUMN_TRANSITIONS = {
