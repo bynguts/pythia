@@ -1,17 +1,22 @@
 // In-scene scenario panel for immersive sessions without a DOM overlay (VR,
 // or AR where dom-overlay was not granted). One canvas texture on one plane:
-// text lines on top, then rows of large buttons. The controller ray hits the
+// text lines on top, then rows of large buttons, then a footer that always
+// carries the provenance (and imagery credit) so it never leaves the scene. The controller ray hits the
 // plane and the hit's UV picks the button, so no per-button meshes are needed.
 import * as THREE from "three";
 
 const W = 1024;
-const H = 640;
+const H = 736;
 const PAD = 28;
 const LINE_H = 46;
 const ROW_H = 96;
 const ROW_GAP = 14;
 const LABEL_W = 180;
 const BTN_GAP = 12;
+const FOOT_H = 30;
+// Total, fleet (with its crew rule), TPA queue, session: four lines still clear the
+// three button rows and the footer (28 + 4 x 46 + 14 + 3 x 110 = 556 < 618).
+const MAX_LINES = 4;
 export const PANEL_WIDTH_M = 0.42;
 export const PANEL_HEIGHT_M = (PANEL_WIDTH_M * H) / W;
 
@@ -32,8 +37,9 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 /**
- * `draw({ lines, rows })`: `lines` are short strings (first one bold), `rows`
- * are `{ label, buttons: [{ id, label, active, disabled }] }`. `hit(raycaster)`
+ * `draw({ lines, rows, footer })`: `lines` are up to four short strings (first one bold, empty ones skipped),
+ * `rows` are `{ label, buttons: [{ id, label, active, disabled }] }` and
+ * `footer` up to three small lines pinned to the bottom edge. `hit(raycaster)`
  * returns the id of the enabled button under the ray, "" for the panel's
  * background (so a near miss does nothing) and null when the ray misses it.
  */
@@ -50,8 +56,11 @@ export function createScenePanel() {
   mesh.name = "scenario-panel";
   mesh.visible = false;
   let targets = [];
+  let text = "";
 
-  function draw({ lines = [], rows = [] }) {
+  function draw({ lines = [], rows = [], footer = [] }) {
+    const top = lines.filter(Boolean).slice(0, MAX_LINES);
+    text = [...top, ...footer.slice(0, 3)].filter(Boolean).join(" | ");
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = COLORS.panel;
     roundRect(ctx, 4, 4, W - 8, H - 8, 28);
@@ -62,7 +71,7 @@ export function createScenePanel() {
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
     let y = PAD;
-    lines.slice(0, 3).forEach((line, i) => {
+    top.forEach((line, i) => {
       ctx.fillStyle = i === 0 ? COLORS.text : COLORS.muted;
       ctx.font = `${i === 0 ? 700 : 500} 34px 'Inter Tight', Inter, system-ui, sans-serif`;
       ctx.fillText(line, PAD, y + LINE_H / 2, W - PAD * 2);
@@ -96,6 +105,13 @@ export function createScenePanel() {
       });
       y += ROW_H + ROW_GAP;
     });
+    const foot = footer.slice(0, 3).filter(Boolean);
+    ctx.textAlign = "left";
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = "500 24px 'Inter Tight', Inter, system-ui, sans-serif";
+    foot.forEach((line, i) => {
+      ctx.fillText(line, PAD, H - PAD - (foot.length - i - 0.5) * FOOT_H, W - PAD * 2);
+    });
     texture.needsUpdate = true;
   }
 
@@ -113,6 +129,7 @@ export function createScenePanel() {
     mesh,
     draw,
     hit,
+    text: () => text,
     dispose: () => {
       texture.dispose();
       material.dispose();

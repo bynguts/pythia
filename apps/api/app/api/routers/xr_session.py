@@ -1,12 +1,18 @@
 """Shared XR tabletop session: two or more /xr devices on one scenario.
 
 Public like /xr itself. A session is only the scenario a group is looking at
-(city, rain, event preset, day) plus whether the group agreed on it — no names,
-no accounts, no personal data. "Agreed" is a note between the people in the
-room, never an official approval. State lives in memory, expires after 12 h of
-inactivity, and the newest write wins (`updated_at` is stamped by the server).
-Writes are rate-limited per client address (token buckets, single worker): a
-steady stream of updates per device and a small budget of new session codes.
+(city, rain, event preset, day, the district someone pointed at) plus whether the
+group agreed on it — no names, no accounts, no personal data. "Agreed" is a note
+between the people in the room, never an official approval. State lives in memory,
+expires after 12 h of inactivity, and the newest write wins (`updated_at` is
+stamped by the server).
+
+Presence: each open device posts a heartbeat with a random per-page id; a device
+counts as present for 10 s after its last heartbeat. Heartbeats never change the
+scenario or its `updated_at`, and only the count is ever returned.
+
+Writes and heartbeats are rate-limited per client address (token buckets, single
+worker): a steady stream of updates per device and a small budget of new codes.
 """
 
 from __future__ import annotations
@@ -27,6 +33,10 @@ SESSION_TTL_S = 12 * 3600
 # Bounds memory for a public endpoint: past this, the stalest sessions go first.
 MAX_SESSIONS = 500
 CODE_PATTERN = "^[A-Z0-9]{4,8}$"
+# A device is "here" for this long after its last heartbeat.
+PRESENCE_TTL_S = 10.0
+# Bounds the per-session presence table; past this the stalest device drops out.
+MAX_PARTICIPANTS = 32
 # Per-client token buckets: (capacity, refill per second).
 PUT_BUCKET = (60.0, 10.0)  # a dragged slider, coalesced client-side, stays well below
 NEW_SESSION_BUCKET = (30.0, 1 / 20)  # 30 fresh codes, then one every 20 s
@@ -46,16 +56,32 @@ class XrSessionState(BaseModel):
     event_preset: Literal["none", "50k", "100k"] = "none"
     day: int = Field(0, ge=0, le=6)
     agreed: bool = False
+    # The district the last device pointed at (a scene district id), or none.
+    selected_id: str | None = Field(None, pattern="^[A-Za-z0-9_.-]{1,64}$")
+
+
+class XrPresence(BaseModel):
+    # Random per-page id generated on the device; never a name or an account.
+    participant_id: str = Field(..., pattern="^[A-Za-z0-9]{8,32}$")
 
 
 def _iso(ts: float) -> str:
     return datetime.fromtimestamp(ts, UTC).isoformat(timespec="milliseconds")
 
 
-def _public(code: str, record: dict[str, Any]) -> dict[str, Any]:
+def _present(record: dict[str, Any], now: float) -> int:
+    """Drop heartbeats older than the presence TTL and count the rest; caller holds the lock."""
+    seen = record.setdefault("participants", {})
+    for pid in [p for p, last in seen.items() if now - last >= PRESENCE_TTL_S]:
+        del seen[pid]
+    return len(seen)
+
+
+def _public(code: str, record: dict[str, Any], now: float) -> dict[str, Any]:
     return {
         "code": code,
         **record["state"],
+        "participants": _present(record, now),
         "updated_at": _iso(record["updated"]),
         "expires_at": _iso(record["updated"] + SESSION_TTL_S),
         "classification": "SESSION_STATE",
@@ -109,7 +135,7 @@ def get_xr_session(code: str = Path(..., pattern=CODE_PATTERN)) -> dict[str, Any
         record = _xr_sessions.get(code)
         if record is None:
             raise HTTPException(status_code=404, detail="Unknown or expired XR session")
-        return _public(code, record)
+        return _public(code, record, now)
 
 
 @router.put("/api/xr/session/{code}")
@@ -131,6 +157,31 @@ def put_xr_session(
         if previous is None and len(_xr_sessions) >= MAX_SESSIONS:
             stalest = min(_xr_sessions, key=lambda c: _xr_sessions[c]["updated"])
             del _xr_sessions[stalest]
-        record = {"state": body.model_dump(), "updated": updated}
+        participants = previous.get("participants", {}) if previous else {}
+        record = {"state": body.model_dump(), "updated": updated, "participants": participants}
         _xr_sessions[code] = record
-        return _public(code, record)
+        return _public(code, record, now)
+
+
+@router.post("/api/xr/session/{code}/presence")
+def post_xr_presence(
+    body: XrPresence, request: Request, code: str = Path(..., pattern=CODE_PATTERN)
+) -> dict[str, Any]:
+    """Heartbeat: mark this device present and return the session with the live count.
+
+    Spends from the same per-client bucket as scenario writes, and never touches the
+    scenario or `updated_at`, so polling devices do not re-apply state because of it."""
+    now = _clock()
+    client = _client(request)
+    with _xr_sessions_lock:
+        _purge(now)
+        record = _xr_sessions.get(code)
+        if record is None:
+            raise HTTPException(status_code=404, detail="Unknown or expired XR session")
+        _take("put", client, PUT_BUCKET, now)
+        seen = record.setdefault("participants", {})
+        seen.pop(body.participant_id, None)
+        if len(seen) >= MAX_PARTICIPANTS:
+            del seen[min(seen, key=seen.get)]
+        seen[body.participant_id] = now
+        return _public(code, record, now)

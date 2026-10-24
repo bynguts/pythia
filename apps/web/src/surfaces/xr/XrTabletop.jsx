@@ -29,13 +29,24 @@ import {
   RotateCw,
   Share2,
   SlidersHorizontal,
+  Users,
   X,
 } from "lucide-react";
 import { apiFetch } from "../../shared/api/client.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
-import { RISK_COLORS, RISK_LEVELS, buildCityModel, dayRisk, dayTons } from "./buildCityModel.js";
+import {
+  JAKARTA_PLATE,
+  RISK_COLORS,
+  RISK_LEVELS,
+  TRUCKS_PER_DOT,
+  buildCityModel,
+  dayRisk,
+  dayTons,
+} from "./buildCityModel.js";
 import { PANEL_HEIGHT_M, createScenePanel } from "./scenePanel.js";
+import { hitTestPointer, selectAction } from "./xrInput.js";
 import { TWIN_EVENT_PRESETS, TWIN_VENUES, twinVenues } from "../../features/twin/twinLinks.js";
+import { IMAGERY_CREDIT } from "../../features/twin/cityBase3d.js";
 import "./xr.css";
 
 const BACKGROUND = "#e9eeeb";
@@ -54,6 +65,8 @@ const EVENT_PRESETS = TWIN_EVENT_PRESETS;
 // A linked venue matches a known one within ~100 m.
 const VENUE_MATCH_DEG = 0.001;
 const SESSION_CODE = /^[A-Z0-9]{4,8}$/;
+// Satellite plates per city (only Jakarta has one; the demo city keeps the plain plate).
+const CITY_PLATES = { jakarta: JAKARTA_PLATE };
 // No 0/O or 1/I, so a code read aloud across the table is unambiguous.
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const POLL_MS = 1500;
@@ -102,8 +115,8 @@ function sceneQuery(city, scenario, venue) {
   return query.toString();
 }
 
-function makeSessionCode() {
-  const bytes = new Uint8Array(6);
+function makeSessionCode(length = 6) {
+  const bytes = new Uint8Array(length);
   window.crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("");
 }
@@ -156,10 +169,10 @@ function createEngine({
   container,
   cityScene,
   dayIndex,
+  plate,
   onSelectDistrict,
   onArStage,
   onSessionChange,
-  onNextDay,
   onControl,
 }) {
   const reducedMotion = prefersReducedMotion();
@@ -188,7 +201,7 @@ function createEngine({
   sun.shadow.bias = -0.0004;
   scene3.add(sun);
 
-  const model = buildCityModel(cityScene, { dayIndex, reducedMotion });
+  const model = buildCityModel(cityScene, { dayIndex, reducedMotion, plate });
   // `anchor` is what XR places, rotates and scales; the model stays untouched.
   const anchor = new THREE.Group();
   anchor.add(model.root);
@@ -253,9 +266,12 @@ function createEngine({
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   let downAt = null;
-  function pick(ray) {
+  function barHit(ray) {
     raycaster.ray.copy(ray);
-    const hit = raycaster.intersectObjects(model.bars, false)[0];
+    return raycaster.intersectObjects(model.bars, false)[0] || null;
+  }
+  function pick(ray) {
+    const hit = barHit(ray);
     onSelectDistrict(hit ? hit.object.userData.district.id : null);
   }
   const onPointerDown = (event) => {
@@ -283,7 +299,7 @@ function createEngine({
     }
     label = makeLabelSprite(lines);
     label.sprite.position.set(0, 0.29, -model.footprint.depth / 2);
-    label.sprite.visible = sessionKind === "immersive-vr";
+    label.sprite.visible = panel.mesh.visible;
     anchor.add(label.sprite);
   }
 
@@ -305,20 +321,17 @@ function createEngine({
   let domOverlay = false;
   let disposed = false;
   let hitTestSource = null;
+  // The controller whose target ray the placement hit test follows (null: the viewer).
+  let hitTestInput = null;
   let placed = false;
-  const controller = renderer.xr.getController(0);
-  scene3.add(controller);
   // A visible pointer ray so a headset user can aim at the panel's buttons.
   const rayGeometry = new THREE.BufferGeometry().setFromPoints([
     new THREE.Vector3(0, 0, 0),
     new THREE.Vector3(0, 0, -1),
   ]);
   const rayMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 });
-  const rayLine = new THREE.Line(rayGeometry, rayMaterial);
-  rayLine.visible = false;
-  controller.add(rayLine);
   const tempMatrix = new THREE.Matrix4();
-  function controllerRay() {
+  function controllerRay(controller) {
     tempMatrix.identity().extractRotation(controller.matrixWorld);
     return new THREE.Ray(
       new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld),
@@ -327,30 +340,58 @@ function createEngine({
   }
   function syncPanel() {
     panel.mesh.visible = sessionKind === "immersive-vr" || (sessionKind === "immersive-ar" && !domOverlay);
-    rayLine.visible = sessionKind === "immersive-vr";
+    // Provenance rides with the model wherever the DOM overlay is missing.
+    if (label) label.sprite.visible = panel.mesh.visible;
+    controllers.forEach((controller) => {
+      const pointer = controller.userData.source?.targetRayMode === "tracked-pointer";
+      controller.userData.rayLine.visible =
+        sessionKind === "immersive-vr" || (sessionKind === "immersive-ar" && pointer);
+    });
   }
-  controller.addEventListener("select", () => {
-    if (panel.mesh.visible && (sessionKind === "immersive-vr" || placed)) {
-      raycaster.ray.copy(controllerRay());
-      const id = panel.hit(raycaster);
-      if (id) onControl(id);
-      if (id !== null) return;
+  function onSelect(event) {
+    const ray = controllerRay(event.target);
+    let panelHit = null;
+    if (panel.mesh.visible) {
+      raycaster.ray.copy(ray);
+      panelHit = panel.hit(raycaster);
     }
-    if (sessionKind === "immersive-vr") {
-      onNextDay();
-      return;
-    }
-    if (sessionKind !== "immersive-ar") return;
-    if (!placed) {
-      if (!reticle.visible) return;
+    const hit = sessionKind ? barHit(ray) : null;
+    const action = selectAction({
+      sessionKind,
+      panelHit,
+      placed,
+      reticleVisible: reticle.visible,
+      barHit: Boolean(hit),
+    });
+    if (action === "control") onControl(panelHit);
+    else if (action === "pick") onSelectDistrict(hit.object.userData.district.id);
+    else if (action === "clear") onSelectDistrict(null);
+    else if (action === "place") {
       anchor.position.setFromMatrixPosition(reticle.matrix);
       anchor.visible = true;
       placed = true;
       reticle.visible = false;
       onArStage("placed");
-      return;
     }
-    pick(controllerRay());
+  }
+  // Both hands on a headset: a select arrives on the controller that made it.
+  const controllers = [0, 1].map((index) => {
+    const controller = renderer.xr.getController(index);
+    const rayLine = new THREE.Line(rayGeometry, rayMaterial);
+    rayLine.visible = false;
+    controller.add(rayLine);
+    controller.userData.rayLine = rayLine;
+    controller.addEventListener("connected", (event) => {
+      controller.userData.source = event.data;
+      syncPanel();
+    });
+    controller.addEventListener("disconnected", () => {
+      controller.userData.source = null;
+      syncPanel();
+    });
+    controller.addEventListener("select", onSelect);
+    scene3.add(controller);
+    return controller;
   });
 
   function resetAnchor() {
@@ -365,13 +406,13 @@ function createEngine({
     if (event?.session && session && event.session !== session) return;
     hitTestSource?.cancel?.();
     hitTestSource = null;
+    hitTestInput = null;
     session = null;
     sessionKind = null;
     domOverlay = false;
     syncPanel();
     placed = false;
     reticle.visible = false;
-    if (label) label.sprite.visible = false;
     scene3.background = background;
     floor.visible = true;
     resetAnchor();
@@ -424,12 +465,29 @@ function createEngine({
       placed = false;
       const viewerSpace = await next.requestReferenceSpace("viewer");
       if (!live()) return;
-      const source = await next.requestHitTestSource({ space: viewerSpace });
-      if (!live()) {
-        source?.cancel?.();
-        return;
-      }
-      hitTestSource = source;
+      // Phones aim the placement with the camera centre (viewer ray); a headset
+      // with controllers (Quest) aims it with the controller's target ray, and
+      // switches whenever controllers connect or disconnect.
+      let request = 0;
+      const refreshHitTest = async () => {
+        const pointer = hitTestPointer(next.inputSources);
+        if (hitTestSource && pointer === hitTestInput) return;
+        const mine = ++request;
+        const space = pointer ? pointer.targetRaySpace : viewerSpace;
+        const source = await next.requestHitTestSource({ space });
+        if (!live() || mine !== request) {
+          source?.cancel?.();
+          return;
+        }
+        hitTestSource?.cancel?.();
+        hitTestSource = source;
+        hitTestInput = pointer;
+      };
+      await refreshHitTest();
+      if (!live()) return;
+      next.addEventListener("inputsourceschange", () => {
+        if (live()) refreshHitTest().catch(() => {});
+      });
       // Without a granted DOM overlay the scenario controls move into the scene.
       domOverlay = Boolean(next.domOverlayState);
       syncPanel();
@@ -457,7 +515,6 @@ function createEngine({
       // A diorama at table height, a comfortable arm's length ahead.
       anchor.position.copy(VR_ANCHOR);
       anchor.scale.setScalar(1.5);
-      if (label) label.sprite.visible = true;
       syncPanel();
       onSessionChange("immersive-vr");
     } catch (error) {
@@ -502,7 +559,24 @@ function createEngine({
     firstFrame: firstFramePromise,
     setDay: (i) => model.setDay(i),
     setScene: (next, i) => model.setScene(next, i),
+    setHighlight: (id) => model.setHighlight(id),
+    stats: () => model.stats(),
+    // Client coordinates of a district's column (inline viewer only), for tests.
+    screenPoint: (id) => {
+      const mesh = model.bars.find((bar) => bar.userData.district.id === id);
+      if (!mesh || renderer.xr.isPresenting) return null;
+      const { anchor: at } = mesh.userData;
+      const point = model.root
+        .localToWorld(new THREE.Vector3(at.x, mesh.scale.y * 0.5, at.z))
+        .project(camera);
+      const rect = renderer.domElement.getBoundingClientRect();
+      return {
+        x: rect.left + ((point.x + 1) / 2) * rect.width,
+        y: rect.top + ((1 - point.y) / 2) * rect.height,
+      };
+    },
     setPanel: (spec) => panel.draw(spec),
+    panelText: () => panel.text(),
     setLabel,
     labelText: () => label?.sprite.userData.text || null,
     startAr,
@@ -548,6 +622,14 @@ function createEngine({
   };
 }
 
+// The imagery licence credit is legal text (untranslated), split over two panel lines.
+function imageryCreditLines(label) {
+  const cut = IMAGERY_CREDIT.indexOf(" (");
+  return cut > 0
+    ? [`${label}: ${IMAGERY_CREDIT.slice(0, cut)}`, IMAGERY_CREDIT.slice(cut + 1)]
+    : [`${label}: ${IMAGERY_CREDIT}`];
+}
+
 const PROVENANCE_KEYS = {
   MODEL_OUTPUT: ["xr_prov_model", "xr_prov_model_note"],
   SIMULATED_DEMO_CITY: ["xr_prov_demo", "xr_prov_demo_note"],
@@ -570,11 +652,13 @@ export function XrTabletop() {
     eventPreset: params.eventPreset,
     day: 0,
     agreed: false,
+    // The district pointed at on any device in the session (last writer wins).
+    selectedId: null,
   }));
   const [mode, setMode] = useState("detecting");
   const [session, setSession] = useState(null);
   const [arStage, setArStage] = useState("scanning");
-  const [selectedId, setSelectedId] = useState(null);
+  const [participants, setParticipants] = useState(0);
   const [engineState, setEngineState] = useState({ ready: false, bars: 0, error: false });
   const [xrError, setXrError] = useState("");
   const [sessionCode, setSessionCode] = useState(params.session);
@@ -585,6 +669,8 @@ export function XrTabletop() {
   const [scenarioOpen, setScenarioOpen] = useState(
     () => !window.matchMedia || window.matchMedia("(min-width: 700px)").matches,
   );
+  // Random per-page id for presence heartbeats; never a name or an account.
+  const participantRef = useRef(null);
   const mountRef = useRef(null);
   const overlayRef = useRef(null);
   const engineRef = useRef(null);
@@ -691,6 +777,7 @@ export function XrTabletop() {
             event_preset: state.eventPreset,
             day: state.day,
             agreed: state.agreed,
+            selected_id: state.selectedId || null,
           },
         });
         if (!res.ok) throw new Error(String(res.status));
@@ -739,15 +826,22 @@ export function XrTabletop() {
     const schedule = () => {
       if (alive && !timer && !inFlight && !hidden()) timer = setTimeout(run, POLL_MS);
     };
+    if (!participantRef.current) participantRef.current = makeSessionCode(16);
     async function run() {
       timer = null;
       inFlight = true;
       try {
-        const res = await apiFetch(`/xr/session/${sessionCode}`, { auth: false });
+        // Each poll is also this device's presence heartbeat (10 s TTL on the server).
+        const res = await apiFetch(`/xr/session/${sessionCode}/presence`, {
+          method: "POST",
+          auth: false,
+          body: { participant_id: participantRef.current },
+        });
         if (!alive) return;
         if (res.status === 404) {
           setSessionErrorKey("xr_session_missing");
           setSessionCode(null);
+          setParticipants(0);
           // gsc n32: an expired code must not come back on reload or in a shared link.
           const url = new URL(window.location.href);
           url.searchParams.delete("session");
@@ -759,6 +853,7 @@ export function XrTabletop() {
         const body = await res.json();
         if (!alive) return;
         setSessionErrorKey("");
+        if (Number.isInteger(body.participants)) setParticipants(body.participants);
         const stamp = Date.parse(body.updated_at) || 0;
         // Ignore anything older than what this device already wrote or applied,
         // and anything that would overwrite an edit still on its way out.
@@ -775,6 +870,7 @@ export function XrTabletop() {
           eventPreset: body.event_preset,
           day: body.day,
           agreed: body.agreed,
+          selectedId: body.selected_id || null,
         });
       } catch {
         if (alive) setSessionErrorKey("xr_session_error");
@@ -831,12 +927,6 @@ export function XrTabletop() {
   const stepDay = (delta) =>
     changeScenario((prev) => ({ day: Math.min(Math.max(0, dayCount - 1), Math.max(0, prev.day + delta)) }));
 
-  const nextDay = useCallback(() => {
-    changeScenario((prev) => ({ day: dayCount ? (prev.day + 1) % dayCount : prev.day }));
-  }, [changeScenario, dayCount]);
-  const nextDayRef = useRef(nextDay);
-  nextDayRef.current = nextDay;
-
   // Buttons of the in-scene panel (headset / AR without DOM overlay).
   const onControl = (id) => {
     const [kind, value] = id.split(":");
@@ -862,10 +952,13 @@ export function XrTabletop() {
         container: mountRef.current,
         cityScene: sceneRef.current,
         dayIndex: scenarioRef.current.day,
-        onSelectDistrict: (id) => setSelectedId(id),
+        plate: CITY_PLATES[params.city] || null,
+        // A pick is shared with the session; a repeat of the current one is not news.
+        onSelectDistrict: (id) => {
+          if (id !== scenarioRef.current.selectedId) changeScenario({ selectedId: id });
+        },
         onArStage: (stage) => setArStage((prev) => (prev === stage ? prev : stage)),
         onSessionChange: (kind) => setSession(kind),
-        onNextDay: () => nextDayRef.current(),
         onControl: (id) => controlRef.current(id),
       });
     } catch {
@@ -881,11 +974,17 @@ export function XrTabletop() {
       engineRef.current = null;
       engine.dispose();
     };
-  }, [hasScene]);
+    // params and changeScenario are stable: the engine is built once per city.
+  }, [hasScene, params.city, changeScenario]);
 
   useEffect(() => {
     if (cityScene) engineRef.current?.setScene(cityScene, day);
   }, [cityScene, day, engineState.ready]);
+
+  const { selectedId } = scenario;
+  useEffect(() => {
+    engineRef.current?.setHighlight(selectedId);
+  }, [selectedId, engineState.ready]);
 
   // Provenance travels into the headset with the model (see makeLabelSprite).
   const labelProvenance = cityScene?.provenance?.districts || {};
@@ -905,7 +1004,7 @@ export function XrTabletop() {
     const el = overlayRef.current;
     if (!el) return undefined;
     const block = (event) => {
-      if (event.target instanceof Element && event.target.closest(".xr-panel, .xr-controls"))
+      if (event.target instanceof Element && event.target.closest(".xr-panel, .xr-controls, .xr-credit"))
         event.preventDefault();
     };
     el.addEventListener("beforexrselect", block);
@@ -989,13 +1088,33 @@ export function XrTabletop() {
           .replace("{normal_base}", queueScaled ? minutes(queue.normal_day.baseline_mean) : "")
           .replace("{normal_stag}", queueScaled ? minutes(queue.normal_day.staggered_mean) : "")
       : null;
+  // Equal truck and crew counts are the one-crew-per-truck rule (core/units): name it,
+  // with the scene's crew size, so "573 = 573" does not read as a bug.
+  const crewSize = cityScene?.summary?.crew_size_workers;
+  const crewRule =
+    crewsNeeded !== null && crewsNeeded === trucksNeeded && finiteNumber(crewSize)
+      ? t("units_crew_per_truck").replace("{n}", crewSize.toLocaleString(locale))
+      : null;
   const fleetText =
     crewsNeeded === null
       ? `${trucksNeeded.toLocaleString(locale)} ${t("xr_metric_fleet")}`
-      : `${trucksNeeded.toLocaleString(locale)} ${t("xr_metric_trucks")} · ${crewsNeeded.toLocaleString(locale)} ${t("xr_metric_crews")}`;
+      : [
+          `${trucksNeeded.toLocaleString(locale)} ${t("xr_metric_trucks")}`,
+          `${crewsNeeded.toLocaleString(locale)} ${t("xr_metric_crews")}`,
+          crewRule,
+        ]
+          .filter(Boolean)
+          .join(" · ");
   const provenance = cityScene?.provenance?.districts || {};
   const [provLabelKey, provNoteKey] = PROVENANCE_KEYS[provenance.class] || [];
   const selected = districts.find((d) => d.id === selectedId) || null;
+  const plate = CITY_PLATES[params.city] || null;
+  const participantsText =
+    participants > 0
+      ? participants === 1
+        ? t("xr_participants_one")
+        : t("xr_participants").replace("{n}", participants.toLocaleString(locale))
+      : "";
   const cityName = cityScene?.city?.name || (params.city === "hcmc" ? "Ho Chi Minh City" : "Jakarta");
   // A linked venue carries only coordinates; name it from the scene's (or the twin's) venue list.
   const venueName =
@@ -1015,12 +1134,21 @@ export function XrTabletop() {
     ? {
         lines: [
           `${t("xr_metric_total")} ${tonnes(totalToday)} · ${extraLabel} ${t("xr_metric_extra")}`,
-          [fleetText, queueLabel && `${t("xr_metric_queue")} ${queueLabel}`].filter(Boolean).join(" · "),
-          scenario.agreed
-            ? t("xr_agreed")
-            : sessionCode
-              ? `${t("xr_session_code")} ${sessionCode}`
+          fleetText,
+          queueLabel && `${t("xr_metric_queue")} ${queueLabel}`,
+          sessionCode
+            ? [scenario.agreed ? t("xr_agreed") : `${t("xr_session_code")} ${sessionCode}`, participantsText]
+                .filter(Boolean)
+                .join(" · ")
+            : scenario.agreed
+              ? t("xr_agreed")
               : `${labelCity} · ${labelClass}`,
+        ],
+        // Always on the panel, whatever the session shows above: what the data is
+        // and whose imagery the plate is.
+        footer: [
+          `${labelCity} · ${labelClass} — ${labelNote}`,
+          ...(plate ? imageryCreditLines(t("xr_imagery")) : []),
         ],
         rows: [
           {
@@ -1072,6 +1200,28 @@ export function XrTabletop() {
       sessionCode,
       sceneRainfall: cityScene?.scenario?.rainfall_mm ?? null,
       sceneLoading,
+      selectedId,
+      participants,
+      // Live engine stats (the plate texture loads after the first frame).
+      get rainParticles() {
+        return engineRef.current?.stats().rainParticles ?? 0;
+      },
+      get flowCount() {
+        return engineRef.current?.stats().flowCount ?? 0;
+      },
+      get districtShape() {
+        return engineRef.current?.stats().districtShape ?? null;
+      },
+      get highlightId() {
+        return engineRef.current?.stats().highlightId ?? null;
+      },
+      get plate() {
+        return engineRef.current?.stats().plate ?? "none";
+      },
+      get panelText() {
+        return engineRef.current?.panelText() || "";
+      },
+      screenPoint: (id) => engineRef.current?.screenPoint(id) ?? null,
     };
   }, [
     engineState,
@@ -1085,6 +1235,8 @@ export function XrTabletop() {
     scenario,
     sessionCode,
     sceneLoading,
+    selectedId,
+    participants,
   ]);
 
   useEffect(
@@ -1144,6 +1296,11 @@ export function XrTabletop() {
                 </span>
                 <span className="xr-prov-note">{provNoteKey ? t(provNoteKey) : provenance.source}</span>
               </div>
+              {sessionCode && participantsText && (
+                <p className="xr-presence" data-testid="xr-participants" data-count={participants}>
+                  <Users size={14} aria-hidden="true" /> {participantsText}
+                </p>
+              )}
               {(cityScene.scenario?.rainfall_mm > 0 || cityScene.scenario?.event_attendance > 0) && (
                 <p className="xr-scenario" data-testid="xr-scenario">
                   {t("xr_scenario")
@@ -1185,6 +1342,11 @@ export function XrTabletop() {
                   <div>
                     <dt title={cityScene.units?.crews_required || undefined}>{t("xr_metric_crews")}</dt>
                     <dd data-testid="xr-crews">{crewsNeeded.toLocaleString(locale)}</dd>
+                    {crewRule && (
+                      <dd className="xr-metric-note" data-testid="xr-crew-rule">
+                        {crewRule}
+                      </dd>
+                    )}
                   </div>
                 )}
                 {queueLabel && (
@@ -1256,7 +1418,7 @@ export function XrTabletop() {
               type="button"
               className="xr-icon-btn"
               aria-label={t("xr_close")}
-              onClick={() => setSelectedId(null)}
+              onClick={() => changeScenario({ selectedId: null })}
             >
               <X size={18} />
             </button>
@@ -1545,8 +1707,17 @@ export function XrTabletop() {
                 </li>
               </ul>
               <p>{t("xr_height_note")}</p>
+              <p data-testid="xr-flow-note">
+                {t("xr_flows_legend").replace("{n}", String(TRUCKS_PER_DOT))}
+                {cityScene.scenario?.rainfall_mm > 0 ? ` ${t("xr_rain_legend")}` : ""}
+              </p>
             </div>
           </section>
+        )}
+        {cityScene && plate && (
+          <p className="xr-credit" data-testid="xr-imagery-credit">
+            {t("xr_imagery")}: {IMAGERY_CREDIT}
+          </p>
         )}
       </div>
     </main>

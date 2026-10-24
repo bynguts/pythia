@@ -4,15 +4,50 @@
 // tabletop scale (~0.6 m across) so the same group works in the inline orbit
 // viewer, a WebXR immersive-ar placement and an immersive-vr diorama.
 //
-// Bar height is proportional to forecast tonnes on the selected day against
-// ONE fixed scale for the whole horizon, so scrubbing days compares honestly.
+// Districts are extruded from their outline (`district.outline`, [[lng, lat], …])
+// when the scene sends one, and drawn as square bars otherwise (the simulated
+// demo city). Height is proportional to forecast tonnes on the selected day
+// against ONE fixed scale for the whole horizon, so scrubbing days compares
+// honestly. Around them: an optional satellite plate, rain particles for the
+// scenario's rainfall and truck-trip dots on arcs to the landfill.
 import * as THREE from "three";
 
 export const MODEL_SPAN_M = 0.6;
 export const MAX_BAR_M = 0.2;
+// Extruded districts tile the whole city, so they stay lower than lone bars.
+export const MAX_PRISM_M = 0.075;
 const MIN_BAR_M = 0.003;
 const PLATE_MARGIN_M = 0.035;
 const PLATE_THICKNESS_M = 0.012;
+// Each outline shrinks toward its centre, leaving a street-like gap of plate.
+const PRISM_INSET = 0.9;
+
+// One moving dot stands for this many trucks of the day's `trucks_required`.
+export const TRUCKS_PER_DOT = 4;
+// Rain particles per mm of scenario rainfall (0 mm → none).
+export const RAIN_PER_MM = 12;
+const RAIN_MAX = 3600;
+const RAIN_TOP_M = 0.22;
+const RAIN_SPEED_M_S = 0.32;
+const FLOW_PERIOD_S = 4.5;
+const ARC_SEGMENTS = 24;
+// Growth animation: the first build rises from the plate, later changes ease.
+const RISE_S = 0.9;
+const RISE_STAGGER_S = 0.6;
+const CHANGE_S = 0.6;
+const CHANGE_STAGGER_S = 0.25;
+
+/**
+ * The satellite plate under the Jakarta tabletop: EOX Sentinel-2 cloudless 2016
+ * (CC BY 4.0), rendered offline by `ml/scripts/render_xr_plate.py` for this box.
+ */
+export const JAKARTA_PLATE = {
+  url: "/xr/jakarta-plate.jpg",
+  west: 106.62,
+  east: 107.06,
+  south: -6.44,
+  north: -6.02,
+};
 
 // Status hues are semantic (styles/tokens.css); the overlay legend carries text labels
 // too, so colour is never the only signal.
@@ -29,19 +64,37 @@ const PLATE_COLOR = "#1d2e28";
 const PLATE_TOP_COLOR = "#24382f";
 const GRID_COLOR = "#33493f";
 const TPS_COLOR = "#b9cbc2";
+const RAIN_COLOR = "#e4f2ff";
+const FLOW_COLOR = "#ffffff";
+const FLOW_LINE_COLOR = "#bfe3cf";
+const HIGHLIGHT_COLOR = "#ffffff";
 
 function finite(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-/** Local equirectangular projection fitted to the districts (+ landfill). */
+/** A usable outline: at least three finite [lng, lat] points. */
+export function districtOutline(district) {
+  const ring = Array.isArray(district?.outline) ? district.outline : null;
+  if (!ring || ring.length < 3) return null;
+  return ring.every((p) => Array.isArray(p) && finite(p[0]) && finite(p[1])) ? ring : null;
+}
+
+/** Local equirectangular projection fitted to the districts (+ outlines, landfill). */
 export function makeProjection(scene) {
   const points = [
     ...(scene.districts || []),
     ...(scene.facilities || []).filter((f) => f.kind === "landfill"),
+    ...(scene.districts || []).flatMap((d) => (districtOutline(d) || []).map(([lng, lat]) => ({ lat, lng }))),
   ].filter((p) => finite(p.lat) && finite(p.lng));
   if (points.length === 0) {
-    return { project: () => ({ x: 0, z: 0 }), width: MODEL_SPAN_M, depth: MODEL_SPAN_M, scale: 1 };
+    return {
+      project: () => ({ x: 0, z: 0 }),
+      unproject: () => ({ lat: 0, lng: 0 }),
+      width: MODEL_SPAN_M,
+      depth: MODEL_SPAN_M,
+      scale: 1,
+    };
   }
   const lats = points.map((p) => p.lat);
   const lngs = points.map((p) => p.lng);
@@ -59,6 +112,7 @@ export function makeProjection(scene) {
   return {
     // North is −Z so the default camera (looking toward −Z) reads like a map.
     project: (lat, lng) => ({ x: (lng - lng0) * kx * scale, z: -(lat - lat0) * kz * scale }),
+    unproject: (x, z) => ({ lng: lng0 + x / (kx * scale), lat: lat0 - z / (kz * scale) }),
     width: extentX * scale,
     depth: extentZ * scale,
     scale,
@@ -78,29 +132,67 @@ function medianNearestNeighbour(positions) {
   return nearest[Math.floor(nearest.length / 2)];
 }
 
+function dayRow(district, dayIndex) {
+  return district.series?.[dayIndex] || district.series?.[0];
+}
+
 export function dayTons(district, dayIndex) {
-  const row = district.series?.[dayIndex] || district.series?.[0];
+  const row = dayRow(district, dayIndex);
   return row && finite(row.predicted_tons) ? row.predicted_tons : 0;
 }
 
 export function dayRisk(district, dayIndex) {
-  const row = district.series?.[dayIndex] || district.series?.[0];
+  const row = dayRow(district, dayIndex);
   return RISK_LEVELS.includes(row?.risk) ? row.risk : "normal";
+}
+
+/** Truck-trip dots for one district and day: trucks_required / TRUCKS_PER_DOT, rounded. */
+export function flowDots(district, dayIndex) {
+  const trucks = dayRow(district, dayIndex)?.trucks_required;
+  return finite(trucks) && trucks > 0 ? Math.round(trucks / TRUCKS_PER_DOT) : 0;
+}
+
+/** Rain particles for a scenario rainfall in mm: proportional, 0 at 0 mm, capped. */
+export function rainParticleCount(rainfallMm) {
+  return finite(rainfallMm) && rainfallMm > 0 ? Math.min(RAIN_MAX, Math.round(rainfallMm * RAIN_PER_MM)) : 0;
+}
+
+const easeOutCubic = (p) => 1 - (1 - p) ** 3;
+
+// One district outline → a unit-height prism centred on the origin, base on y=0.
+function prismGeometry(ring, projection) {
+  const pts = ring.map(([lng, lat]) => projection.project(lat, lng));
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  if (pts.length > 3 && Math.abs(first.x - last.x) < 1e-9 && Math.abs(first.z - last.z) < 1e-9) pts.pop();
+  const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+  const cz = pts.reduce((s, p) => s + p.z, 0) / pts.length;
+  // Shape space (x, y) = (x, −z); after rotateX(−π/2) the extrusion (0..1) is +y.
+  const shape = new THREE.Shape(
+    pts.map((p) => new THREE.Vector2((p.x - cx) * PRISM_INSET, -(p.z - cz) * PRISM_INSET)),
+  );
+  const geometry = new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false, curveSegments: 1 });
+  geometry.rotateX(-Math.PI / 2);
+  return { geometry, centre: { x: cx, z: cz } };
 }
 
 /**
  * Build the tabletop model. Returns the root group plus handles the viewer
  * uses: `bars` (one mesh per district, userData.district), `setDay(i, {instant})`
- * to retarget heights/colours, `setScene(scene, i)` for a new scenario of the
- * same city, `tick(dt)` to ease toward them, and `dispose()`.
+ * to retarget heights/colours/flows, `setScene(scene, i)` for a new scenario of
+ * the same city, `setHighlight(id)`, `tick(dt)` to animate, `stats()` for the
+ * test hooks, and `dispose()`. `plate` (e.g. JAKARTA_PLATE) textures the plate.
  */
-export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false } = {}) {
+export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false, plate = null } = {}) {
   const geometries = [];
   const materials = [];
+  const textures = [];
   const track = (thing, list) => {
     list.push(thing);
     return thing;
   };
+  let disposed = false;
+  let clock = 0;
 
   const root = new THREE.Group();
   root.name = "pythia-city";
@@ -111,19 +203,21 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false } = 
   // ── Plate ──
   const plateW = projection.width + PLATE_MARGIN_M * 2;
   const plateD = projection.depth + PLATE_MARGIN_M * 2;
-  const plate = new THREE.Mesh(
+  const plateMesh = new THREE.Mesh(
     track(new THREE.BoxGeometry(plateW, PLATE_THICKNESS_M, plateD), geometries),
     track(new THREE.MeshStandardMaterial({ color: PLATE_COLOR, roughness: 0.92, metalness: 0 }), materials),
   );
-  plate.position.y = -PLATE_THICKNESS_M / 2;
-  plate.receiveShadow = true;
-  plate.name = "plate";
-  root.add(plate);
+  plateMesh.position.y = -PLATE_THICKNESS_M / 2;
+  plateMesh.receiveShadow = true;
+  plateMesh.name = "plate";
+  root.add(plateMesh);
 
-  const top = new THREE.Mesh(
-    track(new THREE.PlaneGeometry(plateW - 0.008, plateD - 0.008), geometries),
-    track(new THREE.MeshStandardMaterial({ color: PLATE_TOP_COLOR, roughness: 0.95 }), materials),
+  const topGeometry = track(new THREE.PlaneGeometry(plateW - 0.008, plateD - 0.008), geometries);
+  const topMaterial = track(
+    new THREE.MeshStandardMaterial({ color: PLATE_TOP_COLOR, roughness: 0.95 }),
+    materials,
   );
+  const top = new THREE.Mesh(topGeometry, topMaterial);
   top.rotation.x = -Math.PI / 2;
   top.position.y = 0.0005;
   top.receiveShadow = true;
@@ -140,13 +234,56 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false } = 
   }
   const gridGeometry = track(new THREE.BufferGeometry(), geometries);
   gridGeometry.setAttribute("position", new THREE.Float32BufferAttribute(gridPoints, 3));
-  const grid = new THREE.LineSegments(
-    gridGeometry,
-    track(new THREE.LineBasicMaterial({ color: GRID_COLOR, transparent: true, opacity: 0.8 }), materials),
+  const gridMaterial = track(
+    new THREE.LineBasicMaterial({ color: GRID_COLOR, transparent: true, opacity: 0.8 }),
+    materials,
   );
-  root.add(grid);
+  root.add(new THREE.LineSegments(gridGeometry, gridMaterial));
 
-  // ── District bars ──
+  // Satellite plate: each corner of the top maps to its own lat/lng in the image box.
+  let plateState = "none";
+  if (plate?.url) {
+    plateState = "loading";
+    const uv = topGeometry.attributes.uv;
+    const pos = topGeometry.attributes.position;
+    for (let i = 0; i < pos.count; i += 1) {
+      // Plane (x, y) lies on the table as (x, −z) once rotated.
+      const { lat, lng } = projection.unproject(pos.getX(i), -pos.getY(i));
+      uv.setXY(
+        i,
+        (lng - plate.west) / (plate.east - plate.west),
+        (lat - plate.south) / (plate.north - plate.south),
+      );
+    }
+    uv.needsUpdate = true;
+    new THREE.TextureLoader().load(
+      plate.url,
+      (texture) => {
+        if (disposed) {
+          texture.dispose();
+          return;
+        }
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 4;
+        track(texture, textures);
+        topMaterial.map = texture;
+        topMaterial.color.set("#ffffff");
+        topMaterial.needsUpdate = true;
+        gridMaterial.opacity = 0.25;
+        plateState = "loaded";
+      },
+      undefined,
+      () => {
+        plateState = "error";
+      },
+    );
+  }
+
+  // ── Districts: extruded outlines, or bars without one ──
+  const outlines = districts.map(districtOutline);
+  const prismCount = outlines.filter(Boolean).length;
+  const districtShape = prismCount === 0 ? "bar" : prismCount === districts.length ? "prism" : "mixed";
+  const maxHeight = prismCount > 0 ? MAX_PRISM_M : MAX_BAR_M;
   const allTons = districts.flatMap((d) => (d.series || []).map((row) => row.predicted_tons).filter(finite));
   const maxTons = Math.max(...allTons, 1);
   const barWidth = Math.min(0.03, Math.max(0.008, medianNearestNeighbour(positions) * 0.55));
@@ -161,17 +298,35 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false } = 
       ),
     ]),
   );
-  const heightFor = (tons) => Math.max(MIN_BAR_M, (tons / maxTons) * MAX_BAR_M);
+  const heightFor = (tons) => Math.max(MIN_BAR_M, (tons / maxTons) * maxHeight);
+  const maxRadius = Math.max(...positions.map((p) => Math.hypot(p.x, p.z)), 1e-6);
 
   const bars = districts.map((district, i) => {
-    const mesh = new THREE.Mesh(barGeometry, riskMaterials[dayRisk(district, dayIndex)]);
-    mesh.position.set(positions[i].x, 0, positions[i].z);
+    let mesh;
+    if (outlines[i]) {
+      const prism = prismGeometry(outlines[i], projection);
+      mesh = new THREE.Mesh(track(prism.geometry, geometries), riskMaterials[dayRisk(district, dayIndex)]);
+      mesh.position.set(prism.centre.x, 0, prism.centre.z);
+    } else {
+      mesh = new THREE.Mesh(barGeometry, riskMaterials[dayRisk(district, dayIndex)]);
+      mesh.position.set(positions[i].x, 0, positions[i].z);
+      mesh.scale.set(barWidth, 1, barWidth);
+    }
     const h = heightFor(dayTons(district, dayIndex));
-    mesh.scale.set(barWidth, h, barWidth);
+    const stagger = Math.hypot(positions[i].x, positions[i].z) / maxRadius;
+    mesh.scale.y = reducedMotion ? h : MIN_BAR_M;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.name = `district-${district.id}`;
-    mesh.userData = { district, targetHeight: h };
+    mesh.userData = {
+      district,
+      stagger,
+      anchor: positions[i],
+      from: mesh.scale.y,
+      to: h,
+      start: stagger * RISE_STAGGER_S,
+      duration: reducedMotion ? 0 : RISE_S,
+    };
     root.add(mesh);
     return mesh;
   });
@@ -181,8 +336,8 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false } = 
     (f) => f.kind === "landfill" && finite(f.lat) && finite(f.lng),
   );
   let landfillMarker = null;
+  const landfillAt = landfill ? projection.project(landfill.lat, landfill.lng) : null;
   if (landfill) {
-    const p = projection.project(landfill.lat, landfill.lng);
     const accent = track(
       new THREE.MeshStandardMaterial({ color: LANDFILL_COLOR, roughness: 0.4, metalness: 0.1 }),
       materials,
@@ -204,7 +359,7 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false } = 
       m.castShadow = true;
     });
     landfillMarker.add(stem, head, ring);
-    landfillMarker.position.set(p.x, 0, p.z);
+    landfillMarker.position.set(landfillAt.x, 0, landfillAt.z);
     root.add(landfillMarker);
   }
 
@@ -232,44 +387,258 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false } = 
     root.add(tpsMesh);
   }
 
-  function setDay(nextDay, { instant = false } = {}) {
-    bars.forEach((mesh) => {
-      const { district } = mesh.userData;
-      mesh.userData.targetHeight = heightFor(dayTons(district, nextDay));
-      mesh.material = riskMaterials[dayRisk(district, nextDay)];
-      if (instant || reducedMotion) mesh.scale.y = mesh.userData.targetHeight;
-    });
+  // ── Rain: THREE.Points falling over the plate, count ∝ scenario rainfall ──
+  const rainMaterial = track(
+    new THREE.PointsMaterial({
+      color: RAIN_COLOR,
+      size: 0.0042,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false,
+    }),
+    materials,
+  );
+  let rain = null;
+  let rainCount = 0;
+  function setRain(mm) {
+    const count = rainParticleCount(mm);
+    if (count === rainCount) return;
+    if (rain) {
+      root.remove(rain);
+      rain.geometry.dispose();
+      rain = null;
+    }
+    rainCount = count;
+    if (!count) return;
+    const xyz = new Float32Array(count * 3);
+    for (let i = 0; i < count; i += 1) {
+      xyz[i * 3] = (Math.random() - 0.5) * (plateW - 0.02);
+      xyz[i * 3 + 1] = Math.random() * RAIN_TOP_M;
+      xyz[i * 3 + 2] = (Math.random() - 0.5) * (plateD - 0.02);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(xyz, 3));
+    rain = new THREE.Points(geometry, rainMaterial);
+    rain.name = "rain";
+    root.add(rain);
   }
 
-  // A re-fetched scenario (rain / event) for the same city: swap each bar's
-  // district data and retarget. The height scale stays the one this model was
-  // built with, so a heavier scenario visibly grows the columns.
+  // ── Truck flows: dots on arcs from each district to the landfill ──
+  const flowGeometry = track(new THREE.SphereGeometry(0.0024, 8, 6), geometries);
+  const flowMaterial = track(new THREE.MeshBasicMaterial({ color: FLOW_COLOR }), materials);
+  const flowLineMaterial = track(
+    new THREE.LineBasicMaterial({
+      color: FLOW_LINE_COLOR,
+      transparent: true,
+      opacity: 0.35,
+      depthWrite: false,
+    }),
+    materials,
+  );
+  let flowMesh = null;
+  let flowDotsList = []; // { i: district index, phase }
+  let arcGeometry = null;
+  if (landfillAt && bars.length) {
+    arcGeometry = track(new THREE.BufferGeometry(), geometries);
+    arcGeometry.setAttribute(
+      "position",
+      new THREE.BufferAttribute(new Float32Array(bars.length * ARC_SEGMENTS * 6), 3),
+    );
+    const arcs = new THREE.LineSegments(arcGeometry, flowLineMaterial);
+    arcs.name = "flow-arcs";
+    arcs.frustumCulled = false;
+    root.add(arcs);
+  }
+  const p0 = new THREE.Vector3();
+  const p1 = new THREE.Vector3();
+  const p2 = new THREE.Vector3();
+  const tmp = new THREE.Vector3();
+  function arcControl(i) {
+    const { anchor } = bars[i].userData;
+    const topY = bars[i].scale.y;
+    const dist = Math.hypot(landfillAt.x - anchor.x, landfillAt.z - anchor.z);
+    p0.set(anchor.x, topY, anchor.z);
+    p2.set(landfillAt.x, 0.012, landfillAt.z);
+    p1.set(
+      (anchor.x + landfillAt.x) / 2,
+      Math.max(topY, 0.012) + dist * 0.45 + 0.02,
+      (anchor.z + landfillAt.z) / 2,
+    );
+  }
+  function arcPoint(t, out) {
+    const a = (1 - t) * (1 - t);
+    const b = 2 * (1 - t) * t;
+    const c = t * t;
+    return out.set(
+      a * p0.x + b * p1.x + c * p2.x,
+      a * p0.y + b * p1.y + c * p2.y,
+      a * p0.z + b * p1.z + c * p2.z,
+    );
+  }
+  function updateArcs() {
+    if (!arcGeometry) return;
+    const arr = arcGeometry.attributes.position.array;
+    let k = 0;
+    bars.forEach((_, i) => {
+      arcControl(i);
+      for (let s = 0; s < ARC_SEGMENTS; s += 1) {
+        arcPoint(s / ARC_SEGMENTS, tmp);
+        arr[k++] = tmp.x;
+        arr[k++] = tmp.y;
+        arr[k++] = tmp.z;
+        arcPoint((s + 1) / ARC_SEGMENTS, tmp);
+        arr[k++] = tmp.x;
+        arr[k++] = tmp.y;
+        arr[k++] = tmp.z;
+      }
+    });
+    arcGeometry.attributes.position.needsUpdate = true;
+  }
+  const flowMatrix = new THREE.Matrix4();
+  function updateFlowDots() {
+    if (!flowMesh) return;
+    const travel = reducedMotion ? 0 : clock / FLOW_PERIOD_S;
+    let current = -1;
+    flowDotsList.forEach((dot, k) => {
+      if (dot.i !== current) {
+        current = dot.i;
+        arcControl(dot.i);
+      }
+      arcPoint((dot.phase + travel) % 1, tmp);
+      flowMatrix.makeTranslation(tmp.x, tmp.y, tmp.z);
+      flowMesh.setMatrixAt(k, flowMatrix);
+    });
+    flowMesh.count = flowDotsList.length;
+    flowMesh.instanceMatrix.needsUpdate = true;
+  }
+  function setFlows(day) {
+    if (!landfillAt) return;
+    flowDotsList = [];
+    bars.forEach((mesh, i) => {
+      const n = flowDots(mesh.userData.district, day);
+      // A per-district offset so neighbouring arcs do not pulse in step.
+      const offset = (i * 0.137) % 1;
+      for (let j = 0; j < n; j += 1) flowDotsList.push({ i, phase: (offset + j / n) % 1 });
+    });
+    if (!flowMesh || flowMesh.instanceMatrix.count < flowDotsList.length) {
+      if (flowMesh) {
+        root.remove(flowMesh);
+        flowMesh.dispose();
+      }
+      flowMesh = new THREE.InstancedMesh(flowGeometry, flowMaterial, Math.max(64, flowDotsList.length * 2));
+      flowMesh.name = "flows";
+      flowMesh.frustumCulled = false;
+      root.add(flowMesh);
+    }
+    updateFlowDots();
+  }
+
+  // ── Highlight: a ring on the selected district's top and a pointer above it ──
+  const highlightMaterial = track(new THREE.MeshBasicMaterial({ color: HIGHLIGHT_COLOR }), materials);
+  const highlight = new THREE.Group();
+  highlight.name = "highlight";
+  highlight.visible = false;
+  const hlRing = new THREE.Mesh(
+    track(new THREE.RingGeometry(0.009, 0.0135, 36), geometries),
+    highlightMaterial,
+  );
+  hlRing.rotation.x = -Math.PI / 2;
+  hlRing.position.y = 0.0015;
+  const hlCone = new THREE.Mesh(
+    track(new THREE.ConeGeometry(0.007, 0.018, 16), geometries),
+    highlightMaterial,
+  );
+  hlCone.rotation.x = Math.PI; // tip down, toward the district
+  highlight.add(hlRing, hlCone);
+  root.add(highlight);
+  let highlighted = null;
+  function placeHighlight() {
+    if (!highlighted) return;
+    const { anchor } = highlighted.userData;
+    highlight.position.set(anchor.x, highlighted.scale.y, anchor.z);
+    hlCone.position.y = 0.03 + (reducedMotion ? 0 : Math.sin(clock * 3) * 0.004);
+  }
+  function setHighlight(id) {
+    highlighted = (id && bars.find((mesh) => mesh.userData.district.id === id)) || null;
+    highlight.visible = Boolean(highlighted);
+    placeHighlight();
+  }
+
+  function setDay(nextDay, { instant = false } = {}) {
+    bars.forEach((mesh) => {
+      const ud = mesh.userData;
+      const to = heightFor(dayTons(ud.district, nextDay));
+      mesh.material = riskMaterials[dayRisk(ud.district, nextDay)];
+      if (instant || reducedMotion) {
+        mesh.scale.y = to;
+        Object.assign(ud, { from: to, to, start: clock, duration: 0 });
+      } else if (Math.abs(to - ud.to) > 1e-7) {
+        // A short staggered wave from the centre outward.
+        Object.assign(ud, {
+          from: mesh.scale.y,
+          to,
+          start: clock + ud.stagger * CHANGE_STAGGER_S,
+          duration: CHANGE_S,
+        });
+      }
+    });
+    setFlows(nextDay);
+    updateArcs();
+    placeHighlight();
+  }
+
+  // A re-fetched scenario (rain / event) for the same city: swap each district's
+  // data and retarget. The height scale stays the one this model was built
+  // with, so a heavier scenario visibly grows the columns.
   function setScene(nextScene, nextDay, options) {
     const byId = new Map((nextScene.districts || []).map((d) => [d.id, d]));
     bars.forEach((mesh) => {
       const district = byId.get(mesh.userData.district.id);
       if (district) mesh.userData.district = district;
     });
+    setRain(nextScene.scenario?.rainfall_mm);
     setDay(nextDay, options);
   }
 
-  // Ease bar heights toward their targets (~250 ms); a no-op once settled.
+  // Advance the animations; returns whether district heights are still moving.
   function tick(dt) {
-    const k = 1 - Math.exp(-Math.min(dt, 0.1) * 12);
+    const step = Math.min(Math.max(dt, 0), 0.1);
+    clock += step;
     let moving = false;
     bars.forEach((mesh) => {
-      const diff = mesh.userData.targetHeight - mesh.scale.y;
-      if (Math.abs(diff) > 1e-5) {
-        mesh.scale.y += diff * k;
-        moving = true;
-      }
+      const ud = mesh.userData;
+      if (mesh.scale.y === ud.to) return;
+      const p = ud.duration > 0 ? Math.min(1, Math.max(0, (clock - ud.start) / ud.duration)) : 1;
+      mesh.scale.y = p >= 1 ? ud.to : ud.from + (ud.to - ud.from) * easeOutCubic(p);
+      moving = true;
     });
+    if (moving) updateArcs();
+    if (rain && !reducedMotion) {
+      const arr = rain.geometry.attributes.position.array;
+      const fall = RAIN_SPEED_M_S * step;
+      for (let i = 1; i < arr.length; i += 3) {
+        arr[i] -= fall;
+        if (arr[i] < 0) arr[i] += RAIN_TOP_M;
+      }
+      rain.geometry.attributes.position.needsUpdate = true;
+    }
+    if (!reducedMotion || moving) updateFlowDots();
+    placeHighlight();
     return moving;
   }
 
+  setRain(scene.scenario?.rainfall_mm);
+  setFlows(dayIndex);
+  updateArcs();
+
   function dispose() {
+    disposed = true;
+    rain?.geometry.dispose();
+    flowMesh?.dispose();
     geometries.forEach((g) => g.dispose());
     materials.forEach((m) => m.dispose());
+    textures.forEach((t) => t.dispose());
     tpsMesh?.dispose();
   }
 
@@ -282,7 +651,15 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false } = 
     maxTons,
     setDay,
     setScene,
+    setHighlight,
     tick,
+    stats: () => ({
+      rainParticles: rainCount,
+      flowCount: flowDotsList.length,
+      districtShape,
+      highlightId: highlighted?.userData.district.id || null,
+      plate: plateState,
+    }),
     dispose,
   };
 }

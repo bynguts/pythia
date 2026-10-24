@@ -134,3 +134,71 @@ def test_rate_limit_table_is_bounded(api_client, clock, monkeypatch):
             xr_session._take("put", client, xr_session.PUT_BUCKET, clock["t"])
         assert len(xr_session._buckets) == 2
         assert ("put", "10.0.0.1") not in xr_session._buckets
+
+
+def test_selected_district_is_shared_state_and_validated(api_client, clock):
+    created = api_client.put("/api/xr/session/SEL1", json=BODY).json()
+    assert created["selected_id"] is None
+    picked = api_client.put("/api/xr/session/SEL1", json={**BODY, "selected_id": "kebon_jeruk"}).json()
+    assert picked["selected_id"] == "kebon_jeruk"
+    assert api_client.get("/api/xr/session/SEL1").json()["selected_id"] == "kebon_jeruk"
+    for bad in ["", "a b", "x" * 65, "<script>"]:
+        assert api_client.put("/api/xr/session/SEL1", json={**BODY, "selected_id": bad}).status_code == 422
+
+
+def _beat(api_client, code, pid):
+    return api_client.post(f"/api/xr/session/{code}/presence", json={"participant_id": pid})
+
+
+def test_presence_counts_devices_with_a_ten_second_ttl(api_client, clock):
+    api_client.put("/api/xr/session/HERE1", json=BODY)
+    assert api_client.get("/api/xr/session/HERE1").json()["participants"] == 0
+    first = _beat(api_client, "HERE1", "deviceAAAA")
+    assert first.status_code == 200
+    assert first.json()["participants"] == 1
+    # The heartbeat returns the scenario too, and never moves updated_at.
+    assert first.json()["rainfall_mm"] == 40.0
+    stamp = first.json()["updated_at"]
+    clock["t"] += 4
+    assert _beat(api_client, "HERE1", "deviceBBBB").json()["participants"] == 2
+    # A repeat heartbeat from one device is still one device.
+    assert _beat(api_client, "HERE1", "deviceBBBB").json()["participants"] == 2
+    assert api_client.get("/api/xr/session/HERE1").json()["updated_at"] == stamp
+    clock["t"] += 6  # A's last heartbeat is now 10 s old: gone
+    assert api_client.get("/api/xr/session/HERE1").json()["participants"] == 1
+    clock["t"] += 4
+    assert api_client.get("/api/xr/session/HERE1").json()["participants"] == 0
+
+
+def test_presence_survives_scenario_writes(api_client, clock):
+    api_client.put("/api/xr/session/HERE2", json=BODY)
+    _beat(api_client, "HERE2", "deviceAAAA")
+    _beat(api_client, "HERE2", "deviceBBBB")
+    assert api_client.put("/api/xr/session/HERE2", json={**BODY, "day": 3}).json()["participants"] == 2
+
+
+def test_presence_needs_a_known_session_and_a_valid_id(api_client, clock):
+    assert _beat(api_client, "NOPE99", "deviceAAAA").status_code == 404
+    api_client.put("/api/xr/session/HERE3", json=BODY)
+    for bad in ["short", "has space1", "x" * 33, "dev-ice-01"]:
+        assert _beat(api_client, "HERE3", bad).status_code == 422
+
+
+def test_presence_table_is_bounded(api_client, clock, monkeypatch):
+    monkeypatch.setattr(xr_session, "MAX_PARTICIPANTS", 2)
+    api_client.put("/api/xr/session/HERE4", json=BODY)
+    for i, pid in enumerate(["deviceAAAA", "deviceBBBB", "deviceCCCC"]):
+        clock["t"] += 0.1 * i
+        assert _beat(api_client, "HERE4", pid).json()["participants"] <= 2
+    with state._xr_sessions_lock:
+        assert set(state._xr_sessions["HERE4"]["participants"]) == {"deviceBBBB", "deviceCCCC"}
+
+
+def test_heartbeats_spend_the_same_rate_limit_as_writes(api_client, clock, monkeypatch):
+    monkeypatch.setattr(xr_session, "PUT_BUCKET", (3.0, 1.0))
+    assert api_client.put("/api/xr/session/HERE5", json=BODY).status_code == 200
+    assert _beat(api_client, "HERE5", "deviceAAAA").status_code == 200
+    assert _beat(api_client, "HERE5", "deviceAAAA").status_code == 200
+    limited = _beat(api_client, "HERE5", "deviceAAAA")
+    assert limited.status_code == 429
+    assert api_client.put("/api/xr/session/HERE5", json=BODY).status_code == 429

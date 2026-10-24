@@ -149,6 +149,16 @@
   color: var(--ui-muted);
 }
 
+.xr-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-accent);
+}
+
 .xr-scenario {
   margin: 0;
   font-size: 12px;
@@ -212,6 +222,14 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The rule behind a figure (1 crew per truck): small, muted, allowed to wrap. */
+.xr-metrics dd.xr-metric-note {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ui-muted);
+  white-space: normal;
 }
 
 .xr-cities {
@@ -610,6 +628,20 @@
 .xr-legend p {
   margin: var(--space-1) 0 0;
   font-size: 12px;
+  color: var(--ui-muted);
+}
+
+/* The plate's licence credit sits outside the scrolling controls, so it is never clipped. */
+.xr-credit {
+  pointer-events: auto;
+  flex: none;
+  max-width: 420px;
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--ui-radius-card);
+  background: rgba(255, 255, 255, 0.95);
+  font-size: 11px;
+  line-height: 1.35;
   color: var(--ui-muted);
 }
 

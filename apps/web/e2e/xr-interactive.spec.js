@@ -159,6 +159,73 @@ test.describe("XR tabletop — interactive scenario and shared session", () => {
     await other.close();
   });
 
+  test("gsc-2026 #7: devices see each other and the district picked on any of them", async ({
+    page,
+    context,
+  }) => {
+    test.setTimeout(120000);
+    // Reduced motion: no auto-rotate, so a district stays under the pointer.
+    const open = async (target, url) => {
+      await target.emulateMedia({ reducedMotion: "reduce" });
+      await target.setViewportSize({ width: 1280, height: 800 });
+      await target.goto(url);
+      return waitForXr(target);
+    };
+    await open(page, "/xr?city=hcmc&lang=en");
+    await openScenario(page);
+    await page.getByTestId("xr-share").click();
+    const code = (await page.getByTestId("xr-session-code").textContent()).trim();
+    await expect(page.getByTestId("xr-participants")).toHaveText("1 device in this session");
+
+    const other = await context.newPage();
+    await open(other, `/xr?session=${code}&city=hcmc&lang=en`);
+    await expect(page.getByTestId("xr-participants")).toHaveText("2 devices in this session", {
+      timeout: 5000,
+    });
+    await expect(other.getByTestId("xr-participants")).toHaveText("2 devices in this session", {
+      timeout: 5000,
+    });
+    // The in-scene panel shows the count and keeps the provenance under the session line.
+    await expect
+      .poll(() => page.evaluate(() => window.__pythiaXr.panelText))
+      .toContain(`Session code ${code} · 2 devices in this session`);
+    expect(await page.evaluate(() => window.__pythiaXr.panelText)).toContain(
+      "Ho Chi Minh City · Simulated demo city",
+    );
+
+    // Tap a district on the second device that no overlay panel covers.
+    const scene = await (await page.request.get(`${API}/twin/scene?city=hcmc&days=7`)).json();
+    const target = await other.evaluate(
+      (ids) => {
+        const canvas = document.querySelector("[data-testid=xr-canvas]");
+        for (const id of ids) {
+          const p = window.__pythiaXr.screenPoint(id);
+          if (p && document.elementFromPoint(p.x, p.y) === canvas) return p;
+        }
+        return null;
+      },
+      scene.districts.map((d) => d.id),
+    );
+    expect(target).not.toBeNull();
+    await other.mouse.click(target.x, target.y);
+    await expect.poll(() => other.evaluate(() => window.__pythiaXr.selectedId)).not.toBeNull();
+    const picked = await other.evaluate(() => window.__pythiaXr.selectedId);
+    const name = scene.districts.find((d) => d.id === picked).name;
+
+    // The first device highlights the same district within 2 s (one poll is 1.5 s).
+    await expect
+      .poll(() => page.evaluate(() => window.__pythiaXr.selectedId), { timeout: 2500 })
+      .toBe(picked);
+    expect(await page.evaluate(() => window.__pythiaXr.highlightId)).toBe(picked);
+    await expect(page.getByTestId("xr-selected")).toContainText(name);
+
+    // A device that leaves drops out after the 10 s presence window.
+    await other.close();
+    await expect(page.getByTestId("xr-participants")).toHaveText("1 device in this session", {
+      timeout: 15000,
+    });
+  });
+
   test("an unknown session code is reported and sharing stays available", async ({ page }) => {
     await page.goto(`/xr?session=${uniqueCode()}&city=hcmc&lang=en`);
     await waitForXr(page);
@@ -280,6 +347,8 @@ test.describe("XR tabletop — interactive scenario and shared session", () => {
     await page.goto("/xr?city=jakarta&lang=en&event_attendance=50000&event_lat=-6.1246&event_lng=106.8584");
     await waitForXr(page);
     await expect(page.getByTestId("xr-crews")).toHaveText("300");
+    // Crews that differ from trucks get no "1 crew per truck" rule: it would be false.
+    await expect(page.getByTestId("xr-crew-rule")).toHaveCount(0);
     await expect(page.getByTestId("xr-queue")).toHaveText("55→24 min/truck (scenario) · normal day 42→18");
     // The simulated label stays on the queue row.
     await expect(page.getByTestId("xr-readout")).toContainText("TPA queue (simulated)");

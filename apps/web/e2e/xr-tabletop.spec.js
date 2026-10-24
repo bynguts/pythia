@@ -69,10 +69,70 @@ test.describe("XR tabletop twin", () => {
     await expect(prov).toHaveAttribute("data-class", "SIMULATED_DEMO_CITY");
     await expect(prov).toHaveText(/simulated demo city/i);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Ho Chi Minh City");
+    // No outlines and no satellite plate for the demo city: bars on the plain plate.
+    expect(state.districtShape).toBe("bar");
+    expect(state.plate).toBe("none");
+    await expect(page.getByTestId("xr-imagery-credit")).toHaveCount(0);
     // The in-scene label that rides with the model into a VR headset.
     await expect
       .poll(() => page.evaluate(() => window.__pythiaXr.sceneLabel))
       .toMatch(/^Ho Chi Minh City · Simulated demo city \|/);
+  });
+
+  test("gsc-2026 #2: the city rises with its plate, scenario rain and truck flows", async ({ page }) => {
+    const sceneFor = async (rain) =>
+      (
+        await page.request.get(`${API}/twin/scene?city=jakarta&days=7${rain ? `&rainfall_mm=${rain}` : ""}`, {
+          timeout: 45000,
+        })
+      ).json();
+    // One dot per 4 trucks of the day's trucks_required (TRUCKS_PER_DOT), rounded per district.
+    const dots = (scene, day = 0) =>
+      scene.districts.reduce((sum, d) => {
+        const trucks = d.series[day]?.trucks_required || 0;
+        return sum + (trucks > 0 ? Math.round(trucks / 4) : 0);
+      }, 0);
+    const hook = (key) => page.evaluate((k) => window.__pythiaXr[k], key);
+
+    const dry = await sceneFor(0);
+    await page.goto("/xr?city=jakarta&lang=en");
+    const state = await waitForXr(page);
+    // Extruded outlines when the scene sends them, bars otherwise.
+    const outlined = dry.districts.every((d) => Array.isArray(d.outline) && d.outline.length >= 3);
+    expect(state.districtShape).toBe(outlined ? "prism" : "bar");
+    expect(state.bars).toBe(42);
+    expect(state.rainParticles).toBe(0);
+    expect(dots(dry)).toBeGreaterThan(0);
+    expect(state.flowCount).toBe(dots(dry));
+    // The satellite plate loads from public/ and its licence credit is on screen and on the panel.
+    await expect.poll(() => hook("plate"), { timeout: 15000 }).toBe("loaded");
+    await expect(page.getByTestId("xr-imagery-credit")).toContainText(
+      "EOxCloudless 2016 by EOX IT Services GmbH",
+    );
+    await expect(page.getByTestId("xr-imagery-credit")).toContainText("CC BY 4.0");
+    await expect(page.getByTestId("xr-flow-note")).toContainText("not live GPS");
+    const panel = await hook("panelText");
+    expect(panel).toContain("Jakarta · Model output — Forecast by district model, not live measurement");
+    expect(panel).toContain("CC BY 4.0");
+    // #xr-crew-rule: equal truck and crew counts name the one-crew-per-truck rule
+    // with the scene's crew size, in the readout and on the in-scene panel.
+    expect(dry.horizon.daily_crews_required[0]).toBe(dry.horizon.daily_trucks_required[0]);
+    const crewRule = `1 crew per truck (${dry.summary.crew_size_workers} workers)`;
+    await expect(page.getByTestId("xr-crew-rule")).toHaveText(crewRule);
+    expect(panel).toContain(`Crews · ${crewRule}`);
+
+    // The flows follow the selected day.
+    await page.getByTestId("xr-day-next").click();
+    await expect.poll(() => hook("flowCount")).toBe(dots(dry, 1));
+
+    // Rain: particles ∝ the scene's rainfall, and the heavier scenario moves the flows.
+    const wet = await sceneFor(80);
+    await page.goto("/xr?city=jakarta&lang=en&rainfall_mm=80");
+    await waitForXr(page);
+    await expect.poll(() => hook("rainParticles")).toBe(80 * 12);
+    expect(await hook("flowCount")).toBe(dots(wet));
+    expect(dots(wet)).not.toBe(dots(dry));
+    await expect(page.getByTestId("xr-flow-note")).toContainText("not live weather");
   });
 
   test("the in-scene provenance label follows the language", async ({ page }) => {
@@ -125,10 +185,11 @@ test.describe("XR tabletop twin", () => {
       return {
         header: fire(document.querySelector(".xr-head h1")),
         controls: fire(document.querySelector("[data-testid=xr-day-next]")),
+        credit: fire(document.querySelector("[data-testid=xr-imagery-credit]")),
         spacer: fire(document.querySelector(".xr-spacer")),
       };
     });
-    expect(prevented).toEqual({ header: true, controls: true, spacer: false });
+    expect(prevented).toEqual({ header: true, controls: true, credit: true, spacer: false });
   });
 
   test("the boot fallback is localised", async ({ page }) => {
