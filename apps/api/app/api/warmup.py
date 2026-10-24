@@ -2,14 +2,40 @@
 
 from __future__ import annotations
 
-import time
+import inspect
+from typing import Any
 
 from app.api.routers.fleet import command_center, fleet_map_truth
 from app.api.routers.forecast import predictions_kecamatan
+from app.api.routers.operations import get_tpa_queue_status
 from app.api.routers.twin import twin_scene
-from app.api.state import _tpa_cache
-from app.fleet.data import TRUCKS, _route_b_osrm, tpa_queue_status_payload
+from app.fleet.data import TRUCKS, _route_b_osrm
 from app.fleet.map_truth import _snapped_for, build_map_truth
+
+
+def warm_twin_scene() -> dict[str, Any]:
+    """Build the scene a bare `/twin` load requests: default city, no rain, no
+    event, today. Raises on failure; the startup caller logs it.
+
+    Called as a plain function, an omitted argument would stay a FastAPI
+    `Query(...)` marker instead of its value (the previous call left `venue`
+    and `day` out and failed on every start). Every argument is therefore the
+    route's own declared default, so the warm entry is exactly the one a
+    request without a query string hits, even when the route gains parameters.
+    """
+    defaults = {
+        name: getattr(param.default, "default", param.default)
+        for name, param in inspect.signature(twin_scene).parameters.items()
+    }
+    return twin_scene(**defaults)
+
+
+def warm_tpa_queue() -> None:
+    """Fill the `/api/tpa/queue-status` cache under the keys the route reads
+    ("live" and "peak"), through the route itself. Writing a bare `payload`
+    key, as before, left the route's cache empty."""
+    for scenario in ("live", "peak"):
+        get_tpa_queue_status(scenario=scenario)
 
 
 def _warm_route_cache() -> None:
@@ -66,8 +92,7 @@ def _warm_route_cache() -> None:
     except Exception as e:
         print("Kecamatan endpoint warmup failed:", e)
     try:
-        _tpa_cache["payload"] = tpa_queue_status_payload()
-        _tpa_cache["ts"] = time.time()
+        warm_tpa_queue()
         print("TPA cache warmed.")
     except Exception as e:
         print("TPA warmup failed:", e)
@@ -75,9 +100,7 @@ def _warm_route_cache() -> None:
     # cold start (~90 s); warming the shared Prophet cache here (main thread,
     # same xgboost constraint as above) keeps scenario changes at ~1 s.
     try:
-        twin_scene(
-            city="jakarta", days=7, rainfall_mm=0.0, event_attendance=0, event_lat=None, event_lng=None
-        )
+        warm_twin_scene()
         print("Twin scene warmed.")
     except Exception as e:
         print("Twin scene warmup failed:", e)
