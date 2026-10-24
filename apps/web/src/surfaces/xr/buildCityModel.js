@@ -24,7 +24,7 @@ export const RISK_COLORS = {
 };
 export const RISK_LEVELS = ["normal", "elevated", "high", "critical"];
 
-const LANDFILL_COLOR = "#b53b1a";
+const LANDFILL_COLOR = "#16613a";
 const PLATE_COLOR = "#1d2e28";
 const PLATE_TOP_COLOR = "#24382f";
 const GRID_COLOR = "#33493f";

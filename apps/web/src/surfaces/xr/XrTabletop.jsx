@@ -120,17 +120,17 @@ function makeLabelSprite(lines) {
   if (ctx.roundRect) ctx.roundRect(4, 4, canvas.width - 8, canvas.height - 8, 28);
   else ctx.rect(4, 4, canvas.width - 8, canvas.height - 8);
   ctx.fill();
-  ctx.strokeStyle = "#e85d32";
+  ctx.strokeStyle = "#2fb36a";
   ctx.lineWidth = 6;
   ctx.stroke();
   ctx.fillStyle = "#ffffff";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = "700 64px 'Plus Jakarta Sans', system-ui, sans-serif";
+  ctx.font = "700 64px 'Inter Tight', Inter, system-ui, sans-serif";
   ctx.fillText(lines[0] || "", canvas.width / 2, lines[1] ? 72 : canvas.height / 2, canvas.width - 64);
   if (lines[1]) {
     ctx.fillStyle = "#cfe0d8";
-    ctx.font = "500 40px 'Plus Jakarta Sans', system-ui, sans-serif";
+    ctx.font = "500 40px 'Inter Tight', Inter, system-ui, sans-serif";
     ctx.fillText(lines[1], canvas.width / 2, 146, canvas.width - 64);
   }
   const texture = new THREE.CanvasTexture(canvas);

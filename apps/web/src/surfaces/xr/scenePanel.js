@@ -17,12 +17,12 @@ export const PANEL_HEIGHT_M = (PANEL_WIDTH_M * H) / W;
 
 const COLORS = {
   panel: "rgba(19, 33, 29, 0.94)",
-  edge: "#e85d32",
+  edge: "#2fb36a",
   text: "#ffffff",
   muted: "#cfe0d8",
   button: "#2c4038",
   buttonEdge: "#5d7a6d",
-  active: "#e85d32",
+  active: "#16613a",
 };
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -64,7 +64,7 @@ export function createScenePanel() {
     let y = PAD;
     lines.slice(0, 3).forEach((line, i) => {
       ctx.fillStyle = i === 0 ? COLORS.text : COLORS.muted;
-      ctx.font = `${i === 0 ? 700 : 500} 34px 'Plus Jakarta Sans', system-ui, sans-serif`;
+      ctx.font = `${i === 0 ? 700 : 500} 34px 'Inter Tight', Inter, system-ui, sans-serif`;
       ctx.fillText(line, PAD, y + LINE_H / 2, W - PAD * 2);
       y += LINE_H;
     });
@@ -72,7 +72,7 @@ export function createScenePanel() {
     targets = [];
     rows.forEach((row) => {
       ctx.fillStyle = COLORS.muted;
-      ctx.font = "600 32px 'Plus Jakarta Sans', system-ui, sans-serif";
+      ctx.font = "600 32px 'Inter Tight', Inter, system-ui, sans-serif";
       ctx.textAlign = "left";
       ctx.fillText(row.label, PAD, y + ROW_H / 2, LABEL_W - 12);
       const count = row.buttons.length;
@@ -89,7 +89,7 @@ export function createScenePanel() {
           ctx.stroke();
         }
         ctx.fillStyle = button.disabled && !button.active ? COLORS.muted : COLORS.text;
-        ctx.font = `${button.active ? 700 : 600} 34px 'Plus Jakarta Sans', system-ui, sans-serif`;
+        ctx.font = `${button.active ? 700 : 600} 34px 'Inter Tight', Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.fillText(button.label, x + bw / 2, y + ROW_H / 2, bw - 16);
         if (!button.disabled) targets.push({ id: button.id, x, y, w: bw, h: ROW_H });
