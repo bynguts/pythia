@@ -332,6 +332,21 @@ export function stepSpeedLock(state, fix) {
 
 /** Spotter mode applies within this distance of the TPA facility point. */
 export const TPA_SPOTTER_RADIUS_M = 1500;
+
+/**
+ * Distance from the fix to the served TPA facility point (queue-status
+ * lat/lng) and whether spotter mode applies there. Distance is null while
+ * either point is missing; that is never "near".
+ */
+export function tpaSpotterRange(fix, tpaPoint, radius = TPA_SPOTTER_RADIUS_M) {
+  if (!hasCoordinate(fix) || !hasCoordinate(tpaPoint)) return { distance: null, near: false };
+  const distance = haversineMeters(
+    { lat: Number(fix.lat), lng: Number(fix.lng) },
+    { lat: Number(tpaPoint.lat), lng: Number(tpaPoint.lng) },
+  );
+  return { distance, near: distance <= radius };
+}
+
 /**
  * Daily rain above this is a no-go for crews on the tipping face: BMKG
  * classes 20–50 mm/day as moderate rain, when the waste slope turns slick.

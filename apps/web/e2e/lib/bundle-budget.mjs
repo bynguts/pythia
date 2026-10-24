@@ -27,8 +27,11 @@ const BUDGETS = {
   // mounts. (A separate deck.gl vendor chunk would pull Vite's preload helper
   // into it and onto the startup path.)
   TwinWorkspace: 1100 * KB,
-  // the /xr tabletop bundles three.js; it loads only on /xr.
+  // the /xr tabletop; it loads only on /xr.
   XrTabletop: 700 * KB,
+  // three.js, shared by the /xr tabletop and the driver's WebXR street path;
+  // loaded only by those lazy chunks.
+  three: 650 * KB,
   // PDF tooling: loaded on demand from ReportActions only.
   html2pdf: 1100 * KB,
   // Any other lazy chunk.
@@ -41,6 +44,7 @@ function budgetFor(name) {
   if (name.startsWith("maplibre")) return BUDGETS.maplibre;
   if (name.startsWith("TwinWorkspace") && name.endsWith(".js")) return BUDGETS.TwinWorkspace;
   if (name.startsWith("XrTabletop") && name.endsWith(".js")) return BUDGETS.XrTabletop;
+  if (name.startsWith("three.module") && name.endsWith(".js")) return BUDGETS.three;
   if (name.startsWith("LiveFleetMap")) return name.endsWith(".js") ? BUDGETS.LiveFleetMap : BUDGETS.default;
   if (name.startsWith("html2pdf")) return BUDGETS.html2pdf;
   if (name.startsWith("index-") && name.endsWith(".js")) return BUDGETS.main;

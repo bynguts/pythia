@@ -15,7 +15,7 @@
 // FIX_STALE_MS → capture disabled until a fresh fix arrives; no stop
 // coordinate → an honest "no coordinate" state with no arrow at all; vehicle
 // speed for several fixes → the AR view locks until the phone is on foot.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Camera,
@@ -26,6 +26,7 @@ import {
   HardHat,
   LocateFixed,
   MapPinOff,
+  Navigation,
   Route,
   Truck,
   X,
@@ -37,7 +38,6 @@ import {
   OFF_ROUTE_M,
   RAIN_NO_GO_MM,
   SPEED_LOCK_KMH,
-  TPA_SPOTTER_RADIUS_M,
   cardinal,
   formatDistance,
   hasCoordinate,
@@ -50,9 +50,14 @@ import {
   relativeAngle,
   routeTarget,
   stepSpeedLock,
+  tpaSpotterRange,
   unwrapAngle,
 } from "./arMath.js";
+import { WORLD_SPEED_LOCK_KMH, stepWorldSpeed } from "./geoEnu.js";
 import "./ar.css";
+
+// WebXR street path: three.js stays in its own lazy chunk.
+const ArWorldPath = lazy(() => import("./ArWorldPath.jsx").then((m) => ({ default: m.ArWorldPath })));
 
 // Absolute-orientation events arrive within a few hundred ms on phones that
 // have a magnetometer; after this window the device is treated as compass-less.
@@ -170,6 +175,15 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
   // Safety lock: AR is for crews on foot, so vehicle speed locks the view.
   const speedRef = useRef(null);
   const [speedLock, setSpeedLock] = useState({ locked: false, speed: null });
+  // WebXR street path: offered only where immersive-ar is supported. `world`
+  // holds the pending session while it runs; the street path also closes on
+  // two fixes above WORLD_SPEED_LOCK_KMH (stopped-only AR).
+  const worldRootRef = useRef(null);
+  const worldSpeedRef = useRef(null);
+  const [xrSupported, setXrSupported] = useState(false);
+  const [world, setWorld] = useState(null);
+  const [worldEnd, setWorldEnd] = useState(null);
+  const [worldFast, setWorldFast] = useState(false);
   // Planned path of the truck's active SPJ: null = not loaded, [] = none.
   const [activePath, setActivePath] = useState(null);
   // TPA spotter mode: simulated queue + rain forecast at the tipping area.
@@ -232,9 +246,25 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
     return () => window.clearInterval(id);
   }, [hasTarget]);
 
-  // ── Camera passthrough ──
+  // ── WebXR support: the street path button exists only where it can work ──
   useEffect(() => {
-    if (!hasTarget) return undefined;
+    if (!hasTarget || !navigator.xr?.isSessionSupported) return undefined;
+    let cancelled = false;
+    navigator.xr
+      .isSessionSupported("immersive-ar")
+      .then((ok) => {
+        if (!cancelled) setXrSupported(ok === true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [hasTarget]);
+
+  // ── Camera passthrough (released while the WebXR session owns the camera) ──
+  const worldOn = world !== null;
+  useEffect(() => {
+    if (!hasTarget || worldOn) return undefined;
     if (!navigator.mediaDevices?.getUserMedia) {
       setCamera("unavailable");
       return undefined;
@@ -271,7 +301,7 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
       if (stream) stream.getTracks().forEach((track) => track.stop());
       if (video) video.srcObject = null;
     };
-  }, [hasTarget]);
+  }, [hasTarget, worldOn]);
 
   // ── GPS ──
   useEffect(() => {
@@ -292,6 +322,8 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
         });
         speedRef.current = lock;
         setSpeedLock((prev) => ({ locked: lock.locked, speed: lock.speed ?? prev.speed }));
+        worldSpeedRef.current = stepWorldSpeed(worldSpeedRef.current, lock.speed);
+        setWorldFast(worldSpeedRef.current.locked);
         setFix({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
@@ -411,7 +443,42 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
     else if (distance > ARRIVAL_EXIT_M) setArrived(false);
   }, [distance, fixFresh]);
 
-  const view = camera === "live" ? "camera" : "compass";
+  // Stopped-only AR: moving closes the street path (both speed rules).
+  useEffect(() => {
+    if (world && (speedLocked || worldFast)) {
+      setWorld(null);
+      setWorldEnd("speed");
+    }
+  }, [world, speedLocked, worldFast]);
+  // After a speed exit the camera AR stays hidden behind the plain arrow card
+  // until the phone is back at or below WORLD_SPEED_LOCK_KMH.
+  const worldStopped = worldEnd === "speed" && worldFast;
+
+  const startWorld = () => {
+    const root = worldRootRef.current;
+    if (!navigator.xr?.requestSession || !root || worldFast || speedRef.current?.locked) return;
+    // ARCore needs the camera: release the passthrough stream first.
+    videoRef.current?.srcObject?.getTracks?.().forEach((track) => track.stop());
+    let sessionPromise;
+    try {
+      // Requested inside the click (user activation); three.js loads meanwhile.
+      sessionPromise = navigator.xr.requestSession("immersive-ar", {
+        optionalFeatures: ["local-floor", "dom-overlay"],
+        domOverlay: { root },
+      });
+    } catch (error) {
+      sessionPromise = Promise.reject(error);
+    }
+    sessionPromise.catch(() => {});
+    setWorldEnd(null);
+    setWorld({ sessionPromise });
+  };
+  const endWorld = (reason) => {
+    setWorld(null);
+    setWorldEnd(reason === "error" ? "error" : null);
+  };
+
+  const view = camera === "live" && !worldStopped ? "camera" : "compass";
   // The floor arrow reads as anchored in the street, so it is only drawn when
   // a live compass makes that true; otherwise the honest 2D compass card.
   const stageMode = view === "camera" && compassLive ? "floor" : "card";
@@ -526,8 +593,7 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
   // TPA spotter: the facility point comes from the queue-status payload.
   const queue = site.queue;
   const tpaPoint = queue && hasCoordinate(queue) ? { lat: Number(queue.lat), lng: Number(queue.lng) } : null;
-  const tpaDistance = fix && tpaPoint ? haversineMeters(fix, tpaPoint) : null;
-  const nearTpa = tpaDistance !== null && tpaDistance <= TPA_SPOTTER_RADIUS_M;
+  const { distance: tpaDistance, near: nearTpa } = tpaSpotterRange(fix, tpaPoint);
   const tpaName = queue?.facility_name || "TPA";
   const rain = site.weather ? rainNoGo(site.weather.forecast, localIsoDate(new Date())) : null;
   const rainText = rain
@@ -536,6 +602,12 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
         .replace("{date}", rain.date || "—")
         .replace("{n}", RAIN_NO_GO_MM)
     : t("drv_ar_rain_unknown");
+
+  // The modelled peak hour the queue figures describe (never the wall clock):
+  // localized from modelled_hour, else the backend's own hour_label.
+  const peakHour = Number.isInteger(queue?.modelled_hour)
+    ? t("ar_world_peak_hour").replace("{h}", `${String(queue.modelled_hour).padStart(2, "0")}:00`)
+    : queue?.hour_label || "";
 
   let spotterBody;
   if (site.status !== "ready") {
@@ -574,6 +646,7 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
               {t("drv_ar_spotter_arrivals").replace("{n}", queue.arrivals_per_hour)}
             </li>
           )}
+          {peakHour && <li data-testid="ar-spotter-peak-hour">{peakHour}</li>}
           <li>
             {t("drv_ar_spotter_wait")
               .replace(
@@ -621,6 +694,7 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
       data-route-mode={route ? "route" : "straight"}
       data-speed-locked={speedLocked ? "true" : "false"}
       data-spotter={spotter ? "true" : "false"}
+      data-world={worldOn ? "on" : "off"}
     >
       <video
         ref={videoRef}
@@ -630,7 +704,7 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
         muted
         autoPlay
         aria-hidden="true"
-        hidden={view !== "camera" || speedLocked}
+        hidden={view !== "camera" || speedLocked || worldOn}
       />
 
       <header className="ar-top">
@@ -686,7 +760,7 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
             </p>
           )}
         </section>
-      ) : (
+      ) : worldOn ? null : (
         <>
           <div className="ar-stage" aria-live="polite">
             {arrowAngle === null ? (
@@ -765,6 +839,17 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
             >
               <HardHat size={16} aria-hidden="true" /> {t("drv_ar_spotter_toggle")}
             </button>
+            {xrSupported && (
+              <button
+                type="button"
+                className="ar-mode-toggle"
+                data-testid="ar-world-open"
+                onClick={startWorld}
+                disabled={worldFast}
+              >
+                <Navigation size={16} aria-hidden="true" /> {t("ar_world_open")}
+              </button>
+            )}
             {spotter ? (
               <div className="ar-spotter" data-testid="ar-spotter" aria-live="polite">
                 {spotterBody}
@@ -804,8 +889,19 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
                 </p>
               </>
             )}
-            {(notice || cameraNotice || staleNotice) && (
+            {(notice || cameraNotice || staleNotice || worldEnd) && (
               <ul className="ar-notices">
+                {worldEnd === "speed" && (
+                  <li className="warn" data-testid="ar-world-stopped-only">
+                    <Gauge size={14} aria-hidden="true" />{" "}
+                    {t("ar_world_stopped_only").replace("{n}", WORLD_SPEED_LOCK_KMH)}
+                  </li>
+                )}
+                {worldEnd === "error" && (
+                  <li className="warn" data-testid="ar-world-error">
+                    <AlertTriangle size={14} aria-hidden="true" /> {t("ar_world_error")}
+                  </li>
+                )}
                 {staleNotice && (
                   <li className="warn" role="alert" data-testid="ar-gps-stale">
                     <AlertTriangle size={14} aria-hidden="true" /> {staleNotice}
@@ -833,6 +929,27 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
             </p>
           </section>
         </>
+      )}
+
+      {/* WebXR dom-overlay root: present (hidden) whenever the street path is
+          offered, because requestSession needs it inside the click. */}
+      {hasTarget && xrSupported && (
+        <div ref={worldRootRef} className="ar-world-root" data-testid="ar-world" hidden={!worldOn}>
+          {worldOn && !speedLocked && (
+            <Suspense fallback={null}>
+              <ArWorldPath
+                sessionPromise={world.sessionPromise}
+                fix={fix}
+                heading={compassLive ? heading : null}
+                leg={leg}
+                target={target}
+                routeMode={route ? "route" : "straight"}
+                routeReason={route ? "" : t(ROUTE_REASON_KEYS[routeReason]).replace("{n}", OFF_ROUTE_M)}
+                onExit={endWorld}
+              />
+            </Suspense>
+          )}
+        </div>
       )}
     </div>
   );

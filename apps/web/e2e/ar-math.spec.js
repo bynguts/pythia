@@ -1,6 +1,7 @@
 // gsc-2026 P1-11: route-following arrow, speed lock and TPA spotter math for AR on foot.
 // Pure functions only: arMath.js is imported straight into the test runner,
-// no page and no backend, so these run without a browser.
+// no page, so these run without a browser. Only the TPA spotter test reads
+// the facility point the backend serves.
 import { expect, test } from "@playwright/test";
 import {
   LOOKAHEAD_MAX_M,
@@ -9,6 +10,7 @@ import {
   RAIN_NO_GO_MM,
   SPEED_LOCK_FIXES,
   SPEED_LOCK_KMH,
+  TPA_SPOTTER_RADIUS_M,
   cumulativeLengths,
   fixSpeed,
   haversineMeters,
@@ -20,7 +22,10 @@ import {
   routeTarget,
   snapToPath,
   stepSpeedLock,
+  tpaSpotterRange,
 } from "../src/surfaces/driver/arMath.js";
+
+const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
 // An L-shaped planned leg in Jakarta: stop A, 400 m east to a corner C,
 // 400 m north to stop B. Offsets are metres converted at this latitude.
@@ -170,6 +175,32 @@ test("speed lock engages after sustained vehicle speed and releases on foot", ()
   }
   expect(derived.locked).toBe(true);
   expect(derived.speed).toBeGreaterThan(SPEED_LOCK_KMH / 3.6);
+});
+
+test("TPA spotter triggers at the served Bantargebang point and not 3 km away", async ({ request }) => {
+  // The spotter measures from the queue-status point, as ArNavigator does.
+  const res = await request.get(`${API}/tpa/queue-status`);
+  expect(res.ok()).toBeTruthy();
+  const queue = await res.json();
+  expect(queue.facility_name).toBe("TPST Bantargebang");
+  const tpa = { lat: queue.lat, lng: queue.lng };
+
+  expect(tpaSpotterRange(tpa, tpa)).toEqual({ distance: 0, near: true });
+  const onSite = tpaSpotterRange({ lat: tpa.lat + 1000 / 111195, lng: tpa.lng }, tpa);
+  expect(onSite.near).toBe(true);
+  const away = tpaSpotterRange({ lat: tpa.lat + 3000 / 111195, lng: tpa.lng }, tpa);
+  expect(away.distance).toBeCloseTo(3000, -1);
+  expect(away.near).toBe(false);
+
+  // The old point was the A* weighbridge-approach node outside the landfill:
+  // measured from it, a crew at the facility was out of spotter range.
+  const weighbridgeApproach = { lat: -6.331, lng: 106.991 };
+  expect(tpaSpotterRange(tpa, weighbridgeApproach).near).toBe(false);
+  expect(haversineMeters(tpa, weighbridgeApproach)).toBeGreaterThan(TPA_SPOTTER_RADIUS_M);
+
+  // No fix or no served point is never "near".
+  expect(tpaSpotterRange(null, tpa)).toEqual({ distance: null, near: false });
+  expect(tpaSpotterRange(tpa, null)).toEqual({ distance: null, near: false });
 });
 
 test("rain no-go reads today's forecast against the threshold", () => {

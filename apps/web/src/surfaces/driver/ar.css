@@ -646,6 +646,119 @@
   font-weight: 600;
 }
 
+/* ── WebXR street path ── */
+
+.ar-mode-toggle:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* dom-overlay root: transparent so the camera passthrough shows through in
+   the immersive session; only the HUD panel is opaque. */
+.ar-world-root {
+  position: relative;
+  z-index: 1;
+  grid-row: 2 / 4;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.ar-world-root[hidden] {
+  display: none;
+}
+
+.ar-world-hud {
+  pointer-events: auto;
+  width: min(100%, 560px);
+  margin: 0 auto;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-4) max(env(safe-area-inset-bottom), var(--space-4));
+  border-radius: 28px 28px 0 0;
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+  box-shadow: var(--ui-shadow-float);
+}
+
+.ar-world-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.ar-world-head h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.ar-world-exit,
+.ar-world-nudge {
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 var(--space-3);
+  border-radius: var(--ui-radius-pill);
+  border: 1px solid var(--ui-border-strong);
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ar-world-exit:focus-visible,
+.ar-world-nudge:focus-visible {
+  outline: 3px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+.ar-world-status,
+.ar-world-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--fs-caption);
+  line-height: 1.35;
+  color: var(--ui-ink-soft);
+}
+
+.ar-world-line svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.ar-world-line.is-warn {
+  color: var(--ui-warning);
+}
+
+.ar-world-align {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ar-world-align-value {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 @media (max-height: 640px) {
   .ar-distance {
     font-size: 32px;
