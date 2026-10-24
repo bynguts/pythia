@@ -139,12 +139,13 @@ def simulate_queue(
 
 
 # ── The one metric: TPA queue minutes per truck (gsc P0-5) ────────────────
-# One operating day at the Bantargebang weighbridges, simulated twice with the
-# same random draws (common random numbers): once with every truck of a shift
-# leaving the depot at shift start (unstaggered), once with departures spread
-# over 15-minute slots (the recommended stagger). The daily arrival count comes
-# from the real weighbridge intake file; every other parameter below is a
-# labelled model assumption, not a facility measurement.
+# One operating day at the Bantargebang weighbridges, simulated with the same
+# random draws (common random numbers) for each arm: the "current practice"
+# baseline, where each shift's trucks leave the depot around shift start with a
+# stated departure spread, and the recommended stagger, where departures are
+# spread over 15-minute slots. The daily arrival count comes from the real
+# weighbridge intake file; every other parameter below is a labelled model
+# assumption, not a facility measurement.
 QUEUE_METRIC_SEED = 42
 QUEUE_METRIC_REPLICATIONS = 100
 COLLECTION_ROUND_MEAN_H = 3.0  # assumption: depot -> collection round -> TPA gate
@@ -152,6 +153,19 @@ COLLECTION_ROUND_SD_H = 0.75
 SHIFTS_PER_DAY = 2
 FIRST_SHIFT_START_HOUR = 6  # 06:00 WIB
 STAGGER_SLOT_MINUTES = 15
+# Current-practice baseline (gsc teardown #3): departures are a normal around
+# shift start, truncated at +/- DEPARTURE_TRUNCATION_SD standard deviations.
+# No DLH dispatch log publishes the real spread, so the headline uses a stated
+# 30-minute SD and the payload reports the same day under the tightest and the
+# loosest plausible spreads (the sensitivity band), never one chosen point.
+BASELINE_DEPARTURE_SD_MINUTES = 30.0
+DEPARTURE_SD_BAND_MINUTES = (10.0, 30.0, 60.0)
+DEPARTURE_TRUNCATION_SD = 2.0
+BASELINE_ASSUMPTION = (
+    "assumption (current practice): each shift's trucks leave the depot around shift start, "
+    f"normal departure spread SD {BASELINE_DEPARTURE_SD_MINUTES:g} min truncated at "
+    f"+/-{DEPARTURE_TRUNCATION_SD:g} SD; not a dispatch-log measurement"
+)
 WEIGHING_CSV = REAL_DIR / "bantargebang_hasil_penimbangan.csv"
 
 
@@ -196,23 +210,65 @@ def stagger_slot_count() -> int:
     return max(1, int((SHIFT_HOURS - COLLECTION_ROUND_MEAN_H) * 60 // STAGGER_SLOT_MINUTES))
 
 
-def _arrival_hours(trips: int, staggered: bool, rng: random.Random) -> list[float]:
-    """Gate arrival times (hours after the first shift start) for one day."""
+def _departure_z(trips: int, seed: int, replication: int) -> list[float]:
+    """Standard-normal departure draws truncated at +/- DEPARTURE_TRUNCATION_SD, one per trip.
+
+    A stream of its own (seeded by seed and replication, not by the SD), so every
+    departure spread of the band scales the same draws and the collection-round
+    and weigh-cycle draws stay common to every arm.
+    """
+    rng = random.Random(f"departure-{seed}-{replication}")
+    draws: list[float] = []
+    for _ in range(trips):
+        z = rng.gauss(0.0, 1.0)
+        while abs(z) > DEPARTURE_TRUNCATION_SD:
+            z = rng.gauss(0.0, 1.0)
+        draws.append(z)
+    return draws
+
+
+def _arrival_hours(trips: int, rng: random.Random, departure_offsets_h: list[float] | None) -> list[float]:
+    """Gate arrival times (hours after the first shift start) for one day.
+
+    `departure_offsets_h` (one per trip, hours from its shift start) is the
+    current-practice baseline; None is the recommended 15-minute stagger.
+    """
     slots = stagger_slot_count()
     arrivals: list[float] = []
+    trip = 0
     for shift in range(SHIFTS_PER_DAY):
         start = shift * SHIFT_HOURS
         count = trips // SHIFTS_PER_DAY + (1 if shift < trips % SHIFTS_PER_DAY else 0)
         for i in range(count):
-            depart = start + ((i % slots) * STAGGER_SLOT_MINUTES / 60.0 if staggered else 0.0)
-            arrivals.append(depart + max(0.5, rng.gauss(COLLECTION_ROUND_MEAN_H, COLLECTION_ROUND_SD_H)))
+            if departure_offsets_h is None:
+                offset = (i % slots) * STAGGER_SLOT_MINUTES / 60.0
+            else:
+                offset = departure_offsets_h[trip]
+            trip += 1
+            arrivals.append(
+                start + offset + max(0.5, rng.gauss(COLLECTION_ROUND_MEAN_H, COLLECTION_ROUND_SD_H))
+            )
     arrivals.sort()
     return arrivals
 
 
+def _baseline_offsets(z: list[float], sd_minutes: float) -> list[float]:
+    return [d * sd_minutes / 60.0 for d in z]
+
+
+def baseline_departure_sd_minutes(
+    trucks_per_day: int, sd_minutes: float = BASELINE_DEPARTURE_SD_MINUTES
+) -> float:
+    """Realised SD (minutes) of the baseline's departure offsets for replication 0 of the metric seed."""
+    offsets = _baseline_offsets(_departure_z(trucks_per_day, QUEUE_METRIC_SEED, 0), sd_minutes)
+    return statistics.pstdev(offsets) * 60.0
+
+
 def _day_trace(arrivals: list[float], lanes: int, rng: random.Random) -> tuple[list[float], list[int]]:
     """FIFO multi-lane weighbridge. Per truck: (wait minutes, trucks queued ahead on arrival)."""
-    free_at = [0.0] * lanes
+    # Lanes are free before the first arrival, which may precede 06:00 when a
+    # baseline truck leaves the depot before shift start.
+    free_at = [float("-inf")] * lanes
     starts: list[float] = []
     waits: list[float] = []
     queued: list[int] = []
@@ -250,7 +306,7 @@ def queue_minutes_per_truck(
     replications: int = QUEUE_METRIC_REPLICATIONS,
     arrivals_source: str = "caller-supplied daily truck arrivals",
 ) -> dict[str, Any] | None:
-    """TPA queue minutes per truck: unstaggered baseline vs the recommended stagger.
+    """TPA queue minutes per truck: current-practice baseline vs the recommended stagger.
 
     Deterministic for a seed, so the simulation is cached keyed by (trucks/day,
     seed, replications) only; the source text is added outside the cache, so
@@ -276,18 +332,30 @@ def queue_minutes_per_truck(
     }
 
 
+def _reduction_percent(baseline: float, staggered: float) -> float:
+    return round((baseline - staggered) / baseline * 100, 1) if baseline > 0 else 0.0
+
+
 @lru_cache(maxsize=64)
 def _simulate_day(trucks_per_day: int, seed: int, replications: int) -> dict[str, Any]:
-    """The cached simulation behind `queue_minutes_per_truck` (no source text)."""
-    runs: dict[bool, list[tuple[float, float, int]]] = {False: [], True: []}
-    for i in range(replications):
-        for staggered in (False, True):
-            rng = random.Random(seed * 100000 + i)  # same draws for both arms
-            arrivals = _arrival_hours(trucks_per_day, staggered, rng)
-            runs[staggered].append(_day_queue(arrivals, WEIGHBRIDGE_LANES, rng))
+    """The cached simulation behind `queue_minutes_per_truck` (no source text).
 
-    def summarise(staggered: bool) -> tuple[float, float, list[float], int]:
-        rows = runs[staggered]
+    Arms: the recommended stagger, and the current-practice baseline at every
+    departure spread of the sensitivity band (the headline spread among them).
+    """
+    sds = tuple(sorted(set(DEPARTURE_SD_BAND_MINUTES) | {BASELINE_DEPARTURE_SD_MINUTES}))
+    arms: tuple[float | None, ...] = (None, *sds)  # None = staggered
+    runs: dict[float | None, list[tuple[float, float, int]]] = {arm: [] for arm in arms}
+    for i in range(replications):
+        z = _departure_z(trucks_per_day, seed, i)
+        for arm in arms:
+            rng = random.Random(seed * 100000 + i)  # same draws for every arm
+            offsets = None if arm is None else _baseline_offsets(z, arm)
+            arrivals = _arrival_hours(trucks_per_day, rng, offsets)
+            runs[arm].append(_day_queue(arrivals, WEIGHBRIDGE_LANES, rng))
+
+    def summarise(arm: float | None) -> tuple[float, float, list[float], int]:
+        rows = runs[arm]
         means = [r[0] for r in rows]
         return (
             round(statistics.fmean(means), 1),
@@ -296,8 +364,23 @@ def _simulate_day(trucks_per_day: int, seed: int, replications: int) -> dict[str
             round(statistics.fmean(r[2] for r in rows)),
         )
 
-    b_mean, b_p95, b_ci, b_queue = summarise(False)
-    s_mean, s_p95, s_ci, s_queue = summarise(True)
+    b_mean, b_p95, b_ci, b_queue = summarise(BASELINE_DEPARTURE_SD_MINUTES)
+    s_mean, s_p95, s_ci, s_queue = summarise(None)
+    rows = []
+    for sd in sorted(DEPARTURE_SD_BAND_MINUTES):
+        mean, p95, ci, _queue = summarise(sd)
+        rows.append(
+            {
+                "departure_sd_minutes": sd,
+                "baseline_mean": mean,
+                "baseline_p95": p95,
+                "baseline_ci95": ci,
+                "reduction_minutes": round(mean - s_mean, 1),
+                "reduction_percent": _reduction_percent(mean, s_mean),
+            }
+        )
+    band_means = [row["baseline_mean"] for row in rows]
+    band_reductions = [row["reduction_percent"] for row in rows]
     return {
         "baseline_mean": b_mean,
         "staggered_mean": s_mean,
@@ -313,6 +396,19 @@ def _simulate_day(trucks_per_day: int, seed: int, replications: int) -> dict[str
         "baseline_max_queue": b_queue,
         "staggered_max_queue": s_queue,
         "recommended_stagger_minutes": STAGGER_SLOT_MINUTES,
+        "reduction_percent": _reduction_percent(b_mean, s_mean),
+        "baseline_departure_sd_minutes": BASELINE_DEPARTURE_SD_MINUTES,
+        # The headline is a range, not one chosen point: the same day and draws
+        # under the tightest and the loosest plausible departure spreads.
+        "sensitivity": {
+            "basis": (
+                "baseline re-run with the same draws at each departure SD; the staggered arm "
+                "does not depend on the baseline spread"
+            ),
+            "rows": rows,
+            "baseline_band": [min(band_means), max(band_means)],
+            "reduction_percent_band": [min(band_reductions), max(band_reductions)],
+        },
         "assumptions": {
             "weighbridge_lanes": WEIGHBRIDGE_LANES,
             "weigh_cycle_minutes": WEIGH_CYCLE_MINUTES,
@@ -321,7 +417,10 @@ def _simulate_day(trucks_per_day: int, seed: int, replications: int) -> dict[str
             "shifts_per_day": SHIFTS_PER_DAY,
             "shift_hours": SHIFT_HOURS,
             "first_shift_start_hour": FIRST_SHIFT_START_HOUR,
-            "baseline": "every truck of a shift departs the depot at shift start",
+            "baseline_departure_sd_minutes": BASELINE_DEPARTURE_SD_MINUTES,
+            "departure_truncation_sd": DEPARTURE_TRUNCATION_SD,
+            "sensitivity_departure_sd_minutes": list(sorted(DEPARTURE_SD_BAND_MINUTES)),
+            "baseline": BASELINE_ASSUMPTION,
             "staggered": f"departures spread over {STAGGER_SLOT_MINUTES}-minute slots",
         },
     }
@@ -385,17 +484,18 @@ def scenario_queue_metric(
     }
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=16)
 def hourly_queue_profile(
     trucks_per_day: int | None = None,
     seed: int = QUEUE_METRIC_SEED,
     replications: int = QUEUE_METRIC_REPLICATIONS,
 ) -> tuple[dict[str, Any], ...] | None:
-    """The metric's unstaggered baseline day, broken down by gate-arrival clock hour (WIB).
+    """The metric's current-practice baseline day, broken down by gate-arrival clock hour (WIB).
 
-    Same arrival model, lanes, weigh cycle and seeds as `queue_minutes_per_truck`
-    (the baseline arm's draws are identical), so the TPA status panel and the
-    daily metric cannot disagree. 24 rows; hours without arrivals read zero.
+    Same arrival model, headline departure spread, lanes, weigh cycle and seeds
+    as `queue_minutes_per_truck` (the baseline arm's draws are identical), so the
+    TPA status panel and the daily metric cannot disagree. 24 rows; hours
+    without arrivals read zero.
     """
     if trucks_per_day is None:
         derived = bantargebang_daily_arrivals()
@@ -408,7 +508,8 @@ def hourly_queue_profile(
     queued_ahead: list[list[int]] = [[] for _ in range(24)]
     for i in range(replications):
         rng = random.Random(seed * 100000 + i)
-        arrivals = _arrival_hours(trucks_per_day, False, rng)
+        offsets = _baseline_offsets(_departure_z(trucks_per_day, seed, i), BASELINE_DEPARTURE_SD_MINUTES)
+        arrivals = _arrival_hours(trucks_per_day, rng, offsets)
         day_waits, queued = _day_trace(arrivals, WEIGHBRIDGE_LANES, rng)
         hour_waits: dict[int, list[float]] = defaultdict(list)
         hour_queue: dict[int, int] = defaultdict(int)
@@ -441,4 +542,56 @@ def hourly_queue_profile(
                 "throughput_per_hour": capacity,
             }
         )
+    return tuple(rows)
+
+
+def modelled_peak_hour(trucks_per_day: int | None = None) -> dict[str, Any] | None:
+    """The modelled peak hour of a day: the clock hour with the most queue-minutes.
+
+    Reads the baseline day of `hourly_queue_profile` for `trucks_per_day` (the
+    normal day when None), so a beacon showing it and the daily metric for the
+    same truck count describe one day and one model. Never the wall clock.
+    """
+    profile = hourly_queue_profile(trucks_per_day)
+    if not profile:
+        return None
+    return max(profile, key=lambda r: r["arrivals"] * r["mean_wait_minutes"])
+
+
+def _clock(hours_after_first_shift: float) -> str:
+    minutes = round((FIRST_SHIFT_START_HOUR + hours_after_first_shift) * 60) % (24 * 60)
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+@lru_cache(maxsize=16)
+def peak_hour_weigh_ins(trucks_per_day: int, hour: int, count: int = 3) -> tuple[dict[str, Any], ...]:
+    """The first `count` gate arrivals of a clock hour on the metric's baseline day.
+
+    Replication 0 of the same seeded day as `hourly_queue_profile` (same draws,
+    departure spread, lanes and weigh cycle), so the TPA panel's weighbridge log
+    is that day's own simulated trucks, not hand-written entries. `truck` is the
+    arrival's rank in the simulated day, not a fleet unit; no weight is given
+    because the simulation does not model payloads.
+    """
+    rng = random.Random(QUEUE_METRIC_SEED * 100000)
+    offsets = _baseline_offsets(
+        _departure_z(trucks_per_day, QUEUE_METRIC_SEED, 0), BASELINE_DEPARTURE_SD_MINUTES
+    )
+    arrivals = _arrival_hours(trucks_per_day, rng, offsets)
+    waits, _queued = _day_trace(arrivals, WEIGHBRIDGE_LANES, rng)
+    rows = []
+    for rank, (arr, wait) in enumerate(zip(arrivals, waits, strict=True), start=1):
+        if int(FIRST_SHIFT_START_HOUR + arr) % 24 != hour:
+            continue
+        rows.append(
+            {
+                "truck": f"SIM-{rank:04d}",
+                "arrived": _clock(arr),
+                "weigh_start": _clock(arr + wait / 60.0),
+                "wait_minutes": round(wait, 1),
+                "source": "SIMULATED",
+            }
+        )
+        if len(rows) == count:
+            break
     return tuple(rows)

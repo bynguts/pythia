@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { apiFetch } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import { Clock } from "lucide-react";
-import { QueueMetricHeadline } from "./StaggerSimulatorPanel.jsx";
+import { modelledPeakLabel, QueueMetricHeadline } from "./StaggerSimulatorPanel.jsx";
 
 export function TpaQueuePanel() {
   const { t } = useLanguage();
@@ -11,11 +11,12 @@ export function TpaQueuePanel() {
   const [metric, setMetric] = useState(null);
   const [metricLoading, setMetricLoading] = useState(true);
   const [mode, setMode] = useState("live");
-  const [scenario, setScenario] = useState("peak");
 
-  async function fetchQueue(sc = scenario) {
+  // gsc teardown #3: the what-if status is the modelled peak hour of the metric's
+  // normal day (the API no longer serves a wall-clock hour of the modelled profile).
+  async function fetchQueue() {
     try {
-      const res = await apiFetch(`/tpa/queue-status?scenario=${sc}`);
+      const res = await apiFetch("/tpa/queue-status");
       if (res.ok) setQueue(await res.json());
     } catch {
       // API unreachable: keep the previous queue status
@@ -43,10 +44,10 @@ export function TpaQueuePanel() {
 
   useEffect(() => {
     if (mode !== "whatif") return;
-    fetchQueue(scenario);
-    const interval = setInterval(() => fetchQueue(scenario), 6000);
+    fetchQueue();
+    const interval = setInterval(fetchQueue, 6000);
     return () => clearInterval(interval);
-  }, [mode, scenario]);
+  }, [mode]);
 
   const congestionClass =
     {
@@ -125,18 +126,13 @@ export function TpaQueuePanel() {
         )
       ) : (
         <div className="tpa-whatif">
-          <div className="tpa-scenario-toggle" role="group" aria-label={t("tpa_scenario_aria")}>
-            {[
-              ["peak", t("tpa_scenario_peak")],
-              ["live", t("tpa_scenario_clock")],
-            ].map(([id, label]) => (
-              <button key={id} className={scenario === id ? "active" : ""} onClick={() => setScenario(id)}>
-                {label}
-              </button>
-            ))}
-          </div>
           {queue && (
             <>
+              {queue.modelled_hour != null && (
+                <p className="tpa-scenario-note" data-testid="tpa-modelled-hour">
+                  <strong>{modelledPeakLabel(t, queue.modelled_hour)}</strong>
+                </p>
+              )}
               {queue.arrival_profile && (
                 <p className="tpa-scenario-note">
                   {t("tpa_arrival_profile")} {queue.arrival_profile} · {queue.method}
@@ -179,21 +175,26 @@ export function TpaQueuePanel() {
 
               <div className="tpa-logs">
                 <h3>{t("tpa_log_title")}</h3>
-                <ul>
-                  {queue.scale_logs?.map((log, i) => (
-                    <li key={i}>
+                {/* Seeded simulation entries at the modelled peak hour, each labelled with its source. */}
+                <ul data-testid="tpa-scale-logs">
+                  {queue.scale_logs?.map((log) => (
+                    <li key={log.truck}>
                       <span className="time">
                         <Clock
                           size={12}
                           style={{ display: "inline-block", verticalAlign: "-1px", marginRight: "3px" }}
                         />
-                        {log.time}
+                        {log.arrived}
                       </span>
                       <span className="truck">{log.truck}</span>
                       <span className="weight">
-                        {log.weight_ton} {t("tpa_tons")}
+                        {t("tpa_log_weigh_in")
+                          .replace("{time}", log.weigh_start)
+                          .replace("{n}", Math.round(log.wait_minutes))}
                       </span>
-                      <span className={`status-badge ${log.status.toLowerCase()}`}>{log.status}</span>
+                      <span className="pill provenance-sim" data-testid="tpa-scale-log-source">
+                        {log.source === "SIMULATED" ? t("honesty_sim_badge") : log.source}
+                      </span>
                     </li>
                   ))}
                 </ul>

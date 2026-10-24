@@ -3,6 +3,13 @@ import { apiFetch } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import { RefreshCcw, Clock, ArrowRight } from "lucide-react";
 
+// The landfill beacon describes the modelled peak hour of a simulated day, never the
+// wall clock; every surface labels it the same way ("modelled peak hour 09:00").
+export function modelledPeakLabel(t, hour) {
+  if (hour === undefined || hour === null) return null;
+  return t("queue_modelled_peak").replace("{hour}", `${String(hour).padStart(2, "0")}:00`);
+}
+
 // gsc P0-5: the one metric, read from GET /api/tpa/queue-metric (seeded, cached, SIMULATED).
 export function QueueMetricHeadline({ metric, loading, testId }) {
   const { t } = useLanguage();
@@ -24,6 +31,20 @@ export function QueueMetricHeadline({ metric, loading, testId }) {
     .replace("{n}", shown(metric.replications))
     .replace("{seed}", shown(metric.seed))
     .replace("{trucks}", shown(metric.trucks_per_day));
+  // gsc teardown #3: the baseline is a range over plausible departure spreads, not one point.
+  const sensitivityRows = metric.sensitivity?.rows || [];
+  const [bandLow, bandHigh] = metric.sensitivity?.baseline_band || [];
+  const band =
+    sensitivityRows.length > 0
+      ? t("qm_band")
+          .replace("{low}", shown(bandLow))
+          .replace("{high}", shown(bandHigh))
+          .replace("{sd_lo}", shown(sensitivityRows[0].departure_sd_minutes))
+          .replace("{sd_hi}", shown(sensitivityRows[sensitivityRows.length - 1].departure_sd_minutes))
+          .replace("{sd}", shown(metric.baseline_departure_sd_minutes))
+          .replace("{lanes}", shown(metric.assumptions?.weighbridge_lanes))
+          .replace("{cycle}", shown(metric.assumptions?.weigh_cycle_minutes))
+      : null;
   return (
     <div
       className="queue-metric-headline"
@@ -40,6 +61,7 @@ export function QueueMetricHeadline({ metric, loading, testId }) {
         {metric.baseline_mean} → {metric.staggered_mean} {t("qm_min")}
       </strong>
       <small>{detail}</small>
+      {band && <small data-testid={`${testId}-band`}>{band}</small>}
     </div>
   );
 }
@@ -147,7 +169,7 @@ export function StaggerSimulatorPanel() {
       )}
       {metric?.baseline_mean > 0 && metric.assumptions?.baseline && (
         <p className="tpa-scenario-note" data-testid="stagger-baseline-assumption">
-          {t("stagger_baseline_assumption")}
+          {t("stagger_baseline_assumption").replace("{sd}", metric.baseline_departure_sd_minutes ?? "—")}
         </p>
       )}
 

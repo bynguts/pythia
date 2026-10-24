@@ -1,5 +1,6 @@
 """The one metric: TPA queue minutes per truck, unstaggered vs staggered (gsc P0-5)."""
 
+import time
 from unittest import mock
 
 import pytest
@@ -8,13 +9,19 @@ from app.ai.forecasters.queue_predictor import TpaQueuePredictor
 from app.fleet import data, queue_simulation
 from app.fleet.data import tpa_queue_status_payload
 from app.fleet.queue_simulation import (
+    BASELINE_DEPARTURE_SD_MINUTES,
+    DEPARTURE_SD_BAND_MINUTES,
+    DEPARTURE_TRUNCATION_SD,
     SCENARIO_TRUCK_STEP,
     WEIGHBRIDGE_ASSUMPTION,
     WEIGHBRIDGE_LANES,
     WEIGHBRIDGE_TRUCKS_PER_HOUR,
     _simulate_day,
     bantargebang_daily_arrivals,
+    baseline_departure_sd_minutes,
     hourly_queue_profile,
+    modelled_peak_hour,
+    peak_hour_weigh_ins,
     queue_minutes_per_truck,
     scenario_queue_metric,
 )
@@ -301,3 +308,121 @@ def test_command_center_trucks_waiting_reads_the_queue_not_arrivals():
         snapshot = data.command_center_snapshot([])
     assert snapshot["tpa_queue"]["trucks_waiting"] == 7
     assert snapshot["kpis"]["tpa_queue_trucks"] == 7
+
+
+# ── gsc teardown #3: a current-practice baseline, a sensitivity band, one beacon ──
+
+
+def test_baseline_departures_spread_around_shift_start():
+    metric = queue_minutes_per_truck()
+    assumptions = metric["assumptions"]
+    assert assumptions["baseline_departure_sd_minutes"] == BASELINE_DEPARTURE_SD_MINUTES > 0
+    assert metric["baseline_departure_sd_minutes"] == BASELINE_DEPARTURE_SD_MINUTES
+    assert "current practice" in assumptions["baseline"]
+    assert "at shift start" not in assumptions["baseline"]
+    # The lanes and weigh cycle travel with the headline as stated assumptions.
+    assert assumptions["weighbridge_lanes"] == WEIGHBRIDGE_LANES
+    assert assumptions["weigh_cycle_minutes"] > 0
+    # The simulated departures really are spread: a normal truncated at +/-2 SD
+    # keeps ~0.88 of its SD, never zero (the old baseline sent a shift at one minute).
+    realised = baseline_departure_sd_minutes(metric["trucks_per_day"])
+    assert 0.8 * BASELINE_DEPARTURE_SD_MINUTES < realised <= BASELINE_DEPARTURE_SD_MINUTES
+    assert baseline_departure_sd_minutes(metric["trucks_per_day"], 60.0) > realised
+
+
+def test_sensitivity_band_brackets_the_headline():
+    metric = queue_minutes_per_truck()
+    band = metric["sensitivity"]
+    rows = band["rows"]
+    assert [row["departure_sd_minutes"] for row in rows] == sorted(DEPARTURE_SD_BAND_MINUTES)
+    assert len(rows) >= 3
+    low, high = band["baseline_band"]
+    assert low <= metric["baseline_mean"] <= high
+    # Tighter departures bunch the gate more: the baseline falls as the spread widens.
+    means = [row["baseline_mean"] for row in rows]
+    assert means == sorted(means, reverse=True)
+    assert (low, high) == (min(means), max(means))
+    # The headline row is the stated spread, and every spread still loses to the stagger.
+    headline = next(r for r in rows if r["departure_sd_minutes"] == BASELINE_DEPARTURE_SD_MINUTES)
+    assert headline["baseline_mean"] == metric["baseline_mean"]
+    assert headline["baseline_ci95"] == metric["baseline_ci95"]
+    assert all(r["baseline_ci95"][0] > metric["staggered_ci95"][1] for r in rows)
+    r_low, r_high = band["reduction_percent_band"]
+    assert r_low <= metric["reduction_percent"] <= r_high
+    assert metric["assumptions"]["departure_truncation_sd"] == DEPARTURE_TRUNCATION_SD
+
+
+def test_band_and_beacon_are_deterministic():
+    first = _fresh(800, seed=42)
+    second = _fresh(800, seed=42)
+    assert first["sensitivity"] == second["sensitivity"]
+    peak = modelled_peak_hour(800)
+    hourly_queue_profile.cache_clear()
+    assert modelled_peak_hour(800) == peak
+
+
+def test_beacon_is_the_modelled_peak_hour_not_the_clock():
+    expected = modelled_peak_hour()
+    payloads = []
+    for frozen_hour in (3, 15):
+        frozen = time.struct_time((2026, 10, 24, frozen_hour, 0, 0, 5, 297, 0))
+        with mock.patch("time.localtime", return_value=frozen):
+            payloads.append(tpa_queue_status_payload(scenario="live"))
+    assert payloads[0] == payloads[1]
+    beacon = payloads[0]
+    assert beacon["modelled_hour"] == expected["hour"]
+    assert beacon["hour_label"] == f"modelled peak hour {expected['hour']:02d}:00"
+    assert beacon["avg_wait_minutes"] == expected["mean_wait_minutes"] > 0
+    assert beacon["trucks_in_queue"] == expected["max_queue"] > 0
+    assert beacon["trucks_per_day"] == queue_minutes_per_truck()["trucks_per_day"]
+    assert "clock_hour" not in beacon
+    assert tpa_queue_status_payload(scenario="peak")["modelled_hour"] == expected["hour"]
+
+
+def test_twin_beacon_and_headline_describe_the_same_day(api_client):
+    # Same scenario as tests/forecast/test_twin.py, so the scaled run is cached.
+    params = {"days": 2, "rainfall_mm": 80, "event_attendance": 50_000, "venue": "jis", "day": 1}
+    queue = api_client.get("/api/twin/scene", params=params).json()["landfill_queue"]
+    metric = queue["minutes_per_truck"]
+    assert metric["scenario_scaled"] is True
+    trucks = metric["trucks_per_day"]
+    assert queue["trucks_per_day"] == trucks != metric["normal_day"]["trucks_per_day"]
+    peak = modelled_peak_hour(trucks)
+    assert queue["modelled_hour"] == peak["hour"]
+    assert queue["avg_wait_minutes"] == peak["mean_wait_minutes"]
+    assert queue["trucks_in_queue"] == peak["max_queue"]
+    # The scaled headline is the cached simulation of that same truck count...
+    same_day = queue_minutes_per_truck(trucks)
+    for key in ("baseline_mean", "staggered_mean", "baseline_ci95", "sensitivity"):
+        assert metric[key] == same_day[key]
+    # ...and the beacon's hours are that day's baseline, split by hour.
+    hourly = hourly_queue_profile(trucks)
+    arrivals = sum(row["arrivals"] for row in hourly)
+    weighted = sum(row["arrivals"] * row["mean_wait_minutes"] for row in hourly) / arrivals
+    assert weighted == pytest.approx(metric["baseline_mean"], abs=1.5)
+    # The beacon's wait is the peak hour of that day, the headline its day average:
+    # two views of one simulated day, so the peak can only read higher.
+    assert queue["avg_wait_minutes"] > metric["baseline_mean"]
+
+    normal = api_client.get("/api/twin/scene", params={"days": 2}).json()["landfill_queue"]
+    status = api_client.get("/api/tpa/queue-status").json()
+    assert normal["minutes_per_truck"]["scenario_scaled"] is False
+    for key in ("modelled_hour", "avg_wait_minutes", "trucks_in_queue", "trucks_per_day"):
+        assert normal[key] == status[key]
+
+
+def test_weighbridge_log_is_the_seeded_peak_hour_and_labelled_simulated():
+    beacon = tpa_queue_status_payload()
+    logs = beacon["scale_logs"]
+    assert logs, "the panel log comes from the simulation, not an empty placeholder"
+    assert logs == list(peak_hour_weigh_ins(beacon["trucks_per_day"], beacon["modelled_hour"]))
+    hour = f"{beacon['modelled_hour']:02d}:"
+    for entry in logs:
+        assert entry["source"] == "SIMULATED"
+        assert entry["arrived"].startswith(hour)  # arrivals of the labelled peak hour
+        assert entry["truck"].startswith("SIM-")  # a simulated arrival, not a fleet unit
+        assert entry["wait_minutes"] >= 0 and entry["weigh_start"] >= entry["arrived"]
+        assert "weight_ton" not in entry  # the simulation does not model payloads
+    # Deterministic: a fresh simulation gives the same log.
+    peak_hour_weigh_ins.cache_clear()
+    assert tpa_queue_status_payload()["scale_logs"] == logs

@@ -48,6 +48,7 @@ export function FleetOperations({
   trucks = [],
   queueTrucks = 0,
   queueWaitMinutes = 0,
+  queueHourLabel = null,
   onFocusProblem = () => {},
 }) {
   const { t, lang } = useLanguage();
@@ -187,9 +188,12 @@ export function FleetOperations({
           onClick={() => selectTab("queue")}
         >
           <Truck size={15} />
-          <strong>{queueWaitMinutes}m</strong>
+          <strong>{queueWaitMinutes != null ? `${queueWaitMinutes}m` : "—"}</strong>
           <span>
-            {lang === "id" ? `antrean TPA · ${queueTrucks} truk` : `TPA queue · ${queueTrucks} trucks`}
+            {lang === "id"
+              ? `antrean TPA · ${queueTrucks ?? "—"} truk`
+              : `TPA queue · ${queueTrucks ?? "—"} trucks`}
+            {queueHourLabel && ` · ${queueHourLabel}`}
           </span>
         </button>
       </div>

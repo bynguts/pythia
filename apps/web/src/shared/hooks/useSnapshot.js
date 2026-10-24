@@ -7,15 +7,17 @@ export const fallbackSnapshot = {
   kpis: {
     active_trucks: 5,
     trucks_with_issues: 2,
-    tpa_queue_trucks: 47,
-    tpa_wait_minutes: 116,
+    // No invented queue figures before the API answers (the old 47 / 116 demo numbers).
+    tpa_queue_trucks: null,
+    tpa_wait_minutes: null,
+    tpa_queue_hour: null,
     predicted_spike_percent: 41,
     pending_dispatches: 0,
   },
   tpa_queue: {
     status: "red",
-    trucks_waiting: 47,
-    estimated_wait_minutes: 116,
+    trucks_waiting: null,
+    estimated_wait_minutes: null,
     throughput_trucks_per_hour: 31,
     recommendation: "Delay non-critical departures by 45 minutes and prioritize West Jakarta event waste.",
   },

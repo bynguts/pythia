@@ -1310,6 +1310,9 @@ export function LiveFleetMap({
         el.title = q.facility_name || "TPA";
         const popup = new maplibregl.Popup({ offset: 18 }).setHTML(
           `<div class="map-popup"><h4>${q.facility_name || "TPA Bantargebang"}</h4>` +
+            (q.modelled_hour != null
+              ? `<p>${mapLabel("Jam puncak model", "Modelled peak hour")} <b>${String(q.modelled_hour).padStart(2, "0")}:00</b></p>`
+              : "") +
             `<p><b>${q.trucks_in_queue}</b> ${countUnit(q.trucks_in_queue, languageRef.current, "truk antre", "truck queued", "trucks queued")}</p>` +
             `<p>${mapLabel("Waktu tunggu", "Wait")}: <b>${q.avg_wait_minutes} ${mapLabel("menit", "min")}</b> (P95 ${q.p95_wait_minutes})</p>` +
             `<p>${q.weighbridge_status === "OPERATIONAL" ? mapLabel("Jembatan timbang beroperasi", "Weighbridge operational") : q.weighbridge_status === "DEGRADED (Overload)" ? mapLabel("Jembatan timbang terbebani", "Weighbridge overloaded") : q.weighbridge_status}</p>` +

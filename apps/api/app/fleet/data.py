@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from app.core.units import event_tons_for_attendance, resource_requirements
+from app.fleet.facilities import FACILITIES
 from app.fleet.osrm import fetch_osrm_route
 from app.forecast.engine import detect_route_deviation, recommend_routes
 
@@ -701,8 +702,9 @@ def command_center_snapshot(
         default={},
     )
 
-    # Same modelled clock hour as the TPA panel (one queue model, gsc C1).
+    # Same modelled peak hour of the normal day as the TPA panel (one queue model, gsc C1).
     live_queue = tpa_queue_status_payload(scenario="live")
+    queue_hour = live_queue.get("modelled_hour")
     base_trucks = live_queue["queue_trucks_max"]  # trucks queued, not arrivals/hour
     wait_time = int(live_queue["avg_wait_minutes"])
     tpa_status = "red" if wait_time >= 90 else "yellow" if wait_time >= 45 else "green"
@@ -729,7 +731,8 @@ def command_center_snapshot(
         points = [
             f"Largest forecasted spike is +{peak_spike}% in {peak_district}, driven by weather/event conditions; weather impact peaks at +{weather_peak.get('waste_impact_percent', 16)}%.",
             "T-047 is outside the assigned corridor and should be redirected through Route B.",
-            f"TPA Bantargebang queue is currently {wait_time} mins; dispatch timing should be staggered."
+            f"TPA Bantargebang modelled peak-hour queue is {wait_time} mins (simulated); "
+            "dispatch timing should be staggered."
             if wait_time > 45
             else "TPA Bantargebang corridor is clear.",
             f"Recommended action: add {extra_trucks_needed} trucks and {extra_crews_needed} crews across high-risk districts.",
@@ -751,6 +754,7 @@ def command_center_snapshot(
             ),
             "tpa_queue_trucks": base_trucks,
             "tpa_wait_minutes": wait_time,
+            "tpa_queue_hour": queue_hour,
             "predicted_spike_percent": max([item["spike_percent"] for item in predictions])
             if predictions
             else 0,
@@ -760,6 +764,7 @@ def command_center_snapshot(
             "status": tpa_status,
             "trucks_waiting": base_trucks,
             "estimated_wait_minutes": wait_time,
+            "modelled_hour": queue_hour,
             "throughput_trucks_per_hour": round(WEIGHBRIDGE_LANES * WEIGHBRIDGE_TRUCKS_PER_HOUR),
             "recommendation": tpa_rec,
         },
@@ -888,28 +893,34 @@ def fleet_history_payload(truck_code: str | None = None, date: str | None = None
     return trips
 
 
-def tpa_queue_status_payload(scenario: str = "live") -> dict[str, Any]:
-    import time
+def tpa_queue_status_payload(scenario: str = "live", trucks_per_day: int | None = None) -> dict[str, Any]:
+    """The landfill beacon: the modelled peak hour of one day, never the wall clock.
 
+    `trucks_per_day` selects the day (the twin passes its scenario day's count;
+    None is the normal day of the daily metric). `scenario` ("live" or "peak")
+    is kept for callers and echoed back; both describe the same modelled peak
+    hour, because a wall-clock hour of a modelled profile made the beacon read
+    "0 min" next to the daily headline depending on when the screen was opened.
+    """
     from app.fleet.queue_simulation import (
         WEIGHBRIDGE_ASSUMPTION,
         WEIGHBRIDGE_LANES,
         WEIGHBRIDGE_TRUCKS_PER_HOUR,
-        hourly_queue_profile,
+        bantargebang_daily_arrivals,
+        modelled_peak_hour,
+        peak_hour_weigh_ins,
     )
 
     # gsc C1: one queue model. The hour comes from the daily TPA metric's baseline
     # day (real median daily ritasi + the shared weighbridge assumptions), so
     # this panel and the minutes-per-truck metric cannot disagree. The peak is
     # a MODELLED peak hour (most queue-minutes), not a documented DLH count.
-    profile = hourly_queue_profile()
-    if scenario == "peak":
-        sim = max(profile, key=lambda r: r["arrivals"] * r["mean_wait_minutes"]) if profile else None
-        arrival_profile = "peak_hour_scenario (modelled from real daily ritasi; not a measured peak)"
-    else:
-        hour = time.localtime().tm_hour
-        sim = profile[hour] if profile else None
-        arrival_profile = "live_clock"
+    if trucks_per_day is None:
+        derived = bantargebang_daily_arrivals()
+        trucks_per_day = derived[0] if derived else None
+    sim = modelled_peak_hour(trucks_per_day) if trucks_per_day else None
+    arrival_profile = "modelled_peak_hour (modelled from real daily ritasi; not a measured peak)"
+    modelled_hour = sim["hour"] if sim else None
     sim = sim or {
         "arrivals": 0,
         "queue_trucks_mean": 0.0,
@@ -920,6 +931,10 @@ def tpa_queue_status_payload(scenario: str = "live") -> dict[str, Any]:
         "wait_ci95": [0.0, 0.0],
     }
     wait_time = sim["mean_wait_minutes"]
+    # The verified facility point (OSM landfill centroid), not the A* weighbridge
+    # approach node ~2.2 km outside it: the AR spotter's 1.5 km radius and the
+    # map marker both measure against this coordinate.
+    tpa = FACILITIES["TPST Bantargebang"]
     status_label = (
         "CRITICAL (Antrian Padat)"
         if wait_time > 60
@@ -935,9 +950,9 @@ def tpa_queue_status_payload(scenario: str = "live") -> dict[str, Any]:
         "queue_trucks_max": sim["max_queue"],
         "arrivals_per_hour": sim["arrivals"],
         "trucks_in_queue": sim["max_queue"],  # compatibility alias of queue_trucks_max
-        "lat": -6.3310,
-        "lng": 106.9910,
-        "facility_name": "TPST Bantargebang",
+        "lat": tpa.lat,
+        "lng": tpa.lng,
+        "facility_name": tpa.name,
         "avg_wait_minutes": wait_time,
         "p95_wait_minutes": sim["p95_wait_minutes"],
         "max_queue": sim["max_queue"],
@@ -948,15 +963,20 @@ def tpa_queue_status_payload(scenario: str = "live") -> dict[str, Any]:
         "status_label": status_label,
         "scenario": scenario,
         "arrival_profile": arrival_profile,
-        "clock_hour": sim.get("hour"),
+        # The modelled peak hour (WIB) of the day described by `trucks_per_day`.
+        "modelled_hour": modelled_hour,
+        "hour_label": f"modelled peak hour {modelled_hour:02d}:00" if modelled_hour is not None else None,
+        "trucks_per_day": trucks_per_day,
         "weighbridge_basis": WEIGHBRIDGE_ASSUMPTION,
         "classification": "SIMULATED",
         "method": "seeded discrete-event queue simulation",
-        "scale_logs": [
-            {"time": "15:30", "truck": "T-088", "weight_ton": 18.2, "status": "Cleared"},
-            {"time": "15:34", "truck": "T-112", "weight_ton": 17.5, "status": "Cleared"},
-            {"time": "15:42", "truck": "T-001", "weight_ton": 19.1, "status": "Weighing"},
-        ],
+        # The modelled peak hour's first gate arrivals on that same seeded day
+        # (each entry carries source SIMULATED); never hand-written log lines.
+        "scale_logs": (
+            list(peak_hour_weigh_ins(trucks_per_day, modelled_hour))
+            if trucks_per_day and modelled_hour is not None
+            else []
+        ),
     }
 
 

@@ -77,6 +77,64 @@ for (const lang of ["id", "en"]) {
   });
 }
 
+// gsc teardown #3: the fleet is a simulated pilot fleet, so the fleet KPI area never claims
+// "live" / "langsung", and the landfill KPI names the modelled peak hour the API serves
+// (never the wall-clock hour of a modelled profile).
+const FLEET_COPY = {
+  id: { simulated: "armada pilot simulasi", peak: "jam puncak model" },
+  en: { simulated: "simulated pilot fleet", peak: "modelled peak hour" },
+};
+
+for (const lang of ["id", "en"]) {
+  test(`fleet KPI area says simulated, never live, and names the modelled peak hour (${lang})`, async ({
+    page,
+  }) => {
+    const copy = FLEET_COPY[lang];
+    const status = await (await page.request.get(`${API}/tpa/queue-status`)).json();
+    expect(status.classification).toBe("SIMULATED");
+    expect(Number.isInteger(status.modelled_hour)).toBe(true);
+    const hour = `${String(status.modelled_hour).padStart(2, "0")}:00`;
+
+    await signIn(page, lang);
+    const strip = page.getByTestId("metric-strip");
+    await expect(strip).toContainText(copy.simulated, { timeout: 15000 });
+    await expect(strip).toContainText(`${copy.peak} ${hour}`, { timeout: 30000 });
+    await expect(strip).toContainText(`${Math.trunc(status.avg_wait_minutes)}m`);
+
+    const kpiArea = [
+      await strip.innerText(),
+      await page.locator(".workspace-heading").first().innerText(),
+      await page.getByTestId("problem-chip-queue").innerText(),
+    ].join("\n");
+    expect(kpiArea).not.toMatch(/\blive\b|langsung/i);
+    expect(kpiArea).toContain(hour);
+
+    // The what-if beacon and the headline band come from the same model.
+    await page.getByRole("tab", { name: COPY[lang].queueTab }).click();
+    await page
+      .getByTestId("tpa-queue-panel")
+      .getByRole("button", { name: lang === "id" ? "Skenario" : "What-if" })
+      .click();
+    await expect(page.getByTestId("tpa-modelled-hour")).toHaveText(`${copy.peak} ${hour}`, {
+      timeout: 15000,
+    });
+    await expect(page.getByTestId("tpa-queue-metric-band")).toContainText("SD", { timeout: 30000 });
+
+    // The weighbridge log is the seeded peak hour's own arrivals, each labelled simulated.
+    expect(status.scale_logs.length).toBeGreaterThan(0);
+    expect(status.scale_logs.every((log) => log.source === "SIMULATED")).toBe(true);
+    const logs = page.getByTestId("tpa-scale-logs");
+    await expect(logs.locator("li")).toHaveCount(status.scale_logs.length);
+    await expect(logs.getByTestId("tpa-scale-log-source")).toHaveText(
+      status.scale_logs.map(() => COPY[lang].sim),
+    );
+    await expect(logs).toContainText(status.scale_logs[0].truck);
+    await expect(logs).toContainText(status.scale_logs[0].arrived);
+    expect(status.scale_logs[0].arrived.startsWith(hour.slice(0, 3))).toBe(true);
+    await expect(logs).not.toContainText(/T-0\d\d|\btons?\b/);
+  });
+}
+
 test("TPA arrival rate unit follows the language", async ({ page }) => {
   await page.route("**/api/ai/tpa-queue-live", (route) =>
     route.fulfill({

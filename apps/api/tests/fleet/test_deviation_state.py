@@ -30,7 +30,7 @@ class TpaQueueScenarioTests(unittest.TestCase):
     def test_peak_scenario_shows_bottleneck(self):
         peak = tpa_queue_status_payload(scenario="peak")
         self.assertEqual(peak["scenario"], "peak")
-        self.assertIn("peak_hour_scenario", peak["arrival_profile"])
+        self.assertIn("modelled_peak_hour", peak["arrival_profile"])
         # The peak is modelled from real daily ritasi, never called a documented count.
         self.assertIn("modelled", peak["arrival_profile"])
         self.assertNotIn("documented", peak["arrival_profile"])
@@ -40,10 +40,13 @@ class TpaQueueScenarioTests(unittest.TestCase):
         self.assertGreater(peak["avg_wait_minutes"], 60, "the modelled peak hour is a bottleneck")
         self.assertEqual(peak["status_label"], "CRITICAL (Antrian Padat)")
 
-    def test_live_scenario_uses_clock(self):
+    def test_live_scenario_shows_the_modelled_peak_hour_not_the_clock(self):
         live = tpa_queue_status_payload(scenario="live")
+        peak = tpa_queue_status_payload(scenario="peak")
         self.assertEqual(live["scenario"], "live")
-        self.assertEqual(live["arrival_profile"], "live_clock")
+        self.assertIn("modelled_peak_hour", live["arrival_profile"])
+        self.assertEqual(live["modelled_hour"], peak["modelled_hour"])
+        self.assertEqual(live["avg_wait_minutes"], peak["avg_wait_minutes"])
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@ import { FleetOperations } from "../features/fleet/FleetOperations.jsx";
 import { FleetTable } from "../features/fleet/FleetTable.jsx";
 import { RouteEvidencePanel } from "../features/fleet/RouteEvidencePanel.jsx";
 import { SpjPanel } from "../features/fleet/SpjPanel.jsx";
-import { StaggerSimulatorPanel } from "../features/fleet/StaggerSimulatorPanel.jsx";
+import { modelledPeakLabel, StaggerSimulatorPanel } from "../features/fleet/StaggerSimulatorPanel.jsx";
 import { TpaQueuePanel } from "../features/fleet/TpaQueuePanel.jsx";
 import { UnlicensedCollectorAlerts } from "../features/fleet/UnlicensedCollectorAlerts.jsx";
 import { CrowdEventsPanel } from "../features/forecast/CrowdEventsPanel.jsx";
@@ -296,6 +296,7 @@ export function CommandCenter({ workspace: activeWorkspace, onLogout }) {
             trucks={snapshot.trucks}
             queueTrucks={snapshot.kpis.tpa_queue_trucks}
             queueWaitMinutes={snapshot.kpis.tpa_wait_minutes}
+            queueHourLabel={modelledPeakLabel(t, snapshot.kpis.tpa_queue_hour)}
             onFocusProblem={focusFleetTruck}
             metrics={[
               {
@@ -311,8 +312,13 @@ export function CommandCenter({ workspace: activeWorkspace, onLogout }) {
               },
               {
                 label: t("kpi_landfill_queue"),
-                value: `${snapshot.kpis.tpa_wait_minutes}m`,
-                helper: `${snapshot.kpis.tpa_queue_trucks} ${t("kpi_landfill_queue_sub")}`,
+                value: snapshot.kpis.tpa_wait_minutes != null ? `${snapshot.kpis.tpa_wait_minutes}m` : "—",
+                helper: [
+                  `${snapshot.kpis.tpa_queue_trucks ?? "—"} ${t("kpi_landfill_queue_sub")}`,
+                  modelledPeakLabel(t, snapshot.kpis.tpa_queue_hour),
+                ]
+                  .filter(Boolean)
+                  .join(" · "),
                 tone: "warning",
               },
               {

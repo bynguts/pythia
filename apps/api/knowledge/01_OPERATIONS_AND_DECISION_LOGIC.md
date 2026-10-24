@@ -5,12 +5,14 @@ keputusan operasional. Ini adalah sumber jawaban utama Ana saat ditanya "kenapa 
 
 ## A. Antrean TPA Bantargebang (Case 1)
 
-- Status antrean dihitung dari simulasi discrete-event ber-seed (`queue_simulation.simulate_queue`).
+- Status antrean (KPI, panel TPA, beacon peta & twin) = **jam puncak model** dari hari simulasi
+  metrik harian (`queue_simulation.modelled_peak_hour`), dilabeli "modelled peak hour HH:00" —
+  bukan jam dinding saat ini dan bukan pengukuran. Di twin, harinya = hari skenario yang dipilih.
 - Ambang batas: wait < 45 menit -> green ("Green corridor clear. Normal dispatch speed approved.");
   45 <= wait < 90 -> yellow ("Stagger dispatch cycles by 20 minutes to flatten landfill load spike.");
   wait >= 90 -> red ("Delay departures of non-essential trucks by 30-45 minutes to relieve Bantargebang gridlock.").
-- Throughput standar 30 truk/jam (2 menit per truk). Waktu tunggu = (truk_menunggu / throughput) * 60.
-- Pada jam sibuk pagi (08:00-10:00) dan sore (14:00-16:00), jumlah truk yang mengantre diasumsikan lebih tinggi (32 vs 14 di luar jam tersebut).
+- Asumsi jembatan timbang: 4 jalur x 30 truk/jam (siklus timbang 2 menit) = 120 truk/jam; asumsi model,
+  bukan pengukuran fasilitas.
 
 ## B. Risiko / Spike Volume Sampah (Case 2)
 
@@ -32,7 +34,10 @@ keputusan operasional. Ini adalah sumber jawaban utama Ana saat ditanya "kenapa 
 ## D. Simulasi Staggered Dispatch
 
 - Simulasi ber-seed satu hari operasi di jembatan timbang Bantargebang (`queue_simulation.queue_minutes_per_truck`):
-  baseline = semua truk satu shift berangkat di awal shift; bertahap = keberangkatan dibagi ke slot 15 menit.
+  baseline = "praktik saat ini": truk tiap shift berangkat sekitar awal shift dengan sebaran normal
+  SD 30 menit (dipotong di +/-2 SD), asumsi yang dinyatakan; bertahap = keberangkatan dibagi ke slot 15 menit.
+- Pita sensitivitas: baseline yang sama dihitung ulang untuk SD keberangkatan 10 / 30 / 60 menit
+  (`sensitivity.baseline_band`), sehingga klaim berupa rentang, bukan satu titik.
 - Jumlah kedatangan truk per hari = median ritasi harian dari data penimbangan Bantargebang (data.go.id);
   jumlah jalur timbang, durasi timbang dan durasi ritase adalah asumsi model, bukan pengukuran fasilitas.
 - Metrik utama: "menit antre TPA per truk" (rata-rata, P95, CI 95% dari replikasi ber-seed), berlabel SIMULATED,
