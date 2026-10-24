@@ -75,3 +75,6 @@ ml/data/raw/*.txt
 CLAUDE.md
 AGENTS.md
 DESIGN.md
+
+# Playwright MCP browser artefacts
+.playwright-mcp/
