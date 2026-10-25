@@ -1,3 +1,4 @@
+import { signedPercent } from "../../shared/hooks/useSnapshot.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import { StatusPill } from "../../shared/ui/StatusPill.jsx";
 import { CloudRain } from "lucide-react";
@@ -44,7 +45,7 @@ export function WeatherPanel({ weather }) {
               {Math.round(peak.precipitation_probability)}% {lang === "id" ? "peluang" : "probability"}
             </span>
           </div>
-          <b>+{peak.waste_impact_percent}%</b>
+          <b>{signedPercent(peak.waste_impact_percent)}</b>
         </div>
       )}
       <div className="weather-strip">
@@ -86,7 +87,7 @@ export function WeatherPanel({ weather }) {
                 <i className="impact-bar" style={{ width: `${impactWidth}%` }} />
               </div>
               <b>{Math.round(day.rainfall_mm)} mm</b>
-              <em>+{day.waste_impact_percent}%</em>
+              <em>{signedPercent(day.waste_impact_percent)}</em>
             </article>
           );
         })}

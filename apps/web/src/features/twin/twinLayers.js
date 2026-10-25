@@ -1,15 +1,7 @@
 // Pythia Twin layer builders. Pure functions: scene + view state in, deck.gl
 // layers out — no React, no map instance — so the twin, the tour and the XR
 // tabletop can share one definition of what the city looks like.
-import {
-  ArcLayer,
-  ColumnLayer,
-  LineLayer,
-  PathLayer,
-  PolygonLayer,
-  ScatterplotLayer,
-  TextLayer,
-} from "@deck.gl/layers";
+import { ArcLayer, ColumnLayer, LineLayer, PathLayer, PolygonLayer, ScatterplotLayer } from "@deck.gl/layers";
 import { TripsLayer } from "@deck.gl/geo-layers";
 
 // Status colours follow tokens.css (--ui-success / --ui-warning / --ui-danger),
@@ -29,7 +21,6 @@ const TRUCK_COLORS = { normal: [22, 97, 58], deviated: [180, 47, 43], damaged: [
 // Constant props hoisted so per-frame rebuilds pass the same references.
 const DISTRICT_MATERIAL = { ambient: 0.5, diffuse: 0.62, shininess: 28, specularColor: [70, 74, 72] };
 const BEACON_MATERIAL = { ambient: 0.55, diffuse: 0.55, shininess: 40, specularColor: [80, 80, 80] };
-const LABEL_FONT = "Inter Tight, Inter, system-ui, sans-serif";
 const NO_TRANSITIONS = {};
 // Trucks drive inside the district blocks: draw them over the blocks, not hidden in them.
 const ON_TOP = { depthCompare: "always" };
@@ -38,6 +29,8 @@ const COLUMN_TRANSITIONS = {
   getElevation: { duration: 750, easing: easeInOutCubic },
   getFillColor: { duration: 450 },
 };
+// The roof edge rises with its block: same duration and easing.
+const ROOF_TRANSITIONS = { getPath: COLUMN_TRANSITIONS.getElevation };
 // Landfill pulse: alphas at full opacity; the pulse scales them via `opacity`.
 const PULSE_FILL = [...ACCENT, 58];
 const PULSE_LINE = [...ACCENT, 220];
@@ -54,16 +47,31 @@ const OUTLINE_MAX_HEIGHT_M = 2200;
 const OUTLINE_INSET = 0.94;
 // Picking: districts are outlines where the scene has them, columns otherwise.
 export const DISTRICT_LAYER_IDS = ["twin-districts", "twin-district-columns"];
-const OUTLINE_EDGE = [255, 255, 255, 110];
+// Roof silhouette: one crisp line along each block's top edge. (An extruded
+// wireframe draws a vertical edge at every outline vertex, hundreds per
+// district, which reads as white "barcode" stripes on the walls.)
+const ROOF_EDGE = [255, 255, 255, 170];
+const ROOF_EDGE_LIFT_M = 6;
+// Haul arcs: the heaviest districts of the selected day get their own arc,
+// the rest ride one bundle arc, so 42 arcs never fan into spaghetti.
+export const FLOW_TOP_N = 8;
+const FLOW_SOURCE_ALPHA = 24;
+const FLOW_TARGET_ALPHA = 105;
+const FLOW_BUNDLE_ALPHA = 70;
+// Districts named on the map: the same top-5 the risk list shows, plus the selection.
+export const LABEL_COUNT = 5;
+// Event venue pin: a stem rising out of the venue's block and a head above the
+// roofs, plus a ground ring at the radius the forecast spreads the crowd over.
+export const VENUE_PIN_HEIGHT_M = 3000;
 // Rain overlay: streaks over the city, density follows the scenario rainfall.
 const RAIN_MIN_DROPS = 120;
 const RAIN_MAX_DROPS = 900;
 const RAIN_MAX_MM = 150;
 const RAIN_TOP_M = 5200;
-const RAIN_STREAK_M = 260;
+const RAIN_STREAK_M = 520;
 // Drops falling per truck-clock period: an integer, so the loop is seamless.
 const RAIN_FALLS_PER_PERIOD = 12;
-const RAIN_COLOR = [64, 98, 128, 120];
+const RAIN_COLOR = [92, 128, 160, 78];
 // Truck animation clock: one leg along the path, one back.
 const TRUCK_LEG = 300;
 export const TRUCK_PERIOD = TRUCK_LEG * 2;
@@ -121,6 +129,12 @@ export function hottestDistrict(scene, day) {
     }
   }
   return best?.district || null;
+}
+
+/** The horizon day a scene's what-if (rain and/or event) applies to. */
+export function whatIfDay(scenario) {
+  const day = Number(scenario?.scenario_day ?? scenario?.day ?? 0);
+  return Number.isInteger(day) && day >= 0 ? day : 0;
 }
 
 /** How many rain streaks the overlay draws for a rainfall: none when dry. */
@@ -255,6 +269,8 @@ export function prepareScene(scene) {
     outlines,
     columnDistricts: districts.filter((d) => !hasOutline(d)),
     rain: rainField(districts, rainDropCount(scene?.scenario?.rainfall_mm)),
+    // The what-if rain falls on its own day only (every other day keeps the base week).
+    rainDay: whatIfDay(scene?.scenario),
     trips,
     landfill,
     beaconHeight: TARGET_MAX_HEIGHT_M * 1.35,
@@ -267,29 +283,98 @@ export function prepareScene(scene) {
 }
 
 /**
+ * Districts ordered by how much attention they need on `day`: risk level
+ * first, then the change against a normal day. The panel's risk list and the
+ * map labels both read this, so they always name the same districts.
+ */
+export function rankDistricts(scene, day) {
+  return (scene?.districts || [])
+    .map((district) => {
+      const row = dayRow(district, day);
+      return { district, row, delta: deltaPercent(row), rank: RISK_ORDER.indexOf(row.risk) };
+    })
+    .sort((a, b) => b.rank - a.rank || b.delta - a.delta);
+}
+
+function weightedCentre(items) {
+  const total = items.reduce((sum, item) => sum + item.tons, 0) || 1;
+  return [
+    items.reduce((sum, item) => sum + item.flow.from[0] * item.tons, 0) / total,
+    items.reduce((sum, item) => sum + item.flow.from[1] * item.tons, 0) / total,
+  ];
+}
+
+/**
+ * The haul arcs for one day: the FLOW_TOP_N heaviest districts (by that day's
+ * forecast, not the scene's first day) plus the selected one, each on its own
+ * arc, and every other district merged into one bundle arc leaving from their
+ * tonnage-weighted centre.
+ */
+export function flowArcs(scene, flows, day, selectedId) {
+  const tonsOf = new Map((scene?.districts || []).map((d) => [d.id, dayRow(d, day).predicted_tons]));
+  const ranked = (flows || [])
+    .filter((flow) => Array.isArray(flow?.from) && Array.isArray(flow?.to))
+    .map((flow) => ({ flow, tons: tonsOf.get(flow.district) ?? flow.tons ?? 0 }))
+    .sort((a, b) => b.tons - a.tons);
+  const own = ranked.filter((item, index) => index < FLOW_TOP_N || item.flow.district === selectedId);
+  const rest = ranked.filter((item) => !own.includes(item));
+  const arcs = own.map(({ flow, tons }) => ({
+    from: flow.from,
+    to: flow.to,
+    district: flow.district,
+    tons,
+    selected: flow.district === selectedId,
+    bundle: false,
+  }));
+  if (rest.length) {
+    arcs.push({
+      from: weightedCentre(rest),
+      to: rest[0].flow.to,
+      district: null,
+      tons: rest.reduce((sum, item) => sum + item.tons, 0),
+      count: rest.length,
+      selected: false,
+      bundle: true,
+    });
+  }
+  return arcs;
+}
+
+/**
  * View-level data arrays for one (day, selection, event) combination. Memoise
  * the result on those inputs; animation frames reuse it unchanged.
+ * `event` is `{lat, lng, radiusM?}`: the venue the scene was computed for.
  */
 export function prepareView(scene, prepared, day, selectedId, event) {
   const districts = scene?.districts || [];
   const metersPerTon = prepared?.metersPerTon || 0;
   const selected = districts.find((d) => d.id === selectedId);
-  // Name the districts that need attention on the selected day, plus the
-  // selected one: labels for all 42 would bury the columns.
-  const labelled = districts
-    .map((d) => ({ d, row: dayRow(d, day) }))
-    .filter(({ d, row }) => d.id === selectedId || isAtRisk(row.risk))
-    .sort((a, b) => deltaPercent(b.row) - deltaPercent(a.row))
-    .slice(0, 3)
-    .map(({ d, row }) => ({ d, row, z: row.predicted_tons * metersPerTon }));
+  // Name the districts the risk list names, plus the selected one: labels for
+  // all 42 would bury the blocks. The labels themselves are DOM chips placed
+  // by the workspace (always on top, never overlapping each other).
+  const ranked = rankDistricts(scene, day);
+  const labelled = [
+    ...ranked.filter(({ district }) => district.id === selectedId),
+    ...ranked.slice(0, LABEL_COUNT).filter(({ district }) => district.id !== selectedId),
+  ].map(({ district, row }) => ({
+    d: district,
+    row,
+    z: row.predicted_tons * metersPerTon,
+    selected: district.id === selectedId,
+  }));
+  const venue =
+    event && Number.isFinite(event.lat) && Number.isFinite(event.lng)
+      ? { ...event, radiusM: Number.isFinite(event.radiusM) && event.radiusM > 0 ? event.radiusM : null }
+      : null;
   return {
     day,
     selectedId,
-    event: event || null,
+    event: venue,
     selectedData: selected ? [selected] : [],
     labelled,
-    eventData: event ? [event] : [],
-    flowTons: new Map(districts.map((d) => [d.id, dayRow(d, day).predicted_tons])),
+    eventData: venue ? [venue] : [],
+    ringData: venue?.radiusM ? [venue] : [],
+    flowData: flowArcs(scene, prepared?.flows, day, selectedId),
   };
 }
 
@@ -345,21 +430,22 @@ export function buildTwinLayers({ scene, prepared, view, time, animate, reducedM
     }),
   );
 
-  if (landfill) {
-    const { flowTons } = view;
+  if (landfill && view.flowData.length) {
     layers.push(
       new ArcLayer({
         id: "twin-flows",
-        data: prepared.flows,
+        data: view.flowData,
         getSourcePosition: (f) => f.from,
         getTargetPosition: (f) => f.to,
-        getWidth: (f) => 0.5 + (flowTons.get(f.district) ?? f.tons) / 160,
+        // The bundle carries many districts' tonnes: a fixed width, so it
+        // never outweighs the named arcs it stands behind.
+        getWidth: (f) => (f.bundle ? 2.5 : Math.min(4, 0.6 + f.tons / 140)),
         widthUnits: "pixels",
         widthMaxPixels: 5,
-        getHeight: 0.28,
-        getSourceColor: [...FLOW, 25],
-        getTargetColor: [...FLOW, 150],
-        updateTriggers: { getWidth: [day] },
+        getHeight: (f) => (f.bundle ? 0.2 : 0.28),
+        getSourceColor: (f) => (f.selected ? [...INK, 60] : [...FLOW, FLOW_SOURCE_ALPHA]),
+        getTargetColor: (f) =>
+          f.selected ? [...INK, 210] : [...FLOW, f.bundle ? FLOW_BUNDLE_ALPHA : FLOW_TARGET_ALPHA],
         pickable: false,
       }),
     );
@@ -368,7 +454,7 @@ export function buildTwinLayers({ scene, prepared, view, time, animate, reducedM
   const { outlines } = prepared;
   // Outlined districts mark the event on their block tops instead (below).
   const eventDistricts = prepared.eventDistricts.filter((d) => !outlines.has(d.id));
-  if (eventDistricts.length || event) {
+  if (eventDistricts.length) {
     layers.push(
       new ScatterplotLayer({
         id: "twin-event-rings",
@@ -396,8 +482,7 @@ export function buildTwinLayers({ scene, prepared, view, time, animate, reducedM
         data: prepared.outlined,
         getPolygon: (d) => outlines.get(d.id),
         extruded: true,
-        wireframe: true,
-        getLineColor: OUTLINE_EDGE,
+        wireframe: false,
         pickable: true,
         autoHighlight: true,
         highlightColor: HIGHLIGHT,
@@ -406,6 +491,24 @@ export function buildTwinLayers({ scene, prepared, view, time, animate, reducedM
         material: DISTRICT_MATERIAL,
         transitions,
         updateTriggers: { getElevation: [day, metersPerTon], getFillColor: [day, selectedId] },
+      }),
+    );
+    // The silhouette: each roof's edge at the block's height, easing with it.
+    layers.push(
+      new PathLayer({
+        id: "twin-district-roofs",
+        data: prepared.outlined,
+        getPath: (d) => {
+          const z = elevationOf(d) + ROOF_EDGE_LIFT_M;
+          return outlines.get(d.id).map(([x, y]) => [x, y, z]);
+        },
+        getColor: ROOF_EDGE,
+        getWidth: 1,
+        widthUnits: "pixels",
+        jointRounded: true,
+        transitions: reducedMotion ? NO_TRANSITIONS : ROOF_TRANSITIONS,
+        updateTriggers: { getPath: [day, metersPerTon] },
+        pickable: false,
       }),
     );
     // Event and selection marks ride the block tops (a ground ring would hide under them).
@@ -473,29 +576,6 @@ export function buildTwinLayers({ scene, prepared, view, time, animate, reducedM
     );
   }
 
-  layers.push(
-    new TextLayer({
-      id: "twin-district-labels",
-      data: view.labelled,
-      getPosition: ({ d, z }) => [d.lng, d.lat, z + 120],
-      getText: ({ d, row }) => `${d.name}  ${Math.round(row.predicted_tons)} t`,
-      getSize: 12,
-      sizeMaxPixels: 12,
-      getColor: [255, 255, 255, 255],
-      background: true,
-      getBackgroundColor: [...INK, 232],
-      backgroundPadding: [6, 3],
-      fontFamily: LABEL_FONT,
-      fontWeight: 600,
-      characterSet: "auto",
-      getTextAnchor: "middle",
-      getAlignmentBaseline: "bottom",
-      billboard: true,
-      updateTriggers: { getPosition: [day, metersPerTon], getText: [day] },
-      pickable: false,
-    }),
-  );
-
   if (trips.length) {
     layers.push(
       new TripsLayer({
@@ -535,18 +615,54 @@ export function buildTwinLayers({ scene, prepared, view, time, animate, reducedM
   }
 
   if (event) {
+    // The venue: a ring at the radius the forecast spreads the crowd over,
+    // drawn over the blocks (on the ground it would hide under them), and a
+    // pin whose stem rises out of the venue's block to a head above the roofs.
+    if (view.ringData.length) {
+      layers.push(
+        new ScatterplotLayer({
+          id: "twin-venue-ring",
+          data: view.ringData,
+          getPosition: (e) => [e.lng, e.lat],
+          getRadius: (e) => e.radiusM,
+          stroked: true,
+          filled: true,
+          getFillColor: [...ACCENT, 38],
+          getLineColor: [...ACCENT, 240],
+          lineWidthMinPixels: 3,
+          updateTriggers: { getRadius: [view.ringData[0].radiusM] },
+          pickable: false,
+          parameters: ON_TOP,
+        }),
+      );
+    }
+    layers.push(
+      new LineLayer({
+        id: "twin-venue-stem",
+        data: view.eventData,
+        getSourcePosition: (e) => [e.lng, e.lat, 0],
+        getTargetPosition: (e) => [e.lng, e.lat, VENUE_PIN_HEIGHT_M],
+        getColor: [...INK, 235],
+        getWidth: 3,
+        widthUnits: "pixels",
+        pickable: false,
+      }),
+    );
     layers.push(
       new ScatterplotLayer({
-        id: "twin-event-marker",
+        id: "twin-venue-pin",
         data: view.eventData,
-        getPosition: (e) => [e.lng, e.lat],
-        getRadius: 260,
-        radiusMinPixels: 6,
+        getPosition: (e) => [e.lng, e.lat, VENUE_PIN_HEIGHT_M],
+        getRadius: 8,
+        radiusUnits: "pixels",
+        billboard: true,
         getFillColor: [...ACCENT, 255],
         stroked: true,
         getLineColor: [255, 255, 255, 255],
-        lineWidthMinPixels: 2,
+        lineWidthUnits: "pixels",
+        getLineWidth: 2.5,
         pickable: false,
+        parameters: ON_TOP,
       }),
     );
   }
@@ -605,7 +721,7 @@ export function buildTwinLayers({ scene, prepared, view, time, animate, reducedM
     );
   }
 
-  if (prepared.rain.length) {
+  if (prepared.rain.length && day === prepared.rainDay) {
     // Streaks fall on the truck clock; frozen (still visible) without animation.
     const clock = animate ? time : 0;
     const fall = (drop) => {

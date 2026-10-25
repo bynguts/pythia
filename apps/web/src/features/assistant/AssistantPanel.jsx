@@ -94,6 +94,7 @@ export function AssistantPanel() {
           text: data.answer || t("asst_no_answer"),
           provider: data.provider || "unknown",
           model: data.model || "",
+          source: { mode: data.mode, providerName: data.provider_name, fallbackReason: data.fallback_reason },
           toolsUsed: data.tools_used || [],
           scenario: data.scenario?.links ? data.scenario : null,
         },
@@ -165,7 +166,12 @@ export function AssistantPanel() {
                 dangerouslySetInnerHTML={{ __html: renderAssistantText(message.text) }}
               />
               {message.scenario && (
-                <ScenarioCard scenario={message.scenario} provider={message.provider} model={message.model} />
+                <ScenarioCard
+                  scenario={message.scenario}
+                  provider={message.provider}
+                  model={message.model}
+                  source={message.source}
+                />
               )}
             </div>
           </article>

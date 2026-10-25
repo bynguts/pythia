@@ -1,12 +1,17 @@
 // #AR-world: WebXR street path — world-anchored ground chevrons on immersive-ar phones, CSS overlay fallback elsewhere.
+// #gsc-6: distance + stop name HUD, pin label, arrival banner, anchor lock with drift-only correction,
+// "AR on the street" label and the DEMO stop's road leg from stop 1.
 // The geometry (geoEnu.js) is pure and runs in the test runner. The UI tests
 // stub navigator.xr: requestSession stays pending (no ARCore in headless
 // Chromium), so the HUD, anchoring, align control, honesty labels and the
 // stopped-only speed rule are exercised without a real XR frame loop.
 import { expect, test } from "@playwright/test";
-import { haversineMeters, initialBearing, legToStop } from "../src/surfaces/driver/arMath.js";
+import { haversineMeters, initialBearing, legFollowsRoad, legToStop } from "../src/surfaces/driver/arMath.js";
 import {
+  ANCHOR_LOCK_ACCURACY_M,
   CHEVRON_STEP_M,
+  CORRECTION_EASE_MS,
+  DRIFT_FACTOR,
   PATH_AHEAD_M,
   REANCHOR_MOVE_M,
   WORLD_SPEED_FIXES,
@@ -14,13 +19,18 @@ import {
   YAW_MAX_DEG,
   alongOnPolyline,
   chevronsAhead,
+  correctedOrigin,
+  driftExceeds,
+  easeOrigin,
   enuBearing,
   enuToScene,
   fromEnu,
   legPolyline,
+  nextAnchor,
   nudgeYaw,
   referenceHeading,
   resamplePolyline,
+  sceneToEnu,
   sceneYawForBearing,
   shouldReanchor,
   stepWorldSpeed,
@@ -134,6 +144,88 @@ test("re-anchoring: first fix, a move beyond 25 m, or 5 m better accuracy", () =
   expect(shouldReanchor({ ...A, accuracy: null }, { ...A, accuracy: 30 })).toBe(true);
 });
 
+test("anchor lock: the first fix within ±15 m locks the anchor, walking never re-anchors it", () => {
+  expect(ANCHOR_LOCK_ACCURACY_M).toBe(15);
+  expect(nextAnchor(null, null)).toBeNull();
+  // A good first fix locks at once.
+  const locked = nextAnchor(null, { ...A, accuracy: 12 });
+  expect(locked).toMatchObject({ seq: 1, locked: true });
+  // Locked: 30 m, 200 m, or a sharper fix never move the anchor (same object back).
+  for (const fix of [
+    { ...at(30, 0), accuracy: 12 },
+    { ...at(200, 0), accuracy: 12 },
+    { ...A, accuracy: 4 },
+  ]) {
+    expect(nextAnchor(locked, fix)).toBe(locked);
+  }
+  // A poor first fix stays provisional: it follows the old rules until a fix is good enough.
+  let anchor = nextAnchor(null, { ...A, accuracy: 30 });
+  expect(anchor).toMatchObject({ seq: 1, locked: false });
+  expect(nextAnchor(anchor, { ...at(10, 0), accuracy: 28 })).toBe(anchor); // jitter: no change
+  anchor = nextAnchor(anchor, { ...at(40, 0), accuracy: 30 }); // moved past 25 m
+  expect(anchor).toMatchObject({ seq: 2, locked: false });
+  anchor = nextAnchor(anchor, { ...at(42, 0), accuracy: 15 }); // good enough: lock here
+  expect(anchor).toMatchObject({ seq: 3, locked: true });
+  expect(anchor.fix.accuracy).toBe(15);
+  expect(nextAnchor(anchor, { ...at(100, 0), accuracy: 15 })).toBe(anchor);
+  // An unknown accuracy never locks.
+  expect(nextAnchor(null, { ...A, accuracy: null })).toMatchObject({ locked: false });
+});
+
+test("drift correction: only beyond 2× the GPS accuracy, gliding to where GPS puts the phone", () => {
+  expect(DRIFT_FACTOR).toBe(2);
+  // sceneToEnu inverts enuToScene for any heading and origin.
+  for (const heading of [0, 37, 90, 211, 333]) {
+    const origin = { x: 1.5, z: -2 };
+    const back = sceneToEnu(enuToScene({ e: 12, n: -7 }, heading, origin), heading, origin);
+    expect(back.e).toBeCloseTo(12, 9);
+    expect(back.n).toBeCloseTo(-7, 9);
+  }
+  // Tracking says 50 m north; GPS (±8 m) says 50 m north and 12 m east: within 16 m, no correction.
+  const tracked = { e: 0, n: 50 };
+  expect(driftExceeds({ e: 12, n: 50 }, tracked, 8)).toBe(false);
+  expect(driftExceeds({ e: 17, n: 50 }, tracked, 8)).toBe(true);
+  expect(driftExceeds({ e: 17, n: 50 }, tracked, null)).toBe(false); // unknown accuracy never corrects
+  expect(driftExceeds(null, tracked, 8)).toBe(false);
+
+  // The corrected origin puts the GPS fix exactly where the phone stands.
+  for (const heading of [0, 90, 200]) {
+    const phone = { x: 3, z: -48 };
+    const gps = { e: 20, n: 50 };
+    const origin = correctedOrigin(phone, gps, heading);
+    const placed = enuToScene(gps, heading, origin);
+    expect(placed.x).toBeCloseTo(phone.x, 9);
+    expect(placed.z).toBeCloseTo(phone.z, 9);
+  }
+
+  // The correction glides: no jump in one frame, settled within CORRECTION_EASE_MS.
+  const from = { x: 0, z: 0 };
+  const to = { x: 20, z: 0 };
+  const firstFrame = easeOrigin(from, to, 16);
+  expect(firstFrame.x).toBeGreaterThan(0);
+  expect(firstFrame.x).toBeLessThan(2);
+  let origin = from;
+  let ms = 0;
+  while (origin !== to && ms < 5000) {
+    origin = easeOrigin(origin, to, 16);
+    ms += 16;
+  }
+  expect(origin).toBe(to);
+  expect(ms).toBeLessThanOrEqual(CORRECTION_EASE_MS * 2);
+  expect(ms).toBeGreaterThan(CORRECTION_EASE_MS / 4);
+});
+
+test("a DEMO SPJ leg follows the road only when it has road vertices, not the bare stop-to-stop segment", () => {
+  // Stitched DEMO geometry: stop A → B on the road (corner vertices), then B → C straight.
+  const C = at(400, 900);
+  const stitched = [...PATH, C];
+  expect(legFollowsRoad(legToStop(stitched, [A, B, C], 1))).toBe(true);
+  expect(legFollowsRoad(legToStop(stitched, [A, B, C], 2))).toBe(false);
+  // A fully straight fallback: no leg follows a road.
+  expect(legFollowsRoad(legToStop([A, B, C], [A, B, C], 1))).toBe(false);
+  expect(legFollowsRoad(null)).toBe(false);
+});
+
 test("heading alignment: north-aligned forward, yaw from the XR pose, chevron rotation", () => {
   // Reference -Z facing north: north is forward (-Z), east is right (+X).
   expect(enuToScene({ e: 0, n: 10 }, 0)).toEqual({ x: 0, z: -10 });
@@ -197,7 +289,8 @@ test("align-to-street offset and the stopped-only speed rule", () => {
 
 // ── UI: entry point, HUD, fallbacks ──
 
-function spjFixture(routeSource) {
+function spjFixture(routeSource, { demo = false } = {}) {
+  const demoStop = demo ? { location_type: "DEMO" } : {};
   return {
     spj_id: "SPJ-AR-WORLD",
     spj_number: "DLH-DKI/SPJ/E2E-AR-WORLD",
@@ -208,14 +301,22 @@ function spjFixture(routeSource) {
     route_source: routeSource,
     stops: [
       {
-        name: "TPS Dunia A",
+        name: demo ? "DEMO · Lokasi A" : "TPS Dunia A",
         kecamatan: "Cilandak",
         address: "Jl. Dunia E2E 1",
         ...A,
+        ...demoStop,
         status: "completed",
         evidence_summary: { has_evidence: true, weighing_count: 1, total_weight_kg: 80 },
       },
-      { name: "TPS Dunia B", kecamatan: "Cilandak", address: "Jl. Dunia E2E 2", ...B, status: "pending" },
+      {
+        name: demo ? "DEMO · Lokasi B" : "TPS Dunia B",
+        kecamatan: "Cilandak",
+        address: "Jl. Dunia E2E 2",
+        ...B,
+        ...demoStop,
+        status: "pending",
+      },
     ],
   };
 }
@@ -315,11 +416,16 @@ async function installStubs(page, { xr = "pending", camera = false } = {}) {
   );
 }
 
-async function stubBackend(page, { routeSource = "LIVE_EXTERNAL", queue = QUEUE } = {}) {
-  await page.route(/\/api\/spj\?status=aktif$/, (route) =>
-    route.fulfill({ json: { spj: [spjFixture(routeSource)], count: 1 } }),
+async function stubBackend(
+  page,
+  { routeSource = "LIVE_EXTERNAL", queue = QUEUE, demo = false, path = PATH } = {},
+) {
+  await page.route(/\/api\/spj\?status=aktif(&|$)/, (route) =>
+    route.fulfill({ json: { spj: [spjFixture(routeSource, { demo })], count: 1 } }),
   );
-  await page.route(/\/api\/spj\?status=selesai$/, (route) => route.fulfill({ json: { spj: [], count: 0 } }));
+  await page.route(/\/api\/spj\?status=selesai(&|$)/, (route) =>
+    route.fulfill({ json: { spj: [], count: 0 } }),
+  );
   await page.route(/\/api\/pretrip\/today\//, (route) => route.fulfill({ json: { done: true } }));
   await page.route(/\/api\/spj\/active-path\//, (route) =>
     route.fulfill({
@@ -328,7 +434,7 @@ async function stubBackend(page, { routeSource = "LIVE_EXTERNAL", queue = QUEUE 
         has_active_spj: true,
         has_reference_path: true,
         destination: "TPST Bantargebang",
-        path: PATH,
+        path,
       },
     }),
   );
@@ -388,7 +494,7 @@ for (const xr of ["absent", "unsupported"]) {
   });
 }
 
-test("street path: immersive-ar session request, HUD, re-anchoring and align-to-street", async ({ page }) => {
+test("street path: immersive-ar session request, HUD, anchor lock and align-to-street", async ({ page }) => {
   test.setTimeout(90000);
   await installStubs(page, { xr: "pending" });
   await stubBackend(page);
@@ -397,7 +503,7 @@ test("street path: immersive-ar session request, HUD, re-anchoring and align-to-
   await expect(page.getByTestId("ar-route-mode")).toHaveAttribute("data-mode", "route");
 
   const open = page.getByTestId("ar-world-open");
-  await expect(open).toHaveText("Street path (WebXR)");
+  await expect(open).toHaveText("AR on the street");
   await expectTapTarget(open);
   await open.click();
 
@@ -417,30 +523,41 @@ test("street path: immersive-ar session request, HUD, re-anchoring and align-to-
   await expect(page.getByTestId("ar-arrow")).toHaveCount(0);
   await expect(page.getByTestId("ar-video")).toBeHidden();
 
-  // Honest labels: road route, GPS ± and never lane-level.
+  // The distance along the leg and the stop name lead the HUD; the 3D pin carries both.
+  const distance = page.getByTestId("ar-world-distance");
+  await expect(distance).toHaveText("700 m");
+  await expect(distance).toHaveAttribute("data-meters", "700");
+  await expect(hud).toHaveAttribute("data-meters", "700");
+  await expect(page.getByTestId("ar-world-stop")).toHaveText("to TPS Dunia B");
+  await expect(hud).toHaveAttribute("data-pin-label", "TPS Dunia B · 700 m");
+  await expect(page.getByTestId("ar-world-arrived")).toHaveCount(0);
+
+  // Honest labels: road route, and every caveat folded into one chip.
   await expect(page.getByTestId("ar-world-route")).toHaveAttribute("data-mode", "route");
   await expect(page.getByTestId("ar-world-route")).toHaveText("Following the planned road route");
-  await expect(page.getByTestId("ar-world-accuracy")).toHaveText(
-    "GPS ±12 m — the path position is approximate, not lane-level",
-  );
+  await expect(page.getByTestId("ar-world-accuracy")).toHaveText("GPS ±12 m");
+  await expect(page.getByTestId("ar-world-caveats")).toHaveText("GPS ±12 m · not lane-level");
   // ~150 m of chevrons every 4 m ahead on the leg.
   await expect(hud).toHaveAttribute("data-anchors", "1");
+  await expect(hud).toHaveAttribute("data-anchor-locked", "true");
+  await expect(page.getByTestId("ar-world-settling")).toHaveCount(0);
   const count = Number(await hud.getAttribute("data-chevrons"));
   expect(count).toBeGreaterThanOrEqual(36);
   expect(count).toBeLessThanOrEqual(39);
 
-  // Re-anchor only past 25 m or on a clearly better fix.
+  // A ±12 m first fix locked the anchor: walking 30 m or a sharper fix no
+  // longer re-anchors (the old 25 m rule made the chevrons jump mid-walk).
   await push(page, { ...at(115, 3), speed: 0, accuracy: 12 });
-  await expect(page.getByTestId("ar-world-accuracy")).toContainText("GPS ±12 m");
-  await expect(hud).toHaveAttribute("data-anchors", "1");
   await push(page, { ...at(130, 3), speed: 0, accuracy: 12 });
-  await expect(hud).toHaveAttribute("data-anchors", "2");
+  await expect(distance).toHaveAttribute("data-meters", "670");
   await push(page, { ...at(130, 3), speed: 0, accuracy: 6 });
-  await expect(hud).toHaveAttribute("data-anchors", "3");
-  await expect(page.getByTestId("ar-world-accuracy")).toContainText("GPS ±6 m");
+  await expect(page.getByTestId("ar-world-accuracy")).toHaveText("GPS ±6 m");
+  await expect(hud).toHaveAttribute("data-anchors", "1");
+  await expect(hud).toHaveAttribute("data-anchor-locked", "true");
   // Close to the stop the window ends at the stop.
-  await push(page, { ...at(400, 390), speed: 0, accuracy: 6 });
-  await expect.poll(async () => Number(await hud.getAttribute("data-chevrons"))).toBeLessThanOrEqual(4);
+  await push(page, { ...at(400, 360), speed: 0, accuracy: 6 });
+  await expect.poll(async () => Number(await hud.getAttribute("data-chevrons"))).toBeLessThanOrEqual(11);
+  await expect(hud).toHaveAttribute("data-anchors", "1");
 
   // Align to street: ±5° steps, persisted for this tab session.
   const right = page.getByTestId("ar-world-yaw-right");
@@ -475,13 +592,13 @@ test("street path labels a straight-line fallback route and fits a 320 px phone 
   await openAr(page, "id");
   await push(page, { ...at(100, 3), speed: 0, accuracy: 9 });
   await expect(page.getByTestId("ar-route-mode")).toHaveAttribute("data-mode", "straight");
+  await expect(page.getByTestId("ar-world-open")).toHaveText("AR di jalan");
   await page.getByTestId("ar-world-open").click();
   const route = page.getByTestId("ar-world-route");
   await expect(route).toHaveAttribute("data-mode", "straight");
   await expect(route).toHaveText("Garis lurus, bukan rute jalan — rute ini tanpa geometri jalan");
-  await expect(page.getByTestId("ar-world-accuracy")).toHaveText(
-    "GPS ±9 m — posisi jalur perkiraan, bukan setingkat lajur",
-  );
+  await expect(page.getByTestId("ar-world-caveats")).toHaveText("GPS ±9 m · bukan setingkat lajur");
+  await expect(page.getByTestId("ar-world-stop")).toHaveText("ke TPS Dunia B");
   // The straight line from the anchor fix still gets 150 m of chevrons.
   await expect(page.getByTestId("ar-world-hud")).toHaveAttribute("data-chevrons", "38");
   await expect(page.getByTestId("ar-world-exit")).toHaveText("Tampilan kamera");
@@ -542,6 +659,94 @@ test("stopped-only AR: moving closes the street path and hides the camera behind
   await expect(nav).toHaveAttribute("data-view", "camera");
   await expect(page.getByTestId("ar-video")).toBeVisible();
   await expect(page.getByTestId("ar-world-open")).toBeEnabled();
+});
+
+test("a poor first fix keeps the anchor provisional and says so until GPS is within ±15 m", async ({
+  page,
+}) => {
+  await installStubs(page, { xr: "pending" });
+  await stubBackend(page);
+  await openAr(page);
+  await push(page, { ...at(100, 3), speed: 0, accuracy: 30 });
+  await page.getByTestId("ar-world-open").click();
+  const hud = page.getByTestId("ar-world-hud");
+  await expect(hud).toHaveAttribute("data-anchors", "1");
+  await expect(hud).toHaveAttribute("data-anchor-locked", "false");
+  await expect(page.getByTestId("ar-world-settling")).toContainText(
+    "path may shift until GPS is within ±15 m",
+  );
+  // Provisional: a 40 m move still re-anchors.
+  await push(page, { ...at(140, 3), speed: 0, accuracy: 30 });
+  await expect(hud).toHaveAttribute("data-anchors", "2");
+  // A ±10 m fix locks it; from then on walking never re-anchors.
+  await push(page, { ...at(142, 3), speed: 0, accuracy: 10 });
+  await expect(hud).toHaveAttribute("data-anchors", "3");
+  await expect(hud).toHaveAttribute("data-anchor-locked", "true");
+  await expect(page.getByTestId("ar-world-settling")).toHaveCount(0);
+  await push(page, { ...at(200, 3), speed: 0, accuracy: 10 });
+  await push(page, { ...at(260, 3), speed: 0, accuracy: 10 });
+  await expect(page.getByTestId("ar-world-distance")).toHaveAttribute("data-meters", "540");
+  await expect(hud).toHaveAttribute("data-anchors", "3");
+});
+
+test("arrival in the street path shows a banner whose button returns to the camera to take the photo", async ({
+  page,
+}) => {
+  await installStubs(page, { xr: "pending", camera: true });
+  await stubBackend(page);
+  const nav = await openAr(page);
+  await push(page, { ...at(400, 300), speed: 0, accuracy: 8 });
+  await page.getByTestId("ar-world-open").click();
+  await expect(page.getByTestId("ar-world-distance")).toHaveText("100 m");
+  await push(page, { ...at(400, 395), speed: 0, accuracy: 8 });
+  await expect(nav).toHaveAttribute("data-arrived", "true");
+  const banner = page.getByTestId("ar-world-arrived");
+  await expect(banner).toBeVisible();
+  await expect(banner).toContainText("You are at TPS Dunia B");
+  await expect(page.getByTestId("ar-world-distance")).toHaveCount(0);
+  await expect(page.getByTestId("ar-world-hud")).toHaveAttribute("data-arrived", "true");
+  const capture = page.getByTestId("ar-world-capture");
+  await expect(capture).toHaveText("Take the arrival photo");
+  await expectTapTarget(capture);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await capture.click();
+  // The XR session ends; the camera view's own capture (same evidence flow) takes over.
+  await expect(nav).toHaveAttribute("data-world", "off");
+  await expect(nav).toHaveAttribute("data-view", "camera");
+  await expect(page.getByTestId("ar-arrived")).toBeVisible();
+  await expect(page.getByTestId("ar-capture")).toBeVisible();
+});
+
+test("DEMO stop: the leg from stop 1 follows its stitched road geometry", async ({ page }) => {
+  // Stitched DEMO geometry (backend activate): stop 1 → stop 2 on the road
+  // (the corner), the unresolved hop to the destination a straight segment.
+  const C = at(400, 5000);
+  await installStubs(page, { xr: "pending" });
+  await stubBackend(page, { routeSource: "FALLBACK_DEGRADED", demo: true, path: [...PATH, C] });
+  await openAr(page);
+  await push(page, { ...at(100, 3), speed: 0, accuracy: 9 });
+  const mode = page.getByTestId("ar-route-mode");
+  await expect(mode).toHaveAttribute("data-mode", "route");
+  await expect(page.getByTestId("ar-distance")).toHaveAttribute("data-meters", "700");
+  await page.getByTestId("ar-world-open").click();
+  await expect(page.getByTestId("ar-world-route")).toHaveAttribute("data-mode", "route");
+  await expect(page.getByTestId("ar-world-hud")).toHaveAttribute("data-pin-label", "DEMO · Lokasi B · 700 m");
+});
+
+test("DEMO stop without a road leg keeps the straight-line label and names the DEMO cause (id)", async ({
+  page,
+}) => {
+  await installStubs(page, { xr: "pending" });
+  await stubBackend(page, { routeSource: "FALLBACK_DEGRADED", demo: true, path: [A, B, at(400, 5000)] });
+  await openAr(page, "id");
+  await push(page, { ...at(100, 3), speed: 0, accuracy: 9 });
+  const mode = page.getByTestId("ar-route-mode");
+  await expect(mode).toHaveAttribute("data-mode", "straight");
+  await expect(mode).toHaveAttribute("data-reason", "demo");
+  await page.getByTestId("ar-world-open").click();
+  await expect(page.getByTestId("ar-world-route")).toHaveText(
+    "Garis lurus, bukan rute jalan — tidak ada rute jalan menuju titik DEMO ini",
+  );
 });
 
 test("TPA spotter shows the modelled peak hour from queue-status", async ({ page }) => {

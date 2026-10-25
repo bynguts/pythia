@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, Map, Radio, Route, ShieldCheck } from "lucide-react";
 import { ActionCard } from "../../features/fleet/ActionCard.jsx";
+import { SafetyPanel, useSafetyOverview } from "../../features/fleet/SafetyPanel.jsx";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import { apiFetch } from "../../shared/api/client.js";
 
@@ -107,6 +108,7 @@ export function SupervisorView() {
   const words = copy[lang] || copy.en;
   const [snapshot, setSnapshot] = useState(null);
   const [loadError, setLoadError] = useState(false);
+  const safety = useSafetyOverview();
 
   useEffect(() => {
     let cancelled = false;
@@ -169,6 +171,8 @@ export function SupervisorView() {
           {words.error}
         </p>
       )}
+
+      <SafetyPanel {...safety} />
 
       {snapshot && (
         <details className="supervisor-alerts">

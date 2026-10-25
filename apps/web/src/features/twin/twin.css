@@ -394,7 +394,8 @@
   gap: var(--space-2);
 }
 .twin-base-toggle,
-.twin-ask-toggle {
+.twin-ask-toggle,
+.twin-table-toggle {
   min-height: var(--tap-min);
   padding: 0 var(--space-4);
   display: inline-flex;
@@ -416,7 +417,8 @@
     border-color 0.15s ease;
 }
 .twin-base-toggle:hover:not(:disabled),
-.twin-ask-toggle:hover {
+.twin-ask-toggle:hover,
+.twin-table-toggle:hover {
   border-color: var(--twin-overlay-line-strong);
 }
 .twin-base-toggle[aria-pressed="true"] {
@@ -674,6 +676,30 @@
 }
 .twin-day[aria-pressed="true"] .twin-day-bar i {
   background: var(--ui-forest-500);
+}
+/* The day's at-risk count: a risk-coloured dot, the number in the label colour. */
+.twin-day-bar {
+  gap: 3px;
+}
+.twin-day-risk {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.twin-day-risk::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--twin-risk-high);
+}
+.twin-day-risk[data-level="critical"]::before {
+  background: var(--twin-risk-critical);
 }
 .twin-day-label {
   display: flex;
@@ -1113,7 +1139,7 @@
   z-index: 2;
   top: 0;
   left: 0;
-  max-width: 248px;
+  max-width: 264px;
   padding: 6px 10px 7px 11px;
   display: grid;
   gap: 1px;
@@ -1142,6 +1168,83 @@
 .twin-landfill-tag .is-hour::first-letter {
   text-transform: uppercase;
 }
+/* The before/after pair: Pythia's stagger reads in the accent, never as the current state. */
+.twin-landfill-tag .is-staggered {
+  color: var(--ui-forest-500);
+}
+/* Phones: the tag keeps the "without stagger" peak line and its class; the
+   day pair stays in the Ask Pythia headline, so the tag never buries the city. */
+@media (max-width: 480px) {
+  .twin-landfill-tag .is-staggered {
+    display: none;
+  }
+}
+
+/* ---- map labels: DOM chips over the 3D scene ------------------------------
+   Placed by placeLabels() (always above the blocks and arcs, hidden on
+   collision). They are names, not controls: no pointer events. */
+.twin-labels {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  pointer-events: none;
+}
+.twin-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 3px 8px 3px 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  visibility: hidden;
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-on-dark);
+  background: var(--ui-primary);
+  box-shadow: var(--ui-shadow-float);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.twin-label > i {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--twin-risk-normal);
+  box-shadow: 0 0 0 1.5px var(--ui-on-dark);
+}
+.twin-label.risk-elevated > i {
+  background: var(--twin-risk-elevated);
+}
+.twin-label.risk-high > i {
+  background: var(--twin-risk-high);
+}
+.twin-label.risk-critical > i {
+  background: var(--twin-risk-critical);
+}
+.twin-label > b {
+  color: var(--ui-on-dark-muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+}
+.twin-label.is-selected {
+  outline: 2px solid var(--ui-forest-500);
+  outline-offset: 1px;
+}
+.twin-label.is-venue {
+  padding: 4px 10px 4px 8px;
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-accent);
+}
+.twin-label.is-venue > small {
+  color: var(--ui-on-dark);
+  font-size: 11px;
+  font-weight: 500;
+}
+
 .twin-landfill-tag .is-class {
   color: var(--ui-on-dark-muted);
   font-family: var(--mono);
@@ -1552,5 +1655,231 @@
   }
   .twin-workspace * {
     transition: none !important;
+  }
+}
+
+/* ---- put this on the table: QR handoff dialog (portaled to <body>) -------- */
+.twin-handoff-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: var(--ui-scrim);
+}
+.twin-handoff {
+  width: min(720px, 100%);
+  max-height: calc(100dvh - 2 * var(--space-4));
+  overflow-y: auto;
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border-radius: var(--ui-radius-elevated);
+  color: var(--ui-ink);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-float);
+}
+.twin-handoff:focus {
+  outline: none;
+}
+.twin-handoff :is(button, input):focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+.twin-handoff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.twin-handoff-head h2 {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-head);
+  font-size: 20px;
+  line-height: 1.25;
+}
+.twin-handoff-icon {
+  width: var(--tap-min);
+  height: var(--tap-min);
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-ink);
+  background: var(--ui-surface);
+  cursor: pointer;
+}
+.twin-handoff-lead,
+.twin-handoff-help,
+.twin-handoff-honesty,
+.twin-handoff-hint,
+.twin-handoff-presence,
+.twin-handoff-code,
+.twin-handoff-error,
+.twin-handoff-wait {
+  margin: 0;
+}
+.twin-handoff-lead {
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-body);
+  line-height: 1.45;
+}
+.twin-handoff-body {
+  display: grid;
+  grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+.twin-handoff-qr {
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-surface);
+}
+.twin-handoff-qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+/* A scanner needs dark modules on a light field. */
+.twin-handoff-qr-bg {
+  fill: var(--ui-surface);
+}
+.twin-handoff-qr-ink {
+  fill: var(--ui-ink);
+}
+.twin-handoff-wait {
+  padding: var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.twin-handoff-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.twin-handoff-code {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.twin-handoff-code strong {
+  color: var(--ui-ink);
+  font-family: var(--font-mono);
+  font-size: var(--fs-kpi);
+  letter-spacing: 0.12em;
+}
+.twin-handoff-label {
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+.twin-handoff-url {
+  max-width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-ink);
+  background: var(--ui-surface-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  overflow-wrap: anywhere;
+}
+.twin-handoff-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ui-success);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+.twin-handoff-origin {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-ink);
+  background: var(--ui-surface);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+}
+.twin-handoff-origin[aria-invalid="true"] {
+  border-color: var(--ui-danger);
+}
+.twin-handoff-help {
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  line-height: 1.4;
+}
+.twin-handoff-help:empty {
+  display: none;
+}
+.twin-handoff-hint {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--ui-warning-line);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-warning);
+  background: var(--ui-warning-soft);
+  font-size: var(--fs-caption);
+  line-height: 1.4;
+}
+.twin-handoff-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ui-danger);
+  font-size: var(--fs-caption);
+}
+.twin-handoff-honesty {
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--ui-info);
+  color: var(--ui-ink-soft);
+  background: var(--ui-info-soft);
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+}
+.twin-handoff-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+@media (max-width: 640px) {
+  .twin-handoff {
+    padding: var(--space-4);
+  }
+  .twin-handoff-body {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+  .twin-handoff-qr {
+    max-width: 240px;
+  }
+  .twin-handoff-info {
+    width: 100%;
+  }
+  .twin-handoff-actions .twin-btn {
+    flex: 1 1 auto;
   }
 }

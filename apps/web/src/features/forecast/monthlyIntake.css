@@ -1,0 +1,62 @@
+/* Bantargebang monthly intake strip (features/forecast/MonthlyIntakeStrip.jsx). */
+.monthly-intake-strip {
+  min-width: 0;
+  margin: var(--space-4) 0;
+  padding: 22px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-surface);
+}
+.monthly-intake-strip h2 {
+  font-size: 16px;
+}
+.monthly-intake-months {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1px;
+  background: var(--ui-border);
+}
+.monthly-intake-months li {
+  min-width: 0;
+  padding: var(--space-3);
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  background: var(--ui-surface);
+}
+.monthly-intake-month {
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.monthly-intake-months strong {
+  color: var(--ui-ink);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.monthly-intake-strip .classification-badge {
+  justify-self: start;
+  max-width: 100%;
+  font-size: 12px;
+  text-transform: none;
+  white-space: normal;
+}
+.monthly-intake-months small,
+.monthly-intake-status,
+.monthly-intake-class {
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.monthly-intake-class {
+  display: block;
+  margin-top: var(--space-2);
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+}
+@media (max-width: 720px) {
+  .monthly-intake-strip {
+    padding: 16px;
+  }
+}

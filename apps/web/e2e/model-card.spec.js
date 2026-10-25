@@ -1,5 +1,7 @@
 // #forecast-honesty: the audit model card shows the monthly forecast against the strongest
 // naive baseline on REAL data, read from the API, and labels synthetic-target resolutions.
+// #w8-audit-320: the audit page holding it never overflows a 320 px phone, even when an
+// imported evidence run carries long unbroken provenance.
 import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
@@ -64,12 +66,42 @@ test("model card shows real-data model vs strongest naive and labels synthetic r
 test("model card is localized and fits a 320 px phone", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 720 });
   await signIn(page, "id");
+  // The audit page also lists imported Scentinel runs; their provenance is long unbroken
+  // text (repository URL@version, run id, digest) that must wrap, not widen the page.
+  const token = await page.evaluate(() => localStorage.getItem("pythia_token"));
+  const runId = `e2e-wide-${Date.now()}${"x".repeat(40)}`;
+  const imported = await page.request.post(`${API}/scentinel/evidence`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: {
+      manifest: {
+        schema: "scentinel.run.v1",
+        run_id: runId,
+        source_repository: "https://github.com/alertxsto/scentinel-sensor-placement-pipeline",
+        source_version: "v1.2.0",
+        scenario: "tps-cilandak-compact",
+        gas_set: ["ch4"],
+        candidate_sensors: [{ sensor_id: "S1", lat: -6.29, lng: 106.79, rationale: "upwind boundary" }],
+        execution: {
+          pipeline_success: true,
+          numerical_convergence: true,
+          mesh_independence: true,
+          mass_balance: true,
+          experimental_validation: false,
+          finished_at: "2026-09-24T04:00:00Z",
+        },
+        input_digest: "f".repeat(64),
+      },
+      sensor_csv: "timestamp,sensor_id,gas,ppm\n2026-09-24T04:00:01Z,S1,ch4,12.5\n",
+    },
+  });
+  expect(imported.status()).toBe(201);
   await page.goto("/audit?lang=id", { waitUntil: "domcontentloaded" });
   const card = page.getByTestId("model-card");
   await expect(card).toBeVisible({ timeout: 15000 });
   await expect(card.getByTestId("model-card-landfill_month")).toContainText("Data riil");
   await expect(card.getByTestId("model-card-landfill_month")).toContainText("t/hari");
   await expect(card).toContainText("Sintetis terkalibrasi");
+  await expect(page.getByText(runId)).toBeVisible();
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );

@@ -209,3 +209,54 @@
   font-family: var(--mono);
   font-size: 11px;
 }
+
+/* ---- Ask rail in the twin (gsc #2, #8) ------------------------------------
+   The ask block never grows past its column: the question box stays in view
+   and a long answer scrolls inside the result region instead of being cut off.
+   Selectors outrank twin.css's single-class rules. */
+.twin-ask .twin-ask-answer {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.twin-ask .twin-ask-answer .assistant-formatted-answer {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+/* Provider names and models can be long: wrap rather than overflow at 320 px. */
+.twin-ask .assistant-scenario-badge {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.twin-ask .twin-ask-result:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+@media (min-width: 921px) {
+  .twin-side > .twin-ask {
+    flex: none;
+    max-height: 100%;
+    min-height: 0;
+  }
+  .twin-side > .twin-ask > * {
+    flex: none;
+  }
+  .twin-side > .twin-ask > .twin-ask-result {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-gutter: stable;
+  }
+}
+@media (max-width: 920px) {
+  .twin-ask .twin-ask-result {
+    /* Short enough that the question box and the answer fit on one phone screen. */
+    max-height: min(45dvh, 400px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}

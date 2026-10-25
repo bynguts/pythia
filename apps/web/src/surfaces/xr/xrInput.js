@@ -36,3 +36,22 @@ export function selectAction({
   if (!placed) return reticleVisible ? "place" : "none";
   return barHit ? "pick" : "clear";
 }
+
+/**
+ * A two-finger gesture step on the AR overlay: from the previous pair of touch
+ * points to the current one. Returns the scale factor (finger spread ratio) and
+ * the rotation in degrees about the table's up axis. Screen y points down, so a
+ * clockwise twist on screen turns the model clockwise seen from above (negative
+ * yaw). Returns null when either pair has its two fingers on one spot.
+ */
+export function twoFingerChange(prev, next) {
+  const span = ([a, b]) => Math.hypot(b.x - a.x, b.y - a.y);
+  const angle = ([a, b]) => Math.atan2(b.y - a.y, b.x - a.x);
+  const before = span(prev);
+  const after = span(next);
+  if (before < 1 || after < 1) return null;
+  let turn = ((angle(next) - angle(prev)) * 180) / Math.PI;
+  if (turn > 180) turn -= 360;
+  if (turn <= -180) turn += 360;
+  return { scale: after / before, rotateDeg: -turn };
+}

@@ -313,3 +313,160 @@ test("twin controls meet text contrast requirements", async ({ page }) => {
   });
   expect(layoutTransitions).toEqual([]);
 });
+
+// #twinrender (gsc-2026 teardown v2 #2): the blocks draw a roof silhouette, not
+// wireframe "barcode" walls; district names are DOM chips over the scene that
+// never overlap; the 42 haul arcs are thinned to the heaviest districts plus one bundle.
+test("district blocks have no wireframe stripes, labels sit on top without overlapping, arcs are thinned", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page);
+  await page.goto("/twin");
+  const state = await waitForTwin(page, "window.__pythiaTwin.outlinedDistricts === 42");
+
+  const layer = (id) => page.evaluate((layerId) => window.__pythiaTwin.inspectLayer(layerId), id);
+  const blocks = await layer("twin-districts");
+  expect(blocks).toMatchObject({ count: 42, extruded: true, wireframe: false });
+  expect((await layer("twin-district-roofs")).count).toBe(42);
+  // Names are no longer a depth-tested text layer buried in the geometry.
+  expect(await layer("twin-district-labels")).toBeNull();
+
+  // 8 named arcs + 1 bundle carrying the other 34 districts.
+  expect(state.flowArcs).toBe(9);
+  expect(state.flowBundled).toBe(34);
+  expect((await layer("twin-flows")).count).toBe(9);
+
+  // The map names the same five districts the risk list ranks, in that order.
+  const listed = await page
+    .getByTestId("twin-risk-list")
+    .getByRole("button")
+    .evaluateAll((buttons) => buttons.map((b) => b.dataset.testid.replace("twin-risk-item-", "")));
+  expect(state.labelledDistricts).toEqual(listed);
+  const labels = page.getByTestId("twin-label");
+  await expect(labels).toHaveCount(5);
+  await expect(page.locator('[data-testid=twin-label][data-placed="true"]').first()).toBeVisible();
+
+  const geometry = await page.evaluate(() => {
+    const map = document.querySelector("[data-testid=twin-map]").getBoundingClientRect();
+    const tag = document.querySelector("[data-testid=twin-landfill-tag]")?.getBoundingClientRect();
+    const placed = [...document.querySelectorAll('[data-testid=twin-label][data-placed="true"]')].map((el) =>
+      el.getBoundingClientRect(),
+    );
+    const hit = (a, b) => !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+    let overlaps = 0;
+    placed.forEach((a, i) =>
+      placed.slice(i + 1).forEach((b) => {
+        if (hit(a, b)) overlaps += 1;
+      }),
+    );
+    const layer = document.querySelector("[data-testid=twin-labels]");
+    return {
+      placed: placed.length,
+      overlaps,
+      onTag: tag ? placed.filter((r) => hit(r, tag)).length : 0,
+      inside: placed.every(
+        (r) => r.left >= map.left && r.top >= map.top && r.right <= map.right && r.bottom <= map.bottom,
+      ),
+      // DOM order puts the label layer after the canvas, so it paints over it.
+      afterCanvas: Boolean(
+        layer &&
+        document.querySelector("[data-testid=twin-map]").compareDocumentPosition(layer) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+    };
+  });
+  expect(geometry.placed).toBeGreaterThanOrEqual(3);
+  expect(geometry).toMatchObject({ overlaps: 0, onTag: 0, inside: true, afterCanvas: true });
+
+  // The selected district's label is marked, and leads the placement order.
+  await page.getByTestId("twin-risk-list").getByRole("button").nth(1).click();
+  await expect(page.locator(".twin-label.is-selected")).toHaveAttribute("data-district", listed[1]);
+  await expect(labels.first()).toHaveAttribute("data-district", listed[1]);
+});
+
+// #twinrender (teardown v2 #2): a crowd event shows where it is: a pin over the
+// roofs and a ring at the reach the scene states (scenario.event.radius_m: the
+// kecamatan whose real boundary lies within it share the crowd).
+test("a crowd event pins its venue with the scene's boundary-reach ring", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page);
+  await page.goto("/twin?event=50k&venue=jis");
+  const state = await waitForTwin(page, "window.__pythiaTwin.scenario.event_attendance === 50000");
+  expect(state.scenario.event.radius_m).toBe(1000);
+  expect(state.venuePin).toMatchObject({ name: "JIS", radiusM: 1000 });
+  expect(state.venuePin.reached).toBe(state.scenario.event.districts.length);
+  expect(state.venuePin.lat).toBeCloseTo(-6.1246, 3);
+
+  const layer = (id) => page.evaluate((layerId) => window.__pythiaTwin.inspectLayer(layerId), id);
+  expect(await layer("twin-venue-pin")).toMatchObject({ count: 1, depthCompare: "always" });
+  expect(await layer("twin-venue-ring")).toMatchObject({ count: 1, depthCompare: "always" });
+  const label = page.getByTestId("twin-venue-label");
+  await expect(label).toHaveText(/JIS\s*1 km reach · \d+ districts share the crowd/);
+  await expect(label).toHaveAttribute("data-placed", "true");
+  await expect(label).toBeVisible();
+
+  // No event, no pin.
+  await page.getByTestId("twin-event-none").click();
+  await waitForTwin(page, "!window.__pythiaTwin.scenario.event_attendance");
+  await expect(page.getByTestId("twin-venue-label")).toHaveCount(0);
+  expect(await layer("twin-venue-pin")).toBeNull();
+});
+
+// #twinrender (teardown v2 #4): the beacon says its peak hour is the unstaggered
+// day and puts the staggered value beside it; the band is a range over assumed
+// departure spreads, not a confidence interval; trucks vs gate trips are explained.
+for (const [lang, copy] of [
+  [
+    "en",
+    {
+      peak: /Without stagger · Peak hour \d{2}:00 \(modelled\): [\d,]+ trucks queued · [\d,]+ min wait/,
+      day: /Day average [\d.,]+ min\/truck without stagger → [\d.,]+ with Pythia stagger/,
+      staggered: "With Pythia stagger, same hour: 12 queued · 9 min wait",
+      band: /^TPA queue( \(scenario\))?: [\d.,]+ min\/truck without stagger \(range [\d.,]+–[\d.,]+ if departure spread is 10–60 min, assumed\) → [\d.,]+ with Pythia stagger .*\(Simulated\)$/,
+      trips: /≈[\d.,]+ TPA gate trips each \([\d,]+\/day, (real median|scaled real median)\)/,
+    },
+  ],
+  [
+    "id",
+    {
+      peak: /Tanpa keberangkatan bertahap · Jam puncak \d{2}:00 \(model\): [\d.]+ truk antre · tunggu [\d.]+ mnt/,
+      day: /Rata-rata harian [\d.,]+ mnt\/truk tanpa bertahap → [\d.,]+ dengan bertahap Pythia/,
+      staggered: "Dengan bertahap Pythia, jam yang sama: 12 truk antre · tunggu 9 mnt",
+      band: /^Antrean TPA( \(skenario\))?: [\d.,]+ mnt\/truk tanpa bertahap \(rentang [\d.,]+–[\d.,]+ bila sebaran keberangkatan 10–60 mnt, asumsi\) → [\d.,]+ dengan bertahap Pythia .*\(Simulasi\)$/,
+      trips: /≈[\d.,]+ rit gerbang TPA per truk \([\d.]+\/hari, (median riil|median riil diskalakan)\)/,
+    },
+  ],
+])
+  test(`landfill beacon names the unstaggered peak hour and the staggered value (${lang})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signIn(page, lang);
+    // The staggered arm at the same modelled hour (landfill_queue.peak_hour.staggered):
+    // pin its figures so the copy is checked against known numbers.
+    await page.route(/\/twin\/scene\?/, async (route) => {
+      const response = await route.fetch();
+      const json = await response.json();
+      const queue = json.landfill_queue;
+      if (queue?.peak_hour?.staggered)
+        queue.peak_hour.staggered = {
+          ...queue.peak_hour.staggered,
+          hour: queue.modelled_hour,
+          queue_trucks_max: 12,
+          mean_wait_minutes: 9,
+        };
+      await route.fulfill({ response, json });
+    });
+    await page.goto("/twin?present=1");
+    await waitForTwin(page);
+    const tag = page.getByTestId("twin-landfill-tag");
+    await expect(tag).toContainText(copy.peak);
+    await expect(tag).toContainText(copy.staggered);
+    await expect(tag).toContainText(copy.day);
+    await expect(page.getByTestId("twin-present-queue-metric")).toHaveText(copy.band);
+    await expect(page.getByTestId("twin-present-queue-metric")).not.toContainText(/\(\d[\d.,]*–\d[\d.,]*\)/);
+    await expect(
+      page.getByTestId("twin-workspace").getByTestId("metric-cell").nth(3).locator("small"),
+    ).toHaveText(copy.trips);
+  });

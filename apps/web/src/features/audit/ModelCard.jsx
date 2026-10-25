@@ -129,6 +129,11 @@ export function ModelCard({ suitability, resolutionLabel }) {
               </li>
             ))}
           </ul>
+          {/* Teardown v3 fix 7: how the daily model's rain effect is served (engine.rain_response_block). */}
+          <p className="model-honesty-note" data-testid="model-card-rain-response">
+            <strong>{t("ufx_mc_rain_title")}</strong>
+            {t("ufx_mc_rain_response")}
+          </p>
         </>
       )}
 

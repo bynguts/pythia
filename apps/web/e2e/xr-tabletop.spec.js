@@ -15,6 +15,16 @@ async function waitForXr(page) {
   return page.evaluate(() => ({ ...window.__pythiaXr }));
 }
 
+// Phones fold the header to one line and the controls to a bottom sheet.
+async function openHead(page) {
+  const toggle = page.getByTestId("xr-head-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+}
+async function openSheet(page) {
+  const toggle = page.getByTestId("xr-scenario-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+}
+
 test.describe("XR tabletop twin", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
@@ -69,6 +79,9 @@ test.describe("XR tabletop twin", () => {
     await expect(prov).toHaveAttribute("data-class", "SIMULATED_DEMO_CITY");
     await expect(prov).toHaveText(/simulated demo city/i);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Ho Chi Minh City");
+    // gsc-2026 #13: Vietnam abolished the district tier on 1 July 2025; the note says
+    // which boundaries the demo city draws, on screen and in the headset label.
+    await expect(page.getByTestId("xr-provenance-note")).toContainText("Pre-July-2025 district boundaries");
     // No outlines and no satellite plate for the demo city: bars on the plain plate.
     expect(state.districtShape).toBe("bar");
     expect(state.plate).toBe("none");
@@ -76,7 +89,7 @@ test.describe("XR tabletop twin", () => {
     // The in-scene label that rides with the model into a VR headset.
     await expect
       .poll(() => page.evaluate(() => window.__pythiaXr.sceneLabel))
-      .toMatch(/^Ho Chi Minh City · Simulated demo city \|/);
+      .toMatch(/^Ho Chi Minh City · Simulated demo city \|.*Pre-July-2025 district boundaries$/);
   });
 
   test("gsc-2026 #2: the city rises with its plate, scenario rain and truck flows", async ({ page }) => {
@@ -101,7 +114,10 @@ test.describe("XR tabletop twin", () => {
     const outlined = dry.districts.every((d) => Array.isArray(d.outline) && d.outline.length >= 3);
     expect(state.districtShape).toBe(outlined ? "prism" : "bar");
     expect(state.bars).toBe(42);
-    expect(state.rainParticles).toBe(0);
+    // #N4 (teardown v3): rain falls only where the day has it; the base week's day 0
+    // carries its own Open-Meteo forecast rain (scene.weather.days), dry if none.
+    const forecastMm = Number(dry.weather?.days?.[0]?.rainfall_mm) || 0;
+    expect(state.rainParticles).toBe(forecastMm > 0 ? Math.min(3600, Math.round(forecastMm * 12)) : 0);
     expect(dots(dry)).toBeGreaterThan(0);
     expect(state.flowCount).toBe(dots(dry));
     // The satellite plate loads from public/ and its licence credit is on screen and on the panel.
@@ -110,6 +126,7 @@ test.describe("XR tabletop twin", () => {
       "EOxCloudless 2016 by EOX IT Services GmbH",
     );
     await expect(page.getByTestId("xr-imagery-credit")).toContainText("CC BY 4.0");
+    await openSheet(page);
     await expect(page.getByTestId("xr-flow-note")).toContainText("not live GPS");
     const panel = await hook("panelText");
     expect(panel).toContain("Jakarta · Model output — Forecast by district model, not live measurement");
@@ -132,6 +149,7 @@ test.describe("XR tabletop twin", () => {
     await expect.poll(() => hook("rainParticles")).toBe(80 * 12);
     expect(await hook("flowCount")).toBe(dots(wet));
     expect(dots(wet)).not.toBe(dots(dry));
+    await openSheet(page);
     await expect(page.getByTestId("xr-flow-note")).toContainText("not live weather");
   });
 
@@ -141,6 +159,7 @@ test.describe("XR tabletop twin", () => {
     await expect
       .poll(() => page.evaluate(() => window.__pythiaXr.sceneLabel))
       .toMatch(/^Jakarta · Keluaran model \|/);
+    await openHead(page);
     await page.getByRole("button", { name: "EN", exact: true }).click();
     await expect
       .poll(() => page.evaluate(() => window.__pythiaXr.sceneLabel))
@@ -150,7 +169,11 @@ test.describe("XR tabletop twin", () => {
   test("a scenario passed in the URL is stated on screen, never implied", async ({ page }) => {
     await page.goto("/xr?city=hcmc&lang=en&rainfall_mm=60");
     await waitForXr(page);
-    await expect(page.getByTestId("xr-scenario")).toHaveText("Scenario applied: rain 60 mm · event 0 people");
+    // The what-if names the one day it applies to (gsc-2026 #5); no crowd, no
+    // event clause (teardown v3 #9).
+    await expect(page.getByTestId("xr-scenario")).toHaveText(
+      /^Scenario applied: rain 60 mm · \w{3} \d{1,2} \w{3}$/,
+    );
     await page.goto("/xr?city=hcmc&lang=en");
     await waitForXr(page);
     await expect(page.getByTestId("xr-scenario")).toHaveCount(0);
@@ -168,8 +191,45 @@ test.describe("XR tabletop twin", () => {
     );
     await sceneRequest;
     await waitForXr(page);
-    await expect(page.getByTestId("xr-scenario")).toHaveText(
-      "Scenario applied: rain 20 mm · event 50,000 people",
+    await expect(page.getByTestId("xr-scenario")).toContainText(
+      "Scenario applied: rain 20 mm · event 50,000 people · ",
+    );
+  });
+
+  // #twin-weather: the selected day's rain says where it comes from (scene.weather),
+  // on screen and on the in-scene panel a headset reads.
+  test("the day's rain source is stated: forecast, what-if or assumed dry", async ({ page }) => {
+    await page.goto("/xr?city=hcmc&lang=en");
+    await waitForXr(page);
+    await expect(page.getByTestId("xr-weather")).toHaveText(
+      "No weather forecast for the demo city · assumed dry (0 mm)",
+    );
+    await expect
+      .poll(() => page.evaluate(() => window.__pythiaXr.panelText))
+      .toContain("No weather forecast for the demo city · assumed dry (0 mm)");
+
+    await page.goto("/xr?city=hcmc&lang=en&rainfall_mm=60");
+    await waitForXr(page);
+    await expect(page.getByTestId("xr-weather")).toHaveText("Scenario rain 60 mm · not observed weather");
+
+    // Jakarta's base week runs on the Open-Meteo forecast; pin it so the copy is known.
+    await page.route(/\/twin\/scene\?/, async (route) => {
+      const response = await route.fetch();
+      const json = await response.json();
+      json.weather = {
+        ...json.weather,
+        source: "open-meteo",
+        class: "REAL_FORECAST_INPUT",
+        // No fetch time: the line ends at the source (xr-polish covers "fetched HH:MM").
+        fetched_at: null,
+        days: json.weather.days.map((d, i) => ({ ...d, input: "forecast", rainfall_mm: i === 0 ? 9 : 0 })),
+      };
+      await route.fulfill({ response, json });
+    });
+    await page.goto("/xr?city=jakarta&lang=en");
+    await waitForXr(page);
+    await expect(page.getByTestId("xr-weather")).toHaveText(
+      "Forecast rain 9 mm · Open-Meteo forecast, not observed",
     );
   });
 
@@ -241,16 +301,84 @@ test.describe("XR tabletop twin", () => {
   test("controls meet 44px targets with no horizontal overflow at 390px", async ({ page }) => {
     await page.goto("/xr?city=jakarta");
     await waitForXr(page);
-    const report = await page.evaluate(() => {
-      const small = [];
-      document.querySelectorAll(".xr-overlay button, .xr-overlay a, .xr-overlay input").forEach((el) => {
-        const r = el.getBoundingClientRect();
-        if (r.width > 0 && (r.width < 44 || r.height < 44))
-          small.push(`${el.outerHTML.slice(0, 60)} ${r.width}x${r.height}`);
+    const audit = () =>
+      page.evaluate(() => {
+        const small = [];
+        document.querySelectorAll(".xr-overlay button, .xr-overlay a, .xr-overlay input").forEach((el) => {
+          const r = el.getBoundingClientRect();
+          if (r.width > 0 && (r.width < 44 || r.height < 44))
+            small.push(`${el.outerHTML.slice(0, 60)} ${r.width}x${r.height}`);
+        });
+        return { small, overflow: document.documentElement.scrollWidth > window.innerWidth };
       });
-      return { small, overflow: document.documentElement.scrollWidth > window.innerWidth };
+    expect(await audit()).toEqual({ small: [], overflow: false });
+    // Unfolded header and sheet too (language, cities, presets, sharing).
+    await openHead(page);
+    await openSheet(page);
+    expect(await audit()).toEqual({ small: [], overflow: false });
+  });
+
+  test("gsc-2026 #3: on a phone the city gets most of the screen and the queue wraps", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/xr?city=jakarta&lang=en&rainfall_mm=80");
+    await waitForXr(page);
+    // One-line header: city, date, total and the provenance chip; details fold away.
+    const head = page.getByTestId("xr-head");
+    await expect(page.getByTestId("xr-head-toggle")).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByTestId("xr-head-summary")).toBeVisible();
+    await expect(page.getByTestId("xr-provenance")).toBeVisible();
+    await expect(page.getByTestId("xr-readout")).toBeHidden();
+    const headBox = await head.boundingBox();
+    expect(headBox.height).toBeLessThanOrEqual(64);
+    // Bottom sheet: folded to the ask field and the scrubber.
+    await expect(page.getByTestId("xr-scenario-toggle")).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByTestId("xr-ask-input")).toBeVisible();
+    await expect(page.getByTestId("xr-day-scrubber")).toBeVisible();
+    // The free band between the header and the sheet, where the city is drawn,
+    // is at least 55% of the 844 px viewport.
+    const band = await page.evaluate(() => {
+      const top = document.querySelector("[data-testid=xr-head]").getBoundingClientRect().bottom;
+      const bottom = document.querySelector("[data-testid=xr-controls]").getBoundingClientRect().top;
+      const canvas = document.querySelector("[data-testid=xr-canvas]").getBoundingClientRect();
+      return { free: bottom - top, canvas: canvas.height, vh: window.innerHeight };
     });
-    expect(report.small).toEqual([]);
-    expect(report.overflow).toBe(false);
+    expect(band.canvas).toBe(band.vh);
+    expect(band.free / band.vh).toBeGreaterThanOrEqual(0.55);
+    // The view is centred in that band, not behind the panels: the districts'
+    // mean screen position lies inside it.
+    const ids = (
+      await (await page.request.get(`${API}/twin/scene?city=jakarta&days=7`)).json()
+    ).districts.map((d) => d.id);
+    const centreY = await page.evaluate((list) => {
+      const ys = list.map((id) => window.__pythiaXr.screenPoint(id)?.y).filter(Number.isFinite);
+      return ys.reduce((a, b) => a + b, 0) / ys.length;
+    }, ids);
+    const bandCentre = headBox.y + headBox.height + band.free / 2;
+    expect(Math.abs(centreY - bandCentre)).toBeLessThan(band.free * 0.1);
+
+    // Expanded, the queue cell wraps its labelled numbers instead of truncating them.
+    await openHead(page);
+    const queue = page.getByTestId("xr-queue");
+    await expect(queue).toContainText("without stagger");
+    const clipped = await queue.evaluate((el) => el.scrollWidth > el.clientWidth);
+    expect(clipped).toBe(false);
+    await page.getByTestId("xr-head-toggle").click();
+    await expect(page.getByTestId("xr-readout")).toBeHidden();
+
+    // The longest city name and chip still fit one row at 320 px, date and total included.
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.goto("/xr?city=hcmc&lang=en");
+    await waitForXr(page);
+    const row = await page.evaluate(() => {
+      const box = (id) => document.querySelector(`[data-testid=${id}]`).getBoundingClientRect();
+      return {
+        head: box("xr-head").height,
+        summary: box("xr-head-summary").width,
+        overflow: document.documentElement.scrollWidth > window.innerWidth,
+      };
+    });
+    expect(row.overflow).toBe(false);
+    expect(row.summary).toBeGreaterThan(60);
+    expect(row.head).toBeLessThanOrEqual(64);
   });
 });

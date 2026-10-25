@@ -208,7 +208,40 @@ export const fallbackSnapshot = {
   },
 };
 
-export function normalizeCommandSnapshot(rawSnapshot) {
+// The backend's at-risk levels (app/forecast/engine.py AT_RISK_LEVELS): a day
+// >= 10% above the district's normal day (no rain, no event) is high or critical.
+export const AT_RISK_LEVELS = ["high", "critical"];
+// engine.RISK_CRITICAL_RATIO / RISK_HIGH_RATIO / RISK_ELEVATED_RATIO, for views that
+// hold a forecast and its normal day but no backend risk class (the planning
+// scenario). tests/forecast/test_honesty_claims.py pins these to the backend.
+export const RISK_RATIOS = { critical: 1.25, high: 1.1, elevated: 1.03 };
+
+// engine.spike_risk: the spike vs the same district's normal day (no rain, no event) and its level.
+export function spikeRisk(tons, normalTons) {
+  const ratio = normalTons > 0 ? tons / normalTons : 1;
+  const level =
+    ratio >= RISK_RATIOS.critical
+      ? "critical"
+      : ratio >= RISK_RATIOS.high
+        ? "high"
+        : ratio >= RISK_RATIOS.elevated
+          ? "elevated"
+          : "normal";
+  return { spike_percent: Math.round((ratio - 1) * 1000) / 10, risk_level: level };
+}
+
+// A spike percent with its own sign: "+3%", "0%", "−2%" (never "+-2%").
+export function signedPercent(value) {
+  const n = value == null || value === "" ? NaN : Number(value);
+  if (!Number.isFinite(n)) return "—";
+  const rounded = Math.round(n * 10) / 10;
+  return `${rounded > 0 ? "+" : rounded < 0 ? "−" : ""}${Math.abs(rounded)}%`;
+}
+
+// Data honesty (teardown v3 N1): a live snapshot keeps its own predictions, even
+// when none is at risk. The canned fallback lists are never merged into live data;
+// they only appear as the offline sample (`is_sample`), which the UI badges.
+export function normalizeCommandSnapshot(rawSnapshot, { sample = false } = {}) {
   const merged = {
     ...fallbackSnapshot,
     ...(rawSnapshot || {}),
@@ -224,28 +257,28 @@ export function normalizeCommandSnapshot(rawSnapshot) {
     osrm_route: rawSnapshot?.osrm_route || fallbackSnapshot.osrm_route,
   };
 
-  const predictions =
-    Array.isArray(merged.predictions) && merged.predictions.length
-      ? merged.predictions
-      : fallbackSnapshot.critical_predictions;
-  const criticalPredictions =
-    Array.isArray(merged.critical_predictions) && merged.critical_predictions.length
-      ? merged.critical_predictions
-      : predictions
-          .filter((item) => ["critical", "high"].includes(item.risk_level))
-          .sort((a, b) => (b.spike_percent || 0) - (a.spike_percent || 0))
-          .slice(0, 8);
+  const predictions = Array.isArray(rawSnapshot?.predictions) ? rawSnapshot.predictions : [];
+  const criticalPredictions = Array.isArray(rawSnapshot?.critical_predictions)
+    ? rawSnapshot.critical_predictions
+    : predictions
+        .filter((item) => AT_RISK_LEVELS.includes(item.risk_level))
+        .sort((a, b) => (b.spike_percent || 0) - (a.spike_percent || 0))
+        .slice(0, 8);
 
   merged.predictions = predictions;
-  merged.critical_predictions = criticalPredictions.length
-    ? criticalPredictions
-    : fallbackSnapshot.critical_predictions;
+  merged.critical_predictions = criticalPredictions;
+  merged.is_sample = sample;
   return merged;
 }
 
 export function useSnapshot() {
-  const [snapshot, setSnapshot] = useState(() => normalizeCommandSnapshot(fallbackSnapshot));
+  const [snapshot, setSnapshot] = useState(() =>
+    normalizeCommandSnapshot(fallbackSnapshot, { sample: true }),
+  );
   const [online, setOnline] = useState(false);
+  // "loading" until the first answer, then "online" or "offline": the offline
+  // sample is shown (and badged) only once the backend is known to be unreachable.
+  const [status, setStatus] = useState("loading");
 
   async function load() {
     // Necessary: 15s cap covers the server's cold-start command-center build
@@ -258,9 +291,11 @@ export function useSnapshot() {
       if (!response.ok) throw new Error("API unavailable");
       setSnapshot(normalizeCommandSnapshot(await response.json()));
       setOnline(true);
+      setStatus("online");
     } catch {
-      setSnapshot(normalizeCommandSnapshot(fallbackSnapshot));
+      setSnapshot(normalizeCommandSnapshot(fallbackSnapshot, { sample: true }));
       setOnline(false);
+      setStatus("offline");
     } finally {
       clearTimeout(timer);
     }
@@ -272,5 +307,5 @@ export function useSnapshot() {
     return () => clearInterval(timer);
   }, []);
 
-  return { snapshot, online, refresh: load };
+  return { snapshot, online, status, refresh: load };
 }

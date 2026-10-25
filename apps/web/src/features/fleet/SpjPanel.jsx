@@ -1,6 +1,6 @@
 import { Fragment, useState, useEffect, useCallback } from "react";
 import { LocateFixed } from "lucide-react";
-import { apiGet, apiPost } from "../../shared/api/client.js";
+import { apiFetch, apiGet, apiPost } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 
 const copy = {
@@ -162,6 +162,310 @@ function errorMessage(error, label, words) {
   return `${label} (HTTP ${error.status}).`;
 }
 
+// Gap 3: evidence photos need the bearer token, so they are fetched as blobs
+// (an <img src> cannot send it) and shown from an object URL.
+function EvidencePhoto({ spjId, photo, stopName }) {
+  const { t } = useLanguage();
+  const [large, setLarge] = useState(false);
+  const [src, setSrc] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const slotKey = photo.slot.startsWith("weighing") ? "weighing" : photo.slot;
+  const slot = t(`spj6_slot_${slotKey}`);
+
+  useEffect(() => {
+    let url = null;
+    let cancelled = false;
+    const path = `/spj/${encodeURIComponent(spjId)}/evidence/${photo.n}${large ? "" : "/thumb"}`;
+    apiFetch(path)
+      .then((res) => (res.ok ? res.blob() : Promise.reject(new Error(String(res.status)))))
+      .then((blob) => {
+        if (cancelled) return;
+        url = URL.createObjectURL(blob);
+        setSrc(url);
+        setFailed(false);
+      })
+      .catch(() => !cancelled && setFailed(true));
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [spjId, photo.n, large]);
+
+  if (failed) return <span className="spj-hint">{t("spj6_photo_failed")}</span>;
+  const label = t(large ? "spj6_photo_close" : "spj6_photo_open")
+    .replace("{slot}", slot)
+    .replace("{stop}", stopName);
+  return (
+    <button
+      type="button"
+      className="spj-evidence-photo"
+      aria-label={label}
+      aria-pressed={large}
+      onClick={() => setLarge((value) => !value)}
+      data-testid={`spj-evidence-photo-${photo.n}`}
+      style={{ minWidth: "var(--tap-min)", minHeight: "var(--tap-min)", padding: 0 }}
+    >
+      {src && (
+        <img
+          src={src}
+          alt={`${slot}, ${stopName}`}
+          style={{ display: "block", width: large ? "min(100%, 480px)" : "96px", height: "auto" }}
+        />
+      )}
+    </button>
+  );
+}
+
+function GeotagNote({ geotag }) {
+  const { t } = useLanguage();
+  if (!geotag || !Number.isFinite(geotag.distance_to_stop_m)) return null;
+  const dist = Math.round(geotag.distance_to_stop_m);
+  const text =
+    geotag.status === "approx"
+      ? t("spj6_geo_approx")
+      : Number.isFinite(geotag.accuracy_m)
+        ? t("spj6_geo_gps").replace("{acc}", Math.round(geotag.accuracy_m)).replace("{dist}", dist)
+        : t("spj6_geo_gps_noacc").replace("{dist}", dist);
+  return (
+    <span className={geotag.flagged ? "pill danger" : "pill"} data-testid="spj-geotag">
+      {text}
+      {geotag.status !== "approx" && geotag.flagged && ` · ${t("spj6_geo_far")}`}
+    </span>
+  );
+}
+
+// Roles holding dispatch:create (app/core/auth.py ROLES); only they may sign off a
+// receipt weight. The server enforces it; this only hides buttons that would 403.
+const RECEIPT_REVIEW_ROLES = ["dispatcher", "supervisor", "administrator"];
+const RECEIPT_REVIEWED = ["confirmed", "corrected"];
+
+function mayReviewReceipt() {
+  try {
+    return RECEIPT_REVIEW_ROLES.includes(localStorage.getItem("pythia_role"));
+  } catch {
+    return false;
+  }
+}
+
+function receiptNeedsReview(receipt) {
+  return !!receipt && !RECEIPT_REVIEWED.includes(receipt.ocr?.status);
+}
+
+// The thumbnail is a 320 px JPEG fetched with the bearer token; the enlarged
+// view reads the stored original from the receipt-photo endpoint.
+function ReceiptPhoto({ spjId }) {
+  const { t } = useLanguage();
+  const [large, setLarge] = useState(false);
+  const [src, setSrc] = useState(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let url = null;
+    let cancelled = false;
+    const base = `/spj/${encodeURIComponent(spjId)}/receipt`;
+    const load = large
+      ? apiGet(`${base}/photo`).then((body) =>
+          body.photo_b64.startsWith("data:image/")
+            ? body.photo_b64
+            : `data:image/jpeg;base64,${body.photo_b64}`,
+        )
+      : apiFetch(`${base}/thumb`)
+          .then((res) => (res.ok ? res.blob() : Promise.reject(new Error(String(res.status)))))
+          .then((blob) => (url = URL.createObjectURL(blob)));
+    load
+      .then((next) => {
+        if (cancelled) return;
+        setSrc(next);
+        setFailed(false);
+      })
+      .catch(() => !cancelled && setFailed(true));
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [spjId, large]);
+
+  if (failed) return <span className="spj-hint">{t("spj6_photo_failed")}</span>;
+  return (
+    <button
+      type="button"
+      className="spj-evidence-photo spj-receipt-photo"
+      aria-label={t(large ? "spj7_receipt_photo_close" : "spj7_receipt_photo_open")}
+      aria-pressed={large}
+      onClick={() => setLarge((value) => !value)}
+      data-testid="spj-receipt-photo"
+    >
+      {src && (
+        <img
+          src={src}
+          alt={t("drv_receipt_photo_label")}
+          style={{ display: "block", width: large ? "min(100%, 480px)" : "96px", height: "auto" }}
+        />
+      )}
+    </button>
+  );
+}
+
+function ReceiptReview({ spj, act, pendingAction, words }) {
+  const { lang, t } = useLanguage();
+  const [correcting, setCorrecting] = useState(false);
+  const [gross, setGross] = useState("");
+  const [tare, setTare] = useState("");
+  const [invalid, setInvalid] = useState(false);
+  const receipt = spj.receipt;
+  // Receipts recorded before H10 carry only the legacy total (= gross).
+  const recordedGross = receipt.gross_weight_kg ?? receipt.total_weight_kg;
+  const ocr = receipt.ocr;
+  const status = ocr?.status || "none";
+  const reviewed = RECEIPT_REVIEWED.includes(status);
+  const allowed = mayReviewReceipt();
+  const canReview = !reviewed && allowed;
+  const path = `/spj/${encodeURIComponent(spj.spj_id)}/receipt/review`;
+  const number = (n) => Number(n).toLocaleString(lang === "en" ? "en-US" : "id-ID");
+  const kg = (n) => (n == null ? t("spj7_receipt_not_recorded") : `${number(n)} kg`);
+
+  const suggestion =
+    status === "pending"
+      ? t("drv_receipt_reading")
+      : status === "none"
+        ? t("spj7_receipt_ocr_none")
+        : ocr.gross_kg == null
+          ? t(ocr.confidence === "low" ? "drv_receipt_unreadable" : "drv_receipt_unavailable")
+          : t("drv_receipt_suggested")
+              .replace("{source}", ocr.source || "OCR")
+              .replace("{n}", number(ocr.gross_kg))
+              .replace("{extra}", reviewed ? "" : t("drv_receipt_confirm_hint"))
+              .trim();
+  const badge = reviewed
+    ? t(`spj7_receipt_badge_${status}`).replace("{who}", ocr.reviewed_by || "")
+    : t("spj7_receipt_badge_unreviewed");
+
+  const startCorrecting = () => {
+    setGross(String(recordedGross ?? ocr?.gross_kg ?? ""));
+    setTare(receipt.tare_weight_kg == null ? "" : String(receipt.tare_weight_kg));
+    setInvalid(false);
+    setCorrecting(true);
+  };
+
+  const saveCorrection = async (event) => {
+    event.preventDefault();
+    const grossKg = Number(gross);
+    const tareKg = tare.trim() === "" ? null : Number(tare);
+    const tareOk = tareKg === null || (Number.isFinite(tareKg) && tareKg > 0 && tareKg < grossKg);
+    if (!(Number.isFinite(grossKg) && grossKg > 0) || !tareOk) {
+      setInvalid(true);
+      return;
+    }
+    setInvalid(false);
+    if (await act(path, { action: "correct", gross_weight_kg: grossKg, tare_weight_kg: tareKg })) {
+      setCorrecting(false);
+    }
+  };
+
+  return (
+    <section
+      className="spj-receipt-review"
+      aria-label={t("spj7_receipt_title")}
+      data-testid={`spj-receipt-review-${spj.spj_id}`}
+    >
+      <h4>{t("spj7_receipt_title")}</h4>
+      <div className="spj-receipt-body">
+        {receipt.has_photo !== false && <ReceiptPhoto spjId={spj.spj_id} />}
+        <div className="spj-receipt-text">
+          {status !== "none" && (
+            <span className="pill info spj-receipt-badge" data-testid="spj-receipt-ocr-badge">
+              {badge}
+            </span>
+          )}
+          <p className="spj-hint" data-testid="spj-receipt-ocr-suggestion">
+            {suggestion}
+          </p>
+          <p className="spj-receipt-recorded" data-testid="spj-receipt-recorded">
+            <strong>{t("spj7_receipt_recorded")}:</strong> {t("spj7_receipt_gross")} {kg(recordedGross)} ·{" "}
+            {t("spj7_receipt_tare")} {kg(receipt.tare_weight_kg)} · {t("spj7_receipt_net")}{" "}
+            {kg(receipt.net_weight_kg)}
+          </p>
+        </div>
+      </div>
+      {!reviewed && !allowed && <p className="spj-hint">{t("spj7_receipt_readonly")}</p>}
+      {canReview && !correcting && (
+        <div className="spj-receipt-actions">
+          {status === "unreviewed" && ocr.gross_kg != null && (
+            <button
+              type="button"
+              className="compact-enforce-btn spj-receipt-btn"
+              data-testid="spj-receipt-confirm"
+              disabled={!!pendingAction}
+              onClick={() => act(path, { action: "confirm" })}
+            >
+              {t("spj7_receipt_confirm")}
+            </button>
+          )}
+          <button
+            type="button"
+            className="compact-enforce-btn spj-receipt-btn"
+            data-testid="spj-receipt-correct"
+            disabled={!!pendingAction}
+            onClick={startCorrecting}
+          >
+            {t("spj7_receipt_correct")}
+          </button>
+        </div>
+      )}
+      {canReview && correcting && (
+        <form className="spj-override-form spj-receipt-form" onSubmit={saveCorrection}>
+          <label>
+            {t("drv_receipt_weight_label")}
+            <input
+              type="number"
+              inputMode="decimal"
+              min="1"
+              step="any"
+              value={gross}
+              onChange={(event) => setGross(event.target.value)}
+              data-testid="spj-receipt-gross"
+            />
+          </label>
+          <label>
+            {t("spj7_receipt_tare_label")}
+            <input
+              type="number"
+              inputMode="decimal"
+              min="1"
+              step="any"
+              value={tare}
+              onChange={(event) => setTare(event.target.value)}
+              data-testid="spj-receipt-tare"
+            />
+          </label>
+          {invalid && (
+            <p className="spj-form-error" role="alert">
+              {t("spj7_receipt_invalid")}
+            </p>
+          )}
+          <div className="spj-receipt-actions">
+            <button
+              type="submit"
+              className="compact-enforce-btn spj-receipt-btn"
+              data-testid="spj-receipt-save"
+              disabled={!!pendingAction}
+            >
+              {t("spj7_receipt_save")}
+            </button>
+            <button
+              type="button"
+              className="compact-enforce-btn spj-receipt-btn"
+              onClick={() => setCorrecting(false)}
+            >
+              {words.close}
+            </button>
+          </div>
+        </form>
+      )}
+    </section>
+  );
+}
+
 const initialForm = {
   truck_code: "",
   destination: "TPST Bantargebang",
@@ -250,6 +554,12 @@ export function SpjCreateForm({ onCreated }) {
   // gsc P0-3: a DEMO stop at this device's GPS fix, so a judge can complete a
   // stop wherever the demo runs. The backend stores it DEMO-labelled.
   const addDemoStop = () => {
+    // A real TPS stop comes first, so the DEMO stop is stop 2 or later and the
+    // leg into it starts on the road network (the AR street path follows it).
+    if (!stops.some((stop) => !stop.demo)) {
+      setError({ demoKey: "spj_demo_needs_stop" });
+      return;
+    }
     if (!navigator.geolocation) {
       setError({ demoKey: "spj_demo_unavailable" });
       return;
@@ -476,7 +786,7 @@ export function SpjCreateForm({ onCreated }) {
 }
 
 export function SpjPanel() {
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
   const words = copy[lang] || copy.id;
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -624,6 +934,11 @@ export function SpjPanel() {
                         <span className={statusPill[s.status] || "pill"}>
                           {words[s.status] || words.unknown}
                         </span>
+                        {receiptNeedsReview(s.receipt) && (
+                          <span className="pill info" data-testid="spj-receipt-needs-review">
+                            {t("spj7_receipt_needs_review")}
+                          </span>
+                        )}
                       </td>
                     </tr>
                     {expanded && (
@@ -665,7 +980,29 @@ export function SpjPanel() {
                                           )
                                             .map(([f, kg]) => `${f} ${kg} kg`)
                                             .join(", ")}); `}
-                                        {st.officer_name && `${words.officer}: ${st.officer_name}`}
+                                        {st.officer_name && `${words.officer}: ${st.officer_name}`}{" "}
+                                        <GeotagNote geotag={st.geotag} />
+                                        {st.photos?.length > 0 && (
+                                          <div
+                                            role="group"
+                                            aria-label={`${t("spj6_photos_label")}: ${st.name}`}
+                                            style={{
+                                              display: "flex",
+                                              flexWrap: "wrap",
+                                              gap: "var(--space-2)",
+                                              marginTop: "var(--space-2)",
+                                            }}
+                                          >
+                                            {st.photos.map((photo) => (
+                                              <EvidencePhoto
+                                                key={photo.n}
+                                                spjId={s.spj_id}
+                                                photo={photo}
+                                                stopName={st.name}
+                                              />
+                                            ))}
+                                          </div>
+                                        )}
                                       </li>
                                     ),
                                 )}
@@ -673,6 +1010,9 @@ export function SpjPanel() {
                             ) : (
                               <p>{words.evidenceEmpty}</p>
                             ))}
+                          {s.receipt && (
+                            <ReceiptReview spj={s} act={act} pendingAction={pendingAction} words={words} />
+                          )}
                           {s.status === "draft" && (
                             <button
                               type="button"

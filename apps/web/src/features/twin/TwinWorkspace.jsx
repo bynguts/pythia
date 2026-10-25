@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -15,6 +15,7 @@ import {
   MapPin,
   Pause,
   Play,
+  QrCode,
   RefreshCw,
   Square,
   Satellite,
@@ -27,20 +28,28 @@ import {
   DISTRICT_LAYER_IDS,
   RISK_ORDER,
   TRUCK_PERIOD,
+  VENUE_PIN_HEIGHT_M,
   buildTwinLayers,
   dayRow,
   daySummary,
   deltaPercent,
   prepareScene,
   prepareView,
+  rankDistricts,
+  whatIfDay,
 } from "./twinLayers.js";
 import { buildTour, overviewCamera, runTour } from "./tour.js";
 import { TwinAskRail } from "./TwinAskRail.jsx";
 import { TWIN_DAYS, useTwinScene } from "./useTwinScene.js";
+import { tablePresenceText, useTableSession } from "./useTableSession.js";
 import {
   TWIN_CITIES,
   TWIN_EVENT_PRESETS,
   TWIN_VENUES,
+  dailyRisk,
+  carriedRainMm,
+  rainHeldText,
+  rainResponseText,
   readTwinParams,
   twinVenues,
   withTwinParams,
@@ -53,6 +62,11 @@ import {
   isCityBaseSource,
 } from "./cityBase3d.js";
 import "./twin.css";
+
+// "Put this on the table": the QR dialog (and its encoder) loads only when opened.
+const TwinTableHandoff = lazy(() =>
+  import("./TwinTableHandoff.jsx").then((module) => ({ default: module.TwinTableHandoff })),
+);
 
 // Same determinism contract as LiveFleetMap: Playwright sets
 // navigator.webdriver, so e2e gets an inline offline style and never waits on
@@ -104,6 +118,64 @@ const TAG_OBSTACLES = [
   ".twin-imagery-credit",
   ".maplibregl-ctrl-top-right",
 ].join(",");
+// Map labels (venue, then districts by priority) also keep clear of the landfill tag.
+const LABEL_OBSTACLES = `${TAG_OBSTACLES},.twin-landfill-tag,.twin-tour-caption,.twin-status`;
+const LABEL_GAP = 8;
+
+/** deck.gl's viewport for the map's current camera, so DOM tags project like the layers. */
+function mapViewport(map) {
+  const container = map.getContainer();
+  const center = map.getCenter();
+  return new WebMercatorViewport({
+    width: container.clientWidth,
+    height: container.clientHeight,
+    longitude: center.lng,
+    latitude: center.lat,
+    zoom: map.getZoom(),
+    pitch: map.getPitch(),
+    bearing: map.getBearing(),
+    padding: map.getPadding(),
+  });
+}
+
+/** Rects (relative to the map box) of the visible elements matching `selector` in the stage. */
+function obstacleRects(map, selector) {
+  const box = map.getContainer().getBoundingClientRect();
+  const stage = map.getContainer().closest(".twin-stage");
+  return [...(stage?.querySelectorAll(selector) || [])]
+    .filter((el) => getComputedStyle(el).visibility !== "hidden")
+    .map((el) => el.getBoundingClientRect())
+    .filter((r) => r.width > 0 && r.height > 0)
+    .map((r) => [r.left - box.left, r.top - box.top, r.right - box.left, r.bottom - box.top]);
+}
+
+function overlaps([l, t, r, b], rects) {
+  return rects.some(([ol, ot, or, ob]) => !(r <= ol || l >= or || b <= ot || t >= ob));
+}
+
+/**
+ * The scene's event venue (what the scene was computed for), with the reach the
+ * forecast used: `scenario.event.radius_m` (kecamatan whose real boundary lies
+ * within it share the crowd) and how many districts it reached. The demo city
+ * puts the whole crowd in its nearest district, so it states no radius and
+ * gets no ring.
+ */
+function sceneVenue(scene) {
+  const scenario = scene?.scenario;
+  if (!scenario?.event_attendance || scenario.event_lat == null || scenario.event_lng == null) return null;
+  const lat = Number(scenario.event_lat);
+  const lng = Number(scenario.event_lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const stated = Number(scenario.event?.radius_m ?? NaN);
+  const radiusM = Number.isFinite(stated) && stated > 0 ? stated : null;
+  const reached = Array.isArray(scenario.event?.districts) ? scenario.event.districts.length : null;
+  // The scene names its preset only when asked by id; the twin asks by coordinates.
+  const venues = scene.venues || [];
+  const preset =
+    venues.find((v) => v.id === scenario.venue) ||
+    venues.find((v) => Math.abs(v.lat - lat) < 1e-4 && Math.abs(v.lng - lng) < 1e-4);
+  return { lat, lng, radiusM, reached, name: preset?.name || null };
+}
 
 /**
  * Top-left for a w×h box near (x, y), clamped inside a width×height canvas
@@ -174,6 +246,9 @@ export function TwinWorkspace({ onCityChange }) {
   const [eventPreset, setEventPreset] = useState(initial.event);
   const [venueId, setVenueId] = useState(initial.venue);
   const [day, setDay] = useState(initial.day);
+  // The day the what-if (rain and/or event) applies to: the selected day when the
+  // scenario was last edited. Stepping or playing the timeline never moves it.
+  const [scenarioDay, setScenarioDay] = useState(initial.scenarioDay);
   const [playing, setPlaying] = useState(false);
   // The scene's queue metric follows the selected day, but not every step of
   // timeline playback (that would refetch the scene once per animation frame).
@@ -204,13 +279,16 @@ export function TwinWorkspace({ onCityChange }) {
   const [sceneVenues, setSceneVenues] = useState(null);
   const venues = twinVenues(city, sceneVenues?.city === city ? sceneVenues.list : null);
   const venue = venues.find((v) => v.id === venueId) || venues[0];
+  const whatIf = rainfall > 0 || preset.attendance > 0;
   const request = {
     city,
     rainfall,
     attendance: preset.attendance,
     eventLat: preset.attendance ? venue.lat : null,
     eventLng: preset.attendance ? venue.lng : null,
+    venue: preset.attendance ? venue.id : null,
     day: queueDay,
+    scenarioDay: whatIf ? scenarioDay : null,
   };
   const { scene, loading, error, settled, retry } = useTwinScene(request);
   useEffect(() => {
@@ -220,14 +298,21 @@ export function TwinWorkspace({ onCityChange }) {
   const prepared = useMemo(() => (scene ? prepareScene(scene) : null), [scene]);
   const dayCount = scene?.horizon?.dates?.length || TWIN_DAYS;
   const safeDay = Math.min(day, dayCount - 1);
+  // "Put this on the table": once started, every scenario change here is written
+  // to the shared XR session that the phones on the table follow.
+  const table = useTableSession({
+    city,
+    rainfall_mm: rainfall,
+    event_preset: eventPreset,
+    venue_id: venue.id,
+    day: Math.max(0, Math.min(TWIN_DAYS - 1, safeDay)),
+    scenario_day: Math.max(0, Math.min(TWIN_DAYS - 1, scenarioDay)),
+    selected_id: selectedId,
+  });
+  const [tableOpen, setTableOpen] = useState(false);
+  const tableTriggerRef = useRef(null);
   // Mark the event the scene was computed for, not the pending preset.
-  const sceneEvent = useMemo(
-    () =>
-      scene?.scenario?.event_attendance && scene.scenario.event_lat != null
-        ? { lat: scene.scenario.event_lat, lng: scene.scenario.event_lng }
-        : null,
-    [scene],
-  );
+  const sceneEvent = useMemo(() => sceneVenue(scene), [scene]);
   // Data arrays for the layers, rebuilt only when the view changes — never
   // per animation frame.
   const view = useMemo(
@@ -235,6 +320,9 @@ export function TwinWorkspace({ onCityChange }) {
     [scene, prepared, safeDay, selectedId, sceneEvent],
   );
   const summary = useMemo(() => daySummary(scene, safeDay), [scene, safeDay]);
+  // Each day's at-risk count (horizon.daily_districts_at_risk), so a dry today
+  // never reads as a calm week (teardown v3 fix 6).
+  const weekRisk = useMemo(() => dailyRisk(scene), [scene]);
   const ready = mapReady && settled && scene?.city?.id === city;
 
   const number = useMemo(() => new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }), [locale]);
@@ -390,30 +478,83 @@ export function TwinWorkspace({ onCityChange }) {
   const queueHour = Number.isInteger(queue?.modelled_hour)
     ? t("twin_queue_peak_hour").replace("{hour}", `${String(queue.modelled_hour).padStart(2, "0")}:00`)
     : queue?.hour_label || null;
-  // The peak-hour wait sits next to the same day's average (the HUD/Ask headline),
-  // so "100 min" and "65.2 min/truck" read as peak vs day, not as a contradiction.
-  const queueDayAverage = queue?.minutes_per_truck?.baseline_mean;
+  // Optional field: only Jakarta scenes carry the simulated per-truck queue time.
+  const queueMetric = queue?.minutes_per_truck;
+  const queueMetricOk =
+    Number.isFinite(queueMetric?.baseline_mean) && Number.isFinite(queueMetric?.staggered_mean);
+  // The beacon's peak hour is the current-practice (unstaggered) arm, and says so.
   const queuePeakLine = queueHour
-    ? t("twin_queue_peak")
+    ? t("twr_queue_peak_unstaggered")
         .replace("{peak}", queueHour)
         .replace("{trucks}", number.format(queue.trucks_in_queue ?? 0))
         .replace("{wait}", number.format(queue.avg_wait_minutes ?? 0))
     : null;
-  const queueDayLine = Number.isFinite(queueDayAverage)
-    ? t("twin_queue_day_avg").replace("{n}", minutesNumber.format(queueDayAverage))
+  // The same clock hour with Pythia's stagger (landfill_queue.peak_hour.staggered,
+  // the same seeded simulated day as the beacon), when it is that hour.
+  const staggeredPeak = queue?.peak_hour?.staggered;
+  const staggeredPeakLine =
+    queuePeakLine &&
+    staggeredPeak?.hour === queue.modelled_hour &&
+    Number.isFinite(staggeredPeak?.mean_wait_minutes)
+      ? t("twr_queue_peak_staggered")
+          .replace("{trucks}", number.format(staggeredPeak.queue_trucks_max ?? 0))
+          .replace("{wait}", number.format(staggeredPeak.mean_wait_minutes))
+      : null;
+  // The day mean, unstaggered next to staggered: the peak-hour wait and the
+  // headline then read as peak vs day and before vs after, not as a contradiction.
+  const queueDayLine = queueMetricOk
+    ? t("twr_queue_day_mean")
+        .replace("{from}", minutesNumber.format(queueMetric.baseline_mean))
+        .replace("{to}", minutesNumber.format(queueMetric.staggered_mean))
     : null;
+  // Teardown v3 N6: the Fleet KPI queue is the unscaled normal day; this beacon is
+  // scaled to the selected day (landfill_queue.day_basis). Say which, and why.
+  const dayBasis = queue?.day_basis;
+  const basisTrips = dayBasis?.trucks_per_day;
+  const basisNormalTrips = dayBasis?.normal_trucks_per_day;
+  const basisHasTrips = Number.isFinite(basisTrips) && Number.isFinite(basisNormalTrips);
+  const queueScaledDay = basisHasTrips
+    ? basisTrips !== basisNormalTrips
+    : queueMetric?.scenario_scaled === true;
+  const queueBasisLine =
+    queue && (queueMetric || dayBasis)
+      ? [
+          t(
+            !queueScaledDay
+              ? "ufx_queue_basis_normal"
+              : dayBasis?.id === "forecast_weather"
+                ? "ufx_queue_basis_forecast"
+                : "ufx_queue_basis_scenario",
+          ),
+          queueScaledDay && basisHasTrips
+            ? t("ufx_queue_basis_trips")
+                .replace("{n}", number.format(basisTrips))
+                .replace("{normal}", number.format(basisNormalTrips))
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : null;
   const landfillLines = landfillName
-    ? [landfillName, queue ? queuePeakLine : t("twin_queue_none"), queueDayLine, queueClassText].filter(
-        Boolean,
-      )
+    ? [
+        landfillName,
+        queue ? queuePeakLine : t("twin_queue_none"),
+        staggeredPeakLine,
+        queueDayLine,
+        queueBasisLine,
+        queueClassText,
+      ].filter(Boolean)
     : [];
   const queueHourLine = queue ? queueHour : null;
   const landfillLabel = landfillLines.length ? landfillLines.join("\n") : null;
 
+  // The last layer list drawn, for the test hook's layer inspector.
+  const layersRef = useRef([]);
   const draw = useCallback(() => {
     const overlay = overlayRef.current;
     if (!overlay) return;
-    overlay.setProps({ layers: buildTwinLayers({ ...frameRef.current, time: clockRef.current }) });
+    layersRef.current = buildTwinLayers({ ...frameRef.current, time: clockRef.current });
+    overlay.setProps({ layers: layersRef.current });
   }, []);
 
   useEffect(() => {
@@ -436,19 +577,8 @@ export function TwinWorkspace({ onCityChange }) {
     const tag = landfillTagRef.current;
     const prep = frameRef.current.prepared;
     if (!map || !tag || !prep?.landfill) return;
-    const width = map.getContainer().clientWidth;
-    const height = map.getContainer().clientHeight;
-    const center = map.getCenter();
-    const viewport = new WebMercatorViewport({
-      width,
-      height,
-      longitude: center.lng,
-      latitude: center.lat,
-      zoom: map.getZoom(),
-      pitch: map.getPitch(),
-      bearing: map.getBearing(),
-      padding: map.getPadding(),
-    });
+    const viewport = mapViewport(map);
+    const { width, height } = viewport;
     const [x, y] = viewport.project([prep.landfill.lng, prep.landfill.lat, prep.beaconHeight]);
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
       tag.style.visibility = "hidden";
@@ -461,18 +591,13 @@ export function TwinWorkspace({ onCityChange }) {
     const [bx, by] = viewport.project([prep.landfill.lng, prep.landfill.lat, 0]);
     const w = tag.offsetWidth;
     const h = tag.offsetHeight;
-    const box = map.getContainer().getBoundingClientRect();
-    const stage = map.getContainer().closest(".twin-stage");
-    const obstacles = [...(stage?.querySelectorAll(TAG_OBSTACLES) || [])].map((el) => {
-      const r = el.getBoundingClientRect();
-      return [r.left - box.left, r.top - box.top, r.right - box.left, r.bottom - box.top];
-    });
+    const obstacles = obstacleRects(map, TAG_OBSTACLES);
     const fits = ([l, t]) =>
       l >= CANVAS_MARGIN &&
       t >= CANVAS_MARGIN &&
       l + w <= width - CANVAS_MARGIN &&
       t + h <= height - CANVAS_MARGIN &&
-      obstacles.every(([ol, ot, or, ob]) => l + w <= ol || l >= or || t + h <= ot || t >= ob);
+      !overlaps([l, t, l + w, t + h], obstacles);
     const below = by + TAG_GAP / 2;
     const candidates = [
       ["right", [x + TAG_GAP, y - h / 2]],
@@ -488,20 +613,79 @@ export function TwinWorkspace({ onCityChange }) {
     tag.style.visibility = "visible";
     tag.style.transform = `translate(${left}px, ${top}px)`;
   }, []);
+
+  // Map labels are DOM chips, so they always sit on top of the 3D blocks and
+  // the arcs. They are placed in priority order (venue, selection, then the
+  // risk ranking); a chip that cannot find a free spot beside its anchor is
+  // hidden rather than drawn over another label or an instrument.
+  const labelsRef = useRef(null);
+  const placeLabels = useCallback(() => {
+    const map = mapRef.current;
+    const layer = labelsRef.current;
+    if (!map || !layer) return;
+    const chips = [...layer.querySelectorAll(".twin-label")];
+    if (!chips.length) return;
+    const viewport = mapViewport(map);
+    const { width, height } = viewport;
+    const taken = obstacleRects(map, LABEL_OBSTACLES);
+    for (const chip of chips) {
+      const [x, y] = viewport.project([
+        Number(chip.dataset.lng),
+        Number(chip.dataset.lat),
+        Number(chip.dataset.z) || 0,
+      ]);
+      const w = chip.offsetWidth;
+      const h = chip.offsetHeight;
+      const spots = [
+        ["above", [x - w / 2, y - h - LABEL_GAP]],
+        ["right", [x + LABEL_GAP, y - h / 2]],
+        ["left", [x - LABEL_GAP - w, y - h / 2]],
+        ["below", [x - w / 2, y + LABEL_GAP]],
+      ];
+      const found =
+        Number.isFinite(x) &&
+        Number.isFinite(y) &&
+        spots.find(
+          ([, [l, t]]) =>
+            l >= CANVAS_MARGIN &&
+            t >= CANVAS_MARGIN &&
+            l + w <= width - CANVAS_MARGIN &&
+            t + h <= height - CANVAS_MARGIN &&
+            !overlaps([l, t, l + w, t + h], taken),
+        );
+      if (!found) {
+        chip.dataset.placed = "false";
+        chip.style.visibility = "hidden";
+        continue;
+      }
+      const [side, [l, t]] = found;
+      taken.push([l, t, l + w, t + h]);
+      chip.dataset.placed = "true";
+      chip.dataset.side = side;
+      chip.style.visibility = "visible";
+      chip.style.transform = `translate(${Math.round(l)}px, ${Math.round(t)}px)`;
+    }
+  }, []);
+
+  // The landfill tag first: the labels then keep clear of it.
+  const placeOverlays = useCallback(() => {
+    placeLandfillTag();
+    placeLabels();
+  }, [placeLandfillTag, placeLabels]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return undefined;
-    map.on("move", placeLandfillTag);
-    map.on("resize", placeLandfillTag);
+    map.on("move", placeOverlays);
+    map.on("resize", placeOverlays);
     return () => {
-      map.off("move", placeLandfillTag);
-      map.off("resize", placeLandfillTag);
+      map.off("move", placeOverlays);
+      map.off("resize", placeOverlays);
     };
-  }, [mapReady, placeLandfillTag]);
+  }, [mapReady, placeOverlays]);
   // A passive effect, so it runs after the frame effect above has stored `prepared`.
   useEffect(() => {
-    placeLandfillTag();
-  }, [landfillLabel, prepared, mapReady, placeLandfillTag]);
+    placeOverlays();
+  }, [landfillLabel, prepared, view, mapReady, placeOverlays]);
 
   // The district tooltip flips to the other side of the cursor near an edge.
   const tooltipRef = useRef(null);
@@ -548,14 +732,15 @@ export function TwinWorkspace({ onCityChange }) {
   const navigate = useNavigate();
   const urlScenarioRef = useRef(initial);
   useEffect(() => {
-    const scenario = { city, rain: rainfall, event: eventPreset, venue: venue.id, day };
+    const scenario = { city, rain: rainfall, event: eventPreset, venue: venue.id, day, scenarioDay };
     const last = urlScenarioRef.current;
     if (
       last.city === city &&
       last.rain === rainfall &&
       last.event === eventPreset &&
       last.venue === venue.id &&
-      last.day === day
+      last.day === day &&
+      last.scenarioDay === scenarioDay
     )
       return undefined;
     const timer = setTimeout(() => {
@@ -565,7 +750,7 @@ export function TwinWorkspace({ onCityChange }) {
         navigate({ pathname: window.location.pathname, search }, { replace: true });
     }, 300);
     return () => clearTimeout(timer);
-  }, [city, rainfall, eventPreset, venue.id, day, navigate]);
+  }, [city, rainfall, eventPreset, venue.id, day, scenarioDay, navigate]);
 
   // ---- Ask Pythia: apply the scenario Ana ran, in place ----------------------
   const applyScenario = useCallback(
@@ -592,7 +777,9 @@ export function TwinWorkspace({ onCityChange }) {
       setRainfall(Math.max(0, Math.min(RAIN_MAX_MM, rain)));
       setEventPreset(nextPreset.id);
       setVenueId(nextVenue);
-      setDay(Math.max(0, Math.min(TWIN_DAYS - 1, Number(asked.day) || 0)));
+      const askedDay = Math.max(0, Math.min(TWIN_DAYS - 1, Number(asked.day) || 0));
+      setDay(askedDay);
+      setScenarioDay(askedDay);
     },
     [city, venueId],
   );
@@ -652,11 +839,29 @@ export function TwinWorkspace({ onCityChange }) {
       scenario: scene?.scenario ?? null,
       venue: venue.id,
       districtsAtRisk: summary.atRisk,
+      dailyAtRisk: weekRisk.map((entry) => entry.count),
       totalTons: summary.tons,
       landfillLabel,
       outlinedDistricts: prepared?.outlined.length ?? 0,
       rainDrops: prepared?.rain.length ?? 0,
+      // Haul arcs drawn (named + one bundle) and how many districts the bundle carries.
+      flowArcs: view?.flowData.length ?? 0,
+      flowBundled: view?.flowData.find((f) => f.bundle)?.count ?? 0,
+      labelledDistricts: view?.labelled.map(({ d }) => d.id) ?? [],
+      venuePin: view?.event ? { ...view.event } : null,
       tourActive: Boolean(tour),
+      /** Props of a drawn layer by id, or null: what the GPU is actually told to draw. */
+      inspectLayer: (id) => {
+        const layer = layersRef.current.find((candidate) => candidate.id === id);
+        if (!layer) return null;
+        const { data, wireframe, extruded, parameters } = layer.props;
+        return {
+          count: Array.isArray(data) ? data.length : null,
+          wireframe: Boolean(wireframe),
+          extruded: Boolean(extruded),
+          depthCompare: parameters?.depthCompare ?? null,
+        };
+      },
       startTour,
       stopTour,
       setDay,
@@ -665,7 +870,20 @@ export function TwinWorkspace({ onCityChange }) {
       setEventPreset,
       setVenue: setVenueId,
     };
-  }, [ready, scene, prepared, safeDay, summary, tour, startTour, stopTour, landfillLabel, venue.id]);
+  }, [
+    ready,
+    scene,
+    prepared,
+    view,
+    safeDay,
+    summary,
+    weekRisk,
+    tour,
+    startTour,
+    stopTour,
+    landfillLabel,
+    venue.id,
+  ]);
   useEffect(
     () => () => {
       delete window.__pythiaTwin;
@@ -675,6 +893,26 @@ export function TwinWorkspace({ onCityChange }) {
 
   // ---- derived copy ---------------------------------------------------------
   const truckCapacity = /([\d.]+)\s*t/.exec(scene?.units?.trucks_required || "")?.[1];
+  // Trucks required (tonnes / capacity per shift) and the queue model's gate
+  // trips per day are different counts: say how they relate, and where the
+  // trip count comes from (the real median when unscaled, else scaled from it).
+  const gateTrips = queueMetric?.trucks_per_day;
+  const trucksHelper =
+    Number.isFinite(gateTrips) && summary.trucks > 0
+      ? t("twr_trucks_helper_trips")
+          .replace("{n}", truckCapacity)
+          .replace("{trips}", number.format(gateTrips))
+          .replace("{per}", minutesNumber.format(gateTrips / summary.trucks))
+          .replace(
+            "{basis}",
+            t(queueMetric.scenario_scaled ? "twr_trips_basis_scaled" : "twr_trips_basis_median"),
+          )
+      : t("twin_metric_trucks_helper").replace("{n}", truckCapacity);
+  // The week's busiest day by at-risk count (first one on a tie).
+  const weekPeakRisk = weekRisk.reduce(
+    (best, entry, day) => (!best || entry.count > best.count ? { ...entry, day } : best),
+    null,
+  );
   const metrics = [
     {
       label: t("twin_metric_total"),
@@ -692,13 +930,22 @@ export function TwinWorkspace({ onCityChange }) {
     {
       label: t("twin_metric_risk"),
       value: scene ? number.format(summary.atRisk) : "—",
-      helper: t("twin_metric_risk_helper").replace("{n}", number.format(scene?.districts?.length ?? 0)),
+      helper: [
+        t("twin_metric_risk_helper").replace("{n}", number.format(scene?.districts?.length ?? 0)),
+        weekPeakRisk && weekPeakRisk.count > summary.atRisk
+          ? t("ufx_twin_risk_week_peak")
+              .replace("{n}", number.format(weekPeakRisk.count))
+              .replace("{date}", formatDate(scene?.horizon?.dates?.[weekPeakRisk.day]))
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
       tone: summary.atRisk > 0 ? "danger" : "neutral",
     },
     {
       label: t("twin_metric_trucks"),
       value: scene ? number.format(summary.trucks) : "—",
-      helper: truckCapacity ? t("twin_metric_trucks_helper").replace("{n}", truckCapacity) : "",
+      helper: truckCapacity ? trucksHelper : "",
     },
   ];
 
@@ -712,16 +959,7 @@ export function TwinWorkspace({ onCityChange }) {
         new Date(scene.generated_at),
       )
     : null;
-  const riskList = useMemo(() => {
-    if (!scene) return [];
-    return scene.districts
-      .map((district) => {
-        const row = dayRow(district, safeDay);
-        return { district, row, delta: deltaPercent(row), rank: RISK_ORDER.indexOf(row.risk) };
-      })
-      .sort((a, b) => b.rank - a.rank || b.delta - a.delta)
-      .slice(0, RISK_LIST_SIZE);
-  }, [scene, safeDay]);
+  const riskList = useMemo(() => rankDistricts(scene, safeDay).slice(0, RISK_LIST_SIZE), [scene, safeDay]);
   const formatDelta = (delta) => `${delta >= 0 ? "+" : "−"}${Math.abs(delta).toFixed(1)}%`;
   // The XR tabletop opens on the same scenario the twin shows.
   const xrHref = (() => {
@@ -732,41 +970,95 @@ export function TwinWorkspace({ onCityChange }) {
       params.set("event_lat", String(venue.lat));
       params.set("event_lng", String(venue.lng));
     }
+    // The tabletop puts the what-if on the same day as the twin.
+    if (whatIf && scenarioDay > 0) params.set("scenario_day", String(scenarioDay));
     return `/xr?${params}`;
   })();
+  // Data honesty: the selected day's rain says where it comes from (scene.weather):
+  // the what-if, the Open-Meteo forecast (a forecast, never observed weather), or
+  // assumed dry because no forecast was available. [chip copy, map label copy].
+  const weather = scene?.weather;
+  const weatherDay = weather?.days?.[safeDay] || null;
+  const weatherRain = Number(weatherDay?.rainfall_mm) || 0;
+  const [rainHudKey, rainLabelKey] = !weatherDay
+    ? [rainfall > 0 ? "twin_hud_rain" : "twin_hud_no_rain", null]
+    : weatherDay.input === "scenario"
+      ? ["twin_hud_rain", "twin_rain_label"]
+      : weatherDay.input === "forecast"
+        ? weatherRain > 0
+          ? ["twin_hud_rain_forecast", "twin_rain_forecast_label"]
+          : ["twin_hud_rain_forecast_dry", "twin_rain_forecast_dry_label"]
+        : weather.class === "UNAVAILABLE"
+          ? weather.source === "not_applicable"
+            ? ["twin_hud_rain_assumed_dry", "twin_rain_demo_city_label"]
+            : ["twin_hud_rain_unavailable", "twin_rain_unavailable_label"]
+          : ["twin_hud_no_rain", null];
+  const rainMm = number.format(weatherDay ? weatherRain : rainfall);
+  const dayText = (index) =>
+    index === 0 ? t("twin_today") : t("twin_hud_day").replace("{n}", number.format(index));
+  // A dry day still carries the previous days' forecast rain in its 3-day sum.
+  const carriedMm = carriedRainMm(weather, safeDay);
+  const carryText =
+    carriedMm === null ? null : t("ufx_twin_rain_carry").replace("{n}", number.format(carriedMm));
+  // Rain beyond the training range: the effect is held at the training maximum.
+  const heldText = rainHeldText(t, weather, safeDay, minutesNumber.format);
+  const rainResponse = rainResponseText(t, weather, minutesNumber.format);
+  const rainLabel =
+    [rainLabelKey ? t(rainLabelKey).replace("{n}", rainMm) : null, heldText, carryText]
+      .filter(Boolean)
+      .join(" · ") || null;
+  // The what-if sits on its own day; say so when the timeline shows another one.
+  const sceneScenario = scene?.scenario;
+  const sceneWhatIfDay = whatIfDay(sceneScenario);
+  const whatIfElsewhere =
+    Boolean(sceneScenario?.rainfall_mm > 0 || sceneScenario?.event_attendance > 0) &&
+    sceneWhatIfDay !== safeDay;
   // Presentation HUD: the scenario (cause) next to the queue headline (effect).
-  const scenarioText = [
-    rainfall > 0 ? t("twin_hud_rain").replace("{n}", number.format(rainfall)) : t("twin_hud_no_rain"),
+  const rainHud = t(rainHudKey).replace("{n}", rainMm);
+  const scenarioTail = [
+    carryText,
     preset.attendance
       ? t("twin_hud_event")
           .replace("{n}", compactNumber.format(preset.attendance))
           .replace("{venue}", venue.name)
       : t("twin_hud_no_event"),
-    safeDay === 0 ? t("twin_today") : t("twin_hud_day").replace("{n}", number.format(safeDay)),
-  ].join(" · ");
-  // Optional field: only Jakarta scenes carry the simulated per-truck queue time.
-  const queueMetric = queue?.minutes_per_truck;
+    dayText(safeDay),
+    whatIfElsewhere ? t("twin_hud_whatif_day").replace("{day}", dayText(sceneWhatIfDay)) : null,
+  ];
+  const scenarioText = [rainHud, heldText, ...scenarioTail].filter(Boolean).join(" · ");
+  // The present chip stays one short line: a held rain effect is marked there and
+  // spelled out in full on the map's rain label (and the chip's title / screen-reader text).
+  const scenarioChipText = [heldText ? t("w8_twin_hud_rain_held").replace("{rain}", rainHud) : rainHud]
+    .concat(scenarioTail)
+    .filter(Boolean)
+    .join(" · ");
   // When the backend scaled the queue to the scenario/day, the normal day sits next to it.
   const normalDay = queueMetric?.normal_day;
   const queueScaled =
     queueMetric?.scenario_scaled === true &&
     Number.isFinite(normalDay?.baseline_mean) &&
     Number.isFinite(normalDay?.staggered_mean);
-  // The unstaggered figure carries its departure-spread sensitivity band when the payload has one.
+  // The unstaggered figure's band is a sensitivity range over assumed departure
+  // spreads (the same simulated day re-run per spread), not a confidence interval.
   const baselineBand = queueMetric?.sensitivity?.baseline_band;
+  const spreads = (queueMetric?.assumptions?.sensitivity_departure_sd_minutes || []).filter(Number.isFinite);
   const bandText =
     Array.isArray(baselineBand) && baselineBand.length === 2 && baselineBand.every(Number.isFinite)
-      ? ` (${minutesNumber.format(baselineBand[0])}–${minutesNumber.format(baselineBand[1])})`
+      ? ` ${t(spreads.length >= 2 ? "twr_queue_band" : "twr_queue_band_generic")
+          .replace("{low}", minutesNumber.format(baselineBand[0]))
+          .replace("{high}", minutesNumber.format(baselineBand[1]))
+          .replace("{min}", number.format(Math.min(...spreads)))
+          .replace("{max}", number.format(Math.max(...spreads)))}`
       : "";
-  const queueMetricText =
-    queueMetric && Number.isFinite(queueMetric.baseline_mean) && Number.isFinite(queueMetric.staggered_mean)
-      ? t(queueScaled ? "twin_hud_queue_scenario" : "twin_hud_queue")
-          .replace("{from}", `${minutesNumber.format(queueMetric.baseline_mean)}${bandText}`)
-          .replace("{to}", minutesNumber.format(queueMetric.staggered_mean))
-          .replace("{normal_from}", queueScaled ? minutesNumber.format(normalDay.baseline_mean) : "")
-          .replace("{normal_to}", queueScaled ? minutesNumber.format(normalDay.staggered_mean) : "")
-          .replace("{class}", classLabel(queueMetric.classification || queueClass || "SIMULATED"))
-      : null;
+  const queueMetricText = queueMetricOk
+    ? t(queueScaled ? "twr_hud_queue_scenario" : "twr_hud_queue")
+        .replace("{from}", minutesNumber.format(queueMetric.baseline_mean))
+        .replace("{band}", bandText)
+        .replace("{to}", minutesNumber.format(queueMetric.staggered_mean))
+        .replace("{normal_from}", queueScaled ? minutesNumber.format(normalDay.baseline_mean) : "")
+        .replace("{normal_to}", queueScaled ? minutesNumber.format(normalDay.staggered_mean) : "")
+        .replace("{class}", classLabel(queueMetric.classification || queueClass || "SIMULATED"))
+    : null;
   const totals = scene?.horizon?.daily_total_tons || [];
   const maxTotal = Math.max(1, ...totals);
   const minTotal = Math.min(...totals, maxTotal);
@@ -848,6 +1140,7 @@ export function TwinWorkspace({ onCityChange }) {
                 onClick={() => {
                   setCity(id);
                   setVenueId(TWIN_VENUES[id][0].id);
+                  setScenarioDay(day);
                   setSelectedId(null);
                 }}
               >
@@ -878,8 +1171,16 @@ export function TwinWorkspace({ onCityChange }) {
             step="5"
             value={rainfall}
             aria-valuetext={`${rainfall} mm`}
-            onChange={(e) => setRainfall(Number(e.target.value))}
+            onChange={(e) => {
+              setRainfall(Number(e.target.value));
+              setScenarioDay(day);
+            }}
           />
+          {rainResponse && (
+            <p className="twin-note" data-testid="twin-rain-response">
+              {rainResponse}
+            </p>
+          )}
           <span className="twin-field-label" id="twin-event-label">
             <Users size={15} aria-hidden="true" /> {t("twin_event")}
           </span>
@@ -890,7 +1191,10 @@ export function TwinWorkspace({ onCityChange }) {
                 type="button"
                 data-testid={`twin-event-${p.id}`}
                 aria-pressed={eventPreset === p.id}
-                onClick={() => setEventPreset(p.id)}
+                onClick={() => {
+                  setEventPreset(p.id);
+                  setScenarioDay(day);
+                }}
               >
                 {p.attendance
                   ? t("twin_event_preset")
@@ -915,7 +1219,10 @@ export function TwinWorkspace({ onCityChange }) {
                 type="button"
                 data-testid={`twin-venue-${v.id}`}
                 aria-pressed={venue.id === v.id}
-                onClick={() => setVenueId(v.id)}
+                onClick={() => {
+                  setVenueId(v.id);
+                  setScenarioDay(day);
+                }}
               >
                 {v.name}
               </button>
@@ -1007,8 +1314,8 @@ export function TwinWorkspace({ onCityChange }) {
   );
 
   const status = !scene && loading ? "loading" : error ? "error" : loading ? "refreshing" : null;
-  // Rain the scene was computed for (what the overlay draws), not the pending slider value.
-  const sceneRain = scene?.scenario?.rainfall_mm || 0;
+  // The what-if rain the overlay draws: the scene's, on its own day only.
+  const sceneRain = sceneWhatIfDay === safeDay ? sceneScenario?.rainfall_mm || 0 : 0;
 
   return (
     <section
@@ -1073,11 +1380,58 @@ export function TwinWorkspace({ onCityChange }) {
               aria-label={t("twin_map_label").replace("{city}", scene?.city?.name || "")}
             />
 
-            {sceneRain > 0 && (
-              <p className="twin-rain-label" data-testid="twin-rain-label">
+            {rainLabel && (
+              <p
+                className="twin-rain-label"
+                data-testid="twin-rain-label"
+                data-input={weatherDay?.input || ""}
+                data-carried-mm={carriedMm === null ? undefined : String(carriedMm)}
+                title={weather?.label || undefined}
+              >
                 <CloudRain size={14} aria-hidden="true" />
-                {t("twin_rain_label").replace("{n}", number.format(sceneRain))}
+                {rainLabel}
               </p>
+            )}
+
+            {view && mapReady && (
+              // Names on the map, always above the blocks: placed (or hidden on
+              // collision) by placeLabels, venue first, then the risk ranking.
+              <div className="twin-labels" ref={labelsRef} aria-hidden="true" data-testid="twin-labels">
+                {view.event && (
+                  <span
+                    className="twin-label is-venue"
+                    data-testid="twin-venue-label"
+                    data-lng={view.event.lng}
+                    data-lat={view.event.lat}
+                    data-z={VENUE_PIN_HEIGHT_M}
+                  >
+                    <MapPin size={13} aria-hidden="true" />
+                    <span>{view.event.name || t("twr_venue_unnamed")}</span>
+                    {view.event.radiusM && (
+                      <small>
+                        {t("twr_venue_radius")
+                          .replace("{km}", minutesNumber.format(view.event.radiusM / 1000))
+                          .replace("{n}", number.format(view.event.reached ?? 0))}
+                      </small>
+                    )}
+                  </span>
+                )}
+                {view.labelled.map(({ d, row, z, selected: isSelected }) => (
+                  <span
+                    key={d.id}
+                    className={`twin-label risk-${row.risk}${isSelected ? " is-selected" : ""}`}
+                    data-testid="twin-label"
+                    data-district={d.id}
+                    data-lng={d.lng}
+                    data-lat={d.lat}
+                    data-z={z}
+                  >
+                    <i aria-hidden="true" />
+                    <span>{d.name}</span>
+                    <b>{number.format(row.predicted_tons)} t</b>
+                  </span>
+                ))}
+              </div>
             )}
 
             {landfillLabel && (
@@ -1095,9 +1449,11 @@ export function TwinWorkspace({ onCityChange }) {
                         ? "is-name"
                         : line === queuePeakLine
                           ? "is-hour"
-                          : line === queueClassText
-                            ? "is-class"
-                            : undefined
+                          : line === staggeredPeakLine || line === queueDayLine
+                            ? "is-staggered"
+                            : line === queueClassText || line === queueBasisLine
+                              ? "is-class"
+                              : undefined
                     }
                   >
                     {line}
@@ -1131,7 +1487,14 @@ export function TwinWorkspace({ onCityChange }) {
                 aria-label={t("twin_hud_scenario_label")}
                 data-testid="twin-scenario-chip"
               >
-                <span data-testid="twin-scenario-text">{scenarioText}</span>
+                <span data-testid="twin-scenario-text" title={heldText || undefined}>
+                  {scenarioChipText}
+                </span>
+                {heldText && (
+                  <span className="sr-only" data-testid="twin-scenario-held">
+                    {heldText}
+                  </span>
+                )}
                 {queueMetricText && (
                   <strong data-testid="twin-present-queue-metric" title={queueMetric.source || undefined}>
                     {queueMetricText}
@@ -1199,7 +1562,12 @@ export function TwinWorkspace({ onCityChange }) {
                 <span>
                   {tour.index + 1} / {tour.total}
                 </span>
-                <strong>{t(`twin_tour_${tour.step.key}`).replace("{name}", tour.step.name || "")}</strong>
+                <strong>
+                  {t(tour.step.key === "venue" ? "twr_tour_venue" : `twin_tour_${tour.step.key}`).replace(
+                    "{name}",
+                    tour.step.name || (tour.step.key === "venue" ? t("twr_venue_unnamed") : ""),
+                  )}
+                </strong>
                 <button type="button" onClick={stopTour}>
                   <Square size={14} aria-hidden="true" /> {t("twin_tour_stop")}
                 </button>
@@ -1278,6 +1646,24 @@ export function TwinWorkspace({ onCityChange }) {
                 </button>
               )}
               <button
+                ref={tableTriggerRef}
+                type="button"
+                className="twin-table-toggle"
+                data-testid="twin-table-open"
+                aria-haspopup="dialog"
+                aria-expanded={tableOpen}
+                onClick={() => setTableOpen(true)}
+              >
+                <QrCode size={16} aria-hidden="true" />
+                {table.code ? (
+                  <span data-testid="twin-table-presence" data-count={table.participants}>
+                    {tablePresenceText(t, table.participants, (n) => number.format(n))}
+                  </span>
+                ) : (
+                  t("ho_open")
+                )}
+              </button>
+              <button
                 type="button"
                 className="twin-base-toggle"
                 data-testid="twin-base-toggle"
@@ -1315,6 +1701,7 @@ export function TwinWorkspace({ onCityChange }) {
               {(scene?.horizon?.dates || []).map((date, index) => {
                 const total = totals[index] || 0;
                 const height = 22 + ((total - minTotal) / Math.max(1, maxTotal - minTotal)) * 78;
+                const risk = weekRisk[index] || { count: 0, worst: "normal" };
                 return (
                   <button
                     key={date}
@@ -1325,11 +1712,25 @@ export function TwinWorkspace({ onCityChange }) {
                     className="twin-day"
                     data-testid={`twin-day-${index}`}
                     aria-pressed={index === safeDay}
-                    aria-label={`${formatDate(date)} · ${number.format(total)} t`}
+                    data-at-risk={risk.count}
+                    aria-label={[
+                      formatDate(date),
+                      `${number.format(total)} t`,
+                      t("ufx_twin_day_at_risk").replace("{n}", number.format(risk.count)),
+                    ].join(" · ")}
                     tabIndex={index === safeDay ? 0 : -1}
                     onClick={() => setDay(index)}
                   >
                     <span className="twin-day-bar" aria-hidden="true">
+                      {risk.count > 0 && (
+                        <b
+                          className="twin-day-risk"
+                          data-level={risk.worst}
+                          data-testid={`twin-day-risk-${index}`}
+                        >
+                          {number.format(risk.count)}
+                        </b>
+                      )}
                       <i style={{ height: `${height}%` }} />
                     </span>
                     <span className="twin-day-label" aria-hidden="true">
@@ -1343,6 +1744,16 @@ export function TwinWorkspace({ onCityChange }) {
           </div>
         </div>
       </div>
+      {tableOpen && (
+        <Suspense fallback={null}>
+          <TwinTableHandoff
+            session={table}
+            city={city}
+            onClose={() => setTableOpen(false)}
+            returnFocusRef={tableTriggerRef}
+          />
+        </Suspense>
+      )}
     </section>
   );
 }

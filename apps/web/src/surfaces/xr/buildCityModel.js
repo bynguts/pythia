@@ -10,7 +10,11 @@
 // against ONE fixed scale for the whole horizon, so scrubbing days compares
 // honestly. Around them: an optional satellite plate, rain particles for the
 // scenario's rainfall and truck-trip dots on arcs to the landfill.
+//
+// `lite` (xrLite.js, budget phones) trims the outlines, the arc segments and
+// the rain; the plate image is the caller's choice and loads on `loadPlate()`.
 import * as THREE from "three";
+import { LITE_RENDER, simplifyRing } from "./xrLite.js";
 
 export const MODEL_SPAN_M = 0.6;
 export const MAX_BAR_M = 0.2;
@@ -31,6 +35,10 @@ const RAIN_TOP_M = 0.22;
 const RAIN_SPEED_M_S = 0.32;
 const FLOW_PERIOD_S = 4.5;
 const ARC_SEGMENTS = 24;
+// Haul arcs, as in the twin (twinLayers.js FLOW_TOP_N; not imported, that module
+// pulls deck.gl): the day's heaviest districts get their own arc, coloured by
+// tonnes, and every other district rides one bundle arc.
+export const FLOW_TOP_N = 8;
 // Growth animation: the first build rises from the plate, later changes ease.
 const RISE_S = 0.9;
 const RISE_STAGGER_S = 0.6;
@@ -66,7 +74,13 @@ const GRID_COLOR = "#33493f";
 const TPS_COLOR = "#b9cbc2";
 const RAIN_COLOR = "#e4f2ff";
 const FLOW_COLOR = "#ffffff";
-const FLOW_LINE_COLOR = "#bfe3cf";
+// Arc ramp by tonnes (light → heavy), the bundle's fixed tone, and the selected arc.
+const FLOW_LIGHT_COLOR = "#3f7f8c";
+const FLOW_HEAVY_COLOR = "#c6eef7";
+const FLOW_BUNDLE_COLOR = "#7fa9b3";
+const FLOW_SELECTED_COLOR = "#ffffff";
+// The arc's source end is dimmer than its landfill end (the twin's source → target fade).
+const FLOW_SOURCE_SHADE = 0.4;
 const HIGHLIGHT_COLOR = "#ffffff";
 
 function finite(value) {
@@ -152,9 +166,52 @@ export function flowDots(district, dayIndex) {
   return finite(trucks) && trucks > 0 ? Math.round(trucks / TRUCKS_PER_DOT) : 0;
 }
 
-/** Rain particles for a scenario rainfall in mm: proportional, 0 at 0 mm, capped. */
-export function rainParticleCount(rainfallMm) {
-  return finite(rainfallMm) && rainfallMm > 0 ? Math.min(RAIN_MAX, Math.round(rainfallMm * RAIN_PER_MM)) : 0;
+/** Rain particles for a scenario rainfall in mm: proportional, 0 at 0 mm, capped (fewer in lite mode). */
+export function rainParticleCount(rainfallMm, lite = false) {
+  const perMm = lite ? LITE_RENDER.rainPerMm : RAIN_PER_MM;
+  const max = lite ? LITE_RENDER.rainMax : RAIN_MAX;
+  return finite(rainfallMm) && rainfallMm > 0 ? Math.min(max, Math.round(rainfallMm * perMm)) : 0;
+}
+
+/**
+ * The haul routes for one day: the `topN` heaviest districts (by that day's
+ * forecast tonnes) plus the selected one each get their own route, and every
+ * other district joins one bundle route. `members` are indices into `districts`.
+ */
+export function flowRoutes(districts, dayIndex, selectedId = null, topN = FLOW_TOP_N) {
+  const ranked = (districts || [])
+    .map((district, i) => ({ i, tons: dayTons(district, dayIndex) }))
+    .sort((a, b) => b.tons - a.tons || a.i - b.i);
+  const own = ranked.filter((item, rank) => rank < topN || districts[item.i].id === selectedId);
+  const rest = ranked.filter((item) => !own.includes(item));
+  const routes = own.map(({ i, tons }) => ({
+    members: [i],
+    tons,
+    bundle: false,
+    selected: selectedId !== null && districts[i].id === selectedId,
+  }));
+  if (rest.length) {
+    routes.push({
+      members: rest.map((item) => item.i),
+      tons: rest.reduce((sum, item) => sum + item.tons, 0),
+      bundle: true,
+      selected: false,
+    });
+  }
+  return routes;
+}
+
+/**
+ * The rain (mm) that fell on one horizon day of a scene (teardown v3 N4): the
+ * per-day source in `scene.weather.days` (the what-if on its own day, forecast
+ * rain on the others), else the what-if rain on `scenario.scenario_day` only.
+ */
+export function dayRainfall(scene, dayIndex) {
+  const weatherDay = scene?.weather?.days?.[dayIndex];
+  if (weatherDay) return finite(weatherDay.rainfall_mm) ? weatherDay.rainfall_mm : 0;
+  const scenario = scene?.scenario;
+  const whatIfDay = Number.isInteger(scenario?.scenario_day) ? scenario.scenario_day : scenario?.day;
+  return dayIndex === whatIfDay && finite(scenario?.rainfall_mm) ? scenario.rainfall_mm : 0;
 }
 
 const easeOutCubic = (p) => 1 - (1 - p) ** 3;
@@ -181,9 +238,13 @@ function prismGeometry(ring, projection) {
  * uses: `bars` (one mesh per district, userData.district), `setDay(i, {instant})`
  * to retarget heights/colours/flows, `setScene(scene, i)` for a new scenario of
  * the same city, `setHighlight(id)`, `tick(dt)` to animate, `stats()` for the
- * test hooks, and `dispose()`. `plate` (e.g. JAKARTA_PLATE) textures the plate.
+ * test hooks, and `dispose()`. `plate` (e.g. JAKARTA_PLATE) textures the plate
+ * once `loadPlate()` is called (after the first frame, so it never delays it).
  */
-export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false, plate = null } = {}) {
+export function buildCityModel(
+  scene,
+  { dayIndex = 0, reducedMotion = false, plate = null, lite = false } = {},
+) {
   const geometries = [];
   const materials = [];
   const textures = [];
@@ -243,7 +304,7 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false, pla
   // Satellite plate: each corner of the top maps to its own lat/lng in the image box.
   let plateState = "none";
   if (plate?.url) {
-    plateState = "loading";
+    plateState = "deferred";
     const uv = topGeometry.attributes.uv;
     const pos = topGeometry.attributes.position;
     for (let i = 0; i < pos.count; i += 1) {
@@ -256,6 +317,10 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false, pla
       );
     }
     uv.needsUpdate = true;
+  }
+  function loadPlate() {
+    if (plateState !== "deferred" || disposed) return;
+    plateState = "loading";
     new THREE.TextureLoader().load(
       plate.url,
       (texture) => {
@@ -280,7 +345,10 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false, pla
   }
 
   // ── Districts: extruded outlines, or bars without one ──
-  const outlines = districts.map(districtOutline);
+  const outlines = districts.map((d) => {
+    const ring = districtOutline(d);
+    return ring && lite ? simplifyRing(ring, LITE_RENDER.outlinePoints) : ring;
+  });
   const prismCount = outlines.filter(Boolean).length;
   const districtShape = prismCount === 0 ? "bar" : prismCount === districts.length ? "prism" : "mixed";
   const maxHeight = prismCount > 0 ? MAX_PRISM_M : MAX_BAR_M;
@@ -402,7 +470,7 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false, pla
   let rain = null;
   let rainCount = 0;
   function setRain(mm) {
-    const count = rainParticleCount(mm);
+    const count = rainParticleCount(mm, lite);
     if (count === rainCount) return;
     if (rain) {
       root.remove(rain);
@@ -424,27 +492,34 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false, pla
     root.add(rain);
   }
 
-  // ── Truck flows: dots on arcs from each district to the landfill ──
+  // ── Truck flows: the day's heaviest districts on their own arcs to the
+  // landfill, coloured by tonnes, the rest on one bundle arc (flowRoutes).
+  // Every district's truck-trip dots ride the arc it belongs to. ──
+  const arcSegments = lite ? LITE_RENDER.arcSegments : ARC_SEGMENTS;
   const flowGeometry = track(new THREE.SphereGeometry(0.0024, 8, 6), geometries);
   const flowMaterial = track(new THREE.MeshBasicMaterial({ color: FLOW_COLOR }), materials);
   const flowLineMaterial = track(
     new THREE.LineBasicMaterial({
-      color: FLOW_LINE_COLOR,
+      vertexColors: true,
       transparent: true,
-      opacity: 0.35,
+      opacity: 0.9,
       depthWrite: false,
     }),
     materials,
   );
   let flowMesh = null;
-  let flowDotsList = []; // { i: district index, phase }
+  let flowDotsList = []; // { r: route index, phase }
+  let routes = [];
+  let selectedId = null;
+  let flowDay = dayIndex;
   let arcGeometry = null;
   if (landfillAt && bars.length) {
+    // Own arcs (top N, plus a selected district outside them) and the bundle.
+    const vertices = (FLOW_TOP_N + 2) * arcSegments * 2;
     arcGeometry = track(new THREE.BufferGeometry(), geometries);
-    arcGeometry.setAttribute(
-      "position",
-      new THREE.BufferAttribute(new Float32Array(bars.length * ARC_SEGMENTS * 6), 3),
-    );
+    arcGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(vertices * 3), 3));
+    arcGeometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(vertices * 3), 3));
+    arcGeometry.setDrawRange(0, 0);
     const arcs = new THREE.LineSegments(arcGeometry, flowLineMaterial);
     arcs.name = "flow-arcs";
     arcs.frustumCulled = false;
@@ -454,17 +529,25 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false, pla
   const p1 = new THREE.Vector3();
   const p2 = new THREE.Vector3();
   const tmp = new THREE.Vector3();
-  function arcControl(i) {
-    const { anchor } = bars[i].userData;
-    const topY = bars[i].scale.y;
-    const dist = Math.hypot(landfillAt.x - anchor.x, landfillAt.z - anchor.z);
-    p0.set(anchor.x, topY, anchor.z);
+  // A route leaves from its district's top or, for the bundle, from its members'
+  // tonnage-weighted centre above the tallest of them.
+  function arcControl(route) {
+    const tons = route.members.map((i) => Math.max(dayTons(bars[i].userData.district, flowDay), 0));
+    const total = tons.reduce((sum, value) => sum + value, 0);
+    let x = 0;
+    let z = 0;
+    let topY = 0;
+    route.members.forEach((i, k) => {
+      const { anchor } = bars[i].userData;
+      const w = total > 0 ? tons[k] / total : 1 / route.members.length;
+      x += anchor.x * w;
+      z += anchor.z * w;
+      topY = Math.max(topY, bars[i].scale.y);
+    });
+    const dist = Math.hypot(landfillAt.x - x, landfillAt.z - z);
+    p0.set(x, topY, z);
     p2.set(landfillAt.x, 0.012, landfillAt.z);
-    p1.set(
-      (anchor.x + landfillAt.x) / 2,
-      Math.max(topY, 0.012) + dist * 0.45 + 0.02,
-      (anchor.z + landfillAt.z) / 2,
-    );
+    p1.set((x + landfillAt.x) / 2, Math.max(topY, 0.012) + dist * 0.45 + 0.02, (z + landfillAt.z) / 2);
   }
   function arcPoint(t, out) {
     const a = (1 - t) * (1 - t);
@@ -476,24 +559,45 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false, pla
       a * p0.z + b * p1.z + c * p2.z,
     );
   }
+  const lightColor = new THREE.Color(FLOW_LIGHT_COLOR);
+  const heavyColor = new THREE.Color(FLOW_HEAVY_COLOR);
+  const bundleColor = new THREE.Color(FLOW_BUNDLE_COLOR);
+  const selectedColor = new THREE.Color(FLOW_SELECTED_COLOR);
+  const tint = new THREE.Color();
+  const shade = new THREE.Color();
+  function routeTint(route, heaviest) {
+    if (route.selected) return tint.copy(selectedColor);
+    if (route.bundle) return tint.copy(bundleColor);
+    return tint.copy(lightColor).lerp(heavyColor, heaviest > 0 ? Math.min(1, route.tons / heaviest) : 0);
+  }
   function updateArcs() {
     if (!arcGeometry) return;
-    const arr = arcGeometry.attributes.position.array;
+    const pos = arcGeometry.attributes.position.array;
+    const col = arcGeometry.attributes.color.array;
+    const heaviest = Math.max(0, ...routes.filter((route) => !route.bundle).map((route) => route.tons));
     let k = 0;
-    bars.forEach((_, i) => {
-      arcControl(i);
-      for (let s = 0; s < ARC_SEGMENTS; s += 1) {
-        arcPoint(s / ARC_SEGMENTS, tmp);
-        arr[k++] = tmp.x;
-        arr[k++] = tmp.y;
-        arr[k++] = tmp.z;
-        arcPoint((s + 1) / ARC_SEGMENTS, tmp);
-        arr[k++] = tmp.x;
-        arr[k++] = tmp.y;
-        arr[k++] = tmp.z;
+    const put = (t) => {
+      arcPoint(t, tmp);
+      shade.copy(tint).multiplyScalar(FLOW_SOURCE_SHADE + (1 - FLOW_SOURCE_SHADE) * t);
+      pos[k] = tmp.x;
+      pos[k + 1] = tmp.y;
+      pos[k + 2] = tmp.z;
+      col[k] = shade.r;
+      col[k + 1] = shade.g;
+      col[k + 2] = shade.b;
+      k += 3;
+    };
+    routes.forEach((route) => {
+      arcControl(route);
+      routeTint(route, heaviest);
+      for (let s = 0; s < arcSegments; s += 1) {
+        put(s / arcSegments);
+        put((s + 1) / arcSegments);
       }
     });
+    arcGeometry.setDrawRange(0, k / 3);
     arcGeometry.attributes.position.needsUpdate = true;
+    arcGeometry.attributes.color.needsUpdate = true;
   }
   const flowMatrix = new THREE.Matrix4();
   function updateFlowDots() {
@@ -501,9 +605,9 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false, pla
     const travel = reducedMotion ? 0 : clock / FLOW_PERIOD_S;
     let current = -1;
     flowDotsList.forEach((dot, k) => {
-      if (dot.i !== current) {
-        current = dot.i;
-        arcControl(dot.i);
+      if (dot.r !== current) {
+        current = dot.r;
+        arcControl(routes[dot.r]);
       }
       arcPoint((dot.phase + travel) % 1, tmp);
       flowMatrix.makeTranslation(tmp.x, tmp.y, tmp.z);
@@ -514,12 +618,18 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false, pla
   }
   function setFlows(day) {
     if (!landfillAt) return;
+    flowDay = day;
+    routes = flowRoutes(
+      bars.map((mesh) => mesh.userData.district),
+      day,
+      selectedId,
+    );
     flowDotsList = [];
-    bars.forEach((mesh, i) => {
-      const n = flowDots(mesh.userData.district, day);
-      // A per-district offset so neighbouring arcs do not pulse in step.
-      const offset = (i * 0.137) % 1;
-      for (let j = 0; j < n; j += 1) flowDotsList.push({ i, phase: (offset + j / n) % 1 });
+    routes.forEach((route, r) => {
+      const n = route.members.reduce((sum, i) => sum + flowDots(bars[i].userData.district, day), 0);
+      // A per-route offset so neighbouring arcs do not pulse in step.
+      const offset = (r * 0.137) % 1;
+      for (let j = 0; j < n; j += 1) flowDotsList.push({ r, phase: (offset + j / n) % 1 });
     });
     if (!flowMesh || flowMesh.instanceMatrix.count < flowDotsList.length) {
       if (flowMesh) {
@@ -563,9 +673,19 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false, pla
     highlighted = (id && bars.find((mesh) => mesh.userData.district.id === id)) || null;
     highlight.visible = Boolean(highlighted);
     placeHighlight();
+    // The selected district gets its own (white) arc, as in the twin.
+    const nextId = highlighted ? id : null;
+    if (nextId !== selectedId) {
+      selectedId = nextId;
+      setFlows(flowDay);
+      updateArcs();
+    }
   }
 
+  let currentScene = scene;
   function setDay(nextDay, { instant = false } = {}) {
+    // Rain falls on the day that has it, not on every day of the horizon.
+    setRain(dayRainfall(currentScene, nextDay));
     bars.forEach((mesh) => {
       const ud = mesh.userData;
       const to = heightFor(dayTons(ud.district, nextDay));
@@ -597,7 +717,7 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false, pla
       const district = byId.get(mesh.userData.district.id);
       if (district) mesh.userData.district = district;
     });
-    setRain(nextScene.scenario?.rainfall_mm);
+    currentScene = nextScene;
     setDay(nextDay, options);
   }
 
@@ -628,7 +748,7 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false, pla
     return moving;
   }
 
-  setRain(scene.scenario?.rainfall_mm);
+  setRain(dayRainfall(scene, dayIndex));
   setFlows(dayIndex);
   updateArcs();
 
@@ -659,7 +779,18 @@ export function buildCityModel(scene, { dayIndex = 0, reducedMotion = false, pla
       districtShape,
       highlightId: highlighted?.userData.district.id || null,
       plate: plateState,
+      // The arcs drawn: an own route names its district, the bundle its size.
+      flowArcs: routes.map((route) => ({
+        district: route.bundle ? null : bars[route.members[0]].userData.district.id,
+        bundle: route.bundle,
+        size: route.members.length,
+        tons: route.tons,
+        selected: route.selected,
+      })),
+      arcSegments,
+      districtVertices: bars.reduce((sum, mesh) => sum + mesh.geometry.attributes.position.count, 0),
     }),
+    loadPlate,
     dispose,
   };
 }

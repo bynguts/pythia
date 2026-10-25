@@ -153,3 +153,108 @@ test("TPA arrival rate unit follows the language", async ({ page }) => {
   await page.getByRole("tab", { name: COPY.en.queueTab }).click();
   await expect(page.getByTestId("tpa-arrival-rate")).toHaveText("12/h", { timeout: 15000 });
 });
+
+// #honesty: the login story never calls the simulated fleet "live" and never reads as a
+// DLH product; it names the case it was built for.
+const LOGIN_COPY = {
+  id: {
+    proof: "Armada, pengemudi, dan antrean TPA dalam satu tampilan (armada simulasi)",
+    footer: "Prototipe untuk studi kasus DLH DKI Jakarta",
+    stale: /Operasi langsung|Prediksi terukur|Dinas Lingkungan Hidup Provinsi/,
+  },
+  en: {
+    proof: "Fleet, drivers and TPA queue in one view (simulated fleet)",
+    footer: "Prototype built for the DLH DKI Jakarta case",
+    stale: /Live operations|Measured forecasts|Jakarta Environmental Agency/,
+  },
+};
+
+for (const lang of ["id", "en"]) {
+  test(`login proof strings say simulated and name the case, not a DLH product (${lang})`, async ({
+    page,
+  }) => {
+    const copy = LOGIN_COPY[lang];
+    await page.addInitScript((value) => localStorage.setItem("pythia_lang", value), lang);
+    await page.goto("/");
+    const proof = page.getByTestId("login-proof-list");
+    await expect(proof).toContainText(copy.proof);
+    await expect(page.locator(".login-story-footer")).toHaveText(copy.footer);
+    const story = await page.locator(".login-story").innerText();
+    expect(story).not.toMatch(copy.stale);
+    expect(story).not.toMatch(/\blive\b/i);
+  });
+}
+
+// #honesty: the planning executive summary is composed through the locale catalog, says the
+// queue and fleet are simulated, and reads as a decision brief, not as a DLH document.
+for (const [lang, copy] of [
+  ["id", { nav: "Rencana", title: "Ringkasan eksekutif", queue: "Antrean TPA Bantargebang (simulasi)" }],
+  ["en", { nav: "Planning", title: "Executive summary", queue: "TPA Bantargebang queue (simulated)" }],
+]) {
+  test(`executive summary labels the simulated queue and is not a DLH document (${lang})`, async ({
+    page,
+  }) => {
+    await signIn(page, lang);
+    await page.getByTestId("workspace-navigation").getByRole("button", { name: copy.nav }).click();
+    const summary = page.locator(".planning-summary");
+    await expect(summary.getByRole("heading", { name: copy.title })).toBeVisible({ timeout: 20000 });
+    await expect(summary.locator(".queue-box strong")).toHaveText(copy.queue);
+    expect(await summary.innerText()).not.toMatch(/DLH|Dinas Lingkungan Hidup/);
+  });
+}
+
+// #N1 (teardown v3): the Forecast workspace never shows the canned June sample as this
+// week's forecast. A live list with no district at risk renders an honest empty state;
+// the sample only appears when the backend is unreachable, badged as not a forecast.
+const FORECAST_COPY = {
+  id: {
+    empty: "Tidak ada wilayah yang diprakirakan ≥ 10% di atas hari normalnya minggu ini (hasil model).",
+    sample: "CONTOH OFFLINE",
+    normalDay: "hari normal (tanpa hujan, tanpa acara)",
+  },
+  en: {
+    empty: "No district is forecast ≥ 10% above its normal day this week (model output).",
+    sample: "OFFLINE SAMPLE",
+    normalDay: "normal day (no rain, no event)",
+  },
+};
+
+for (const lang of ["id", "en"]) {
+  test(`a live week with no district at risk shows an empty state, never the canned sample (${lang})`, async ({
+    page,
+  }) => {
+    const copy = FORECAST_COPY[lang];
+    await page.route("**/api/command-center", async (route) => {
+      const response = await route.fetch();
+      const json = await response.json();
+      json.critical_predictions = [];
+      json.predictions = (json.predictions || []).map((p) => ({
+        ...p,
+        risk_level: "normal",
+        spike_percent: -2,
+      }));
+      json.kpis = { ...json.kpis, predicted_spike_percent: -2 };
+      await route.fulfill({ response, json });
+    });
+    await signIn(page, lang);
+    // The Fleet queue KPI names its basis (the normal day), unlike the twin's scaled beacon (#N6).
+    await expect(page.getByTestId("metric-strip")).toContainText(copy.normalDay, { timeout: 30000 });
+    await page.goto("/forecast");
+    const workspace = page.getByTestId("forecast-workspace");
+    await expect(page.getByTestId("forecast-empty")).toHaveText(copy.empty, { timeout: 30000 });
+    await expect(page.getByTestId("forecast-sample-badge")).toHaveCount(0);
+    await expect(workspace).not.toContainText("41%");
+    await expect(workspace).not.toContainText("2026-06-01");
+    await expect(workspace).not.toContainText("+-");
+    await expect(workspace.getByTestId("metric-strip")).toContainText("−2%");
+  });
+
+  test(`the canned sample appears only offline, badged as not a forecast (${lang})`, async ({ page }) => {
+    const copy = FORECAST_COPY[lang];
+    await page.route("**/api/command-center", (route) => route.abort());
+    await signIn(page, lang);
+    await page.goto("/forecast");
+    await expect(page.getByTestId("forecast-sample-badge")).toContainText(copy.sample, { timeout: 30000 });
+    await expect(page.getByTestId("forecast-empty")).toHaveCount(0);
+  });
+}

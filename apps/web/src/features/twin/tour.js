@@ -1,6 +1,6 @@
 // Cinematic tour for the Pythia Twin: a scripted camera path used live in
-// demos and for recorded footage. city overview -> highest-risk district ->
-// landfill beacon -> overview, ~20 s. Under prefers-reduced-motion the same
+// demos and for recorded footage. city overview -> event venue (when the
+// scenario has one) -> highest-risk district -> landfill beacon -> overview, ~20-25 s. Under prefers-reduced-motion the same
 // stops are shown as jump cuts with holds instead of camera flights.
 import { hottestDistrict, landfillOf } from "./twinLayers.js";
 
@@ -67,6 +67,24 @@ export function buildTour(scene, day, map) {
       hold: 0,
     },
   ];
+  // A crowd event in the scenario: show where it is before what it does.
+  const scenario = scene.scenario;
+  const eventLat = Number(scenario?.event_lat);
+  const eventLng = Number(scenario?.event_lng);
+  if (scenario?.event_attendance && scenario.event_lat != null && Number.isFinite(eventLat + eventLng)) {
+    const preset = (scene.venues || []).find(
+      (venue) =>
+        venue.id === scenario.venue ||
+        (Math.abs(venue.lat - eventLat) < 1e-4 && Math.abs(venue.lng - eventLng) < 1e-4),
+    );
+    steps.push({
+      key: "venue",
+      name: preset?.name || null,
+      camera: { center: [eventLng, eventLat], zoom: 12.3, pitch: 60, bearing: 8 },
+      duration: 4000,
+      hold: 1500,
+    });
+  }
   const hot = hottestDistrict(scene, day);
   if (hot) {
     steps.push({

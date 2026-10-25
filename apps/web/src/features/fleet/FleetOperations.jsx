@@ -1,12 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Clock3, FileText, Layers, Radio, Route, Truck, Wrench } from "lucide-react";
+import {
+  AlertTriangle,
+  Clock3,
+  FileText,
+  HeartPulse,
+  Layers,
+  Radio,
+  Route,
+  Truck,
+  Wrench,
+} from "lucide-react";
 import { MetricStrip } from "../../shared/ui/MetricStrip.jsx";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { SafetyPanel, safetyAttentionCount, useSafetyOverview } from "./SafetyPanel.jsx";
 
 const detailTabs = [
   { id: "fleet", key: "tab_fleet", label: "Kondisi armada", surface: "fleet-table-surface" },
   { id: "history", key: "tab_history", label: "Riwayat perjalanan", surface: "fleet-history-surface" },
   { id: "queue", key: "tab_queue", label: "Antrean TPA", surface: "fleet-queue-surface" },
+  { id: "safety", key: "saf_tab", label: "Keselamatan sopir", surface: "fleet-safety-surface" },
   { id: "evidence", key: "tab_evidence", label: "Bukti rute", surface: "fleet-evidence-surface" },
   { id: "unlicensed", key: "tab_unlicensed", label: "Kolektor liar", surface: "fleet-unlicensed-surface" },
   { id: "impact", key: "tab_impact", label: "Jejak karbon", surface: "fleet-impact-surface" },
@@ -56,11 +68,15 @@ export function FleetOperations({
   const [toolsOpen, setToolsOpen] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const activeTab = detailTabs.find((tab) => tab.id === detailTab) || detailTabs[0];
+  const safety = useSafetyOverview();
+  const safetyAttention = safetyAttentionCount(safety.overview);
+  const safetySimulated = safety.overview && safety.overview.classification !== "OBSERVED_APP_EVENTS";
   const surfaces = {
     fleet: fleetTable,
     unlicensed: unlicensedTable,
     history,
     queue,
+    safety: <SafetyPanel {...safety} />,
     evidence: routeEvidence,
     impact: carbon,
     spj,
@@ -195,6 +211,18 @@ export function FleetOperations({
               : `TPA queue · ${queueTrucks ?? "—"} trucks`}
             {queueHourLabel && ` · ${queueHourLabel}`}
           </span>
+        </button>
+        <button
+          type="button"
+          className="problem-chip safety-chip-strip"
+          data-testid="problem-chip-safety"
+          disabled={!safety.overview}
+          onClick={() => selectTab("safety")}
+        >
+          <HeartPulse size={15} />
+          <strong>{safety.overview ? safetyAttention : "—"}</strong>
+          <span>{t("saf_chip")}</span>
+          {safetySimulated && <em>{t("honesty_sim_badge")}</em>}
         </button>
       </div>
 

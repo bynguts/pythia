@@ -27,8 +27,9 @@ async function signIn(page, lang = "id") {
 async function assertShellCopy(page, mode) {
   const id = mode === "id";
   // Sidebar: brand subtitle, workspaces label, connectivity, logout.
+  // #honesty: Pythia is a prototype built for the DLH case, not a DLH product.
   await expect(page.locator(".command-brand small")).toHaveText(
-    id ? "Pusat kendali DLH" : "DLH command center",
+    id ? "Pusat kendali operasi sampah" : "Waste operations command center",
   );
   await expect(page.locator(".command-nav-label")).toHaveText(id ? "Ruang kerja" : "Workspaces");
   await expect(page.locator(".system-connection strong")).toHaveText(
@@ -45,8 +46,11 @@ async function assertShellCopy(page, mode) {
   await expect(page.locator(".command-assistant span")).toHaveText(
     id ? "Asisten operasi" : "Operations assistant",
   );
-  await expect(page.locator(".command-profile strong")).toHaveText(id ? "Tim Pythia" : "Pythia Team");
-  await expect(page.locator(".command-profile small")).toHaveText(id ? "Operator DLH" : "DLH Operator");
+  // H12: the profile names the signed-in role (shared demo account), not a fixed "Operator".
+  await expect(page.locator(".command-profile strong")).toHaveText(id ? "Pengatur armada" : "Dispatcher");
+  await expect(page.locator(".command-profile small")).toHaveText(
+    id ? "Akun demo bersama: dispatcher" : "Shared demo account: dispatcher",
+  );
   // Accessible labels.
   await expect(page.locator(".command-sidebar")).toHaveAccessibleName(
     id ? "Navigasi utama Pythia" : "Pythia main navigation",

@@ -14,6 +14,16 @@ export function AppShell({
 }) {
   const { lang, setLang, t } = useLanguage();
   const current = items.find((item) => item.id === activeWorkspace) || items[0];
+  // H12: the profile names the signed-in role. Accounts are shared per role in
+  // this prototype (the username is the role), so that is the display name too.
+  let signedInRole = null;
+  try {
+    signedInRole = localStorage.getItem("pythia_role");
+  } catch {
+    signedInRole = null;
+  }
+  const roleKey = `pln6_profile_role_${signedInRole}`;
+  const roleLabel = signedInRole && t(roleKey) !== roleKey ? t(roleKey) : t("pln6_profile_role_unknown");
   const [assistantOpen, setAssistantOpen] = useState(false);
   const assistantTriggerRef = useRef(null);
   const assistantDialogRef = useRef(null);
@@ -185,8 +195,10 @@ export function AppShell({
                 <CircleUserRound size={19} />
               </span>
               <span className="command-profile-copy">
-                <strong>{t("shell_profile_name")}</strong>
-                <small>{t("shell_profile_role")}</small>
+                <strong data-testid="profile-role">{roleLabel}</strong>
+                <small data-testid="profile-account">
+                  {signedInRole ? t("pln6_profile_account").replace("{u}", signedInRole) : roleLabel}
+                </small>
               </span>
               <ChevronDown size={15} />
             </button>

@@ -4,7 +4,7 @@ import { AlertTriangle, Check, Radio } from "lucide-react";
 import { AppShell } from "./AppShell.jsx";
 import { workspacePath } from "./workspaces.js";
 import { apiFetch } from "../shared/api/client.js";
-import { useSnapshot } from "../shared/hooks/useSnapshot.js";
+import { signedPercent, useSnapshot } from "../shared/hooks/useSnapshot.js";
 import { useLanguage } from "../shared/i18n/index.jsx";
 import { ErrorBoundary } from "../shared/ui/ErrorBoundary.jsx";
 import { StatusPill } from "../shared/ui/StatusPill.jsx";
@@ -90,7 +90,11 @@ function MapPanel({
 export function CommandCenter({ workspace: activeWorkspace, onLogout }) {
   const { t, lang } = useLanguage();
   const navigate = useNavigate();
-  const { snapshot, online, refresh } = useSnapshot();
+  const { snapshot, online, status: snapshotStatus, refresh } = useSnapshot();
+  // Teardown v3 N1: the canned sample is only ever the offline sample, never live data.
+  const forecastSource =
+    snapshotStatus === "online" ? "live" : snapshotStatus === "offline" ? "sample" : "loading";
+  const liveForecast = forecastSource === "live";
   const [toast, setToast] = useState("");
   const [filterTruck, setFilterTruck] = useState("ALL");
   const setActiveWorkspace = useCallback(
@@ -316,6 +320,8 @@ export function CommandCenter({ workspace: activeWorkspace, onLogout }) {
                 helper: [
                   `${snapshot.kpis.tpa_queue_trucks ?? "—"} ${t("kpi_landfill_queue_sub")}`,
                   modelledPeakLabel(t, snapshot.kpis.tpa_queue_hour),
+                  // Teardown v3 N6: the twin beacon may be scaled for a rain day; this is the normal day.
+                  snapshot.tpa_queue?.day_basis?.id === "normal_day" ? t("ufx_fleet_queue_normal_day") : null,
                 ]
                   .filter(Boolean)
                   .join(" · "),
@@ -323,7 +329,7 @@ export function CommandCenter({ workspace: activeWorkspace, onLogout }) {
               },
               {
                 label: t("kpi_waste_spike"),
-                value: `+${snapshot.kpis.predicted_spike_percent}%`,
+                value: signedPercent(snapshot.kpis.predicted_spike_percent),
                 helper: t("kpi_waste_spike_sub"),
                 tone: "warning",
               },
@@ -566,16 +572,16 @@ export function CommandCenter({ workspace: activeWorkspace, onLogout }) {
               <WasteForecast
                 metrics={[
                   {
-                    label: lang === "id" ? "Lonjakan Terbesar" : "Largest forecast spike",
-                    value: `+${snapshot.kpis.predicted_spike_percent}%`,
-                    helper: lang === "id" ? "7 hari ke depan" : "next 7 days",
+                    label: t("ufx_fc_kpi_spike"),
+                    value: liveForecast ? signedPercent(snapshot.kpis.predicted_spike_percent) : "—",
+                    helper: t("ufx_fc_kpi_spike_sub"),
                     tone: "warning",
                   },
                   {
-                    label: lang === "id" ? "Distrik Risiko Tinggi" : "High-risk districts",
-                    value: snapshot.critical_predictions.length,
-                    helper: lang === "id" ? "perlu penguatan armada" : "capacity reinforcement needed",
-                    tone: "danger",
+                    label: t("ufx_fc_kpi_high_risk"),
+                    value: liveForecast ? snapshot.critical_predictions.length : "—",
+                    helper: t("ufx_fc_kpi_high_risk_sub"),
+                    tone: liveForecast && snapshot.critical_predictions.length > 0 ? "danger" : undefined,
                   },
                   {
                     label: lang === "id" ? "Puncak Curah Hujan" : "Peak rainfall",
@@ -590,10 +596,7 @@ export function CommandCenter({ workspace: activeWorkspace, onLogout }) {
                   },
                 ]}
                 forecast={
-                  <PredictionPanel
-                    predictions={snapshot.critical_predictions}
-                    allPredictions={snapshot.predictions}
-                  />
+                  <PredictionPanel predictions={snapshot.critical_predictions} source={forecastSource} />
                 }
                 weather={<WeatherPanel weather={snapshot.weather} />}
                 events={

@@ -628,6 +628,19 @@
   text-align: center;
 }
 
+/* The offline sample is never read as a forecast (teardown v3 N1). */
+.prediction-sample-note {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--ui-warning);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-muted);
+  color: var(--ui-ink);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 .decision-evidence > .summary-panel {
   width: 100%;
   padding: 0;
@@ -1765,4 +1778,62 @@
   border-radius: var(--ui-radius-control, 8px);
   padding: 4px 8px;
   font-size: var(--fs-caption);
+}
+
+/* Receipt review: the OCR reading is a MODEL OUTPUT suggestion beside the recorded weights. */
+.spj-receipt-review {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--ui-border);
+}
+
+.spj-receipt-review h4 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-caption);
+}
+
+.spj-receipt-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.spj-receipt-text {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.spj-receipt-photo {
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  padding: 0;
+}
+
+.spj-receipt-badge {
+  font-size: var(--fs-caption);
+}
+
+.spj-receipt-recorded {
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-caption);
+}
+
+.spj-receipt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.spj-receipt-review .spj-receipt-btn {
+  min-height: var(--tap-min);
+  min-width: var(--tap-min);
+  margin-right: 0;
+  transition-property: background-color, color, transform;
+}
+
+.spj-receipt-form input {
+  min-height: var(--tap-min);
 }

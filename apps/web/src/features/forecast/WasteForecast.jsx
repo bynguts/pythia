@@ -2,6 +2,7 @@ import { CalendarRange, CloudSun } from "lucide-react";
 import { MetricStrip } from "../../shared/ui/MetricStrip.jsx";
 import { SegmentedControl } from "../../shared/ui/SegmentedControl.jsx";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { MonthlyIntakeStrip } from "./MonthlyIntakeStrip.jsx";
 
 export function WasteForecast({
   metrics,
@@ -13,7 +14,7 @@ export function WasteForecast({
   horizon,
   onHorizonChange,
 }) {
-  const { lang, t } = useLanguage();
+  const { t } = useLanguage();
   const horizonOptions = [
     { value: "7d", label: `7 ${t("fc_days")}` },
     { value: "14d", label: `14 ${t("fc_days")}` },
@@ -31,14 +32,8 @@ export function WasteForecast({
           <span className="workspace-kicker">
             <CloudSun size={14} /> {t("fc_kicker")}
           </span>
-          <h1 id="forecast-title">
-            {lang === "id" ? "Prediksi timbulan sampah" : "Waste generation forecast"}
-          </h1>
-          <p>
-            {lang === "id"
-              ? "Temukan wilayah yang membutuhkan tambahan armada sebelum beban layanan meningkat."
-              : "Find districts that need more fleet capacity before service demand rises."}
-          </p>
+          <h1 id="forecast-title">{t("hon_fc_title")}</h1>
+          <p>{t("hon_fc_sub")}</p>
         </div>
         <div className="forecast-heading-actions">
           <div className="forecast-horizon-control">
@@ -52,6 +47,8 @@ export function WasteForecast({
       </header>
 
       <MetricStrip metrics={metrics} />
+
+      <MonthlyIntakeStrip />
 
       <div className="forecast-command-grid" data-testid="forecast-command-grid">
         <section

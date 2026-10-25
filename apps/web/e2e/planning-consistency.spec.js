@@ -8,6 +8,8 @@ const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 // scenario data exists.
 // NOTE: ExecutiveSummary picks its headline district by the LARGEST ABSOLUTE
 // ton delta (predicted − baseline), not by spike percent — mirror that here.
+// #N2 (teardown v3): it picks among the districts at risk (>= 10% above their
+// normal day: the same request without rain or event) when there are any.
 async function signIn(page, lang = "id") {
   await page.goto("/");
   const response = await page.request.post(`${API}/auth/login`, {
@@ -35,8 +37,15 @@ async function signIn(page, lang = "id") {
   await page.reload({ waitUntil: "domcontentloaded" });
 }
 
-function topDistrictFromScenario(scenario) {
-  const districts = scenario.kecamatan || [];
+const RISK_HIGH_RATIO = 1.1; // engine.RISK_HIGH_RATIO
+
+function topDistrictFromScenario(scenario, normal) {
+  const normalTons = Object.fromEntries((normal.kecamatan || []).map((k) => [k.kecamatan, k.predicted_tons]));
+  const all = scenario.kecamatan || [];
+  const atRisk = all.filter(
+    (k) => normalTons[k.kecamatan] > 0 && k.predicted_tons / normalTons[k.kecamatan] >= RISK_HIGH_RATIO,
+  );
+  const districts = atRisk.length ? atRisk : all;
   // Same criterion as ExecutiveSummary: largest absolute predicted − baseline
   // ton delta, so the spec's expectation always matches the review headline.
   return districts.reduce((best, k) => {
@@ -48,6 +57,17 @@ function topDistrictFromScenario(scenario) {
 
 test("planning review derives from the active scenario inputs", async ({ page }) => {
   await signIn(page);
+  // R7 planning: the plan date defaults to the browser's local day and the
+  // weekday or weekend follows from it (never a fixed is_weekend=true).
+  const { planDate, weekend } = await page.evaluate(() => {
+    const now = new Date();
+    const iso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    return { planDate: iso, weekend: now.getDay() === 0 || now.getDay() === 6 };
+  });
+  const normalResponse = await page.request.get(
+    `${API}/predictions/kecamatan?rainfall_mm=0&event_attendance=0&is_weekend=${weekend}&target_date=${planDate}`,
+  );
+  const normal = await normalResponse.json();
   // Attach the listener BEFORE opening the workspace: the scenario auto-runs
   // on mount (useEffect on attendance/rainfall).
   // Only PlanningDecisionFlow's own request counts — KecamatanMapPanel fetches
@@ -62,7 +82,7 @@ test("planning review derives from the active scenario inputs", async ({ page })
   await expect(page.getByTestId("planning-workspace")).toBeVisible();
   const baselineResponse = await baselinePromise;
   const baseline = await baselineResponse.json();
-  const baselinePeak = topDistrictFromScenario(baseline);
+  const baselinePeak = topDistrictFromScenario(baseline, normal);
   expect(baselinePeak).toBeTruthy();
 
   // The review headline must name the ACTIVE scenario's peak district, not
@@ -91,7 +111,7 @@ test("planning review derives from the active scenario inputs", async ({ page })
     });
   const scenarioResponse = await scenarioPromise;
   const scenario = await scenarioResponse.json();
-  const scenarioPeak = topDistrictFromScenario(scenario);
+  const scenarioPeak = topDistrictFromScenario(scenario, normal);
   expect(scenarioPeak).toBeTruthy();
 
   await expect(summary).toContainText(scenarioPeak.kecamatan, { timeout: 15000 });

@@ -14,9 +14,10 @@ const ROW_GAP = 14;
 const LABEL_W = 180;
 const BTN_GAP = 12;
 const FOOT_H = 30;
-// Total, fleet (with its crew rule), TPA queue, session: four lines still clear the
-// three button rows and the footer (28 + 4 x 46 + 14 + 3 x 110 = 556 < 618).
-const MAX_LINES = 4;
+// Total, fleet (with its crew rule), TPA queue, the day's rain source, Ask Pythia's
+// trace, session: the first five lines still clear the three button rows and the
+// footer (28 + 5 x 46 + 14 + 3 x 110 = 602 < 618); a sixth is left out.
+const MAX_LINES = 5;
 export const PANEL_WIDTH_M = 0.42;
 export const PANEL_HEIGHT_M = (PANEL_WIDTH_M * H) / W;
 
@@ -37,7 +38,7 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 /**
- * `draw({ lines, rows, footer })`: `lines` are up to four short strings (first one bold, empty ones skipped),
+ * `draw({ lines, rows, footer })`: `lines` are up to five short strings (first one bold, empty ones skipped),
  * `rows` are `{ label, buttons: [{ id, label, active, disabled }] }` and
  * `footer` up to three small lines pinned to the bottom edge. `hit(raycaster)`
  * returns the id of the enabled button under the ray, "" for the panel's

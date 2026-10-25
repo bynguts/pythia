@@ -35,6 +35,9 @@
 
 .xr-shell.in-session .xr-overlay {
   background: transparent;
+  /* AR: the overlay root takes two-finger pinch/twist (a tap still reaches XR as a select). */
+  pointer-events: auto;
+  touch-action: none;
 }
 
 .xr-panel {
@@ -61,9 +64,95 @@
   gap: var(--space-2);
 }
 
+/* One line: city · date · total · provenance chip · chevron. */
 .xr-head-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* City over date · total: one row as tall as the chevron. */
+.xr-head-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.xr-head-row h1 {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 20px;
+  line-height: 1.15;
+  font-weight: 650;
+  color: var(--ui-ink);
+}
+
+/* Date · total, then the day's rain source; the chip drops to a second line
+   rather than being cut off on a narrow phone. */
+.xr-head-sum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-2);
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-ink-soft);
+}
+
+.xr-head-sum-main,
+.xr-head-wx {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xr-head-wx {
+  font-size: 11px;
+  color: var(--ui-info);
+}
+
+.xr-head-wx[data-input="scenario"] {
+  color: var(--ui-warning);
+}
+
+.xr-head-wx:not([data-input="scenario"]):not([data-input="forecast"]) {
+  color: var(--ui-muted);
+}
+
+/* Expanded, the readout below repeats the date and total. */
+.xr-head.open .xr-head-sum {
+  display: none;
+}
+
+/* The provenance chip may wrap to two lines rather than squeeze the city out. */
+.xr-head-row .xr-prov {
+  max-width: 45%;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.15;
+}
+
+.xr-head-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.xr-head-detail[hidden] {
+  display: none;
+}
+
+.xr-head-meta {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
 }
@@ -77,14 +166,6 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ui-accent);
-}
-
-.xr-title h1 {
-  margin: 2px 0 0;
-  font-size: 22px;
-  line-height: 1.15;
-  font-weight: 650;
-  color: var(--ui-ink);
 }
 
 .xr-lang {
@@ -116,13 +197,6 @@
   color: #ffffff;
 }
 
-.xr-prov-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px var(--space-2);
-}
-
 .xr-prov {
   flex: none;
   padding: 3px 8px;
@@ -145,6 +219,13 @@
 }
 
 .xr-prov-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-muted);
+}
+
+.xr-weather {
+  margin: 0;
   font-size: 12px;
   color: var(--ui-muted);
 }
@@ -201,6 +282,13 @@
 
 .xr-metrics .xr-metric-wide dd {
   white-space: normal;
+}
+
+/* The TPA queue cell wraps; it never truncates its numbers (gsc-2026 #3/#4). */
+.xr-metrics .xr-queue-cell dd[data-testid="xr-queue"] {
+  font-size: 14px;
+  line-height: 1.3;
+  overflow: visible;
 }
 
 .xr-metrics[aria-busy="true"] dd {
@@ -452,6 +540,44 @@
   color: var(--ui-ink-soft);
 }
 
+/* The AR / VR entry or the orbit hint, with the lite-mode tag beside it. */
+.xr-mode-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.xr-mode-row > .xr-btn,
+.xr-mode-row > .xr-hint {
+  flex: 1;
+  min-width: 0;
+}
+
+.xr-mode-row:empty {
+  display: none;
+}
+
+.xr-lite-tag {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ui-ink-soft);
+  background: var(--ui-surface);
+}
+
+.xr-lite-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
 .xr-error {
   margin: 0;
   font-size: 13px;
@@ -518,6 +644,91 @@
 .xr-range input:focus-visible {
   outline: none;
   box-shadow: var(--ui-focus);
+}
+
+/* ── Ask Pythia on the table (gsc-2026 #7) ── */
+
+.xr-ask {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.xr-ask-icon {
+  flex: none;
+  color: var(--ui-accent);
+}
+
+.xr-ask input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+  font: inherit;
+  font-size: var(--fs-body);
+}
+
+.xr-ask input::placeholder {
+  color: var(--ui-muted);
+}
+
+.xr-ask input:focus-visible {
+  outline: none;
+  box-shadow: var(--ui-focus);
+}
+
+.xr-icon-btn.primary {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent);
+  color: var(--ui-accent-foreground);
+}
+
+.xr-icon-btn.primary:disabled {
+  opacity: 0.6;
+  color: var(--ui-accent-foreground);
+  cursor: progress;
+}
+
+.xr-ask-result {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.xr-ask-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.xr-ask-text p {
+  margin: 0;
+}
+
+.xr-ask-applied {
+  font-size: var(--fs-caption);
+  font-weight: 650;
+  color: var(--ui-ink);
+}
+
+.xr-ask-trace {
+  font-size: 12px;
+  color: var(--ui-ink-soft);
+}
+
+.xr-ask-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
+  font-weight: 650;
+  color: var(--ui-accent);
 }
 
 .xr-tool-row {
@@ -596,6 +807,32 @@
   color: var(--ui-accent);
 }
 
+/* The day's at-risk count beside its date: a risk-coloured dot, then the number. */
+.xr-range-ticks > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.xr-tick-risk {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  color: var(--ui-ink);
+}
+
+.xr-tick-risk::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ui-warning);
+}
+
+.xr-tick-risk[data-level="critical"]::before {
+  background: var(--ui-danger);
+}
+
 .xr-legend ul {
   display: flex;
   flex-wrap: wrap;
@@ -655,6 +892,71 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* Phones: the city first. One-line header, a bottom sheet folded to the ask
+   field and the scrubber, tighter panels (gsc-2026 #3). */
+@media (max-width: 480px) {
+  .xr-overlay {
+    gap: var(--space-1);
+    padding-top: max(env(safe-area-inset-top), var(--space-2));
+    padding-bottom: max(env(safe-area-inset-bottom), var(--space-2));
+  }
+
+  .xr-panel {
+    padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  }
+
+  .xr-head.open {
+    padding-bottom: var(--space-2);
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+
+  .xr-head-row h1 {
+    font-size: 17px;
+  }
+
+  .xr-head-row .xr-prov {
+    padding: 2px 6px;
+    font-size: 10px;
+  }
+
+  .xr-controls {
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .xr-controls.open {
+    max-height: 72vh;
+  }
+
+  .xr-controls .xr-btn {
+    min-height: var(--tap-min);
+  }
+
+  .xr-credit {
+    font-size: 10px;
+    line-height: 1.3;
+    padding: 2px var(--space-2);
+  }
+}
+
+/* The narrowest phones (320 px): a tighter gutter keeps the header's rain chip
+   whole, and the ask field drops its decorative icon so the placeholder fits. */
+@media (max-width: 360px) {
+  .xr-overlay {
+    padding-left: var(--space-2);
+    padding-right: var(--space-2);
+  }
+
+  .xr-ask-icon {
+    display: none;
+  }
+
+  .xr-ask input {
+    padding: 0 var(--space-2);
+  }
 }
 
 @media (max-height: 700px) {

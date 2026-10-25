@@ -20,19 +20,25 @@ import {
   ChevronRight,
   ChevronUp,
   Copy,
+  Gauge,
   Glasses,
   LogOut,
+  Mic,
+  MicOff,
   Minus,
   Move,
   Plus,
   RotateCcw,
   RotateCw,
+  Send,
   Share2,
   SlidersHorizontal,
+  Sparkles,
   Users,
   X,
 } from "lucide-react";
 import { apiFetch } from "../../shared/api/client.js";
+import { useSpeechInput } from "../../features/assistant/useSpeechInput.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import {
   JAKARTA_PLATE,
@@ -44,8 +50,18 @@ import {
   dayTons,
 } from "./buildCityModel.js";
 import { PANEL_HEIGHT_M, createScenePanel } from "./scenePanel.js";
-import { hitTestPointer, selectAction } from "./xrInput.js";
-import { TWIN_EVENT_PRESETS, TWIN_VENUES, twinVenues } from "../../features/twin/twinLinks.js";
+import { hitTestPointer, selectAction, twoFingerChange } from "./xrInput.js";
+import { askToScenario, traceKeys } from "./xrAsk.js";
+import { LITE_RENDER, detectLite, storeLite } from "./xrLite.js";
+import {
+  TWIN_EVENT_PRESETS,
+  TWIN_VENUES,
+  dailyRisk,
+  carriedRainMm,
+  rainHeldText,
+  rainResponseText,
+  twinVenues,
+} from "../../features/twin/twinLinks.js";
 import { IMAGERY_CREDIT } from "../../features/twin/cityBase3d.js";
 import "./xr.css";
 
@@ -90,6 +106,8 @@ function readParams() {
   const lng = finiteParam(params, "event_lng");
   const linkedVenue = lat !== null && lng !== null ? { name: null, lat, lng } : null;
   const session = (params.get("session") || "").toUpperCase();
+  // The day a linked what-if applies to (the twin's `day`, or `scenario_day`).
+  const linkedDay = finiteParam(params, "scenario_day") ?? finiteParam(params, "day");
   return {
     city,
     lang: params.get("lang"),
@@ -98,6 +116,7 @@ function readParams() {
     eventPreset: attendance <= 0 ? "none" : attendance > 75000 ? "100k" : "50k",
     venue: linkedVenue || TWIN_VENUES[city][0],
     session: SESSION_CODE.test(session) ? session : null,
+    day: Number.isInteger(linkedDay) && linkedDay >= 0 && linkedDay <= 6 ? linkedDay : 0,
   };
 }
 
@@ -111,6 +130,12 @@ function sceneQuery(city, scenario, venue) {
     query.set("event_attendance", String(preset.attendance));
     query.set("event_lat", String(venue.lat));
     query.set("event_lng", String(venue.lng));
+  }
+  // gsc-2026 #5: a what-if overrides only its own day; the queue metric describes
+  // that day too. Without a what-if the scene is the base week (no day sent).
+  if ((scenario.rain > 0 || preset.attendance > 0) && scenario.scenarioDay > 0) {
+    query.set("day", String(scenario.scenarioDay));
+    query.set("scenario_day", String(scenario.scenarioDay));
   }
   return query.toString();
 }
@@ -174,14 +199,18 @@ function createEngine({
   onArStage,
   onSessionChange,
   onControl,
+  lite = false,
 }) {
   const reducedMotion = prefersReducedMotion();
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  // Lite mode (budget phones): no antialias or shadows, 1× pixels, a smaller
+  // XR framebuffer and a 30 fps orbit viewer.
+  const renderer = new THREE.WebGLRenderer({ antialias: !lite, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lite ? LITE_RENDER.pixelRatio : 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = !lite;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.xr.enabled = true;
+  if (lite) renderer.xr.setFramebufferScaleFactor(LITE_RENDER.xrFramebufferScale);
   renderer.domElement.className = "xr-canvas-el";
   renderer.domElement.setAttribute("data-testid", "xr-canvas");
   container.appendChild(renderer.domElement);
@@ -195,13 +224,19 @@ function createEngine({
   scene3.add(new THREE.HemisphereLight(0xffffff, 0x41524b, 1.15));
   const sun = new THREE.DirectionalLight(0xffffff, 1.7);
   sun.position.set(0.45, 1.1, 0.35);
-  sun.castShadow = true;
+  sun.castShadow = !lite;
   sun.shadow.mapSize.set(1024, 1024);
   Object.assign(sun.shadow.camera, { left: -0.5, right: 0.5, top: 0.5, bottom: -0.5, near: 0.1, far: 3 });
   sun.shadow.bias = -0.0004;
   scene3.add(sun);
 
-  const model = buildCityModel(cityScene, { dayIndex, reducedMotion, plate });
+  const model = buildCityModel(cityScene, {
+    dayIndex,
+    reducedMotion,
+    lite,
+    // Lite mode drapes a 512 px copy of the satellite plate (≈40 KB, not ≈340 KB).
+    plate: plate && lite ? { ...plate, url: LITE_RENDER.plateUrl } : plate,
+  });
   // `anchor` is what XR places, rotates and scales; the model stays untouched.
   const anchor = new THREE.Group();
   anchor.add(model.root);
@@ -238,18 +273,33 @@ function createEngine({
     controls.autoRotate = false;
   });
 
+  // Pixels the overlay panels cover at the top and bottom of the canvas. The
+  // view is shifted so the model sits in the free band between them (phones).
+  let insets = { top: 0, bottom: 0 };
+  function freeBand(h) {
+    const band = h - insets.top - insets.bottom;
+    return band >= 120 ? band : h;
+  }
+  function applyViewOffset() {
+    const { clientWidth: w, clientHeight: h } = container;
+    if (!w || !h) return;
+    if (freeBand(h) === h) camera.clearViewOffset();
+    else camera.setViewOffset(w, h, 0, (insets.bottom - insets.top) / 2, w, h);
+    camera.updateProjectionMatrix();
+  }
+
   function frameCamera() {
     const { clientWidth: w, clientHeight: h } = container;
     if (!w || !h) return;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    camera.updateProjectionMatrix();
+    applyViewOffset();
     // Narrow (portrait phone) viewports need the camera further back to fit
-    // the plate's width.
+    // the plate's width; a short free band, its height.
     // The plate is seen corner-on while it orbits, so fit its diagonal.
     const span = Math.hypot(model.footprint.width, model.footprint.depth);
     const fitDistance =
-      (span * 1.12) / (2 * Math.tan((camera.fov * Math.PI) / 360) * Math.min(1, camera.aspect));
+      (span * 1.12) / ((2 * Math.tan((camera.fov * Math.PI) / 360) * Math.min(freeBand(h), w)) / h);
     const dir = new THREE.Vector3(0.62, 0.72, 0.92).normalize();
     camera.position
       .copy(controls.target)
@@ -348,7 +398,13 @@ function createEngine({
         sessionKind === "immersive-vr" || (sessionKind === "immersive-ar" && pointer);
     });
   }
+  // A two-finger gesture on the AR overlay also produces screen selects; they
+  // must not place or pick behind the gesture.
+  let holdSelectUntil = 0;
+  // Short haptic tick on a phone, so a tap on the table is felt (no-op elsewhere).
+  const tick = () => navigator.vibrate?.(12);
   function onSelect(event) {
+    if (performance.now() < holdSelectUntil) return;
     const ray = controllerRay(event.target);
     let panelHit = null;
     if (panel.mesh.visible) {
@@ -364,15 +420,39 @@ function createEngine({
       barHit: Boolean(hit),
     });
     if (action === "control") onControl(panelHit);
-    else if (action === "pick") onSelectDistrict(hit.object.userData.district.id);
-    else if (action === "clear") onSelectDistrict(null);
+    else if (action === "pick") {
+      tick();
+      onSelectDistrict(hit.object.userData.district.id);
+    } else if (action === "clear") onSelectDistrict(null);
     else if (action === "place") {
+      tick();
       anchor.position.setFromMatrixPosition(reticle.matrix);
       anchor.visible = true;
       placed = true;
       reticle.visible = false;
       onArStage("placed");
     }
+  }
+
+  // Quest: squeeze grabs the placed model with that controller and moves it with
+  // the hand; on release it stays where it was let go, set level on the table.
+  let grabbedBy = null;
+  const yaw = new THREE.Euler();
+  function release() {
+    if (!grabbedBy) return;
+    scene3.attach(anchor);
+    yaw.setFromQuaternion(anchor.quaternion, "YXZ");
+    anchor.rotation.set(0, yaw.y, 0);
+    grabbedBy = null;
+  }
+  function onSqueezeStart(event) {
+    const canGrab = sessionKind === "immersive-vr" || (sessionKind === "immersive-ar" && placed);
+    if (!canGrab || grabbedBy) return;
+    grabbedBy = event.target;
+    grabbedBy.attach(anchor);
+  }
+  function onSqueezeEnd(event) {
+    if (event.target === grabbedBy) release();
   }
   // Both hands on a headset: a select arrives on the controller that made it.
   const controllers = [0, 1].map((index) => {
@@ -390,11 +470,14 @@ function createEngine({
       syncPanel();
     });
     controller.addEventListener("select", onSelect);
+    controller.addEventListener("squeezestart", onSqueezeStart);
+    controller.addEventListener("squeezeend", onSqueezeEnd);
     scene3.add(controller);
     return controller;
   });
 
   function resetAnchor() {
+    release();
     anchor.position.set(0, 0, 0);
     anchor.rotation.set(0, 0, 0);
     anchor.scale.setScalar(1);
@@ -528,8 +611,14 @@ function createEngine({
   const firstFramePromise = new Promise((resolve) => {
     firstFrame = resolve;
   });
+  // The plate image is the largest download on /xr: fetch it once the city is drawn.
+  firstFramePromise.then(() => {
+    if (!disposed) model.loadPlate();
+  });
   renderer.setAnimationLoop((time, frame) => {
     const now = performance.now();
+    // Lite orbit viewer: ~30 fps leaves an entry GPU headroom (an XR frame always renders).
+    if (lite && !frame && now - last < LITE_RENDER.orbitFrameMs) return;
     const dt = (now - last) / 1000;
     last = now;
     model.tick(dt);
@@ -560,7 +649,12 @@ function createEngine({
     setDay: (i) => model.setDay(i),
     setScene: (next, i) => model.setScene(next, i),
     setHighlight: (id) => model.setHighlight(id),
-    stats: () => model.stats(),
+    stats: () => ({
+      ...model.stats(),
+      pixelRatio: renderer.getPixelRatio(),
+      antialias: Boolean(renderer.getContext().getContextAttributes()?.antialias),
+      shadows: renderer.shadowMap.enabled,
+    }),
     // Client coordinates of a district's column (inline viewer only), for tests.
     screenPoint: (id) => {
       const mesh = model.bars.find((bar) => bar.userData.district.id === id);
@@ -584,6 +678,15 @@ function createEngine({
     endSession: () => session?.end(),
     rotate: (deg) => {
       anchor.rotation.y += (deg * Math.PI) / 180;
+    },
+    holdSelect: (ms) => {
+      holdSelectUntil = Math.max(holdSelectUntil, performance.now() + ms);
+    },
+    setInsets: (top, bottom) => {
+      const next = { top: Math.max(0, Math.round(top)), bottom: Math.max(0, Math.round(bottom)) };
+      if (Math.abs(next.top - insets.top) < 4 && Math.abs(next.bottom - insets.bottom) < 4) return;
+      insets = next;
+      if (!renderer.xr.isPresenting) applyViewOffset();
     },
     scale: (factor) => {
       const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, anchor.scale.x * factor));
@@ -639,6 +742,9 @@ function finiteNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+// Android without ARCore (or without a WebXR browser) falls back to orbit: say why.
+const IS_ANDROID = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent || "");
+
 export function XrTabletop() {
   const { t, lang, setLang } = useLanguage();
   const params = useMemo(readParams, []);
@@ -650,25 +756,39 @@ export function XrTabletop() {
   const [scenario, setScenario] = useState(() => ({
     rain: params.rain,
     eventPreset: params.eventPreset,
-    day: 0,
+    day: params.day,
+    // The horizon day the what-if (rain / event) applies to.
+    scenarioDay: params.day,
     agreed: false,
     // The district pointed at on any device in the session (last writer wins).
     selectedId: null,
+    // An event venue set by Ask Pythia (a twin venue id); null keeps the linked/default venue.
+    venueId: null,
   }));
   const [mode, setMode] = useState("detecting");
   const [session, setSession] = useState(null);
   const [arStage, setArStage] = useState("scanning");
   const [participants, setParticipants] = useState(0);
   const [engineState, setEngineState] = useState({ ready: false, bars: 0, error: false });
+  // Lite mode for budget phones (xrLite.js): auto-detected, with a manual toggle.
+  const [liteState, setLiteState] = useState(() => detectLite());
+  const { lite } = liteState;
   const [xrError, setXrError] = useState("");
   const [sessionCode, setSessionCode] = useState(params.session);
   const [sessionErrorKey, setSessionErrorKey] = useState("");
   const [sharing, setSharing] = useState(false);
   const [copied, setCopied] = useState(false);
-  // Presets and sharing fold away on phones so the model stays visible.
+  // Presets, sharing and the legend fold into a bottom sheet on phones, and the
+  // header into one line, so the city takes most of the screen (gsc-2026 #3).
   const [scenarioOpen, setScenarioOpen] = useState(
     () => !window.matchMedia || window.matchMedia("(min-width: 700px)").matches,
   );
+  const [headOpen, setHeadOpen] = useState(
+    () => !window.matchMedia || window.matchMedia("(min-width: 481px)").matches,
+  );
+  // Ask Pythia on the table (gsc-2026 #7).
+  const [question, setQuestion] = useState("");
+  const [ask, setAsk] = useState({ status: "idle", asked: "", result: null });
   // Random per-page id for presence heartbeats; never a name or an account.
   const participantRef = useRef(null);
   const mountRef = useRef(null);
@@ -686,7 +806,9 @@ export function XrTabletop() {
   const seenRef = useRef(0);
   const { day } = scenario;
   const dayCount = cityScene?.horizon?.dates?.length || 0;
-  const query = sceneQuery(params.city, scenario, params.venue);
+  const venue =
+    (scenario.venueId && TWIN_VENUES[params.city]?.find((v) => v.id === scenario.venueId)) || params.venue;
+  const query = sceneQuery(params.city, scenario, venue);
 
   useEffect(() => {
     if (params.lang === "en" || params.lang === "id") setLang(params.lang);
@@ -752,7 +874,12 @@ export function XrTabletop() {
     setScenario((prev) => {
       const change = typeof patch === "function" ? patch(prev) : patch;
       const next = { ...prev, ...change };
-      if (!("agreed" in change) && (next.rain !== prev.rain || next.eventPreset !== prev.eventPreset)) {
+      const moved =
+        next.rain !== prev.rain ||
+        next.eventPreset !== prev.eventPreset ||
+        next.venueId !== prev.venueId ||
+        next.scenarioDay !== prev.scenarioDay;
+      if (!("agreed" in change) && moved) {
         next.agreed = false;
       }
       return next;
@@ -778,6 +905,8 @@ export function XrTabletop() {
             day: state.day,
             agreed: state.agreed,
             selected_id: state.selectedId || null,
+            venue_id: state.venueId || null,
+            scenario_day: state.scenarioDay,
           },
         });
         if (!res.ok) throw new Error(String(res.status));
@@ -871,6 +1000,8 @@ export function XrTabletop() {
           day: body.day,
           agreed: body.agreed,
           selectedId: body.selected_id || null,
+          venueId: body.venue_id || null,
+          scenarioDay: Number.isInteger(body.scenario_day) ? body.scenario_day : 0,
         });
       } catch {
         if (alive) setSessionErrorKey("xr_session_error");
@@ -927,11 +1058,61 @@ export function XrTabletop() {
   const stepDay = (delta) =>
     changeScenario((prev) => ({ day: Math.min(Math.max(0, dayCount - 1), Math.max(0, prev.day + delta)) }));
 
+  // Ask Pythia: the twin Ask rail's endpoint (/assistant/query) when this device
+  // is signed in to the command center; otherwise the public /xr/ask, which runs
+  // the same local parser and read-only run_scenario tool. The scenario the tool
+  // ran goes onto the table through changeScenario, so a shared session pushes it
+  // to every joined device.
+  const askSeqRef = useRef(0);
+  const askPythia = async (text = question) => {
+    const prompt = text.trim();
+    if (!prompt || ask.status === "loading") return;
+    const seq = ++askSeqRef.current;
+    setQuestion("");
+    setAsk({ status: "loading", asked: prompt, result: null });
+    const body = { question: prompt, language: lang, history: [] };
+    try {
+      let res = await apiFetch("/assistant/query", { method: "POST", body });
+      if (res.status === 401 || res.status === 403) {
+        res = await apiFetch("/xr/ask", {
+          method: "POST",
+          auth: false,
+          // A joined table is rate-limited per session, not per venue address.
+          body: sessionCode
+            ? { question: prompt, language: lang, session: sessionCode }
+            : { question: prompt, language: lang },
+        });
+      }
+      if (!res.ok) throw new Error(String(res.status));
+      const data = await res.json();
+      if (seq !== askSeqRef.current) return;
+      const patch = askToScenario(data.scenario, params.city);
+      if (!patch) {
+        setAsk({ status: "none", asked: prompt, result: null });
+      } else if (patch.otherCity) {
+        setAsk({
+          status: "other-city",
+          asked: prompt,
+          result: { ...data.scenario, otherCity: patch.otherCity },
+        });
+      } else {
+        changeScenario({ ...patch, scenarioDay: patch.day, selectedId: null });
+        setAsk({ status: "applied", asked: prompt, result: data.scenario, provider: data.provider });
+      }
+    } catch {
+      if (seq === askSeqRef.current) setAsk({ status: "error", asked: prompt, result: null });
+    }
+  };
+  const voice = useSpeechInput(lang, (transcript) => {
+    setQuestion(transcript);
+    askPythia(transcript);
+  });
+
   // Buttons of the in-scene panel (headset / AR without DOM overlay).
   const onControl = (id) => {
     const [kind, value] = id.split(":");
-    if (kind === "rain") changeScenario({ rain: Number(value) });
-    else if (kind === "event") changeScenario({ eventPreset: value });
+    if (kind === "rain") changeScenario((prev) => ({ rain: Number(value), scenarioDay: prev.day }));
+    else if (kind === "event") changeScenario((prev) => ({ eventPreset: value, scenarioDay: prev.day }));
     else if (id === "day-prev") stepDay(-1);
     else if (id === "day-next") stepDay(1);
     else if (id === "agree") toggleAgree();
@@ -960,6 +1141,7 @@ export function XrTabletop() {
         onArStage: (stage) => setArStage((prev) => (prev === stage ? prev : stage)),
         onSessionChange: (kind) => setSession(kind),
         onControl: (id) => controlRef.current(id),
+        lite,
       });
     } catch {
       setEngineState({ ready: false, bars: 0, error: true });
@@ -974,8 +1156,18 @@ export function XrTabletop() {
       engineRef.current = null;
       engine.dispose();
     };
-    // params and changeScenario are stable: the engine is built once per city.
-  }, [hasScene, params.city, changeScenario]);
+    // params and changeScenario are stable: the engine is built once per city
+    // (and again when lite mode changes the renderer's context attributes).
+  }, [hasScene, params.city, changeScenario, lite]);
+
+  const toggleLite = () => {
+    const next = !lite;
+    storeLite(next);
+    // The new engine reports ready on its first frame; the scene, highlight,
+    // label and panel effects then re-apply to it.
+    setEngineState((prev) => ({ ...prev, ready: false }));
+    setLiteState((prev) => ({ ...prev, lite: next, source: "manual" }));
+  };
 
   useEffect(() => {
     if (cityScene) engineRef.current?.setScene(cityScene, day);
@@ -991,7 +1183,13 @@ export function XrTabletop() {
   const [labelKey, labelNoteKey] = PROVENANCE_KEYS[labelProvenance.class] || [];
   const labelCity = cityScene?.city?.name || "";
   const labelClass = labelKey ? t(labelKey) : labelProvenance.class || "";
-  const labelNote = labelNoteKey ? t(labelNoteKey) : labelProvenance.source || "";
+  const hcmcNote = t("xr3_hcmc_boundaries");
+  const labelNote = [
+    labelNoteKey ? t(labelNoteKey) : labelProvenance.source || "",
+    params.city === "hcmc" && hcmcNote,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   useEffect(() => {
     if (!engineState.ready || !labelCity) return;
     engineRef.current?.setLabel([`${labelCity} · ${labelClass}`, labelNote]);
@@ -1010,6 +1208,75 @@ export function XrTabletop() {
     el.addEventListener("beforexrselect", block);
     return () => el.removeEventListener("beforexrselect", block);
   }, []);
+
+  // Phones: the header and the bottom sheet span the screen, so the view is
+  // centred in the band between them (a side panel on a wide screen is ignored).
+  const headRef = useRef(null);
+  const controlsRef = useRef(null);
+  useEffect(() => {
+    const shell = mountRef.current;
+    if (!engineState.ready || !hasScene || !shell) return undefined;
+    const measure = () => {
+      const box = shell.getBoundingClientRect();
+      const spans = (r) => r && r.height > 0 && r.width >= box.width * 0.8;
+      const head = headRef.current?.getBoundingClientRect();
+      const foot = controlsRef.current?.getBoundingClientRect();
+      engineRef.current?.setInsets(
+        spans(head) ? head.bottom - box.top : 0,
+        spans(foot) ? box.bottom - foot.top : 0,
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    [shell, headRef.current, controlsRef.current].forEach((el) => el && observer.observe(el));
+    return () => observer.disconnect();
+  }, [engineState.ready, hasScene]);
+
+  // gsc-2026 #12: in an AR session, two fingers on the camera view pinch to scale
+  // and twist to rotate the placed city (the buttons stay as the accessible path).
+  // Selects made by those fingers are held so they never place or pick.
+  useEffect(() => {
+    const el = overlayRef.current;
+    if (session !== "immersive-ar" || !el) return undefined;
+    const points = new Map();
+    let last = null;
+    const pair = () => Array.from(points.values()).slice(0, 2);
+    const down = (event) => {
+      if (event.target instanceof Element && event.target.closest(".xr-panel, .xr-controls, .xr-credit"))
+        return;
+      points.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (points.size >= 2) {
+        last = pair();
+        engineRef.current?.holdSelect(400);
+      }
+    };
+    const move = (event) => {
+      if (!points.has(event.pointerId)) return;
+      points.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (points.size < 2 || !last) return;
+      const next = pair();
+      const change = twoFingerChange(last, next);
+      last = next;
+      engineRef.current?.holdSelect(400);
+      if (!change) return;
+      engineRef.current?.scale(change.scale);
+      engineRef.current?.rotate(change.rotateDeg);
+    };
+    const up = (event) => {
+      points.delete(event.pointerId);
+      if (points.size < 2) last = null;
+    };
+    el.addEventListener("pointerdown", down);
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+    return () => {
+      el.removeEventListener("pointerdown", down);
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
+    };
+  }, [session]);
 
   const enterAr = async () => {
     setXrError("");
@@ -1049,6 +1316,8 @@ export function XrTabletop() {
   const districts = cityScene?.districts || [];
   const totalToday = cityScene?.horizon?.daily_total_tons?.[day] ?? 0;
   const atRisk = districts.filter((d) => ["high", "critical"].includes(dayRisk(d, day))).length;
+  // Each day's at-risk count on the scrubber (teardown v3 fix 6).
+  const weekRisk = dailyRisk(cityScene);
   // Readout for the selected day, straight from the scene payload: the same
   // model without rain or event is the "normal day"; trucks are the scene's
   // per-district trucks_required (one crew team per truck, per core/units).
@@ -1074,19 +1343,49 @@ export function XrTabletop() {
   // gsc M5: the scene is fetched for today; the queue metric names the day the
   // backend computed it for, not the day being stepped through.
   const queueDay = finiteNumber(cityScene?.scenario?.day) ? cityScene.scenario.day : 0;
-  const minutes = (n) => Math.round(n).toLocaleString(locale);
-  // Scenario-scaled queue: show it next to the normal day it is compared with.
+  const minutes = (n) => n.toLocaleString(locale, { maximumFractionDigits: 1 });
+  // gsc-2026 #4: the queue says what each number is, in the twin's words — the day
+  // average without → with stagger, the modelled peak hour of the unstaggered arm,
+  // and the unstaggered range over assumed departure spreads (not a confidence interval).
   const queueScaled =
     queue?.scenario_scaled === true &&
     finiteNumber(queue.normal_day?.baseline_mean) &&
     finiteNumber(queue.normal_day?.staggered_mean);
   const queueLabel =
     queue && finiteNumber(queue.baseline_mean) && finiteNumber(queue.staggered_mean)
-      ? t(queueScaled ? "xr_queue_value_scenario" : "xr_queue_value")
+      ? t("xr3_queue_day_mean")
           .replace("{base}", minutes(queue.baseline_mean))
           .replace("{stag}", minutes(queue.staggered_mean))
-          .replace("{normal_base}", queueScaled ? minutes(queue.normal_day.baseline_mean) : "")
-          .replace("{normal_stag}", queueScaled ? minutes(queue.normal_day.staggered_mean) : "")
+      : null;
+  const beacon = cityScene?.landfill_queue;
+  const queuePeak =
+    queueLabel && Number.isInteger(beacon?.modelled_hour) && finiteNumber(beacon.avg_wait_minutes)
+      ? t("xr3_queue_peak")
+          .replace("{hour}", `${String(beacon.modelled_hour).padStart(2, "0")}:00`)
+          .replace("{trucks}", Number(beacon.trucks_in_queue ?? 0).toLocaleString(locale))
+          .replace("{wait}", minutes(beacon.avg_wait_minutes))
+      : null;
+  const band = queue?.sensitivity?.baseline_band;
+  const spreads = queue?.assumptions?.sensitivity_departure_sd_minutes;
+  const queueBand =
+    queueLabel && Array.isArray(band) && band.every(finiteNumber) && Array.isArray(spreads) && spreads.length
+      ? t("xr3_queue_band")
+          .replace("{low}", minutes(band[0]))
+          .replace("{high}", minutes(band[1]))
+          .replace("{sd_low}", minutes(Math.min(...spreads)))
+          .replace("{sd_high}", minutes(Math.max(...spreads)))
+      : null;
+  const queueNormal = queueScaled
+    ? t("xr3_queue_normal")
+        .replace("{base}", minutes(queue.normal_day.baseline_mean))
+        .replace("{stag}", minutes(queue.normal_day.staggered_mean))
+    : null;
+  const queueTrips =
+    queueLabel && finiteNumber(queue.trucks_per_day)
+      ? t(queue.scenario_scaled ? "xr3_queue_trips_scaled" : "xr3_queue_trips_real").replace(
+          "{n}",
+          queue.trucks_per_day.toLocaleString(locale),
+        )
       : null;
   // Equal truck and crew counts are the one-crew-per-truck rule (core/units): name it,
   // with the scene's crew size, so "573 = 573" does not read as a bug.
@@ -1107,6 +1406,11 @@ export function XrTabletop() {
           .join(" · ");
   const provenance = cityScene?.provenance?.districts || {};
   const [provLabelKey, provNoteKey] = PROVENANCE_KEYS[provenance.class] || [];
+  // gsc-2026 #13: Vietnam abolished the district tier on 1 July 2025; the demo city says
+  // which boundaries it draws.
+  const provNote = [provNoteKey ? t(provNoteKey) : provenance.source, params.city === "hcmc" && hcmcNote]
+    .filter(Boolean)
+    .join(" · ");
   const selected = districts.find((d) => d.id === selectedId) || null;
   const plate = CITY_PLATES[params.city] || null;
   const participantsText =
@@ -1118,16 +1422,80 @@ export function XrTabletop() {
   const cityName = cityScene?.city?.name || (params.city === "hcmc" ? "Ho Chi Minh City" : "Jakarta");
   // A linked venue carries only coordinates; name it from the scene's (or the twin's) venue list.
   const venueName =
-    params.venue.name ||
+    venue.name ||
     twinVenues(params.city, cityScene?.venues).find(
-      (v) =>
-        Math.abs(v.lat - params.venue.lat) < VENUE_MATCH_DEG &&
-        Math.abs(v.lng - params.venue.lng) < VENUE_MATCH_DEG,
+      (v) => Math.abs(v.lat - venue.lat) < VENUE_MATCH_DEG && Math.abs(v.lng - venue.lng) < VENUE_MATCH_DEG,
     )?.name;
   const eventLabel = venueName ? `${t("xr_event")} · ${venueName}` : t("xr_event");
   const shareUrl = sessionCode
     ? `${window.location.origin}/xr?session=${sessionCode}&city=${params.city}`
     : "";
+  // What Ask Pythia put on the table, read back from the table's own scenario, and
+  // the steps the tool ran ("Local parser (no LLM) → twin forecast → queue sim").
+  const askScenario = ask.result?.scenario;
+  // Data honesty: where the selected day's rain comes from (scene.weather): the
+  // what-if, the Open-Meteo forecast (never observed weather) or assumed dry.
+  const weather = cityScene?.weather;
+  const weatherDay = weather?.days?.[day] || null;
+  const weatherKey = !weatherDay
+    ? null
+    : weatherDay.input === "scenario"
+      ? "twin_rain_label"
+      : weatherDay.input === "forecast"
+        ? Number(weatherDay.rainfall_mm) > 0
+          ? "twin_rain_forecast_label"
+          : "twin_rain_forecast_dry_label"
+        : weather.class === "UNAVAILABLE"
+          ? weather.source === "not_applicable"
+            ? "twin_rain_demo_city_label"
+            : "twin_rain_unavailable_label"
+          : null;
+  const weatherMm = Number(weatherDay?.rainfall_mm || 0).toLocaleString(locale);
+  // The one-line header's weather chip: where the day's rain comes from.
+  const weatherChip = !weatherDay
+    ? null
+    : weatherDay.input === "scenario"
+      ? t("xl_wx_whatif").replace("{n}", weatherMm)
+      : weatherDay.input === "forecast"
+        ? t("xl_wx_forecast").replace("{n}", weatherMm)
+        : t("xl_wx_dry");
+  // When the Open-Meteo forecast was fetched (local time), on forecast days.
+  const fetchedAt = weather?.fetched_at ? new Date(weather.fetched_at) : null;
+  const fetchedText =
+    weatherDay?.input === "forecast" && fetchedAt && !Number.isNaN(fetchedAt.getTime())
+      ? t("xl_fetched").replace(
+          "{time}",
+          fetchedAt.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false }),
+        )
+      : null;
+  const rainResponse = rainResponseText(t, weather, (n) => n.toLocaleString(locale));
+  // A dry day still carries the previous days' forecast rain in its 3-day sum.
+  const carriedMm = carriedRainMm(weather, day);
+  const weatherText =
+    [
+      weatherKey ? t(weatherKey).replace("{n}", weatherMm) : null,
+      fetchedText,
+      rainHeldText(t, weather, day, (n) => n.toLocaleString(locale)),
+      carriedMm === null ? null : t("ufx_twin_rain_carry").replace("{n}", carriedMm.toLocaleString(locale)),
+    ]
+      .filter(Boolean)
+      .join(" · ") || null;
+  const appliedText = [
+    `${scenario.rain.toLocaleString(locale)} mm`,
+    scenario.eventPreset !== "none" &&
+      [t(`xr_event_${scenario.eventPreset}`), venueName].filter(Boolean).join(" · "),
+    dateLabel(dates[day]),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const askNotes = [
+    askScenario?.attendance_assumed && t("xr3_ask_assumed"),
+    askScenario?.snapped_to_twin_presets && t("xr3_ask_snapped"),
+  ].filter(Boolean);
+  const askTrace = traceKeys(ask.result?.trace)
+    .map((key) => t(key))
+    .join(" → ");
+  const askLine = ask.status === "applied" && askTrace ? `${t("xr3_ask_title")}: ${askTrace}` : null;
 
   // In-scene panel content; redrawn only when its text changes.
   const panelSpec = cityScene
@@ -1136,6 +1504,8 @@ export function XrTabletop() {
           `${t("xr_metric_total")} ${tonnes(totalToday)} · ${extraLabel} ${t("xr_metric_extra")}`,
           fleetText,
           queueLabel && `${t("xr_metric_queue")} ${queueLabel}`,
+          weatherText,
+          askLine,
           sessionCode
             ? [scenario.agreed ? t("xr_agreed") : `${t("xr_session_code")} ${sessionCode}`, participantsText]
                 .filter(Boolean)
@@ -1201,7 +1571,12 @@ export function XrTabletop() {
       sceneRainfall: cityScene?.scenario?.rainfall_mm ?? null,
       sceneLoading,
       selectedId,
+      venueId: scenario.venueId,
+      scenarioDay: scenario.scenarioDay,
       participants,
+      lite,
+      liteSource: liteState.source,
+      liteReasons: liteState.reasons,
       // Live engine stats (the plate texture loads after the first frame).
       get rainParticles() {
         return engineRef.current?.stats().rainParticles ?? 0;
@@ -1217,6 +1592,24 @@ export function XrTabletop() {
       },
       get plate() {
         return engineRef.current?.stats().plate ?? "none";
+      },
+      get flowArcs() {
+        return engineRef.current?.stats().flowArcs ?? [];
+      },
+      get arcSegments() {
+        return engineRef.current?.stats().arcSegments ?? 0;
+      },
+      get districtVertices() {
+        return engineRef.current?.stats().districtVertices ?? 0;
+      },
+      get pixelRatio() {
+        return engineRef.current?.stats().pixelRatio ?? null;
+      },
+      get antialias() {
+        return engineRef.current?.stats().antialias ?? null;
+      },
+      get shadows() {
+        return engineRef.current?.stats().shadows ?? null;
       },
       get panelText() {
         return engineRef.current?.panelText() || "";
@@ -1237,6 +1630,8 @@ export function XrTabletop() {
     sceneLoading,
     selectedId,
     participants,
+    lite,
+    liteState,
   ]);
 
   useEffect(
@@ -1261,121 +1656,189 @@ export function XrTabletop() {
       />
 
       <div className="xr-overlay" ref={overlayRef}>
-        <header className="xr-panel xr-head">
+        <header className={`xr-panel xr-head${headOpen ? " open" : ""}`} ref={headRef} data-testid="xr-head">
+          {/* One line on a phone: city · date · total · provenance, with a chevron for the rest. */}
           <div className="xr-head-row">
-            <div className="xr-title">
+            <div className="xr-head-title">
+              <h1>{cityName}</h1>
+              {cityScene && (
+                <span className="xr-head-sum" data-testid="xr-head-summary">
+                  <span className="xr-head-sum-main">
+                    {dateLabel(dates[day])} · {tonnes(totalToday)}
+                  </span>
+                  {weatherChip && (
+                    <span className="xr-head-wx" data-testid="xr-head-weather" data-input={weatherDay.input}>
+                      {weatherChip}
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
+            {cityScene && (
+              <span
+                className={`xr-prov ${provenance.class === "SIMULATED_DEMO_CITY" ? "demo" : "model"}`}
+                data-testid="xr-provenance"
+                data-class={provenance.class || ""}
+              >
+                {provLabelKey ? t(provLabelKey) : provenance.class}
+              </span>
+            )}
+            <button
+              type="button"
+              className="xr-icon-btn xr-head-toggle"
+              data-testid="xr-head-toggle"
+              aria-expanded={headOpen}
+              aria-controls="xr-head-detail"
+              aria-label={headOpen ? t("xr3_head_less") : t("xr3_head_more")}
+              title={headOpen ? t("xr3_head_less") : t("xr3_head_more")}
+              onClick={() => setHeadOpen((open) => !open)}
+            >
+              {headOpen ? (
+                <ChevronUp size={18} aria-hidden="true" />
+              ) : (
+                <ChevronDown size={18} aria-hidden="true" />
+              )}
+            </button>
+          </div>
+
+          <div className="xr-head-detail" id="xr-head-detail" hidden={!headOpen}>
+            <div className="xr-head-meta">
               <span className="xr-kicker">
                 <Box size={13} aria-hidden="true" /> {t("xr_kicker")}
               </span>
-              <h1>{cityName}</h1>
-            </div>
-            <div className="xr-lang" role="group" aria-label={t("xr_language")}>
-              {["id", "en"].map((code) => (
-                <button
-                  key={code}
-                  type="button"
-                  aria-pressed={lang === code}
-                  className={lang === code ? "active" : ""}
-                  onClick={() => setLang(code)}
-                >
-                  {code.toUpperCase()}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {cityScene && (
-            <>
-              <div className="xr-prov-row">
-                <span
-                  className={`xr-prov ${provenance.class === "SIMULATED_DEMO_CITY" ? "demo" : "model"}`}
-                  data-testid="xr-provenance"
-                  data-class={provenance.class || ""}
-                >
-                  {provLabelKey ? t(provLabelKey) : provenance.class}
-                </span>
-                <span className="xr-prov-note">{provNoteKey ? t(provNoteKey) : provenance.source}</span>
-              </div>
-              {sessionCode && participantsText && (
-                <p className="xr-presence" data-testid="xr-participants" data-count={participants}>
-                  <Users size={14} aria-hidden="true" /> {participantsText}
-                </p>
-              )}
-              {(cityScene.scenario?.rainfall_mm > 0 || cityScene.scenario?.event_attendance > 0) && (
-                <p className="xr-scenario" data-testid="xr-scenario">
-                  {t("xr_scenario")
-                    .replace("{rain}", Number(cityScene.scenario.rainfall_mm || 0).toLocaleString(locale))
-                    .replace(
-                      "{people}",
-                      Number(cityScene.scenario.event_attendance || 0).toLocaleString(locale),
-                    )}
-                </p>
-              )}
-              <dl className="xr-metrics" data-testid="xr-readout" aria-busy={sceneLoading}>
-                <div>
-                  <dt>{t("xr_metric_date")}</dt>
-                  <dd data-testid="xr-date">{dateLabel(dates[day])}</dd>
-                </div>
-                <div>
-                  <dt>{t("xr_metric_total")}</dt>
-                  <dd data-testid="xr-total">{tonnes(totalToday)}</dd>
-                </div>
-                <div>
-                  <dt>{t("xr_metric_risk")}</dt>
-                  <dd>{t("xr_risk_count").replace("{n}", atRisk).replace("{total}", districts.length)}</dd>
-                </div>
-                <div>
-                  <dt>{t("xr_metric_extra")}</dt>
-                  <dd data-testid="xr-extra">{extraLabel}</dd>
-                </div>
-                <div>
-                  <dt
-                    title={[cityScene.units?.trucks_required, crewsNeeded === null && t("xr_fleet_note")]
-                      .filter(Boolean)
-                      .join("; ")}
+              <div className="xr-lang" role="group" aria-label={t("xr_language")}>
+                {["id", "en"].map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    aria-pressed={lang === code}
+                    className={lang === code ? "active" : ""}
+                    onClick={() => setLang(code)}
                   >
-                    {crewsNeeded === null ? t("xr_metric_fleet") : t("xr_metric_trucks")}
-                  </dt>
-                  <dd data-testid="xr-fleet">{trucksNeeded.toLocaleString(locale)}</dd>
-                </div>
-                {crewsNeeded !== null && (
+                    {code.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {cityScene && (
+              <>
+                <p className="xr-prov-note" data-testid="xr-provenance-note">
+                  {provNote}
+                </p>
+                {sessionCode && participantsText && (
+                  <p className="xr-presence" data-testid="xr-participants" data-count={participants}>
+                    <Users size={14} aria-hidden="true" /> {participantsText}
+                  </p>
+                )}
+                {(cityScene.scenario?.rainfall_mm > 0 || cityScene.scenario?.event_attendance > 0) && (
+                  <p className="xr-scenario" data-testid="xr-scenario">
+                    {/* No crowd, no event clause (never "event 0 people"). */}
+                    {t(cityScene.scenario.event_attendance > 0 ? "xr_scenario" : "xl_scenario_rain")
+                      .replace("{rain}", Number(cityScene.scenario.rainfall_mm || 0).toLocaleString(locale))
+                      .replace(
+                        "{people}",
+                        Number(cityScene.scenario.event_attendance || 0).toLocaleString(locale),
+                      )}
+                    {/* The what-if holds for one day only (gsc-2026 #5): name it. */}
+                    {` · ${dateLabel(dates[finiteNumber(cityScene.scenario.scenario_day) ? cityScene.scenario.scenario_day : scenario.scenarioDay])}`}
+                  </p>
+                )}
+                {weatherText && (
+                  <p className="xr-weather" data-testid="xr-weather" data-input={weatherDay.input}>
+                    {weatherText}
+                  </p>
+                )}
+                {rainResponse && (
+                  <p className="xr-weather" data-testid="xr-rain-response">
+                    {rainResponse}
+                  </p>
+                )}
+                <dl className="xr-metrics" data-testid="xr-readout" aria-busy={sceneLoading}>
                   <div>
-                    <dt title={cityScene.units?.crews_required || undefined}>{t("xr_metric_crews")}</dt>
-                    <dd data-testid="xr-crews">{crewsNeeded.toLocaleString(locale)}</dd>
-                    {crewRule && (
-                      <dd className="xr-metric-note" data-testid="xr-crew-rule">
-                        {crewRule}
-                      </dd>
-                    )}
+                    <dt>{t("xr_metric_date")}</dt>
+                    <dd data-testid="xr-date">{dateLabel(dates[day])}</dd>
                   </div>
-                )}
-                {queueLabel && (
-                  <div className={queueScaled ? "xr-metric-wide" : undefined}>
-                    <dt title={t("xr_queue_note")}>
-                      {t("xr_metric_queue")} ·{" "}
-                      <span data-testid="xr-queue-day">{dateLabel(dates[queueDay])}</span>
+                  <div>
+                    <dt>{t("xr_metric_total")}</dt>
+                    <dd data-testid="xr-total">{tonnes(totalToday)}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("xr_metric_risk")}</dt>
+                    <dd>{t("xr_risk_count").replace("{n}", atRisk).replace("{total}", districts.length)}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("xr_metric_extra")}</dt>
+                    <dd data-testid="xr-extra">{extraLabel}</dd>
+                  </div>
+                  <div>
+                    <dt
+                      title={[cityScene.units?.trucks_required, crewsNeeded === null && t("xr_fleet_note")]
+                        .filter(Boolean)
+                        .join("; ")}
+                    >
+                      {crewsNeeded === null ? t("xr_metric_fleet") : t("xr_metric_trucks")}
                     </dt>
-                    <dd data-testid="xr-queue">{queueLabel}</dd>
+                    <dd data-testid="xr-fleet">{trucksNeeded.toLocaleString(locale)}</dd>
                   </div>
-                )}
-              </dl>
-            </>
-          )}
-          <nav className="xr-cities" aria-label={t("xr_city_switch")}>
-            {[
-              ["jakarta", "Jakarta"],
-              ["hcmc", "Ho Chi Minh City"],
-            ].map(([id, name]) => (
-              <a
-                key={id}
-                href={`/xr?city=${id}`}
-                aria-current={params.city === id ? "page" : undefined}
-                className={params.city === id ? "active" : ""}
-              >
-                {name}
-              </a>
-            ))}
-          </nav>
+                  {crewsNeeded !== null && (
+                    <div>
+                      <dt title={cityScene.units?.crews_required || undefined}>{t("xr_metric_crews")}</dt>
+                      <dd data-testid="xr-crews">{crewsNeeded.toLocaleString(locale)}</dd>
+                      {crewRule && (
+                        <dd className="xr-metric-note" data-testid="xr-crew-rule">
+                          {crewRule}
+                        </dd>
+                      )}
+                    </div>
+                  )}
+                  {queueLabel && (
+                    <div className="xr-metric-wide xr-queue-cell">
+                      <dt title={t("xr_queue_note")}>
+                        {t("xr_metric_queue")} ·{" "}
+                        <span data-testid="xr-queue-day">{dateLabel(dates[queueDay])}</span>
+                      </dt>
+                      <dd data-testid="xr-queue">{queueLabel}</dd>
+                      {queuePeak && (
+                        <dd className="xr-metric-note" data-testid="xr-queue-peak">
+                          {queuePeak}
+                        </dd>
+                      )}
+                      {queueBand && (
+                        <dd className="xr-metric-note" data-testid="xr-queue-band">
+                          {queueBand}
+                        </dd>
+                      )}
+                      {queueNormal && (
+                        <dd className="xr-metric-note" data-testid="xr-queue-normal">
+                          {queueNormal}
+                        </dd>
+                      )}
+                      {queueTrips && (
+                        <dd className="xr-metric-note" data-testid="xr-queue-trips">
+                          {queueTrips}
+                        </dd>
+                      )}
+                    </div>
+                  )}
+                </dl>
+              </>
+            )}
+            <nav className="xr-cities" aria-label={t("xr_city_switch")}>
+              {[
+                ["jakarta", "Jakarta"],
+                ["hcmc", "Ho Chi Minh City"],
+              ].map(([id, name]) => (
+                <a
+                  key={id}
+                  href={`/xr?city=${id}`}
+                  aria-current={params.city === id ? "page" : undefined}
+                  className={params.city === id ? "active" : ""}
+                >
+                  {name}
+                </a>
+              ))}
+            </nav>
+          </div>
         </header>
 
         {!cityScene && !loadError && (
@@ -1426,12 +1889,17 @@ export function XrTabletop() {
         )}
 
         {cityScene && (
-          <section className="xr-panel xr-controls" aria-label={t("xr_controls")}>
+          <section
+            className={`xr-panel xr-controls${scenarioOpen ? " open" : ""}`}
+            ref={controlsRef}
+            data-testid="xr-controls"
+            aria-label={t("xr_controls")}
+          >
             {session === "immersive-ar" && (
               <>
                 <p className="xr-hint" role="status" data-testid="xr-ar-hint">
                   {arStage === "placed"
-                    ? t("xr_ar_placed")
+                    ? t("xr3_ar_placed")
                     : arStage === "ready"
                       ? t("xr_ar_tap")
                       : t("xr_ar_scan")}
@@ -1489,37 +1957,157 @@ export function XrTabletop() {
               </>
             )}
 
-            {!session && mode === "ar" && (
-              <button
-                type="button"
-                className="xr-btn primary"
-                data-testid="xr-enter-ar"
-                onClick={enterAr}
-                disabled={!engineState.ready}
-              >
-                <Box size={18} /> {t("xr_place_ar")}
-              </button>
-            )}
-            {!session && mode === "vr" && (
-              <button
-                type="button"
-                className="xr-btn primary"
-                data-testid="xr-enter-vr"
-                onClick={enterVr}
-                disabled={!engineState.ready}
-              >
-                <Glasses size={18} /> {t("xr_enter_vr")}
-              </button>
-            )}
-            {!session && mode === "orbit" && (
-              <p className="xr-hint" data-testid="xr-orbit-hint">
-                {t("xr_orbit_hint")}
-              </p>
+            {!session && (
+              <div className="xr-mode-row">
+                {mode === "ar" && (
+                  <button
+                    type="button"
+                    className="xr-btn primary"
+                    data-testid="xr-enter-ar"
+                    onClick={enterAr}
+                    disabled={!engineState.ready}
+                  >
+                    <Box size={18} /> {t("xr_place_ar")}
+                  </button>
+                )}
+                {mode === "vr" && (
+                  <button
+                    type="button"
+                    className="xr-btn primary"
+                    data-testid="xr-enter-vr"
+                    onClick={enterVr}
+                    disabled={!engineState.ready}
+                  >
+                    <Glasses size={18} /> {t("xr_enter_vr")}
+                  </button>
+                )}
+                {mode === "orbit" && (
+                  <p
+                    className="xr-hint"
+                    data-testid="xr-orbit-hint"
+                    data-reason={IS_ANDROID ? "no-arcore" : "no-webxr"}
+                  >
+                    {IS_ANDROID ? t("xl_no_arcore") : t("xr3_orbit_hint")}
+                  </p>
+                )}
+                {lite && (
+                  <span className="xr-lite-tag" data-testid="xr-lite-label" title={t("xl_lite_hint")}>
+                    <Gauge size={14} aria-hidden="true" /> {t("xl_lite")}
+                  </span>
+                )}
+              </div>
             )}
             {xrError && (
               <p className="xr-error" role="alert">
                 {xrError}
               </p>
+            )}
+
+            <form
+              className="xr-ask"
+              data-testid="xr-ask"
+              onSubmit={(event) => {
+                event.preventDefault();
+                askPythia();
+              }}
+            >
+              <label className="xr-visually-hidden" htmlFor="xr-ask-input">
+                {t("xr3_ask_label")}
+              </label>
+              <Sparkles size={16} className="xr-ask-icon" aria-hidden="true" />
+              <input
+                id="xr-ask-input"
+                data-testid="xr-ask-input"
+                type="text"
+                enterKeyHint="send"
+                autoComplete="off"
+                maxLength={500}
+                value={question}
+                placeholder={voice.listening ? t("asst_voice_listening") : t("xl_ask_placeholder")}
+                onChange={(event) => setQuestion(event.target.value)}
+              />
+              {voice.supported && (
+                <button
+                  type="button"
+                  className="xr-icon-btn"
+                  data-testid="xr-ask-voice"
+                  aria-pressed={voice.listening}
+                  aria-label={voice.listening ? t("asst_voice_stop") : t("asst_voice_start")}
+                  title={voice.listening ? t("asst_voice_stop") : t("asst_voice_start")}
+                  onClick={voice.toggle}
+                >
+                  {voice.listening ? (
+                    <MicOff size={18} aria-hidden="true" />
+                  ) : (
+                    <Mic size={18} aria-hidden="true" />
+                  )}
+                </button>
+              )}
+              <button
+                type="submit"
+                className="xr-icon-btn primary"
+                data-testid="xr-ask-send"
+                aria-label={t("xr3_ask_send")}
+                title={t("xr3_ask_send")}
+                aria-busy={ask.status === "loading"}
+                disabled={ask.status === "loading"}
+              >
+                <Send size={18} aria-hidden="true" />
+              </button>
+            </form>
+            {ask.status !== "idle" && (
+              <div
+                className="xr-ask-result"
+                aria-live="polite"
+                data-testid="xr-ask-result"
+                data-status={ask.status}
+              >
+                <div className="xr-ask-text">
+                  {ask.status === "loading" && <p className="xr-hint">{t("xr3_ask_loading")}</p>}
+                  {ask.status === "applied" && (
+                    <>
+                      <p className="xr-ask-applied" data-testid="xr-ask-applied">
+                        {t("xr3_ask_applied").replace("{scenario}", appliedText)}
+                        {askNotes.length ? ` (${askNotes.join(", ")})` : ""}
+                      </p>
+                      {askTrace && (
+                        <p className="xr-ask-trace" data-testid="xr-ask-trace">
+                          {t("xr3_trace_label")}: {askTrace}
+                        </p>
+                      )}
+                      {sessionCode && (
+                        <p className="xr-ask-trace">{t("xr3_ask_shared").replace("{code}", sessionCode)}</p>
+                      )}
+                    </>
+                  )}
+                  {ask.status === "none" && <p className="xr-hint">{t("xr3_ask_none")}</p>}
+                  {ask.status === "error" && <p className="xr-error">{t("xr3_ask_error")}</p>}
+                  {ask.status === "other-city" && (
+                    <p className="xr-hint">
+                      {t("xr3_ask_other_city").replace(
+                        "{city}",
+                        ask.result.otherCity === "hcmc" ? "Ho Chi Minh City" : "Jakarta",
+                      )}{" "}
+                      <a className="xr-ask-link" href={`/xr?city=${ask.result.otherCity}`}>
+                        {t("xr3_ask_open_city").replace(
+                          "{city}",
+                          ask.result.otherCity === "hcmc" ? "Ho Chi Minh City" : "Jakarta",
+                        )}
+                      </a>
+                    </p>
+                  )}
+                </div>
+                {ask.status !== "loading" && (
+                  <button
+                    type="button"
+                    className="xr-icon-btn"
+                    aria-label={t("xr_close")}
+                    onClick={() => setAsk({ status: "idle", asked: "", result: null })}
+                  >
+                    <X size={18} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
             )}
 
             <div className="xr-scrubber">
@@ -1542,13 +2130,25 @@ export function XrTabletop() {
                   step={1}
                   value={day}
                   data-testid="xr-day-scrubber"
-                  aria-valuetext={dateLabel(dates[day])}
+                  aria-valuetext={[
+                    dateLabel(dates[day]),
+                    t("ufx_twin_day_at_risk").replace("{n}", String(weekRisk[day]?.count ?? 0)),
+                  ].join(" · ")}
                   onChange={(e) => changeScenario({ day: Number(e.target.value) })}
                 />
                 <span className="xr-range-ticks" aria-hidden="true">
                   {dates.map((iso, i) => (
-                    <span key={iso} className={i === day ? "active" : ""}>
+                    <span
+                      key={iso}
+                      className={i === day ? "active" : ""}
+                      data-at-risk={weekRisk[i]?.count ?? 0}
+                    >
                       {Number(iso.slice(8, 10))}
+                      {weekRisk[i]?.count > 0 && (
+                        <b className="xr-tick-risk" data-level={weekRisk[i].worst}>
+                          {weekRisk[i].count}
+                        </b>
+                      )}
                     </span>
                   ))}
                 </span>
@@ -1605,7 +2205,7 @@ export function XrTabletop() {
                           className="xr-chip"
                           data-testid={`xr-rain-${mm}`}
                           aria-pressed={scenario.rain === mm}
-                          onClick={() => changeScenario({ rain: mm })}
+                          onClick={() => changeScenario((prev) => ({ rain: mm, scenarioDay: prev.day }))}
                         >
                           {mm} mm
                         </button>
@@ -1624,7 +2224,9 @@ export function XrTabletop() {
                           className="xr-chip"
                           data-testid={`xr-event-${preset.id}`}
                           aria-pressed={scenario.eventPreset === preset.id}
-                          onClick={() => changeScenario({ eventPreset: preset.id })}
+                          onClick={() =>
+                            changeScenario((prev) => ({ eventPreset: preset.id, scenarioDay: prev.day }))
+                          }
                         >
                           {t(`xr_event_${preset.id}`)}
                         </button>
@@ -1676,6 +2278,45 @@ export function XrTabletop() {
                     <p className="xr-session-note">{t("xr_session_note")}</p>
                   </div>
                 )}
+                {!session && (
+                  <div className="xr-lite-row">
+                    <button
+                      type="button"
+                      className={`xr-btn ${lite ? "primary" : "secondary"}`}
+                      data-testid="xr-lite-toggle"
+                      data-lite={lite ? "on" : "off"}
+                      data-source={liteState.source}
+                      aria-pressed={lite}
+                      onClick={toggleLite}
+                    >
+                      <Gauge size={18} aria-hidden="true" /> {t("xl_lite")}
+                    </button>
+                    <p className="xr-session-note">{t("xl_lite_hint")}</p>
+                  </div>
+                )}
+                <div className="xr-legend">
+                  <ul aria-label={t("xr_legend")}>
+                    {RISK_LEVELS.map((level) => (
+                      <li key={level}>
+                        <span
+                          className="xr-swatch"
+                          style={{ background: RISK_COLORS[level] }}
+                          aria-hidden="true"
+                        />
+                        {t(`xr_risk_${level}`)}
+                      </li>
+                    ))}
+                    <li>
+                      <span className="xr-swatch landfill" aria-hidden="true" />
+                      {t("xr_landfill")}
+                    </li>
+                  </ul>
+                  <p>{t("xr_height_note")}</p>
+                  <p data-testid="xr-flow-note">
+                    {t("xr_flows_legend").replace("{n}", String(TRUCKS_PER_DOT))}
+                    {cityScene.scenario?.rainfall_mm > 0 ? ` ${t("xr_rain_legend")}` : ""}
+                  </p>
+                </div>
               </div>
             )}
             {scenario.agreed && (
@@ -1688,30 +2329,6 @@ export function XrTabletop() {
                 {t(sessionErrorKey)}
               </p>
             )}
-
-            <div className="xr-legend">
-              <ul aria-label={t("xr_legend")}>
-                {RISK_LEVELS.map((level) => (
-                  <li key={level}>
-                    <span
-                      className="xr-swatch"
-                      style={{ background: RISK_COLORS[level] }}
-                      aria-hidden="true"
-                    />
-                    {t(`xr_risk_${level}`)}
-                  </li>
-                ))}
-                <li>
-                  <span className="xr-swatch landfill" aria-hidden="true" />
-                  {t("xr_landfill")}
-                </li>
-              </ul>
-              <p>{t("xr_height_note")}</p>
-              <p data-testid="xr-flow-note">
-                {t("xr_flows_legend").replace("{n}", String(TRUCKS_PER_DOT))}
-                {cityScene.scenario?.rainfall_mm > 0 ? ` ${t("xr_rain_legend")}` : ""}
-              </p>
-            </div>
           </section>
         )}
         {cityScene && plate && (

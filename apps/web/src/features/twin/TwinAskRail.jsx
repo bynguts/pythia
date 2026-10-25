@@ -1,8 +1,10 @@
 import { useRef, useState } from "react";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 import { Mic, MicOff, PanelLeftClose, Send, Sparkles } from "lucide-react";
 import { apiPost } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
-import { ScenarioCard } from "../assistant/ScenarioCard.jsx";
+import { providerLabel, ScenarioCard } from "../assistant/ScenarioCard.jsx";
 import { useSpeechInput } from "../assistant/useSpeechInput.js";
 import "../assistant/assistant.css";
 
@@ -13,7 +15,17 @@ import "../assistant/assistant.css";
  * `appliedText` is the twin's own scenario line, so the rail never claims a
  * scenario the twin is not showing; `queueText` is the twin's queue headline
  * (with its sensitivity band and class) for that same scenario.
+ * Any other question shows Ana's own text answer (gsc #8: no dead ends), badged
+ * with who produced it: the local parser, a fallback after an LLM error, or the
+ * LLM provider and model the backend says answered.
  */
+function answerHtml(text) {
+  return DOMPurify.sanitize(marked.parse(text, { gfm: true, breaks: true }), {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ["style", "script", "iframe", "form", "input"],
+  });
+}
+
 export function TwinAskRail({ onApply, appliedText, queueText, collapsible = false, onCollapse }) {
   const { t, lang } = useLanguage();
   const [question, setQuestion] = useState("");
@@ -40,8 +52,14 @@ export function TwinAskRail({ onApply, appliedText, queueText, collapsible = fal
     try {
       const data = await apiPost("/assistant/query", { question: prompt, language: lang, history: [] });
       const scenario = data.scenario?.links ? data.scenario : null;
-      setResult({ scenario, provider: data.provider, model: data.model });
-      setStatus(scenario ? "applied" : "no-scenario");
+      setResult({
+        scenario,
+        answer: String(data.answer || "").trim(),
+        provider: data.provider,
+        model: data.model,
+        source: { mode: data.mode, providerName: data.provider_name, fallbackReason: data.fallback_reason },
+      });
+      setStatus(scenario ? "applied" : "answered");
       if (scenario) onApply(scenario);
     } catch {
       setResult(null);
@@ -133,7 +151,15 @@ export function TwinAskRail({ onApply, appliedText, queueText, collapsible = fal
           {asked}
         </p>
       )}
-      <div className="twin-ask-result" aria-live="polite">
+      <div
+        className="twin-ask-result"
+        data-testid="twin-ask-result"
+        role="region"
+        aria-label={t("ask_result_label")}
+        aria-live="polite"
+        // Long answers scroll here, so an answered region takes keyboard focus for scrolling.
+        tabIndex={status === "answered" || status === "applied" ? 0 : undefined}
+      >
         {status === "loading" && (
           <div className="assistant-thinking twin-ask-thinking" aria-hidden="true">
             <span />
@@ -153,14 +179,30 @@ export function TwinAskRail({ onApply, appliedText, queueText, collapsible = fal
             )}
           </div>
         )}
-        {status === "no-scenario" && <p className="twin-note">{t("twin_ask_no_scenario")}</p>}
+        {status === "answered" && (
+          <div className="twin-ask-answer" data-testid="twin-ask-answer">
+            <span className="assistant-scenario-badge" data-testid="twin-ask-provider">
+              {providerLabel(result.provider, result.model, t, result.source)}
+            </span>
+            <div
+              className="assistant-formatted-answer"
+              dangerouslySetInnerHTML={{ __html: answerHtml(result.answer || t("asst_no_answer")) }}
+            />
+          </div>
+        )}
         {status === "error" && (
           <p className="twin-ask-error" role="alert">
             {t("twin_ask_error")}
           </p>
         )}
         {status === "applied" && result?.scenario && (
-          <ScenarioCard scenario={result.scenario} provider={result.provider} model={result.model} inTwin />
+          <ScenarioCard
+            scenario={result.scenario}
+            provider={result.provider}
+            model={result.model}
+            source={result.source}
+            inTwin
+          />
         )}
       </div>
     </aside>

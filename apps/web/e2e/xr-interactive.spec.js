@@ -1,4 +1,4 @@
-// gsc-2026 P1-10 + P2 + C2: /xr scenario presets re-fetch the scene, a shared session code syncs devices, and the readout shows scene crews and the scenario-scaled queue.
+// gsc-2026 P1-10 + P2 + C2 + #4 + #7: /xr scenario presets re-fetch the scene, a shared session code syncs devices, the readout labels the queue numbers, and Ask Pythia sets the table.
 import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
@@ -294,10 +294,82 @@ test.describe("XR tabletop — interactive scenario and shared session", () => {
     if (await page.getByTestId("xr-queue").count()) {
       const firstDate = await page.getByTestId("xr-day-scrubber").evaluate(() => {
         const ticks = document.querySelectorAll(".xr-range-ticks span");
-        return ticks[0]?.textContent;
+        // The tick's own text node is the date; an at-risk count may follow it.
+        return ticks[0]?.firstChild?.textContent;
       });
       await expect(page.getByTestId("xr-queue-day")).toContainText(String(firstDate));
     }
+  });
+
+  test("gsc-2026 #5: a preset sets the what-if on the day being viewed, not the whole week", async ({
+    page,
+  }) => {
+    await page.goto("/xr?city=jakarta&lang=en");
+    await waitForXr(page);
+    await page.getByTestId("xr-day-next").click();
+    await page.getByTestId("xr-day-next").click();
+    await expect.poll(() => page.evaluate(() => window.__pythiaXr.selectedDay)).toBe(2);
+    await openScenario(page);
+    const sceneRequest = page.waitForRequest(
+      (r) =>
+        r.url().includes("/twin/scene?") &&
+        r.url().includes("rainfall_mm=80") &&
+        r.url().includes("scenario_day=2"),
+    );
+    await page.getByTestId("xr-rain-80").click();
+    await sceneRequest;
+    expect(await page.evaluate(() => window.__pythiaXr.scenarioDay)).toBe(2);
+  });
+
+  // #N4 (teardown v3): the particles follow the selected day's own rain (scene.weather.days):
+  // the what-if on its day, forecast rain on a forecast day, none elsewhere.
+  test("rain particles fall on the what-if day and forecast rain days only", async ({ page }) => {
+    await page.route(/\/twin\/scene\?/, async (route) => {
+      const response = await route.fetch();
+      const json = await response.json();
+      json.weather.days = json.weather.days.map((d, i) =>
+        d.input === "scenario"
+          ? d
+          : i === 4
+            ? { ...d, input: "forecast", rainfall_mm: 20, carried_rain_mm: 0 }
+            : { ...d, input: "assumed_dry", rainfall_mm: 0, carried_rain_mm: 0 },
+      );
+      await route.fulfill({ response, json });
+    });
+    await page.goto("/xr?city=jakarta&lang=en&rainfall_mm=80&scenario_day=2");
+    await waitForXr(page);
+    const particles = () => page.evaluate(() => window.__pythiaXr.rainParticles);
+    expect(await page.evaluate(() => window.__pythiaXr.selectedDay)).toBe(2);
+    await expect.poll(particles).toBe(80 * 12);
+    await page.getByTestId("xr-day-next").click();
+    await expect.poll(() => page.evaluate(() => window.__pythiaXr.selectedDay)).toBe(3);
+    await expect.poll(particles).toBe(0);
+    await page.getByTestId("xr-day-next").click();
+    await expect.poll(particles).toBe(20 * 12);
+    await page.getByTestId("xr-day-prev").click();
+    await page.getByTestId("xr-day-prev").click();
+    await expect.poll(particles).toBe(80 * 12);
+  });
+
+  // #fix-6 (teardown v3): each scrubber day shows its own at-risk count.
+  test("the day scrubber shows each day's at-risk count", async ({ page }) => {
+    await page.route(/\/twin\/scene\?/, async (route) => {
+      const response = await route.fetch();
+      const json = await response.json();
+      json.horizon.daily_districts_at_risk = json.horizon.dates.map((_, i) => (i === 2 ? 6 : 0));
+      await route.fulfill({ response, json });
+    });
+    await page.goto("/xr?city=jakarta&lang=en");
+    await waitForXr(page);
+    const ticks = page.locator(".xr-range-ticks > span");
+    await expect(ticks.nth(2)).toHaveAttribute("data-at-risk", "6");
+    await expect(ticks.nth(2).locator(".xr-tick-risk")).toHaveText("6");
+    await expect(ticks.nth(0)).toHaveAttribute("data-at-risk", "0");
+    await expect(ticks.nth(0).locator(".xr-tick-risk")).toHaveCount(0);
+    await expect(page.getByTestId("xr-day-scrubber")).toHaveAttribute("aria-valuetext", /· 0 at risk$/);
+    await page.getByTestId("xr-day-next").click();
+    await page.getByTestId("xr-day-next").click();
+    await expect(page.getByTestId("xr-day-scrubber")).toHaveAttribute("aria-valuetext", /· 6 at risk$/);
   });
 
   test("open scenario controls meet 44px targets with no overflow at 320px", async ({ page }) => {
@@ -332,12 +404,18 @@ test.describe("XR tabletop — interactive scenario and shared session", () => {
       json.summary = { ...json.summary, crews_required_today: 300 };
       json.landfill_queue = {
         ...(json.landfill_queue || {}),
+        modelled_hour: 9,
+        trucks_in_queue: 230,
+        avg_wait_minutes: 90,
         minutes_per_truck: {
-          baseline_mean: 55,
+          baseline_mean: 55.4,
           staggered_mean: 24,
+          trucks_per_day: 1300,
           classification: "SIMULATED",
           source: "e2e stub",
           scenario_scaled: true,
+          sensitivity: { baseline_band: [42.9, 74.2] },
+          assumptions: { sensitivity_departure_sd_minutes: [10, 30, 60] },
           normal_day: { trucks_per_day: 1200, baseline_mean: 42, staggered_mean: 18 },
         },
       };
@@ -349,10 +427,129 @@ test.describe("XR tabletop — interactive scenario and shared session", () => {
     await expect(page.getByTestId("xr-crews")).toHaveText("300");
     // Crews that differ from trucks get no "1 crew per truck" rule: it would be false.
     await expect(page.getByTestId("xr-crew-rule")).toHaveCount(0);
-    await expect(page.getByTestId("xr-queue")).toHaveText("55→24 min/truck (scenario) · normal day 42→18");
+    // gsc-2026 #4: the twin's words — day average without → with stagger, the
+    // unstaggered modelled peak hour, and a range over assumed departure spreads.
+    await expect(page.getByTestId("xr-queue")).toHaveText(
+      "Day average 55.4 min/truck without stagger → 24 with Pythia stagger",
+    );
+    await expect(page.getByTestId("xr-queue-peak")).toHaveText(
+      "Without stagger · Peak hour 09:00 (modelled): 230 trucks queued · 90 min wait",
+    );
+    await expect(page.getByTestId("xr-queue-band")).toHaveText(
+      "Without stagger: range 42.9–74.2 if departure spread is 10–60 min, assumed",
+    );
+    await expect(page.getByTestId("xr-queue-normal")).toHaveText("Normal day 42 → 18");
+    await expect(page.getByTestId("xr-queue-trips")).toHaveText(
+      "1,300 TPA gate trips/day (scaled from the real median)",
+    );
     // The simulated label stays on the queue row.
     await expect(page.getByTestId("xr-readout")).toContainText("TPA queue (simulated)");
     await openScenario(page);
     await expect(page.getByRole("group", { name: "Event · JIS" })).toBeVisible();
+  });
+
+  // gsc-2026 #7: Ask Pythia on the table. /xr has no login: the twin's /assistant/query
+  // answers 401, so the ask goes to the public /xr/ask (same local parser and
+  // read-only run_scenario tool), and the scenario lands on the table.
+  test("an ask sets rain, crowd, venue and day on the table and shows what ran", async ({ page }) => {
+    const calls = [];
+    page.on("request", (r) => {
+      if (/\/(assistant\/query|xr\/ask)$/.test(r.url())) calls.push(new URL(r.url()).pathname);
+    });
+    await page.goto("/xr?city=jakarta&lang=en");
+    await waitForXr(page);
+    const sceneRequest = page.waitForRequest(
+      (r) =>
+        r.url().includes("/twin/scene?") &&
+        r.url().includes("rainfall_mm=80") &&
+        r.url().includes("event_attendance=50000") &&
+        r.url().includes("event_lat=-6.1246") &&
+        // gsc-2026 #5: the what-if lands on the asked day only.
+        r.url().includes("scenario_day=1"),
+    );
+    await page.getByTestId("xr-ask-input").fill("what if 80 mm rain during the JIS concert tomorrow");
+    await page.getByTestId("xr-ask-send").click();
+    await expect(page.getByTestId("xr-ask-applied")).toBeVisible({ timeout: 45000 });
+    expect(calls.map((path) => path.replace(/^.*\/api/, ""))).toEqual(["/assistant/query", "/xr/ask"]);
+    expect(await xrScenario(page)).toEqual({ rain: 80, event: "50k", day: 1, agreed: false });
+    expect(await page.evaluate(() => window.__pythiaXr.venueId)).toBe("jis");
+    expect(await page.evaluate(() => window.__pythiaXr.scenarioDay)).toBe(1);
+    await sceneRequest;
+    await expect(page.getByTestId("xr-ask-applied")).toContainText("On the table: 80 mm · 50k people · JIS");
+    await expect(page.getByTestId("xr-ask-applied")).toContainText("crowd size assumed");
+    await expect(page.getByTestId("xr-ask-trace")).toHaveText(
+      "What Pythia ran: Local parser (no LLM) → twin forecast → resource rule → queue sim",
+    );
+    // The same trace rides on the in-scene panel for a headset.
+    await expect
+      .poll(() => page.evaluate(() => window.__pythiaXr.panelText))
+      .toContain("Ask Pythia: Local parser (no LLM) → twin forecast");
+    await openScenario(page);
+    await expect(page.getByRole("group", { name: "Event · JIS" })).toBeVisible();
+    await expect(page.getByTestId("xr-event-50k")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("an ask in a shared session reaches every joined device", async ({ page, context }) => {
+    test.setTimeout(120000);
+    await page.goto("/xr?city=jakarta&lang=en");
+    await waitForXr(page);
+    await openScenario(page);
+    await page.getByTestId("xr-share").click();
+    const code = (await page.getByTestId("xr-session-code").textContent()).trim();
+    const other = await context.newPage();
+    await other.setViewportSize({ width: 390, height: 844 });
+    await other.goto(`/xr?session=${code}&city=jakarta&lang=en`);
+    await waitForXr(other);
+
+    await page.getByTestId("xr-ask-input").fill("kalau hujan 40 mm saat konser 100 ribu orang di Monas lusa");
+    await page.getByTestId("xr-ask-input").press("Enter");
+    await expect(page.getByTestId("xr-ask-applied")).toBeVisible({ timeout: 45000 });
+    await expect(page.getByTestId("xr-ask-result")).toContainText(`Sent to everyone in session ${code}.`);
+    await expect
+      .poll(() => xrScenario(other), { timeout: 15000 })
+      .toEqual({ rain: 40, event: "100k", day: 2, agreed: false });
+    expect(await other.evaluate(() => window.__pythiaXr.venueId)).toBe("monas");
+    const shared = await (await page.request.get(`${API}/xr/session/${code}`)).json();
+    expect(shared).toMatchObject({
+      rainfall_mm: 40,
+      event_preset: "100k",
+      day: 2,
+      scenario_day: 2,
+      venue_id: "monas",
+    });
+    expect(await other.evaluate(() => window.__pythiaXr.scenarioDay)).toBe(2);
+  });
+
+  test("the mic dictates the ask through the browser's speech API", async ({ page }) => {
+    await page.addInitScript(() => {
+      class FakeRecognition {
+        start() {
+          setTimeout(() => {
+            this.onresult?.({ results: [[{ transcript: "what if 120 mm rain today" }]] });
+            this.onend?.();
+          }, 50);
+        }
+        stop() {
+          this.onend?.();
+        }
+        abort() {}
+      }
+      window.SpeechRecognition = FakeRecognition;
+    });
+    await page.goto("/xr?city=jakarta&lang=en");
+    await waitForXr(page);
+    await page.getByTestId("xr-ask-voice").click();
+    await expect(page.getByTestId("xr-ask-applied")).toBeVisible({ timeout: 45000 });
+    expect(await xrScenario(page)).toEqual({ rain: 120, event: "none", day: 0, agreed: false });
+  });
+
+  test("an ask that is not a what-if leaves the table as it was", async ({ page }) => {
+    await page.goto("/xr?city=jakarta&lang=en&rainfall_mm=40");
+    await waitForXr(page);
+    await page.getByTestId("xr-ask-input").fill("hello");
+    await page.getByTestId("xr-ask-send").click();
+    await expect(page.getByTestId("xr-ask-result")).toHaveAttribute("data-status", "none");
+    await expect(page.getByTestId("xr-ask-result")).toContainText("No what-if found");
+    expect((await xrScenario(page)).rain).toBe(40);
   });
 });

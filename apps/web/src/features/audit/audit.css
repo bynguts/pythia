@@ -108,3 +108,10 @@
   color: var(--ui-warning);
   background: var(--ui-warning-soft);
 }
+/* Imported evidence carries unbroken URLs and digests (repository@version): let
+   them wrap, or their min-content widens the whole audit grid past a 320 px phone. */
+.scentinel-run .audit-source,
+.scentinel-run-head strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

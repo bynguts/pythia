@@ -52,16 +52,21 @@ function traceDetail(step, t, number) {
   return null;
 }
 
-/** Who turned the question into tool calls: an LLM (named) or the local rule parser. */
-export function providerLabel(provider, model, t) {
+/**
+ * Who answered: the local rule parser, the parser as a fallback after an LLM
+ * error, or an LLM named by the host and model the backend reports as served.
+ */
+export function providerLabel(provider, model, t, { mode, providerName, fallbackReason } = {}) {
+  if (provider === "local" && mode === "fallback")
+    return t("ask_provider_fallback").replace("{reason}", fallbackReason || "—");
   if (provider === "local") return t("asst_provider_local");
   if (!provider) return null;
-  return `LLM: ${provider}${model ? ` · ${model}` : ""}`;
+  return `LLM: ${providerName || provider}${model ? ` · ${model}` : ""}`;
 }
 
 // `inTwin`: the card sits in the Twin's rail, which already shows the scenario,
 // so it links on to approval and XR instead of back into the Twin.
-export function ScenarioCard({ scenario, provider, model, inTwin = false }) {
+export function ScenarioCard({ scenario, provider, model, source, inTwin = false }) {
   const { t, lang } = useLanguage();
   const number = new Intl.NumberFormat(localeFor(lang), { maximumFractionDigits: 1 });
   const { summary, queue_minutes_per_truck: queue } = scenario;
@@ -109,7 +114,17 @@ export function ScenarioCard({ scenario, provider, model, inTwin = false }) {
     ? t("asst_scn_assumed_crowd").replace("{n}", number.format(scenario.scenario.event_attendance))
     : null;
   const trace = Array.isArray(scenario.trace) ? scenario.trace : null;
-  const providerText = providerLabel(provider, model, t);
+  const providerText = providerLabel(provider, model, t, source);
+  // gsc #8: a rain word ("heavy rain") ran at its BMKG category's stated value.
+  const rainCategory = scenario.scenario?.rain_category;
+  const rainCategoryNote = rainCategory
+    ? t("ask_scn_rain_category")
+        .replace("{phrase}", rainCategory.phrase)
+        .replace("{mm}", number.format(rainCategory.rainfall_mm))
+        .replace("{label}", rainCategory.bmkg_label)
+        .replace("{range}", rainCategory.range_mm_per_day) +
+      (rainCategory.lower_bound ? ` ${t("ask_scn_rain_lower_bound")}` : "")
+    : null;
   const snappedNote = asked
     ? t("asst_scn_snapped")
         .replace("{asked_rain}", number.format(asked.rainfall_mm ?? 0))
@@ -129,6 +144,11 @@ export function ScenarioCard({ scenario, provider, model, inTwin = false }) {
           </span>
         )}
       </div>
+      {rainCategoryNote && (
+        <p className="assistant-scenario-note" data-testid="assistant-scenario-rain-category">
+          {rainCategoryNote}
+        </p>
+      )}
       {assumedCrowd && (
         <p className="assistant-scenario-note" data-testid="assistant-scenario-assumed">
           {assumedCrowd}

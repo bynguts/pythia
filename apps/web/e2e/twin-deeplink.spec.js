@@ -3,6 +3,20 @@ import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
+// #twin-weather: the chip and the map label say where the day's rain comes from, so
+// tests that read them pin the scene's weather block (Open-Meteo is live upstream).
+function forecastWeather(json, rain = []) {
+  json.weather = {
+    ...json.weather,
+    source: "open-meteo",
+    class: "REAL_FORECAST_INPUT",
+    kind: "forecast",
+    days: json.weather.days.map((d, i) =>
+      d.input === "scenario" ? d : { ...d, input: "forecast", rainfall_mm: rain[i] ?? 0 },
+    ),
+  };
+}
+
 async function signIn(page, lang = "en") {
   await page.goto("/");
   const response = await page.request.post(`${API}/auth/login`, {
@@ -115,7 +129,8 @@ test("present mode shows the scenario chip and the simulated queue headline", as
     /^Rain 80 mm · Concert 50k at GBK · Day \+1$/i,
   );
   await expect(page.getByTestId("twin-present-queue-metric")).toHaveText(
-    "TPA queue: 42 → 18.5 min per truck (Simulated)",
+    // #twinrender: each side of the arrow says which arm it is.
+    "TPA queue: 42 min/truck without stagger → 18.5 with Pythia stagger (Simulated)",
   );
   // Provenance stays on screen in footage mode.
   await expect(page.getByTestId("twin-provenance-landfill_queue")).toBeVisible();
@@ -128,11 +143,14 @@ test("present mode renders no queue headline when the scene has no metric", asyn
     const response = await route.fetch();
     const json = await response.json();
     if (json.landfill_queue) delete json.landfill_queue.minutes_per_truck;
+    forecastWeather(json);
     await route.fulfill({ response, json });
   });
   await page.goto("/twin?present=1");
   await expect(page.getByTestId("twin-scenario-chip")).toBeVisible({ timeout: 45000 });
-  await expect(page.getByTestId("twin-scenario-text")).toHaveText("Tanpa hujan · Tanpa keramaian · Hari ini");
+  await expect(page.getByTestId("twin-scenario-text")).toHaveText(
+    "Tanpa hujan menurut prakiraan (Open-Meteo) · Tanpa keramaian · Hari ini",
+  );
   await expect(page.getByTestId("twin-present-queue-metric")).toHaveCount(0);
 });
 
@@ -142,6 +160,10 @@ test("a venue deep link moves the event to that venue and the XR hand-off follow
   const state = await waitForTwin(page, "window.__pythiaTwin.scenario.event_attendance === 50000");
   expect(state.venue).toBe("jis");
   expect(state.scenario.event_lat).toBeCloseTo(-6.1246, 3);
+  // #twinrender: the map pins the venue the scene was computed for, with the
+  // boundary reach the scene states (scenario.event.radius_m), not a fixed radius.
+  expect(state.venuePin).toMatchObject({ name: "JIS", radiusM: state.scenario.event.radius_m });
+  expect(state.venuePin.reached).toBe(state.scenario.event.districts.length);
   await expect(page.getByTestId("twin-venue-jis")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("twin-event-50k")).toContainText("JIS");
   const box = await page.getByTestId("twin-venue-jis").boundingBox();
@@ -163,6 +185,8 @@ test("a venue from another city is ignored", async ({ page }) => {
   await page.goto("/twin?city=hcmc&event=50k&venue=gbk");
   const state = await waitForTwin(page, "window.__pythiaTwin.city === 'hcmc'");
   expect(state.venue).toBe("d1");
+  // #twinrender: the demo city puts the event in its nearest district only, so no reach ring.
+  expect(state.venuePin).toMatchObject({ radiusM: null });
   await expect(page.getByTestId("twin-venue-d1")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("twin-venue-gbk")).toHaveCount(0);
 });
@@ -193,15 +217,16 @@ test("present mode names the venue and shows the scenario-scaled queue next to t
         normal_day: { trucks_per_day: 1200, baseline_mean: 42, staggered_mean: 18.5 },
       },
     };
+    forecastWeather(json);
     await route.fulfill({ response, json });
   });
   await page.goto("/twin?present=1&event=100k&venue=monas");
   await expect(page.getByTestId("twin-scenario-chip")).toBeVisible({ timeout: 45000 });
   await expect(page.getByTestId("twin-scenario-text")).toHaveText(
-    /^No rain · Concert 100k at Monas · Today$/i,
+    /^No rain forecast \(Open-Meteo\) · Concert 100k at Monas · Today$/i,
   );
   await expect(page.getByTestId("twin-present-queue-metric")).toHaveText(
-    "TPA queue (scenario): 55 → 24.5 min/truck · normal day 42 → 18.5 (Simulated)",
+    "TPA queue (scenario): 55 min/truck without stagger → 24.5 with Pythia stagger · normal day 42 → 18.5 (Simulated)",
   );
   await expect(page.getByTestId("twin-present-queue")).toHaveText("Queue data: Simulated");
 });
