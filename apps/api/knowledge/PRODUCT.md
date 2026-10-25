@@ -6,7 +6,7 @@ product
 
 ## Users
 
-Pythia serves DLH command-center operators, fleet supervisors, field coordinators, and evaluators judging whether the prototype can support real operational decisions. Users need to identify urgent conditions, inspect evidence, compare recommendations, and dispatch an action without searching across unrelated panels.
+Pythia is built for city waste-agency command-center operators (its case provider is DLH DKI Jakarta; Pythia is not a DLH product), fleet supervisors, field coordinators, and evaluators judging whether the prototype can support real operational decisions. Users need to identify urgent conditions, inspect evidence, compare recommendations, and dispatch an action without searching across unrelated panels.
 
 ## Product Purpose
 

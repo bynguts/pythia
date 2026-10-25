@@ -1,7 +1,7 @@
 # Pythia
 
-AI + immersive-media command center for city waste agencies, piloted on Jakarta's public
-waste data: fleet supervision (Case 1 module), waste forecasting and planning (Case 2
+AI + immersive-media command center prototype for city waste agencies, built and tested on
+Jakarta's public waste data (not a deployed or piloted system): fleet supervision (Case 1 module), waste forecasting and planning (Case 2
 module), and an immersive layer (3D twin, driver AR, XR tabletop).
 
 ## What This Replaces
@@ -15,7 +15,7 @@ follow the design tokens in `apps/web/src/styles/tokens.css`.
 
 - **Frontend:** React + Vite, MapLibre GL, and a responsive command-center design system based on Geist Sans/Mono.
 - **Backend:** FastAPI, OR-Tools CP-SAT (Integrated Planning optimizer), Prophet + XGBoost (Waste Forecast models), and an optional OpenAI-compatible Ana assistant gateway. Without an assistant key, Ana gives labelled local answers from relevant Pythia tools instead of inventing data.
-- **WhatsApp Gateway:** A standalone Express + `@whiskeysockets/baileys` gateway running on port 2785 for direct WhatsApp alert dispatching (no Puppeteer/headless browser overhead).
+- **WhatsApp Gateway:** A standalone Express + `@whiskeysockets/baileys` gateway running on port 2785 that sends the WhatsApp alerts (no Puppeteer/headless browser overhead). Baileys is an unofficial WhatsApp Web client, fit for the prototype only; a pilot would use the WhatsApp Business Platform.
 
 ### Driver analytics data contract
 
@@ -27,7 +27,7 @@ assigned zone, current status, damage flag, and current route-deviation flag
 and distance. The interface refreshes every 15 seconds, marks snapshots older
 than 30 seconds or failed refreshes as stale, and keeps the last snapshot visible
 on refresh failure. Rows and KPIs describe current assignments, **not**
-historical trips, fuel efficiency, or driver performance scores. Pilot telemetry
+historical trips, fuel efficiency, or driver performance scores. Fleet telemetry
 and assignments are simulated; fleet composition uses the DKI 2023 truck census.
 
 ### Durable record storage
@@ -60,13 +60,45 @@ response carries a `units` glossary next to the numbers:
 
 Closing a stop requires field evidence (arrival photo, weighing, officer).
 `POST /api/spj/{id}/complete` is the exceptional path: it needs a supervisor
-override with a reason and is gated by the `dispatch:override` permission, which
+override with a reason and is gated by the `spj:override` permission, which
 only the `supervisor` and `administrator` roles hold. Receipt submission is
 idempotent per `operation_id`; replacing an existing receipt requires a
 `replace_reason` and archives the previous one in `receipt_history`. Destination
 coordinates come from `app/fleet/facilities.py`; a destination without a sourced
 coordinate (`JRC Pesanggrahan`) is reported as `usable_for_routing: false` and
 does not become a deviation-scoring reference path.
+
+### Driver safety
+
+`app/field/safety.py` and `/api/safety/*` turn two promises into per-truck states;
+the thresholds are `DUTY_WARN_MIN`, `DUTY_BLOCK_MIN` and `GATE_ALERT_MIN` in
+`app/core/units.py`.
+
+- **Duty:** minutes since the truck's first pre-trip check or SPJ activation of the
+  local WIB day (an SPJ still active from the day before carries its start over).
+  `warn` from 600 min (10 h); `blocked` from 720 min (12 h). While blocked, creating or
+  activating an SPJ for that truck returns 409 with an Indonesian reason, unless a
+  holder of `spj:override` (supervisor, administrator) recorded an override with a
+  reason of at least 10 characters for that truck today. The override is stored with
+  the signed-in username and written to `/api/history` (`safety_duty_override`); each
+  SPJ start it allows writes `safety_override_used`, and each refusal
+  `safety_duty_block`.
+- **Gate wait:** from the SPJ `gate_arrival` event (the driver's tap, with the device
+  time accepted for offline replays) to the weighbridge receipt, or to now while the
+  truck still waits. At 180 min (DLH's 3-hour gate-wait promise) one alert per truck per
+  gate visit is stored and, when `PYTHIA_WA_DEFAULT_GROUP_ID` is set, sent once to that
+  supervisor group (never to a driver's personal number). Alerts are swept on every
+  safety read and by a background timer every 60 s started from the app lifespan
+  (`PYTHIA_SAFETY_GATE_TIMER`, on by default), so no panel needs to be open.
+- **Classification:** `OBSERVED_APP_EVENTS` when this server holds pre-trip, SPJ,
+  gate-arrival or receipt events for the local day; every number then comes from them.
+  With none, the overview falls back to a seeded scenario over the simulated fleet,
+  labelled `SIMULATED`; it never blocks an SPJ, stores an alert or sends a message.
+  The two are never mixed.
+- **Access:** `GET /api/safety/driver/{truck}` and `POST /api/safety/gate-arrival` take
+  a driver token or an operator token (`dashboard:read`); a personal driver account
+  bound to a truck gets 403 for any other truck. `GET /api/safety/overview` needs
+  `dashboard:read`; `POST /api/safety/override` needs `spj:override`.
 
 ## Complete Demo Flow
 
@@ -77,14 +109,24 @@ does not become a deviation-scoring reference path.
    - Click the **A* Simulate Jam** button. Watch `T-047` dynamically calculate a new road-following route to TPA Bantargebang.
    - Look at the TPA Queue and staggered dispatch slots.
    - Click **Send Alert** in the Action Queue to dispatch the reroute instruction.
-   - Open `/field` in another tab (no login needed) and confirm the dispatch instruction.
-   - Back in Fleet Operations, the confirmation is synced instantly.
+   - Open `/field` in another tab, sign in as `driver` (`driver-demo-pass`) and confirm the dispatch instruction.
+   - Back in Fleet Operations, the confirmation appears within seconds (the dashboard polls every 8 s).
 3. **Waste Forecast & AI Assistant (Case 2):**
    - Navigate to **Waste Forecast**.
    - Browse/filter the 42 Kecamatan map/list. Click a Kecamatan to expand its 3-column resource optimization dashboard (predicted waste tonnage, fuel consumption, carbon emissions, crew, and fleet mix).
+   - Read the **Bantargebang intake** strip: the monthly forecast backtested on real data
+     (`GET /api/ml/monthly-intake`). Its data end in April 2026 and the backtest covers 1–3 months
+     ahead, so each month is badged inside or outside the backtested horizon.
    - Use **Ana** to ask a specific operational question. It selects relevant read-only tools rather than injecting a prediction into every answer; image/PDF analysis requires a configured assistant gateway.
 4. **Integrated Planning:**
-   - Review constraints and approve the weekly staggered queue plan.
+   - Review the rules in force and build the daily plan ("Rencana harian"): CP-SAT assigns
+     18 t truck trips per shift and facility for the top forecast districts (5 by default)
+     on the simulated fleet. Kecamatan rit quotas, the Bantargebang gate caps, the RDF
+     Rorotan rules and per-truck trip limits are hard constraints from an example rules
+     file (`EXAMPLE_CONFIG`, every value with its source, to be confirmed with DLH); demand
+     they cannot serve is shown as unassigned tonnes. A supervisor approves the plan,
+     which creates the per-truck dispatch instructions. The staggered landfill arrivals
+     are a separate seeded queue simulation (SIMULATED), not part of this plan.
 5. **Data & ML Audit:**
    - Model card: for the monthly landfill-intake forecast (total and per city) it shows the model's error next to the strongest simple baseline on real Bantargebang data (rolling-origin backtest), green when the whole 90% interval of the gain is above zero, red otherwise. The numbers come from `GET /api/ml/suitability` (`monthly_backtest`), which reads `apps/api/data/models/forecast_evaluation.json` written by `ml/scripts/train_models.py`.
    - Suitability labels per resolution: `backtested_real` (monthly landfill and city intake), `synthetic_validated` (city-day and per-district week/month: sums or slices of the calibrated-synthetic series), `reproduces_input` (hotspot ranking: it reproduces the SILIKA 2023 input ranking, not evidence of skill) and `not_supported` (district-day). No daily or per-district accuracy is claimed.
@@ -165,7 +207,7 @@ Access the app at: **http://localhost:5175**
 
 ## Testing & Verification
 
-Run the full end-to-end Playwright tests to verify zero regressions:
+Run the end-to-end Playwright tests against the built app:
 ```powershell
 cd "apps/web"
 npm run build   # required: the preview server serves dist/ — a stale dist causes false e2e failures
