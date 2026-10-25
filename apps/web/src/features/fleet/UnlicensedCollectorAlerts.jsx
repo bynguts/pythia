@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
+import { ScanSearch } from "lucide-react";
 import { apiFetch } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { AttentionAction, AttentionRow } from "./AttentionRow.jsx";
 
 export function getDistrictFromCoords(lat, lng) {
   if (lat > -6.18 && lng < 106.78) return "Cengkareng, Jakbar";
@@ -35,48 +37,40 @@ export function UnlicensedCollectorAlerts() {
   const mark = (id, value) => setResolved((prev) => ({ ...prev, [id]: value }));
 
   return (
-    <ul className="action-list unlicensed-list" data-testid="unlicensed-alerts">
+    <ul className="ui-list action-list unlicensed-list" data-testid="unlicensed-alerts">
       {flags.map((f) => {
         const state = resolved[f.collector_id];
         return (
-          <li key={f.collector_id} className="action-row unlicensed-row" data-testid="unlicensed-row">
-            <div className="action-row-head is-static">
-              <span className="status-dot warning" />
-              <span className="action-row-text">
-                <span>
-                  <b className="mono-id">{f.collector_id || "—"}</b> {t("w10fleet_unlicensed_title")}
-                </span>
-                <small>
-                  {getDistrictFromCoords(f.lat, f.lng)} ·{" "}
-                  {t("w10fleet_unlicensed_detail")
-                    .replace("{min}", Math.round(f.duration_min))
-                    .replace("{m}", Math.round(f.nearest_site_m))
-                    .replace("{p}", Math.round(f.confidence * 100))}
-                </small>
-              </span>
-              <span className="pill provenance-sim">{t("w10fleet_unlicensed_badge")}</span>
-            </div>
-            <div className="action-row-secondary">
+          <AttentionRow
+            key={f.collector_id}
+            className="unlicensed-row"
+            data-testid="unlicensed-row"
+            tone={state === "verified" ? "success" : "warning"}
+            icon={ScanSearch}
+            title={t("w10fleet_unlicensed_title")}
+            meta={`${getDistrictFromCoords(f.lat, f.lng)} · ${t("w10fleet_unlicensed_detail")
+              .replace("{min}", Math.round(f.duration_min))
+              .replace("{m}", Math.round(f.nearest_site_m))
+              .replace("{p}", Math.round(f.confidence * 100))}`}
+          >
+            <span className="prov prov-sim prov-bare">{t("w10fleet_unlicensed_badge")}</span>
+            <div className="attn-actions">
               {state ? (
-                <span className={`pill ${state === "verified" ? "success" : ""}`}>
+                <span className="action-row-resolved">
                   {t(state === "verified" ? "w10fleet_verified" : "w10fleet_marked_safe")}
                 </span>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => mark(f.collector_id, "verified")}
-                  >
+                  <AttentionAction onClick={() => mark(f.collector_id, "verified")}>
                     {t("w10fleet_verify")}
-                  </button>
-                  <button type="button" className="ghost-button" onClick={() => mark(f.collector_id, "safe")}>
+                  </AttentionAction>
+                  <AttentionAction quiet onClick={() => mark(f.collector_id, "safe")}>
                     {t("w10fleet_mark_safe")}
-                  </button>
+                  </AttentionAction>
                 </>
               )}
             </div>
-          </li>
+          </AttentionRow>
         );
       })}
     </ul>

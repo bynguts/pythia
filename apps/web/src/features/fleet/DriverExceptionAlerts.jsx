@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, CheckCircle2, MessageCircle } from "lucide-react";
+import { Camera, CheckCircle2, Construction, PackageX, Siren, TriangleAlert, Truck } from "lucide-react";
 import { apiFetch } from "../../shared/api/client.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
+import { AttentionAction, AttentionRow } from "./AttentionRow.jsx";
 
 const POLL_MS = 15000;
 // Accidents first, then what takes a truck out of service, then curbside exceptions.
 const KIND_RANK = { accident: 0, truck_breakdown: 1, road_closed: 2, tps_empty: 3 };
 const DANGER_KINDS = new Set(["accident", "truck_breakdown"]);
+const EXCEPTION_ICONS = {
+  accident: Siren,
+  truck_breakdown: Truck,
+  road_closed: Construction,
+  tps_empty: PackageX,
+};
 
 // The follow-up log keys on any alert id; driver reports use their own prefix.
 export function exceptionAlertId(exception) {
@@ -89,6 +96,35 @@ export function useHandledExceptions() {
   return [handled, markHandled];
 }
 
+function reportedAt(exception) {
+  const at = new Date(exception.reported_at || exception.created_at).getTime();
+  return Number.isNaN(at) ? 0 : at;
+}
+
+// wave11 fleet: repeat reports (same truck, same kind, same open/handled state) are one row
+// carrying a count; the row shows the latest report's words and time.
+export function groupExceptions(exceptions, handled) {
+  const groups = new Map();
+  for (const exception of exceptions) {
+    const who = handled[exceptionAlertId(exception)];
+    const key = `${exception.truck_code}|${exception.kind}|${who ? "done" : "open"}`;
+    const group = groups.get(key) || { reports: [], who };
+    group.reports.push(exception);
+    groups.set(key, group);
+  }
+  return [...groups.values()]
+    .map((group) => {
+      group.reports.sort((a, b) => reportedAt(b) - reportedAt(a));
+      return { ...group, latest: group.reports[0] };
+    })
+    .sort(
+      (a, b) =>
+        (a.who ? 1 : 0) - (b.who ? 1 : 0) ||
+        (KIND_RANK[a.latest.kind] ?? 9) - (KIND_RANK[b.latest.kind] ?? 9) ||
+        reportedAt(b.latest) - reportedAt(a.latest),
+    );
+}
+
 // Driver exceptions as an alert type in "Perlu tindakan": accident first and in danger
 // tone; each row offers WhatsApp contact and closes through the existing follow-up log.
 export function DriverExceptionAlerts({ exceptions, handled, onHandled, onWhatsApp }) {
@@ -98,92 +134,108 @@ export function DriverExceptionAlerts({ exceptions, handled, onHandled, onWhatsA
 
   if (!exceptions.length) return null;
 
-  async function markHandled(exception) {
-    const alertId = exceptionAlertId(exception);
+  // wave11 fleet: one follow-up per report, so closing a grouped row closes every report in it.
+  async function markHandled(group) {
     try {
-      const res = await apiFetch("/alert/follow-up", {
-        method: "POST",
-        body: JSON.stringify({
-          alert_id: alertId,
-          status: "RESOLVED",
-          operator: operator.current,
-          note: exception.kind,
-        }),
-      });
-      if (!res.ok)
-        throw new Error(
-          t(
-            res.status === 401 || res.status === 403
-              ? "w10fleet_followup_denied"
-              : "w10fleet_followup_failed",
-          ),
-        );
-      onHandled(alertId, operator.current);
+      for (const exception of group) {
+        const alertId = exceptionAlertId(exception);
+        const res = await apiFetch("/alert/follow-up", {
+          method: "POST",
+          body: JSON.stringify({
+            alert_id: alertId,
+            status: "RESOLVED",
+            operator: operator.current,
+            note: exception.kind,
+          }),
+        });
+        if (!res.ok)
+          throw new Error(
+            t(
+              res.status === 401 || res.status === 403
+                ? "w10fleet_followup_denied"
+                : "w10fleet_followup_failed",
+            ),
+          );
+        onHandled(alertId, operator.current);
+      }
       setError("");
     } catch (err) {
       setError(err.message || t("w10fleet_followup_unavailable"));
     }
   }
 
-  const rows = [...exceptions].sort((a, b) => {
-    const doneA = handled[exceptionAlertId(a)] ? 1 : 0;
-    const doneB = handled[exceptionAlertId(b)] ? 1 : 0;
-    return doneA - doneB || (KIND_RANK[a.kind] ?? 9) - (KIND_RANK[b.kind] ?? 9);
-  });
+  const rows = groupExceptions(exceptions, handled);
 
   return (
-    <ul className="action-list driver-exception-list" data-testid="driver-exceptions">
-      {rows.map((exception) => {
-        const who = handled[exceptionAlertId(exception)];
+    <ul className="ui-list action-list driver-exception-list" data-testid="driver-exceptions">
+      {rows.map(({ latest: exception, reports, who }) => {
         const danger = DANGER_KINDS.has(exception.kind);
+        const time = exceptionTime(exception, lang);
+        // wave11 fleet: the meta is the driver's own words; ids never reach the operator.
+        const meta = [
+          exception.note || t("w11fleet_exc_no_note"),
+          exception.stop_index != null && t("w10fleet_exc_stop").replace("{n}", exception.stop_index + 1),
+        ]
+          .filter(Boolean)
+          .join(" · ");
         return (
-          <li
+          <AttentionRow
             key={exception.exception_id}
-            className={`action-row driver-exception-row ${danger ? "is-danger" : ""}`}
+            className={`driver-exception-row ${danger ? "is-danger" : ""} ${who ? "is-done" : ""}`}
             data-testid="driver-exception-row"
+            data-exception-id={exception.exception_id}
+            data-exception-ids={reports.map((report) => report.exception_id).join(" ")}
             data-kind={exception.kind}
+            tone={who ? "success" : danger ? "danger" : "warning"}
+            icon={EXCEPTION_ICONS[exception.kind] || TriangleAlert}
+            title={
+              <>
+                <b className="mono-id">{exception.truck_code}</b> {t(`drv10_exc_${exception.kind}`)}
+                {reports.length > 1 && (
+                  <span
+                    className="attn-repeat"
+                    title={t("w11fleet_exc_repeat").replace("{n}", reports.length)}
+                  >
+                    {` ×${reports.length}`}
+                  </span>
+                )}
+              </>
+            }
+            meta={
+              <>
+                {meta}
+                {exception.has_photo && (
+                  <span className="driver-exception-photo">
+                    {" · "}
+                    <Camera size={12} aria-hidden="true" /> {t("w10fleet_exc_photo")}
+                  </span>
+                )}
+              </>
+            }
+            aside={
+              <time className="ui-row-time" title={t("w10fleet_exc_detail").replace("{time}", time)}>
+                {time}
+              </time>
+            }
           >
-            <div className="action-row-head is-static">
-              <span className={`status-dot ${who ? "success" : danger ? "danger" : "warning"}`} />
-              <span className="action-row-text">
-                <span>
-                  <b className="mono-id">{exception.truck_code}</b> {t(`drv10_exc_${exception.kind}`)}
-                </span>
-                <small>
-                  {exceptionDetail(t, exception, lang)}
-                  {exception.has_photo && (
-                    <span className="driver-exception-photo">
-                      {" · "}
-                      <Camera size={12} aria-hidden="true" /> {t("w10fleet_exc_photo")}
-                    </span>
-                  )}
-                </small>
-              </span>
-              <span className={`pill ${who ? "success" : danger ? "danger" : "warning"}`}>
-                {t(who ? "w10fleet_status_handled" : "w10fleet_exc_badge")}
-              </span>
-            </div>
-            <div className="action-row-secondary">
+            <div className="attn-actions">
               {who ? (
                 <span className="action-row-resolved">
+                  <CheckCircle2 size={14} aria-hidden="true" />{" "}
                   {t("w10fleet_exc_handled_by").replace("{who}", who)}
                 </span>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => onWhatsApp(exceptionAsAlert(exception))}
-                  >
-                    <MessageCircle size={15} /> {t("w10fleet_exc_contact")}
-                  </button>
-                  <button type="button" className="ghost-button" onClick={() => markHandled(exception)}>
-                    <CheckCircle2 size={15} /> {t("w10fleet_exc_handled_btn")}
-                  </button>
+                  <AttentionAction onClick={() => onWhatsApp(exceptionAsAlert(exception))}>
+                    {t("w10fleet_exc_contact")}
+                  </AttentionAction>
+                  <AttentionAction quiet onClick={() => markHandled(reports)}>
+                    {t("w10fleet_exc_handled_btn")}
+                  </AttentionAction>
                 </>
               )}
             </div>
-          </li>
+          </AttentionRow>
         );
       })}
       {error && (
@@ -202,7 +254,7 @@ export function TruckExceptions({ exceptions }) {
   return (
     <ul className="trip-list" data-testid="drawer-exception-list">
       {exceptions.map((exception) => (
-        <li key={exception.exception_id}>
+        <li key={exception.exception_id} data-exception-id={exception.exception_id}>
           <span>
             <b>{t(`drv10_exc_${exception.kind}`)}</b>
             <small>{exceptionDetail(t, exception, lang)}</small>

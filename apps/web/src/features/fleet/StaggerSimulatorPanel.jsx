@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../../shared/api/client.js";
-import { useLanguage } from "../../shared/i18n/index.jsx";
+import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { RefreshCcw, Clock, ArrowRight, Info } from "lucide-react";
 
 // The landfill beacon describes the modelled peak hour of a simulated day, never the
@@ -69,6 +69,73 @@ export function QueueMetricHeadline({ metric, loading, testId }) {
         {band && <small data-testid={`${testId}-band`}>{band}</small>}
       </details>
     </div>
+  );
+}
+
+// wave11 fleet: the rail's foot, unstaggered vs staggered wait from the same seeded
+// queue metric as the TPA tab, with its provenance in one mono line.
+// wave11 fleet: one read of the day-mean queue metric, shared by the strip tile and the
+// rail foot so both name the same statistic.
+export function useQueueMetric() {
+  const [metric, setMetric] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch("/tpa/queue-metric")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => !cancelled && setMetric(body))
+      .catch(() => {})
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return { metric, loading };
+}
+
+export function formatQueueMinutes(value, lang) {
+  return value == null ? "—" : Number(value).toLocaleString(localeFor(lang), { maximumFractionDigits: 1 });
+}
+
+export function StaggerSummary({ metric, loading, onOpen }) {
+  const { t, lang } = useLanguage();
+  const minutes = (value) => formatQueueMinutes(value, lang);
+
+  return (
+    <section className="stagger-summary" data-testid="fleet-stagger-summary">
+      <div className="stagger-summary-head">
+        <h2>{t("w11fleet_stagger_title")}</h2>
+        <button type="button" className="attn-action" onClick={onOpen}>
+          {t("w11fleet_stagger_open")}
+          <ArrowRight size={14} aria-hidden="true" />
+        </button>
+      </div>
+      {metric ? (
+        <>
+          <dl className="stagger-summary-pair">
+            <div>
+              <dt>{t("w11fleet_stagger_before")}</dt>
+              <dd>
+                <strong>{minutes(metric.baseline_mean)}</strong> {t("w11fleet_stagger_unit")}
+              </dd>
+            </div>
+            <div className="is-better">
+              <dt>{t("w11fleet_stagger_after")}</dt>
+              <dd>
+                <strong>{minutes(metric.staggered_mean)}</strong> {t("w11fleet_stagger_unit")}
+              </dd>
+            </div>
+          </dl>
+          <p className="prov-line" data-testid="fleet-stagger-provenance">
+            {t("w11fleet_stagger_prov")
+              .replace("{lanes}", metric.assumptions?.weighbridge_lanes ?? "—")
+              .replace("{cycle}", metric.assumptions?.weigh_cycle_minutes ?? "—")}
+          </p>
+        </>
+      ) : (
+        <p className="prov-line">{loading ? t("qm_loading") : t("qm_unavailable")}</p>
+      )}
+    </section>
   );
 }
 

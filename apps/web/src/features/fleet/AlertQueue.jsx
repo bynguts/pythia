@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, MessageCircle } from "lucide-react";
+import { MessageCircle, Route, Wrench } from "lucide-react";
 import { apiFetch } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import { ActionCard } from "./ActionCard.jsx";
-import { alertDetail, alertTitle } from "./decisionRoute.js";
+import { AttentionAction, AttentionRow } from "./AttentionRow.jsx";
+import { alertDetail, alertTitle, decisionRoute } from "./decisionRoute.js";
 
 const SEVERITY_RANK = { critical: 0, warning: 1 };
 const STATUS_TONE = { OPEN: "danger", DISPATCHED: "warning", RESOLVED: "success" };
@@ -81,37 +82,48 @@ export function AlertQueue({ alerts, snapshot, selectedId, onSelect, onWhatsApp 
     recordFollowUp(alert, "DISPATCHED", `Routed via ${route?.name || "backup route"}`);
   }
 
+  if (!alerts.length) return null;
+
   return (
-    <ul className="action-list" data-testid="action-queue">
+    <ul className="ui-list action-list" data-testid="action-queue">
       {sortAlerts(alerts).map((alert) => {
         const status = followUps[alert.id]?.status || "OPEN";
         const tone = STATUS_TONE[status] || "danger";
         const expanded = alert.id === selectedId;
+        const toggle = () => onSelect(expanded ? null : alert);
+        const link =
+          status === "DISPATCHED"
+            ? t("w11fleet_link_dispatched")
+            : status === "RESOLVED"
+              ? t("w11fleet_link_resolved")
+              : decisionRoute(alert)
+                ? t("w11fleet_link_route")
+                : t("w11fleet_link_review");
         return (
-          <li
+          <AttentionRow
             key={alert.id}
-            className={`action-row ${expanded ? "expanded" : ""}`}
+            className={expanded ? "is-selected" : ""}
             data-testid="action-row"
             data-alert-id={alert.id}
-          >
-            <button
-              type="button"
-              className="action-row-head"
-              aria-expanded={expanded}
-              onClick={() => onSelect(expanded ? null : alert)}
-            >
-              <span className={`status-dot ${alert.severity === "critical" ? "danger" : "warning"}`} />
-              <span className="action-row-text">
-                <span>
-                  <b className="mono-id">{alert.truck_code}</b> {alertTitle(t, alert)}
-                </span>
-                <small>{alertDetail(t, alert, lang)}</small>
-              </span>
-              <span className={`pill ${tone}`} data-testid="action-row-status">
+            tone={status === "OPEN" ? (alert.severity === "critical" ? "danger" : "warning") : tone}
+            icon={alert.type === "fleet_damage" ? Wrench : Route}
+            title={
+              <button type="button" className="action-row-head" aria-expanded={expanded} onClick={toggle}>
+                <b className="mono-id">{alert.truck_code}</b> {alertTitle(t, alert)}
+              </button>
+            }
+            meta={alertDetail(t, alert, lang)}
+            aside={
+              <span className={`ui-row-time tone-${tone}`} data-testid="action-row-status">
                 {t(`w10fleet_status_${status.toLowerCase()}`)}
               </span>
-              <ChevronDown size={16} className="action-row-chevron" aria-hidden="true" />
-            </button>
+            }
+          >
+            {!expanded && (
+              <AttentionAction onClick={toggle} tabIndex={-1}>
+                {link}
+              </AttentionAction>
+            )}
             {expanded && (
               <div className="action-row-body">
                 {status === "RESOLVED" ? (
@@ -124,7 +136,11 @@ export function AlertQueue({ alerts, snapshot, selectedId, onSelect, onWhatsApp 
                   <>
                     <ActionCard snapshot={snapshot} alert={alert} onSent={markSent} />
                     <div className="action-row-secondary">
-                      <button type="button" className="ghost-button" onClick={() => onWhatsApp(alert)}>
+                      <button
+                        type="button"
+                        className="ghost-button is-small"
+                        onClick={() => onWhatsApp(alert)}
+                      >
                         <MessageCircle size={15} /> {t("btn_wa_alert")}
                       </button>
                       <label className="action-row-resolve">
@@ -138,7 +154,7 @@ export function AlertQueue({ alerts, snapshot, selectedId, onSelect, onWhatsApp 
                       </label>
                       <button
                         type="button"
-                        className="ghost-button"
+                        className="ghost-button is-small"
                         onClick={() => recordFollowUp(alert, "RESOLVED")}
                         disabled={!notes[alert.id]?.trim()}
                       >
@@ -154,7 +170,7 @@ export function AlertQueue({ alerts, snapshot, selectedId, onSelect, onWhatsApp 
                 )}
               </div>
             )}
-          </li>
+          </AttentionRow>
         );
       })}
     </ul>

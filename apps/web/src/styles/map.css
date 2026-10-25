@@ -56,16 +56,34 @@
 
 .truck-marker.is-critical {
   background: #b42318;
-  animation: pulseMarker 1.6s ease-in-out infinite;
 }
 
-@keyframes pulseMarker {
-  0%,
-  100% {
-    transform: scale(1);
+/* wave11 map perf: the critical pulse is a ring that animates only transform and opacity,
+   so it runs on the compositor; the old box-shadow pulse repainted the marker every frame. */
+.truck-marker.is-critical::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 8px rgba(180, 35, 24, 0.4);
+  pointer-events: none;
+  animation: markerRing 1.6s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .truck-marker.is-critical::before {
+    animation: none;
   }
-  50% {
-    transform: scale(1.08);
+}
+
+@keyframes markerRing {
+  0% {
+    opacity: 1;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.2);
   }
 }
 
@@ -426,11 +444,6 @@
   font-size: var(--fs-caption);
   font-weight: 900;
   line-height: 1;
-  transition:
-    min-width 160ms ease,
-    min-height 160ms ease,
-    padding 160ms ease,
-    font-size 160ms ease;
 }
 
 .map-zoom-low .truck-marker {
@@ -917,27 +930,6 @@
   display: grid;
   place-items: center;
   color: var(--ui-ink-soft);
-}
-
-/* The decision overlay owns the right edge on wide screens: keep the map's
-   own controls and the search row clear of it. */
-@media (min-width: 641px) {
-  .fleet-deck-stage:has(.deck-decision-overlay) .maplibregl-ctrl-top-right,
-  .fleet-deck-stage:has(.deck-decision-overlay) .maplibregl-ctrl-bottom-right {
-    right: 384px;
-  }
-
-  .fleet-deck-stage:has(.deck-decision-overlay) .map-overlay-row {
-    width: min(400px, calc(100% - 456px));
-  }
-
-  .fleet-deck-stage:has(.deck-decision-overlay) .map-route-pill {
-    max-width: min(440px, calc(100% - 586px));
-  }
-
-  .fleet-deck-stage:has(.deck-decision-overlay) .maplibregl-ctrl-scale {
-    display: none;
-  }
 }
 
 @media (max-width: 640px) {

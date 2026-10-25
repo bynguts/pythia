@@ -38,6 +38,8 @@ test("a driver's accident and road-closure reports reach the rail and the truck 
   ).json();
   const truck = snapshot.trucks[snapshot.trucks.length - 1].truck_code;
   const key = `e2e-${Date.now()}`;
+  // wave11 fleet: the operation key stays in operation_id; the note is the driver's words,
+  // and the rail must never print an internal id (rows are found by data-exception-id).
   const report = async (kind, note) => {
     const response = await page.request.post(`${API}/driver/exceptions`, {
       headers: driverHeaders,
@@ -47,19 +49,26 @@ test("a driver's accident and road-closure reports reach the rail and the truck 
     return response.json();
   };
   // The accident is filed first, so newest-first order alone would not put it on top.
-  const accident = await report("accident", `${key} tabrakan ringan`);
-  await report("road_closed", `${key} jalan ditutup`);
+  const accident = await report("accident", "tabrakan ringan di simpang");
+  const road = await report("road_closed", "jalan ditutup untuk perbaikan");
+  const ids = [accident.exception_id, road.exception_id];
+  expect(ids.every(Boolean)).toBe(true);
 
   try {
     await signIn(page, dispatcher);
     const rail = page.getByTestId("fleet-rail-action");
-    const rows = rail.getByTestId("driver-exception-row").filter({ hasText: key });
+    const rows = rail.locator(ids.map((id) => `[data-exception-id="${id}"]`).join(", "));
     await expect(rows).toHaveCount(2, { timeout: 30000 });
     await expect(rows.first()).toHaveAttribute("data-kind", "accident");
     await expect(rows.first()).toHaveClass(/is-danger/);
     await expect(rows.first()).toContainText("Kecelakaan");
     await expect(rows.first()).toContainText(truck);
     await expect(rows.nth(1)).toContainText("Jalan tertutup");
+    // The meta is the driver's note; no operation key or exception id is printed.
+    await expect(rows.first()).toContainText("tabrakan ringan di simpang");
+    const railText = await rail.innerText();
+    expect(railText).not.toContain(key);
+    for (const id of ids) expect(railText).not.toContain(id);
     await expect(rows.first().getByRole("button", { name: "Hubungi sopir" })).toBeVisible();
 
     const contrast = await new AxeBuilder({ page })
@@ -69,12 +78,12 @@ test("a driver's accident and road-closure reports reach the rail and the truck 
     expect(contrast.violations.map(({ nodes }) => nodes.map(({ target }) => target))).toEqual([]);
 
     // "Tandai ditangani" writes the existing follow-up log, so it survives a reload.
-    const road = rows.filter({ hasText: "Jalan tertutup" });
-    await road.getByRole("button", { name: "Tandai ditangani" }).click();
-    await expect(road).toContainText("Ditangani");
+    const roadRow = rail.locator(`[data-exception-id="${road.exception_id}"]`);
+    await roadRow.getByRole("button", { name: "Tandai ditangani" }).click();
+    await expect(roadRow).toContainText("Ditangani");
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(
-      page.getByTestId("driver-exception-row").filter({ hasText: `${key} jalan ditutup` }),
+      page.locator(`[data-testid=driver-exception-row][data-exception-id="${road.exception_id}"]`),
     ).toContainText("Ditangani", { timeout: 30000 });
 
     // The truck drawer lists the same reports, read-only.
@@ -83,7 +92,9 @@ test("a driver's accident and road-closure reports reach the rail and the truck 
     await page.locator(`[data-testid=truck-row][data-truck="${truck}"]`).click();
     const section = page.getByTestId("drawer-exceptions");
     await expect(section).toContainText("Kecelakaan");
-    await expect(section).toContainText(`${key} jalan ditutup`);
+    await expect(section.locator(`[data-exception-id="${road.exception_id}"]`)).toContainText(
+      "jalan ditutup untuk perbaikan",
+    );
   } finally {
     if (accident.damage_report_id)
       await page.request.post(`${API}/damage-reports/${accident.damage_report_id}/resolve`, {

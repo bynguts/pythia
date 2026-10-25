@@ -82,9 +82,12 @@ async function stubDecision(page) {
   });
 }
 
-test("the rail lists the workspaces in daily order with Settings pinned below a separator", async ({
+// wave11 design system: the sidebar rail became one top bar, so Settings now sits at the
+// right end of the workspace pills, after a separator, instead of below one.
+test("the top nav lists the workspaces in daily order with Settings set apart after a separator", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);
   const nav = page.getByTestId("workspace-navigation");
   await expect(nav.getByRole("button")).toHaveText([
@@ -103,10 +106,10 @@ test("the rail lists the workspaces in daily order with Settings pinned below a 
     separator.boundingBox(),
     nav.getByRole("button", { name: "Pengaturan" }).boundingBox(),
   ]);
-  expect(line.y).toBeGreaterThanOrEqual(twin.y + twin.height);
-  expect(settings.y).toBeGreaterThanOrEqual(line.y);
+  expect(line.x).toBeGreaterThanOrEqual(twin.x + twin.width);
+  expect(settings.x).toBeGreaterThanOrEqual(line.x + line.width);
   // Settings is set apart, not just the next item: at least 16 px between the groups.
-  expect(settings.y - (twin.y + twin.height)).toBeGreaterThanOrEqual(16);
+  expect(settings.x - (twin.x + twin.width)).toBeGreaterThanOrEqual(16);
 
   // The twin moved to fifth, but its deep links still land on it.
   await page.goto("/?workspace=twin", { waitUntil: "domcontentloaded" });
@@ -167,14 +170,19 @@ test("one strip of four metrics, no duplicate strip, and each number matches its
   await expect(page.locator(".fleet-problem-strip, [data-testid^=problem-chip]")).toHaveCount(0);
   await expect(page.getByTestId("metric-strip")).toHaveCount(1);
 
-  // One denominator: "52 aktif / 59 unit", the same total as the truck list.
+  // One denominator: "52 / 59 unit" under "Truk aktif", the same total as the truck list.
   const active = strip.locator('[data-metric="active"] strong');
-  await expect(active).toHaveText(/^\d+ aktif \/ \d+ unit$/);
-  const [, activeCount, total] = /^(\d+) aktif \/ (\d+) unit$/.exec(await active.innerText());
+  await expect(active).toHaveText(/^\d+ \/ \d+ unit$/);
+  // wave11 fleet: the number and its unit words are separate flex items, so read textContent.
+  const activeText = (await active.textContent()).replace(/\s+/g, " ").trim();
+  const [, activeCount, total] = /^(\d+) \/ (\d+) unit$/.exec(activeText);
 
-  // The TPA tile is the modelled peak in minutes, never "89m".
+  // The TPA tile is minutes per truck, never "89m".
   const queue = strip.locator('[data-metric="queue"]');
-  await expect(queue.locator("strong")).toHaveText(/^Puncak \d{2}[.:]\d{2}: ±\d+ mnt$/);
+  // wave11 fleet: the tile headlines the staggered day mean (Pythia's answer); the per-truck
+  // peak-hour wait stays in its meta line, so it never reads as the day mean.
+  await expect(queue.locator("strong")).toHaveText(/^\d+(,\d)? mnt\/truk$/, { timeout: 30000 });
+  await expect(queue.locator(".metric-meta")).toContainText(/Puncak \d{2}[.:]\d{2}: ±\d+ mnt\/truk$/);
   await expect(queue).not.toContainText(/\d+m\b/);
   await expect(strip.locator('[data-metric="trips"] strong')).toHaveText("1 dari 2");
 
