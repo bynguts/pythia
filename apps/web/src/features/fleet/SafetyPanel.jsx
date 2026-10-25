@@ -310,6 +310,8 @@ export function SafetyPanel({ overview, error = false, reload = () => {} }) {
             <button
               type="button"
               className="safety-toggle"
+              data-testid="safety-show-all"
+              data-value={trucks.length}
               aria-expanded={expanded}
               onClick={() => setExpanded((open) => !open)}
             >

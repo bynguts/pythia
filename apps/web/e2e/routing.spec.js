@@ -83,7 +83,8 @@ test("the legacy ?workspace=twin entry point opens the twin", async ({ page }) =
 
   await expect(page).toHaveURL(/\/twin$/);
   await expect(page.getByTestId("twin-workspace")).toBeVisible();
-  await expect(navButton(page, "Kembaran Digital")).toHaveAttribute("aria-current", "page");
+  // wave9 fleet composition: the twin's nav label is now "Kota 3D".
+  await expect(navButton(page, "Kota 3D")).toHaveAttribute("aria-current", "page");
 });
 
 test("logout clears the stored session and keeps the workspace URL for the next sign-in", async ({

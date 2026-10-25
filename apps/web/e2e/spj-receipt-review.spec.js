@@ -114,7 +114,7 @@ async function openPanel(page, request, role) {
     localStorage.setItem("pythia_role", signedIn);
   }, principal);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: "Surat Perintah Jalan" }).click();
+  await page.getByRole("tab", { name: "Surat jalan (SPJ)" }).click(); // wave9 fleet composition: records tab
   const panel = page.locator(".spj-panel");
   await expect(panel.getByTestId("spj-receipt-needs-review")).toHaveText("Struk perlu ditinjau");
   await panel.getByRole("button", { name: new RegExp(SPJ_NUMBER.replace(/[/.]/g, "\\$&")) }).click();

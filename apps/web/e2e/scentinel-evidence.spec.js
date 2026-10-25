@@ -51,7 +51,8 @@ test("scentinel evidence renders as external simulation with visible gates", asy
   });
   expect(importRes.status).toBe(201);
 
-  // Authenticate then open the Data & Model Audit workspace via the rail.
+  // Authenticate then open Settings → Data sources & model (wave9 settings: the audit
+  // workspace moved there) and expand the registry, which holds the evidence rail.
   await page.goto("/");
   await page.evaluate((token) => {
     localStorage.setItem("pythia_auth", "true");
@@ -60,7 +61,9 @@ test("scentinel evidence renders as external simulation with visible gates", asy
     localStorage.setItem("pythia_lang", "en");
   }, principal.token);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: "Data & ML Audit" }).click();
+  await page.getByTestId("workspace-navigation").getByRole("button", { name: "Settings" }).click();
+  await page.getByTestId("settings-tab-data").click();
+  await page.getByTestId("source-registry-disclosure").locator("summary").click();
 
   const panel = page.getByTestId("scentinel-evidence-panel");
   await expect(panel).toBeVisible({ timeout: 15000 });

@@ -59,7 +59,7 @@ test("admin sees SPJ in panel, expands it, and activates it", async ({ page }) =
   expect(stop.ok()).toBeTruthy();
 
   try {
-    await page.getByRole("button", { name: "Surat Perintah Jalan" }).click();
+    await page.getByRole("tab", { name: "Surat jalan (SPJ)" }).click(); // wave9 fleet composition: records tab
     await expect(page.getByText(spj.spj_number).first()).toBeVisible({ timeout: 15000 });
     await page.getByText(spj.spj_number).first().click();
     await page.getByRole("button", { name: "Ubah ke aktif" }).click();
@@ -120,7 +120,7 @@ test("Fleet SPJ mutations and lifecycle labels follow authorization and ID/EN", 
   }
 
   try {
-    await page.getByRole("button", { name: "Surat Perintah Jalan" }).click();
+    await page.getByRole("tab", { name: "Surat jalan (SPJ)" }).click(); // wave9 fleet composition: records tab
     await expect(panel.getByRole("combobox", { name: "Kendaraan" })).toBeVisible();
     const first = await createOrder();
     await expect(status(first.spj_number)).toHaveText("Draf");

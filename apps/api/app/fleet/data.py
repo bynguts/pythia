@@ -434,8 +434,10 @@ class DynamicTruckList(list):
 
 TRUCKS = DynamicTruckList()
 
+# `code` lets the UI name each option in the active locale; `name` stays the English label.
 ROUTE_OPTIONS = [
     {
+        "code": "A",
         "name": "Route A - Original Corridor",
         "eta_minutes": 62,
         "traffic_level": 0.7,
@@ -448,6 +450,7 @@ ROUTE_OPTIONS = [
         ],
     },
     {
+        "code": "B",
         "name": "Route B - Daan Mogot Recovery",
         "eta_minutes": 48,
         "traffic_level": 0.35,
@@ -460,6 +463,7 @@ ROUTE_OPTIONS = [
         ],
     },
     {
+        "code": "C",
         "name": "Route C - Restricted Shortcut",
         "eta_minutes": 38,
         "traffic_level": 0.1,
@@ -638,7 +642,12 @@ def build_alerts() -> list[dict[str, Any]]:
                     "truck_code": truck["truck_code"],
                     "title": f"{truck['truck_code']} deviated from assigned corridor",
                     "description": truck["deviation"]["message"],
-                    "recommended_routes": recommend_routes(ROUTE_OPTIONS),
+                    # Codes the UI localizes instead of showing the English prose above.
+                    "distance_meters": truck["deviation"]["distance_meters"],
+                    "sustained": "sustained_deviation" in truck["deviation"].get("rule_flags", []),
+                    "recommended_routes": [
+                        {**route, "source": "scenario"} for route in recommend_routes(ROUTE_OPTIONS)
+                    ],
                     "status": "active",
                 }
             )
@@ -665,6 +674,10 @@ def build_alerts() -> list[dict[str, Any]]:
 _route_b_cache: dict[str, Any] = {"ts": 0.0, "payload": None}
 
 
+# The one truck Route B is computed for (its live position to its corridor end).
+ROUTE_B_TRUCK = "T-047"
+
+
 def _route_b_osrm() -> dict[str, Any]:
     import time as _t
 
@@ -673,8 +686,8 @@ def _route_b_osrm() -> dict[str, Any]:
         return cached["payload"]
     cached["payload"] = fetch_osrm_route(
         "Route B - Daan Mogot Recovery",
-        origin=LATEST_POSITIONS["T-047"],
-        destination=ASSIGNED_PATHS["T-047"][-1],
+        origin=LATEST_POSITIONS[ROUTE_B_TRUCK],
+        destination=ASSIGNED_PATHS[ROUTE_B_TRUCK][-1],
     )
     cached["ts"] = _t.time()
     return cached["payload"]
@@ -688,6 +701,24 @@ def command_center_snapshot(
     predictions = build_predictions()
     critical_predictions = [item for item in predictions if item["risk_level"] in {"critical", "high"}]
     active_alerts = build_alerts()
+    osrm_route = _route_b_osrm()
+    # Teardown v4 M3: one route object per decision. Where Route B is computed for the
+    # alert's truck, the decision carries that route's ETA, distance, source and line,
+    # so the card, the map and the dispatch text quote the same numbers. No computed route
+    # (OSRM down, empty payload): the decision keeps its labelled scenario route, no line.
+    computed = bool(osrm_route) and all(
+        osrm_route.get(key) is not None for key in ("eta_minutes", "distance_km", "source", "path")
+    )
+    for alert in active_alerts if computed else []:
+        routes = alert["recommended_routes"]
+        if alert["truck_code"] == ROUTE_B_TRUCK and routes and routes[0].get("code") == "B":
+            routes[0] = {
+                **routes[0],
+                "eta_minutes": osrm_route["eta_minutes"],
+                "distance_km": osrm_route["distance_km"],
+                "source": osrm_route["source"],
+                "path": osrm_route["path"],
+            }
     weather_forecast = weather or {"source": "not-loaded", "forecast": []}
     weather_peak = max(
         weather_forecast.get("forecast", []),
@@ -777,7 +808,7 @@ def command_center_snapshot(
         },
         "trucks": list(TRUCKS),
         "alerts": active_alerts,
-        "osrm_route": _route_b_osrm(),
+        "osrm_route": osrm_route,
         "predictions": predictions,
         "critical_predictions": critical_predictions[:8],
         "weather": weather_forecast,

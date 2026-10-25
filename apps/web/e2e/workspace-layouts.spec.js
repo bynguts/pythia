@@ -20,74 +20,63 @@ async function signIn(page) {
 
 test.beforeEach(async ({ page }) => signIn(page));
 
-test("fleet opens as a map-led command deck with a decision overlay", async ({ page }) => {
+// wave9 fleet composition: the decision overlay, problem strip, "Status Armada" table and
+// document links were replaced by one metric strip, a three-tab work rail beside the map
+// and one "Dokumen armada" tablist (teardown v4 F1-F5).
+test("fleet opens as a map-led deck with the work rail beside the map", async ({ page }) => {
   const map = page.getByTestId("fleet-map-stage");
-  const overlay = page.getByTestId("decision-overlay");
+  const rail = page.getByTestId("fleet-rail");
   await expect(map).toBeVisible();
-  await expect(overlay).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Tindakan prioritas" })).toBeVisible();
-  await expect(overlay.getByTestId("action-card")).toBeVisible();
+  await expect(rail).toBeVisible();
+  await expect(rail.getByRole("tab", { name: /Perlu tindakan/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("fleet-rail-action")).toBeVisible();
 
-  // The deck is one full-bleed canvas: the decision instrument floats over the
-  // map's own right edge rather than competing in a separate rail column.
-  const [mapBox, overlayBox] = await Promise.all([map.boundingBox(), overlay.boundingBox()]);
-  expect(overlayBox.x).toBeGreaterThan(mapBox.x + mapBox.width * 0.5);
-  expect(overlayBox.x + overlayBox.width).toBeLessThanOrEqual(mapBox.x + mapBox.width + 2);
+  // The map keeps the larger share; the rail sits to its right, never over it.
+  const [mapBox, railBox] = await Promise.all([map.boundingBox(), rail.boundingBox()]);
+  expect(railBox.x).toBeGreaterThanOrEqual(mapBox.x + mapBox.width - 2);
+  expect(mapBox.width).toBeGreaterThan(railBox.width);
 });
 
-test("problem strip focuses the worst deviation and opens evidence tabs", async ({ page }) => {
-  const deviationChip = page.getByTestId("problem-chip-deviation");
-  await expect(deviationChip).toBeVisible();
-  await expect(deviationChip).toBeEnabled();
-  await deviationChip.click();
-  await expect(page.getByTestId("decision-overlay").getByTestId("action-card")).toBeVisible();
+test("metric strip opens the deviation queue and the TPA queue", async ({ page }) => {
+  await expect(page.getByTestId("metric-strip")).toBeVisible({ timeout: 15000 });
+  const deviation = page.locator("[data-metric=deviation]");
+  await deviation.click();
+  await expect(page.getByRole("tab", { name: /Perlu tindakan/ })).toHaveAttribute("aria-selected", "true");
 
-  const queueChip = page.getByTestId("problem-chip-queue");
-  if (await queueChip.isEnabled()) {
-    await queueChip.click();
+  const queue = page.locator("[data-metric=queue]");
+  if (await queue.count()) {
+    await queue.click();
     await expect(page.getByTestId("fleet-queue-surface")).toBeVisible();
   }
 });
 
-test("fleet evidence tabs reveal one surface and support keyboard selection", async ({ page }) => {
-  const tablist = page.getByRole("tablist", { name: "Detail armada" });
-  const fleet = tablist.getByRole("tab", { name: "Status Armada" });
-  const history = tablist.getByRole("tab", { name: "Riwayat Perjalanan" });
-  await expect(fleet).toHaveAttribute("aria-selected", "true");
-  await history.click();
-  await expect(history).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByTestId("fleet-history-surface")).toBeVisible();
-  await expect(page.getByTestId("fleet-table-surface")).toBeHidden();
-
-  await history.focus();
-  await page.keyboard.press("Home");
-  await expect(fleet).toBeFocused();
-  await expect(fleet).toHaveAttribute("aria-selected", "true");
-});
-
-test("document links open operational document surfaces", async ({ page }) => {
-  await page.locator(".records-doc-link", { hasText: "Surat Perintah Jalan" }).click();
+test("fleet document tabs reveal one surface and support keyboard selection", async ({ page }) => {
+  const tablist = page.getByRole("tablist", { name: "Dokumen armada" });
+  const spj = tablist.getByRole("tab", { name: "Surat jalan (SPJ)" });
+  const damage = tablist.getByRole("tab", { name: "Laporan Kerusakan" });
+  await expect(spj).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("fleet-spj-surface")).toBeVisible();
-  await page.locator(".records-doc-link", { hasText: "Laporan Kerusakan" }).click();
+  await damage.click();
+  await expect(damage).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("fleet-damage-surface")).toBeVisible();
+  await expect(page.getByTestId("fleet-spj-surface")).toBeHidden();
+
+  await damage.focus();
+  await page.keyboard.press("Home");
+  await expect(spj).toBeFocused();
+  await expect(spj).toHaveAttribute("aria-selected", "true");
 });
 
-test("mobile fleet collapses the decision into a bottom sheet without overflow", async ({ page }) => {
+test("mobile fleet stacks the work rail under the map without overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  const sheet = page.getByTestId("deck-action-sheet");
-  await expect(sheet).toBeVisible();
-  const geometry = await page.evaluate(() => {
-    const overlay = document.querySelector(".deck-decision-overlay");
-    return {
-      overlayHidden: overlay ? getComputedStyle(overlay).display === "none" : true,
-      overflow: document.documentElement.scrollWidth - innerWidth,
-    };
-  });
-  expect(geometry.overlayHidden).toBe(true);
-  expect(geometry.overflow).toBeLessThanOrEqual(2);
-
-  await page.locator(".deck-sheet-handle").click();
-  await expect(sheet.getByTestId("action-card")).toBeVisible();
+  const map = page.getByTestId("fleet-map-stage");
+  const rail = page.getByTestId("fleet-rail");
+  await expect(rail).toBeVisible();
+  const [mapBox, railBox] = await Promise.all([map.boundingBox(), rail.boundingBox()]);
+  expect(railBox.y).toBeGreaterThanOrEqual(mapBox.y + mapBox.height - 2);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  expect(overflow).toBeLessThanOrEqual(2);
+  await expect(page.getByTestId("fleet-rail-action")).toBeVisible();
 });
 
 // #6 (gsc-2026 teardown): at 390 px the landfill tag ran off the canvas and the
@@ -131,7 +120,7 @@ test("map layers panel opens inside the deck and lists controls", async ({ page 
   await page.getByTestId("deck-tools-toggle").click();
   const panel = page.getByTestId("deck-tools-panel");
   await expect(panel).toBeVisible();
-  await expect(panel.getByText("Lapisan", { exact: true })).toBeVisible();
+  await expect(panel.getByText("Lapisan referensi", { exact: true })).toBeVisible();
   await expect(panel.locator(".map-controls-grid label").first()).toBeVisible();
 });
 
@@ -179,7 +168,8 @@ test("planning presents scenario, allocation, and approval as one flow", async (
 
   await page.getByRole("button", { name: "Rencana" }).click();
   await expect(page.locator(".planning-progress li")).toHaveCount(3);
-  for (const heading of ["Tetapkan skenario", "Susun alokasi", "Tinjau & setujui"]) {
+  // Teardown v4 R2: stage 1 starts from today's forecast; a scenario is opt-in.
+  for (const heading of ["Mulai dari prakiraan", "Susun alokasi", "Tinjau & setujui"]) {
     await expect(page.getByRole("heading", { name: heading })).toBeVisible();
   }
   await page.getByRole("button", { name: "Susun Alokasi Armada" }).click();
@@ -187,9 +177,12 @@ test("planning presents scenario, allocation, and approval as one flow", async (
   await expect(page.getByText("Izin sesuai")).toBeVisible();
 });
 
-test("audit workspace exposes provenance and model suitability evidence", async ({ page }) => {
-  await page.getByRole("button", { name: "Audit Data & Model ML" }).click();
-  await expect(page.getByRole("heading", { name: "Audit data & model" })).toBeVisible();
+// wave9 settings: the audit content moved to Settings → Sumber data & model, collapsed.
+test("data sources section exposes provenance and model suitability evidence", async ({ page }) => {
+  await page.getByTestId("workspace-navigation").getByRole("button", { name: "Pengaturan" }).click();
+  await page.getByTestId("settings-tab-data").click();
+  await expect(page.getByRole("heading", { name: "Sumber data & model" })).toBeVisible();
+  await page.getByTestId("source-registry-disclosure").locator("summary").click();
   await expect(page.locator(".audit-table tbody tr").first()).toBeVisible({ timeout: 15000 });
   expect(await page.locator(".audit-table tbody tr").count()).toBeGreaterThan(0);
   await expect(page.getByRole("heading", { name: "Resolusi yang didukung" })).toBeVisible();

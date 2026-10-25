@@ -1,31 +1,47 @@
 import { useState } from "react";
-import { useLanguage } from "../../shared/i18n/index.jsx";
+import { fleetDenominator } from "../../shared/hooks/useBaseline.js";
+import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { Search } from "lucide-react";
+
+const ACTIVE_STATUSES = ["active", "deviation"];
 
 export function FleetTable({ trucks, onOpenTripHistory }) {
   const { t, lang } = useLanguage();
+  const locale = localeFor(lang);
   const [showAll, setShowAll] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const term = searchTerm.toLowerCase();
   const filtered = trucks.filter(
-    (t) =>
-      t.truck_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.driver_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.plate_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.assigned_zone?.toLowerCase().includes(searchTerm.toLowerCase()),
+    (truck) =>
+      truck.truck_code?.toLowerCase().includes(term) ||
+      truck.driver_name?.toLowerCase().includes(term) ||
+      truck.plate_number?.toLowerCase().includes(term) ||
+      truck.assigned_zone?.toLowerCase().includes(term),
   );
   const shown = showAll ? filtered : filtered.slice(0, 12);
-  const damagedCount = trucks.filter((t) => t.is_damaged).length;
-  const violationCount = trucks.filter((t) => t.deviation?.violated).length;
+  const damagedCount = trucks.filter((truck) => truck.is_damaged).length;
+  const violationCount = trucks.filter((truck) => truck.deviation?.violated).length;
+  // Teardown v4 F4: one denominator ("52 aktif / 59 unit"), the Fleet KPI's basis, and
+  // honest freshness: the fleet is simulated and the snapshot refreshes every 8 s.
+  const fleet = {
+    active: trucks.filter((truck) => ACTIVE_STATUSES.includes(truck.status)).length,
+    total: trucks.length,
+  };
+  const distance = (meters) =>
+    meters >= 1000
+      ? `${(meters / 1000).toLocaleString(locale, { maximumFractionDigits: 1 })} km`
+      : `${Math.round(meters)} m`;
 
   return (
     <section className="panel wide">
       <div className="panel-title">
         <div>
           <h2>{t("ft_title")}</h2>
-          <p>
-            {trucks.length} {lang === "id" ? "unit dipantau real-time" : "units monitored in real-time"} ·{" "}
-            {damagedCount} {lang === "id" ? "peringatan perbaikan" : "maintenance alerts"} · {violationCount}{" "}
-            {lang === "id" ? "deviasi rute" : "corridor deviations"}.
+          <p data-testid="fleet-table-summary">
+            <strong data-testid="fleet-table-denominator">{fleetDenominator(t, fleet)}</strong> ·{" "}
+            {t("w10num_ft_summary")
+              .replace("{damaged}", damagedCount)
+              .replace("{deviations}", violationCount)}
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
@@ -42,10 +58,7 @@ export function FleetTable({ trucks, onOpenTripHistory }) {
         </div>
       </div>
       <div className="table-wrap fleet-table-wrap">
-        <table
-          className="fleet-state-table"
-          aria-label={lang === "id" ? "Status operasional armada" : "Fleet operational status"}
-        >
+        <table className="fleet-state-table" aria-label={t("w10num_ft_table_label")}>
           <thead>
             <tr>
               <th scope="col" style={{ width: "18%" }}>
@@ -75,9 +88,7 @@ export function FleetTable({ trucks, onOpenTripHistory }) {
             {shown.length === 0 ? (
               <tr>
                 <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--ui-muted)" }}>
-                  {lang === "id"
-                    ? `Tidak ada kendaraan yang cocok dengan "${searchTerm}".`
-                    : `No vehicles found matching "${searchTerm}".`}
+                  {t("w10num_ft_no_match").replace("{q}", searchTerm)}
                 </td>
               </tr>
             ) : (
@@ -86,18 +97,20 @@ export function FleetTable({ trucks, onOpenTripHistory }) {
                 const isBreakdown = Boolean(truck.is_damaged);
                 const complianceTone = isViolation ? "danger" : isBreakdown ? "warning" : "success";
                 const complianceLabel = isViolation
-                  ? `${lang === "id" ? "Pelanggaran" : "Violation"} (${Math.round(truck.deviation.distance_meters >= 1000 ? truck.deviation.distance_meters / 1000 : truck.deviation.distance_meters)}${truck.deviation.distance_meters >= 1000 ? "km" : "m"})`
+                  ? t("w10num_ft_violation").replace("{d}", distance(truck.deviation.distance_meters))
                   : isBreakdown
-                    ? truck.damage_status?.state === "breakdown"
-                      ? lang === "id"
-                        ? "Mogok"
-                        : "Breakdown"
-                      : lang === "id"
-                        ? "Perawatan"
-                        : "Maintenance"
-                    : lang === "id"
-                      ? "Sesuai"
-                      : "Compliant";
+                    ? t(
+                        truck.damage_status?.state === "breakdown"
+                          ? "w10num_ft_breakdown"
+                          : "w10num_ft_maintenance",
+                      )
+                    : t("w10num_ft_compliant");
+                const activity = truck.activity?.state;
+                const activityLabel = activity
+                  ? t(`w10num_act_${activity}`) === `w10num_act_${activity}`
+                    ? truck.activity.label
+                    : t(`w10num_act_${activity}`)
+                  : t("w10num_act_idle");
 
                 return (
                   <tr key={truck.truck_code}>
@@ -138,9 +151,7 @@ export function FleetTable({ trucks, onOpenTripHistory }) {
                         <span
                           className={`activity-dot ${isViolation ? "danger" : isBreakdown ? "warning" : "active"}`}
                         />
-                        <span style={{ fontSize: "12.5px" }}>
-                          {truck.activity?.label || (lang === "id" ? "Siaga" : "Idle")}
-                        </span>
+                        <span style={{ fontSize: "12.5px" }}>{activityLabel}</span>
                       </div>
                     </td>
                     <td className="speed-cell">
@@ -150,11 +161,7 @@ export function FleetTable({ trucks, onOpenTripHistory }) {
                       <button
                         className="text-button"
                         type="button"
-                        aria-label={
-                          lang === "id"
-                            ? `Lihat riwayat perjalanan ${truck.truck_code}`
-                            : `View ${truck.truck_code} trip history`
-                        }
+                        aria-label={t("w10num_ft_history_aria").replace("{code}", truck.truck_code)}
                         onClick={() => onOpenTripHistory?.(truck.truck_code)}
                         style={{ height: "30px", padding: "0 10px", fontSize: "12px" }}
                       >
@@ -171,11 +178,7 @@ export function FleetTable({ trucks, onOpenTripHistory }) {
       {filtered.length > 12 && (
         <div style={{ marginTop: "12px", display: "flex", justifyContent: "center" }}>
           <button className="text-button show-more-btn" onClick={() => setShowAll(!showAll)}>
-            {showAll
-              ? lang === "id"
-                ? "Tampilkan lebih sedikit"
-                : "Show fewer"
-              : `${lang === "id" ? "Tampilkan semua" : "Show all"} (${filtered.length} ${lang === "id" ? "unit" : "units"})`}
+            {showAll ? t("w10num_show_fewer") : t("w10num_ft_show_all").replace("{n}", filtered.length)}
           </button>
         </div>
       )}

@@ -42,19 +42,29 @@ test.describe("English mode has no Indonesian interface copy", () => {
     await signInEnglish(page);
   });
 
-  for (const workspace of ["fleet", "twin", "forecast", "planning", "drivers", "audit"]) {
+  // wave9 settings: Settings (each section) replaced the audit workspace.
+  const paths = ["fleet", "twin", "forecast", "planning", "drivers", "settings", "settings?tab=team"];
+  for (const workspace of [...paths, "settings?tab=data"]) {
     test(`/${workspace} renders English only`, async ({ page }) => {
-      await page.goto(`/${workspace}?lang=en`, { waitUntil: "domcontentloaded" });
+      const separator = workspace.includes("?") ? "&" : "?";
+      await page.goto(`/${workspace}${separator}lang=en`, { waitUntil: "domcontentloaded" });
       await expect(page.locator("main h1").first()).toBeVisible();
       await expect(page.locator("html")).toHaveAttribute("lang", "en");
       await expectNoIndonesianCopy(page, `/${workspace}`);
     });
   }
 
-  test("fleet unlicensed-collector tab renders English only", async ({ page }) => {
+  // wave9 fleet composition: unlicensed collectors are rows in "Needs action" now, so the
+  // check walks the three work-rail tabs instead of the old collector tab.
+  test("fleet work rail tabs render English only", async ({ page }) => {
     await page.goto("/fleet?lang=en", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Unlicensed Collectors" }).click();
-    await expect(page.getByTestId("fleet-unlicensed-surface")).toBeVisible();
-    await expectNoIndonesianCopy(page, "fleet unlicensed tab");
+    await expect(page.getByTestId("fleet-rail-action")).toBeVisible();
+    await expectNoIndonesianCopy(page, "fleet needs-action tab");
+    await page.getByRole("tab", { name: "Trucks", exact: true }).click();
+    await expect(page.getByTestId("truck-list")).toBeVisible();
+    await expectNoIndonesianCopy(page, "fleet trucks tab");
+    await page.getByRole("tab", { name: /TPA Queue/ }).click();
+    await expect(page.getByTestId("fleet-queue-surface")).toBeVisible();
+    await expectNoIndonesianCopy(page, "fleet TPA queue tab");
   });
 });

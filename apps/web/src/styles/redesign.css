@@ -30,7 +30,6 @@ button {
 }
 .ghost-button,
 .text-button,
-.danger-button,
 .icon-button {
   border-radius: var(--ui-radius-pill);
 }
@@ -111,16 +110,24 @@ button {
 .command-nav-label {
   padding: 0 12px 10px;
   color: var(--ui-muted);
-  font-family: var(--mono);
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 .command-nav {
-  display: grid;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
 }
+.command-nav-separator {
+  margin: auto 12px 8px;
+  padding-top: var(--space-5);
+  border-bottom: 1px solid var(--ui-border);
+}
+/* The separator replaces the older CSS-only gap drawn on the item itself. */
 .command-nav-item {
   width: 100%;
   min-height: 46px;
@@ -149,9 +156,74 @@ button {
   color: var(--ui-on-dark);
 }
 .command-sidebar-footer {
-  margin-top: auto;
+  margin-top: 12px;
   display: grid;
   gap: 12px;
+}
+.mono-id {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.command-profile-wrap {
+  position: relative;
+}
+.command-profile-menu {
+  position: absolute;
+  z-index: var(--z-dropdown);
+  top: calc(100% + 8px);
+  right: 0;
+  width: 260px;
+  padding: 6px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-float);
+}
+.command-profile-menu-head {
+  padding: 10px 12px 12px;
+  display: grid;
+  gap: 2px;
+  border-bottom: 1px solid var(--ui-border);
+}
+.command-profile-menu-head b {
+  color: var(--ui-ink);
+  font-size: 14px;
+}
+.command-profile-menu-head span {
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+.command-profile-menu-group {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+.command-profile-menu [role="menu"] button {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-ink);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.command-profile-menu [role="menu"] button:hover,
+.command-profile-menu [role="menu"] button:focus-visible {
+  background: var(--ui-surface-muted);
+  outline: none;
+}
+.command-profile-menu [role="menuitemradio"] svg {
+  margin-left: auto;
+  color: var(--ui-accent);
+}
+.command-profile-menu [role="menuitem"] svg {
+  color: var(--ui-ink-soft);
 }
 .system-connection {
   padding: 14px 12px;
@@ -228,7 +300,6 @@ button {
   display: block;
   margin-bottom: 2px;
   color: var(--ui-muted);
-  font-family: var(--mono);
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.1em;
@@ -387,9 +458,8 @@ button {
   align-items: center;
   gap: 6px;
   color: var(--ui-accent);
-  font-family: var(--mono);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -408,9 +478,7 @@ button {
 .workspace-freshness strong {
   color: var(--ui-ink);
 }
-.section-intro,
-.surface-heading,
-.records-heading {
+.section-intro {
   margin-bottom: 16px;
   display: flex;
   align-items: flex-end;
@@ -420,9 +488,7 @@ button {
 .section-intro.compact {
   align-items: center;
 }
-.section-intro h2,
-.surface-heading h2,
-.records-heading h2 {
+.section-intro h2 {
   margin: 4px 0 0;
   font-family: var(--font-head);
   font-size: 19px;
@@ -435,22 +501,6 @@ button {
   color: var(--ui-muted);
   font-size: 12px;
   line-height: 1.45;
-}
-.live-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--ui-success);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-}
-.live-indicator i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ui-success);
-  box-shadow: 0 0 0 4px var(--ui-forest-100);
 }
 
 /* Joined metrics, not card soup */
@@ -491,16 +541,16 @@ button {
 .metric-cell strong {
   margin: 4px 0 4px;
   color: var(--ui-ink) !important;
-  font-family: var(--mono);
+  font-family: var(--font-head);
   font-size: 28px;
-  font-weight: 500;
-  letter-spacing: -0.03em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 .metric-cell small {
   color: var(--ui-muted);
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.02em;
+  font-size: 12px;
+  line-height: 1.35;
 }
 .metric-cell.metric-warning small {
   color: var(--ui-warning);
@@ -533,11 +583,6 @@ button {
   min-height: 74px;
   padding: 12px 16px;
 }
-.fleet-workspace .metric-cell strong {
-  font-size: 24px;
-  margin: 2px 0 1px;
-}
-.fleet-map-surface,
 .fleet-records-surface,
 .forecast-primary-analysis,
 .forecast-context-rail,
@@ -552,71 +597,42 @@ button {
   background: var(--ui-surface);
 }
 
-/* Problem strip: triage chips bound to what the map actually shows */
-.fleet-problem-strip {
-  min-width: 0;
-  margin: 12px 0 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+/* wave10 fleet: one flat metric strip, the map large, a right rail with three tabs.
+   On phones the rail sits under the map as a sheet, in the page flow, so it never
+   covers the route card or the legend. */
+.fleet-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
-.problem-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 0 14px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-pill);
-  color: var(--ui-ink);
-  background: var(--ui-surface);
-  font-size: 13px;
+.metric-button {
+  min-height: var(--tap-min);
+  display: grid;
+  align-content: start;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
-  transition:
-    border-color 0.18s ease,
-    background-color 0.18s ease;
 }
-.problem-chip:hover:not(:disabled) {
-  border-color: var(--ui-border-strong);
+.metric-button:hover {
   background: var(--ui-canvas);
 }
-.problem-chip:focus-visible {
+.metric-button:focus-visible {
   outline: 2px solid var(--ui-accent);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
-.problem-chip:disabled {
-  cursor: default;
-}
-.problem-chip svg {
-  color: var(--ui-accent);
-  flex: 0 0 auto;
-}
-.problem-chip strong {
-  font-family: var(--mono);
-  font-size: 15px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-.problem-chip span {
-  color: var(--ui-muted);
-}
-.problem-chip em {
-  color: var(--ui-danger);
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+.fleet-workspace .metric-cell strong {
+  font-size: 22px;
 }
 
-/* Deck: full-bleed operational canvas */
 .fleet-deck {
-  position: relative;
-  margin-top: 10px;
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 12px;
 }
 .fleet-deck-stage {
   position: relative;
-  height: clamp(400px, calc(100dvh - 400px), 720px);
-  min-height: 380px;
+  height: clamp(460px, calc(100dvh - 240px), 860px);
+  min-height: 420px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-card);
   overflow: hidden;
@@ -652,15 +668,41 @@ button {
 }
 .map-data-notice span {
   color: var(--ui-muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 .map-data-notice .status-badge {
   min-height: 21px;
   padding: 0 6px;
-  font-size: 9px;
+  font-size: 10px;
+}
+/* The legend opens on request only; open, it scrolls inside a capped panel that always
+   ends above the map's bottom chrome, so no row is cut off. */
+.fleet-deck-stage .map-key-body {
+  max-height: clamp(160px, calc(100dvh - 420px), 420px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (max-width: 640px) {
+  /* The phone map is ~52dvh tall: the panel ends well above its bottom edge. */
+  .fleet-deck-stage .map-key-body {
+    max-height: min(200px, calc(52dvh - 150px));
+  }
+}
+/* At 320-360 px the honesty notice needs two lines: stack it neatly and start the
+   search row below it instead of under it. */
+@media (max-width: 360px) {
+  .fleet-deck-stage .map-data-notice {
+    flex-wrap: wrap;
+    row-gap: 2px;
+    padding: 5px 8px;
+    border-radius: var(--ui-radius-control);
+  }
+  .fleet-deck-stage .map-overlay-row {
+    top: 72px;
+  }
 }
 
-/* Layers & controls: pinned inside the map, never a detached drawer */
+/* Lapisan peta: reference layers only, pinned inside the map */
 .deck-tools-toggle {
   position: absolute;
   z-index: 7;
@@ -669,7 +711,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
+  min-height: var(--tap-min);
   padding: 0 14px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-pill);
@@ -692,15 +734,14 @@ button {
   position: absolute;
   z-index: 8;
   left: 12px;
-  bottom: 60px;
-  width: min(380px, calc(100% - 24px));
-  max-height: min(70%, 560px);
+  bottom: 64px;
+  width: min(320px, calc(100% - 24px));
+  max-height: min(70%, 480px);
   overflow-y: auto;
-  padding: 14px;
+  padding: 12px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-card);
-  background: var(--ui-glass);
-  backdrop-filter: var(--ui-glass-blur);
+  background: var(--ui-surface);
   box-shadow: var(--ui-shadow-float);
 }
 .deck-tools-head {
@@ -708,7 +749,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding-bottom: 10px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--ui-border);
 }
 .deck-tools-head strong {
@@ -716,8 +757,8 @@ button {
   font-size: 13px;
 }
 .deck-tools-close {
-  min-height: 32px;
-  padding: 0 10px;
+  min-height: var(--tap-min);
+  padding: 0 12px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-pill);
   color: var(--ui-ink-soft);
@@ -731,214 +772,674 @@ button {
   border-color: var(--ui-border-strong);
 }
 .deck-tools-section {
-  padding: 12px 0 2px;
-}
-.deck-tools-section + .deck-tools-section {
-  border-top: 1px solid var(--ui-border);
+  padding: 10px 0 0;
 }
 .deck-tools-label {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   color: var(--ui-muted);
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+/* V5: left-aligned rows, each a 44 px target. */
 .deck-tools-section .map-controls-grid {
   margin-top: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
 }
 .deck-tools-section .map-controls-grid label {
-  font-size: 12px;
-}
-.deck-legend > summary {
-  min-height: 34px;
-  display: flex;
+  min-height: var(--tap-min);
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
+  justify-items: start;
+  gap: 10px;
   color: var(--ui-ink);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  list-style: none;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
 }
-.deck-legend > summary::-webkit-details-marker {
-  display: none;
+.deck-tools-section .map-controls-grid input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--ui-accent);
 }
-.deck-legend-body {
-  padding: 4px 0 10px;
-}
-.deck-legend-body span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 3px 10px 3px 0;
-  font-size: 11px;
-}
-.deck-tools-section .alert-queue-collapsible {
-  margin-top: 0;
-}
-.deck-tools-section .astar-panel,
-.deck-tools-section .panel {
-  border: 0;
-  padding: 0;
-  box-shadow: none;
+.swatch-osrm {
+  border-top-color: var(--ui-accent);
 }
 
-/* Decision overlay: an instrument layered on the map, not a card in a grid */
-.deck-decision-overlay {
-  position: absolute;
-  z-index: 7;
-  top: 16px;
-  right: 16px;
-  width: min(360px, calc(100% - 32px));
-  max-height: calc(100% - 32px);
-  overflow-y: auto;
+/* Right rail */
+.fleet-rail {
+  min-width: 0;
+  height: clamp(460px, calc(100dvh - 240px), 860px);
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-elevated);
-  color: var(--ui-ink);
-  background: var(--ui-glass);
-  backdrop-filter: var(--ui-glass-blur);
-  box-shadow: var(--ui-shadow-float);
+  border-radius: var(--ui-radius-card);
+  overflow: hidden;
+  background: var(--ui-surface);
 }
-.deck-decision-body {
-  padding: 20px;
-}
-.deck-decision-heading {
-  padding-bottom: 14px;
+.rail-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px;
   border-bottom: 1px solid var(--ui-border);
 }
-.deck-decision-kicker {
+.rail-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: var(--tap-min);
+  padding: 0 8px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  color: var(--ui-danger);
-  font-family: var(--mono);
-  font-size: 10px;
+  border: 0;
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-ink-soft);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
   font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
 }
-.deck-decision-heading h2 {
-  margin: 6px 0 0;
+.rail-tab:hover {
   color: var(--ui-ink);
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  background: var(--ui-surface-muted);
 }
-.deck-decision-body .action-card {
-  margin-top: 16px;
+.rail-tab[aria-selected="true"] {
+  color: var(--ui-on-dark);
+  background: var(--ui-primary);
+  font-weight: 600;
+}
+.rail-tab:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 1px;
+}
+.rail-tab-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-on-dark);
+  background: var(--ui-danger);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.rail-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  display: grid;
+  /* One column that may shrink: an auto track grew to the widest card and ran off the rail. */
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 12px;
+}
+.rail-panel .panel {
+  min-width: 0;
   padding: 0;
   border: 0;
   border-radius: 0;
-  background: transparent;
   box-shadow: none;
 }
-.deck-decision-body .action-card-head {
-  align-items: flex-start;
+/* Everything in the rail fits its width: no fixed tracks, long words wrap. */
+.rail-panel :where(.fleet-queue-stack, .panel, .panel-title, .panel-title > div, .stagger-compare) {
+  min-width: 0;
+  max-width: 100%;
 }
-.deck-decision-body .action-card-icon {
-  color: var(--ui-danger);
-  background: var(--ui-danger-soft);
+.rail-panel :where(h2, h3, p, small, span, strong) {
+  overflow-wrap: anywhere;
 }
-.deck-decision-body .action-card-icon.ok {
-  color: var(--ui-success);
-  background: var(--ui-accent-soft);
+.rail-panel .panel-title {
+  grid-template-columns: minmax(0, 1fr);
 }
-.deck-decision-body .action-card-title {
-  color: var(--ui-ink);
-  font-size: 18px;
+.rail-panel .panel-title > button {
+  justify-self: start;
 }
-.deck-decision-body .action-card-issue {
-  margin-top: 6px;
-  color: var(--ui-ink-soft);
+.rail-panel :where(.tpa-status-grid, .tpa-live-stats) {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 110px), 1fr));
+}
+.rail-panel .stagger-compare {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rail-empty,
+.rail-note {
+  margin: 0;
+  color: var(--ui-muted);
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.45;
 }
-.deck-decision-body .action-card-route {
-  margin: 16px 0;
-  padding: 13px;
+.rail-note {
+  font-size: 12px;
+}
+
+/* Perlu tindakan */
+.action-list {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  list-style: none;
+}
+.action-row {
   border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-card);
-  color: var(--ui-ink);
-  background: var(--ui-canvas);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
 }
-.deck-decision-body .action-card-route strong {
-  color: var(--ui-ink);
+.action-row.expanded {
+  border-color: var(--ui-border-strong);
 }
-.deck-decision-body .action-card-route-meta {
+.action-row-head {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: var(--ui-radius);
+  color: var(--ui-ink);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.action-row-head.is-static {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  cursor: default;
+}
+.action-row-head:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -2px;
+}
+.action-row-text {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.action-row-text small {
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+.action-row-chevron {
   color: var(--ui-muted);
 }
-.deck-decision-body .action-card-button {
+.action-row.expanded .action-row-chevron {
+  transform: rotate(180deg);
+}
+.action-row-body {
+  padding: 0 12px 12px;
+  display: grid;
+  gap: 10px;
+}
+.action-row-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.unlicensed-row .action-row-secondary,
+.driver-exception-row .action-row-secondary {
+  padding: 0 12px 12px;
+}
+/* An accident or breakdown reported by the driver reads as danger before anything else. */
+.driver-exception-row.is-danger {
+  border-color: var(--ui-danger-line);
+  background: var(--ui-danger-soft);
+}
+.driver-exception-row.is-danger .action-row-text small {
+  color: var(--ui-ink-soft);
+}
+.driver-exception-photo {
+  white-space: nowrap;
+}
+.driver-exception-photo svg {
+  vertical-align: -1px;
+}
+.action-row-secondary .ghost-button,
+.action-row-secondary .primary-button {
+  width: auto;
+  font-size: 13px;
+}
+.action-row-resolve {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+.action-row-resolve input {
   width: 100%;
-  min-height: 48px;
+  min-height: var(--tap-min);
+  padding: 0 10px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-ink);
+  background: var(--ui-surface);
+  font: inherit;
+  font-size: 13px;
+}
+.action-row-resolved {
+  margin: 0;
+  color: var(--ui-ink-soft);
+  font-size: 13px;
+}
+/* The decision card sits flat inside its row or the drawer: one card level. */
+.fleet-rail .action-card {
+  margin: 0;
+  padding: 0;
+  gap: 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 14px;
+}
+.fleet-rail .action-card-head {
+  display: none;
+}
+.fleet-rail .action-card-route {
+  padding: 10px 12px;
+  font-size: 14px;
+}
+.fleet-rail .action-card-route > div {
+  display: grid;
+  gap: 2px;
+}
+.fleet-rail .action-card-route-meta,
+.action-card-route-source {
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+.fleet-rail .action-card-issue,
+.fleet-rail .action-card-warning,
+.fleet-rail .action-card-success {
+  font-size: 13px;
+}
+/* F7: the decision button is a normal 44 px control, not the page's loudest element. */
+.fleet-rail .action-card-button {
+  min-height: var(--tap-min);
+  padding: 0 16px;
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-accent-foreground);
+  background: var(--ui-accent);
+  font-size: 14px;
+  font-weight: 600;
+}
+.fleet-rail .action-card-button:hover {
+  background: var(--ui-accent-hover);
+}
+
+.reroute-block {
+  padding-top: 12px;
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--ui-border);
+}
+.reroute-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.reroute-head h3 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--ui-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+.reroute-head p {
+  margin: 4px 0 0;
+  color: var(--ui-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.reroute-stats {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.reroute-stats dt {
+  color: var(--ui-muted);
+  font-size: 11px;
+}
+.reroute-stats dd {
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+.reroute-block .ai-feed {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  list-style: none;
+}
+.reroute-block .ai-feed-item {
+  padding: 10px 0 0;
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--ui-border);
+}
+.reroute-block .ai-feed-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+.reroute-block .ai-feed-time {
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+.reroute-block .ai-ack-btn {
+  justify-self: start;
+  width: auto;
+}
+
+/* Truk */
+.truck-list-panel {
+  display: grid;
+  gap: 10px;
+}
+.rail-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rail-chip {
+  min-height: var(--tap-min);
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-ink-soft);
+  background: var(--ui-surface);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.rail-chip b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.rail-chip[aria-pressed="true"] {
+  border-color: var(--ui-primary);
+  color: var(--ui-on-dark);
+  background: var(--ui-primary);
+}
+.rail-chip:focus-visible,
+.truck-row:focus-visible,
+.rail-segment button:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 1px;
+}
+.rail-search {
+  min-height: var(--tap-min);
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-muted);
+  background: var(--ui-surface);
+}
+.rail-search:focus-within {
+  border-color: var(--ui-accent);
+}
+.rail-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  border: 0;
+  outline: 0;
+  color: var(--ui-ink);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+}
+.truck-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--ui-border);
+}
+.truck-row {
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 4px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-ink);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.truck-row:hover {
+  background: var(--ui-canvas);
+}
+.truck-row-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.truck-row-id {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+}
+.truck-row-id span {
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+.truck-row-sub {
+  overflow: hidden;
+  color: var(--ui-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.truck-row-age {
+  color: var(--ui-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.rail-more {
+  width: 100%;
+}
+
+/* Truck drawer (in place of the list) */
+.truck-drawer {
+  display: grid;
+  gap: 12px;
+}
+.truck-drawer-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+}
+.truck-drawer-head h3 {
+  margin: 0;
+  color: var(--ui-ink);
+  font-size: 17px;
+  font-weight: 600;
+}
+.truck-drawer-plate {
+  color: var(--ui-muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+.truck-drawer-head p {
+  margin: 2px 0 0;
+  color: var(--ui-ink-soft);
+  font-size: 13px;
+}
+.truck-drawer-head .icon-button {
+  width: var(--tap-min);
+  height: var(--tap-min);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-ink);
+  background: var(--ui-surface);
+}
+.rail-segment {
+  padding: 4px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-surface-muted);
+}
+.rail-segment button {
+  min-height: var(--tap-min);
   border: 0;
   border-radius: var(--ui-radius-pill);
-  color: var(--ui-accent-foreground);
-  background: var(--ui-accent-strong);
+  color: var(--ui-ink-soft);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.rail-segment button[aria-pressed="true"] {
+  color: var(--ui-ink);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
+  font-weight: 600;
+}
+.truck-drawer-body {
+  display: grid;
+}
+.drawer-section {
+  padding: 12px 0;
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid var(--ui-border);
+}
+.drawer-section h4 {
+  margin: 0;
+  color: var(--ui-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.drawer-section p {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--ui-ink);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.drawer-section p.drawer-muted {
+  color: var(--ui-ink-soft);
+}
+.drawer-section p.drawer-danger {
+  color: var(--ui-danger);
+}
+.drawer-section p.drawer-warning {
+  color: var(--ui-warning);
+}
+.drawer-section .text-button,
+.drawer-replay {
+  justify-self: start;
+  width: auto;
+}
+.trip-history {
+  padding-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+.trip-history .history-record-note {
+  margin: 0;
+  color: var(--ui-ink-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.trip-history-date {
+  display: grid;
+  gap: 4px;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+.trip-history-date input {
+  min-height: var(--tap-min);
+  padding: 0 10px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-ink);
+  background: var(--ui-surface);
+  font: inherit;
+}
+.trip-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* Queue-model method (P95, CI, replications, seed): one tap away, not in the headline. */
+.metric-method summary {
+  min-height: var(--tap-min);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ui-ink-soft);
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
-.deck-decision-body .action-card-button:hover {
-  background: var(--ui-accent);
+.metric-method[open] {
+  display: grid;
+  gap: var(--space-1);
 }
-.deck-decision-body .action-card-warning {
-  color: var(--ui-warning);
+.trip-list li {
+  padding: 10px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--ui-border);
 }
-.deck-decision-body .action-card-success {
-  color: var(--ui-success);
+.trip-list li > span:first-child {
+  display: grid;
+  gap: 2px;
 }
-
-/* Mobile action sheet (desktop/tablet keeps the overlay) */
-.deck-action-sheet {
-  display: none;
+.trip-list b {
+  font-size: 14px;
+}
+.trip-list small {
+  color: var(--ui-muted);
+  font-size: 12px;
 }
 
 .fleet-records-surface {
   min-width: 0;
   width: 100%;
   margin-top: 16px;
-  padding: 22px;
-}
-.records-heading {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-.records-doc-links {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-  color: var(--ui-muted);
-}
-.records-doc-link {
-  min-height: 34px;
-  padding: 0 11px;
-  border: 1px solid transparent;
-  border-radius: var(--ui-radius-pill);
-  color: var(--ui-ink-soft);
-  background: transparent;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.records-doc-link:hover {
-  color: var(--ui-ink);
-  background: var(--ui-surface-muted);
-}
-.records-doc-link:focus-visible {
-  outline: 2px solid var(--ui-accent);
-  outline-offset: 1px;
-}
-.records-doc-link.active {
-  color: var(--ui-on-dark);
-  border-color: var(--ui-primary);
-  background: var(--ui-primary);
-  font-weight: 600;
+  padding: 18px 22px 22px;
 }
 .workspace-tabs {
   width: max-content;
@@ -969,6 +1470,9 @@ button {
   color: var(--ui-on-dark);
   background: var(--ui-primary);
   font-weight: 600;
+}
+.workspace-tab .rail-tab-count {
+  margin-left: 6px;
 }
 .fleet-detail-surface {
   min-width: 0;
@@ -1050,7 +1554,6 @@ button {
   color: var(--ui-on-dark);
   background: var(--ui-primary);
 }
-.forecast-heading-actions .report-panel,
 .forecast-heading-actions .panel {
   padding: 0;
   border: 0;
@@ -1105,11 +1608,6 @@ button {
 }
 .forecast-evidence-section {
   margin-top: 16px;
-}
-.kecamatan-map-panel .district-grid,
-.kecamatan-grid {
-  max-height: 480px;
-  overflow: auto;
 }
 
 /* Planning */
@@ -1301,26 +1799,6 @@ button {
   font-size: 10px;
   font-style: normal;
   font-weight: 800;
-}
-.score-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.score-cell > span {
-  width: 78px;
-  height: 4px;
-  border-radius: 10px;
-  background: var(--ui-surface-muted);
-  overflow: hidden;
-}
-.score-cell > span i {
-  display: block;
-  height: 100%;
-  background: var(--ui-success);
-}
-.needs-attention .score-cell > span i {
-  background: var(--ui-danger);
 }
 .deviation-badge,
 .freshness-badge,
@@ -1843,18 +2321,10 @@ button {
 }
 
 /* Field and supervisor mobile products */
-.field-shell,
 .supervisor-view {
   min-height: 100dvh;
   background: var(--ui-canvas);
 }
-.field-shell {
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  padding: 0;
-}
-.field-app-header,
 .supervisor-header {
   min-height: 72px;
   padding: 0 max(20px, calc((100vw - 560px) / 2));
@@ -1865,69 +2335,12 @@ button {
   color: var(--ui-ink);
   background: var(--ui-surface);
 }
-.field-brand {
-  color: var(--ui-ink);
-}
-.field-brand-mark {
-  color: var(--ui-accent-foreground);
-  background: var(--ui-accent-strong);
-}
-.field-brand small {
-  color: var(--ui-muted);
-}
-.field-card {
-  width: min(520px, calc(100% - 32px));
-  margin: 20px auto 40px;
-  padding: 22px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-elevated);
-  box-shadow: none;
-}
-.field-head {
-  padding-bottom: 18px;
-}
-.field-kicker {
-  color: var(--ui-muted);
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-.field-head h1 {
-  font-size: 34px;
-  letter-spacing: -0.03em;
-}
-.field-duty-label {
-  color: var(--ui-success);
-  background: var(--green-light);
-}
-.field-card select,
-.field-input {
-  min-height: 48px;
-  border-radius: var(--ui-radius-control);
-}
-.field-shell .field-status {
-  min-height: 48px;
-  border-radius: var(--ui-radius-pill);
-  color: var(--ui-ink);
-  background: var(--ui-surface-muted);
-}
 .instruction {
   margin-top: 18px;
   padding: 18px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-card);
   background: var(--ui-surface-muted);
-}
-.field-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.field-actions .danger-button {
-  background: var(--ui-primary);
-  border-color: var(--ui-primary);
 }
 .supervisor-view {
   max-width: none;
@@ -2068,14 +2481,22 @@ button {
   .driver-command-grid {
     grid-template-columns: 1fr;
   }
-  .fleet-deck-stage {
-    height: 520px;
-    min-height: 520px;
+  .fleet-deck {
+    grid-template-columns: minmax(0, 1fr);
   }
-  .deck-decision-overlay {
-    top: 12px;
-    right: 12px;
-    width: min(340px, calc(100% - 24px));
+  .fleet-deck-stage {
+    height: 56dvh;
+    min-height: 380px;
+  }
+  .fleet-rail {
+    height: auto;
+    min-height: 0;
+  }
+  .rail-panel {
+    overflow: visible;
+  }
+  .command-profile {
+    padding-left: 8px;
   }
   .forecast-context-rail {
     grid-template-columns: repeat(2, 1fr);
@@ -2122,9 +2543,14 @@ button {
     min-height: 58px;
   }
   .command-eyebrow,
-  .command-assistant span,
-  .command-profile {
+  .command-assistant span {
     display: none;
+  }
+  .command-profile {
+    min-width: var(--tap-min);
+    padding: 0;
+    justify-content: center;
+    border-left: 0;
   }
   .command-title-row strong {
     font-size: 14px;
@@ -2182,7 +2608,6 @@ button {
   .metric-cell strong {
     font-size: 21px;
   }
-  .fleet-map-surface,
   .fleet-records-surface,
   .forecast-primary-analysis,
   .forecast-context-rail,
@@ -2196,29 +2621,32 @@ button {
     border-radius: 10px;
   }
 
-  /* Mobile deck: map shrinks to a working window; decision becomes a sheet */
-  .fleet-problem-strip {
-    min-width: 0;
-    max-width: 100%;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 4px;
-  }
-  .problem-chip {
-    flex: 0 0 auto;
-  }
+  /* Mobile deck: the map first, then the rail as a sheet in the page flow. */
   .fleet-deck-stage {
-    height: 46dvh;
+    height: 52dvh;
     min-height: 340px;
     border-radius: 10px;
   }
-  /* Keep the map's own center controls clear of the half-open sheet handle. */
-  .fleet-deck:has(.deck-action-sheet) .fleet-deck-stage .maplibre-container {
-    padding-bottom: 58px;
-    box-sizing: border-box;
+  .fleet-rail {
+    position: relative;
+    padding-top: 14px;
+    border-radius: var(--ui-radius-elevated) var(--ui-radius-elevated) 10px 10px;
+    box-shadow: var(--ui-shadow-float);
   }
-  .deck-decision-overlay {
-    display: none;
+  .fleet-rail::before {
+    content: "";
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    width: 42px;
+    height: 4px;
+    margin-left: -21px;
+    border-radius: var(--ui-radius-pill);
+    background: var(--ui-border-strong);
+  }
+  .rail-tab {
+    padding: 0 4px;
+    font-size: 12px;
   }
   .deck-tools-toggle {
     bottom: 10px;
@@ -2226,57 +2654,14 @@ button {
   }
   .deck-tools-panel {
     left: 10px;
-    bottom: 56px;
+    bottom: 60px;
     width: calc(100% - 20px);
   }
-  .deck-action-sheet {
-    position: fixed;
-    z-index: 45;
-    inset: auto 0 76px;
-    display: block;
-    max-height: calc(82dvh - 76px);
-    overflow-y: auto;
-    border: 1px solid var(--ui-border);
-    border-bottom: 0;
-    border-radius: var(--ui-radius-elevated) var(--ui-radius-elevated) 0 0;
-    color: var(--ui-ink);
-    background: var(--ui-surface);
-    box-shadow: var(--ui-shadow-float);
+  .fleet-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .deck-sheet-handle {
-    width: 100%;
-    min-height: 52px;
-    padding: 8px 18px 12px;
-    display: grid;
-    justify-items: center;
-    gap: 6px;
-    border: 0;
-    color: var(--ui-ink);
-    background: transparent;
-    cursor: pointer;
-  }
-  .deck-sheet-grip {
-    width: 42px;
-    height: 4px;
-    border-radius: var(--ui-radius-pill);
-    background: var(--ui-border-strong);
-  }
-  .deck-sheet-title {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 13px;
-    font-weight: 700;
-  }
-  .deck-action-sheet .deck-decision-body {
-    padding: 4px 18px 26px;
-  }
-  .records-heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .records-doc-links {
-    width: 100%;
+  .fleet-workspace .metric-cell strong {
+    font-size: 17px;
   }
   .forecast-heading-actions {
     margin-top: 16px;
@@ -2319,9 +2704,6 @@ button {
   }
   .login-card h2 {
     font-size: 26px;
-  }
-  .field-actions {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -2424,14 +2806,6 @@ button {
   font-weight: 700;
 }
 
-.field-status {
-  padding: 0 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--ui-ink);
-}
-
 .supervisor-brand-copy strong,
 .supervisor-header strong {
   color: var(--ui-ink);
@@ -2477,10 +2851,6 @@ button {
 
 .planning-stage-content .scenario-result strong {
   color: var(--ui-ink);
-}
-
-.planning-stage-content .req-chip b {
-  color: var(--ui-accent);
 }
 
 /* ── Migrated from the retired legacy.css layer (issue #66) ─────────────
@@ -2634,7 +3004,7 @@ button {
   align-self: flex-start;
   font-size: var(--fs-caption);
   font-weight: 600;
-  color: #fff;
+  color: var(--ui-on-dark);
   background: var(--ui-accent);
   border: none;
   border-radius: 6px;
@@ -2709,41 +3079,25 @@ button {
 }
 
 .primary-button,
-.danger-button,
 .ghost-button,
 .text-button,
 .icon-button,
-.alert-actions .primary-button,
-.alert-actions .alert-wa-button,
-.alert-actions .ghost-button,
-.alert-resolve-row .resolve-btn,
 .ai-ack-btn {
   border-radius: var(--ui-radius-pill);
 }
-.alert-actions .primary-button,
 .ai-ack-btn {
   color: var(--ui-accent-foreground);
   background: var(--ui-accent-strong);
 }
-.alert-actions .primary-button:hover,
 .ai-ack-btn:hover {
   background: var(--ui-accent);
 }
-.danger-button {
-  color: var(--ui-on-dark);
-}
 
 /* Inputs: white field, warm hairline, forest focus. */
-.alert-resolve-row input,
 .driver-input,
-.field-input,
-.field-card select,
 textarea {
   border-color: var(--ui-border-strong);
   border-radius: var(--ui-radius-control);
-}
-.alert-resolve-row input {
-  border-radius: var(--ui-radius-pill);
 }
 
 /* Status chips: outlined, mono, never filled heavy. */
@@ -2841,46 +3195,13 @@ th {
 }
 
 /* Fleet alert queue: flat rows, tinted rounded icon, forest action. */
-.alert-item {
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-card);
-  box-shadow: none;
-}
-.alert-item:hover {
-  border-color: var(--ui-border-strong);
-  box-shadow: none;
-}
-.alert-icon-box {
-  width: 36px;
-  height: 36px;
-  border: 0;
-  border-radius: var(--ui-radius);
-}
-.route-rec {
-  border-color: var(--ui-border);
-  border-radius: var(--ui-radius);
-  background: var(--ui-canvas);
-}
-.route-rec-icon {
-  border-radius: var(--ui-radius);
-  color: var(--ui-accent);
-  background: var(--ui-accent-soft);
-}
-.route-rec-empty {
-  border-radius: var(--ui-radius);
-}
-.alert-resolved-note {
-  border-radius: var(--ui-radius-pill);
-}
 
 .login-shell .login-submit,
-.field-shell .primary-button,
 .login-shell .primary-button {
   border-radius: var(--ui-radius-pill);
   color: var(--ui-accent-foreground);
   background: var(--ui-accent-strong);
 }
-.login-shell .primary-button:hover,
-.field-shell .primary-button:hover {
+.login-shell .primary-button:hover {
   background: var(--ui-accent);
 }

@@ -23,25 +23,26 @@ function nav(page, name) {
   return page.getByTestId("workspace-navigation").getByRole("button", { name, exact: true });
 }
 
+// wave9 fleet composition: the twin's nav label is "3D City" / "Kota 3D".
 for (const path of ["/fleet", "/twin"]) {
   test(`${path}?lang=en renders English navigation and ?lang=id switches back`, async ({ page }) => {
     await signIn(page);
 
     await page.goto(`${path}?lang=en`);
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
-    await expect(nav(page, "Digital Twin")).toBeVisible();
+    await expect(nav(page, "3D City")).toBeVisible();
     await expect(nav(page, "Fleet")).toBeVisible();
     await expect(nav(page, "Forecast")).toBeVisible();
-    await expect(nav(page, "Kembaran Digital")).toHaveCount(0);
+    await expect(nav(page, "Kota 3D")).toHaveCount(0);
     expect(await page.evaluate(() => localStorage.getItem("pythia_lang"))).toBe("en");
 
     // The choice persists without the parameter.
     await page.goto(path);
-    await expect(nav(page, "Digital Twin")).toBeVisible();
+    await expect(nav(page, "3D City")).toBeVisible();
 
     await page.goto(`${path}?lang=id`);
     await expect(page.locator("html")).toHaveAttribute("lang", "id");
-    await expect(nav(page, "Kembaran Digital")).toBeVisible();
+    await expect(nav(page, "Kota 3D")).toBeVisible();
     await expect(nav(page, "Armada")).toBeVisible();
     await expect(nav(page, "Prediksi")).toBeVisible();
     expect(await page.evaluate(() => localStorage.getItem("pythia_lang"))).toBe("id");

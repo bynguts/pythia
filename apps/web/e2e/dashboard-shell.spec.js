@@ -28,11 +28,13 @@ async function expectMinimumTouchTarget(locator) {
 
 test.beforeEach(async ({ page }) => signIn(page));
 
-// the Digital Twin joins the rail as its first workspace.
+// wave9 settings: Audit left the rail; Settings (Pengaturan) closes it, set apart.
+// wave9 fleet composition: daily work first (Armada · Rencana · Prediksi · Sopir), the
+// 3D city ("Kota 3D") last before the separator, Settings pinned below it.
 test("command rail exposes six task workspaces and preserves active state", async ({ page }) => {
   const nav = page.getByTestId("workspace-navigation");
   await expect(nav).toBeVisible();
-  const labels = ["Kembaran Digital", "Armada", "Prediksi", "Rencana", "Sopir", "Audit Data & Model ML"];
+  const labels = ["Armada", "Rencana", "Prediksi", "Sopir", "Kota 3D", "Pengaturan"];
   await expect(nav.getByRole("button")).toHaveCount(labels.length);
   for (const label of labels) await expect(nav.getByRole("button", { name: label })).toBeVisible();
 
@@ -48,8 +50,9 @@ test("command rail exposes six task workspaces and preserves active state", asyn
   }
 });
 
+// wave9 fleet composition: the SPJ register is a "Dokumen armada" tab, not a link button.
 test("desktop and mobile layouts never create document-level horizontal overflow", async ({ page }) => {
-  await page.getByRole("button", { name: "Surat Perintah Jalan" }).click();
+  await page.getByRole("tab", { name: "Surat jalan (SPJ)" }).click();
   for (const viewport of [
     { width: 1440, height: 900 },
     { width: 820, height: 1180 },
@@ -67,7 +70,8 @@ test("mobile bottom navigation stays reachable and switches workspaces", async (
   await page.setViewportSize({ width: 390, height: 844 });
   const nav = page.locator(".command-mobile-nav");
   await expect(nav).toBeVisible();
-  await expect(nav.getByRole("button")).toHaveCount(6);
+  // wave9 fleet composition: five workspaces; Settings and logout moved to the profile menu.
+  await expect(nav.getByRole("button")).toHaveCount(5);
   for (const button of await nav.getByRole("button").all()) await expectMinimumTouchTarget(button);
 
   const planning = nav.getByRole("button", { name: "Rencana" });
@@ -128,7 +132,7 @@ test("core workspaces meet text contrast requirements", async ({ page }) => {
     [null, "Operasi armada hari ini"],
     ["Prediksi", "Prediksi timbulan sampah"],
     ["Rencana", "Rencana operasi terpadu"],
-    ["Audit Data & Model ML", "Audit data & model"],
+    ["Pengaturan", "Pengaturan"],
   ]) {
     if (workspace)
       await page.getByTestId("workspace-navigation").getByRole("button", { name: workspace }).click();
@@ -143,7 +147,7 @@ test("workspace navigation emits no runtime errors", async ({ page }) => {
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
   });
-  for (const label of ["Prediksi", "Rencana", "Sopir", "Audit Data & Model ML", "Armada"]) {
+  for (const label of ["Prediksi", "Rencana", "Sopir", "Pengaturan", "Armada"]) {
     await page.getByTestId("workspace-navigation").getByRole("button", { name: label }).click();
   }
   expect(errors).toEqual([]);

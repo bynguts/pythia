@@ -1,15 +1,26 @@
 // Command-center workspace registry: nav order, catalog keys and URL paths.
-import { BarChart3, Building2, ShieldCheck, Truck, Users, Workflow } from "lucide-react";
+import { BarChart3, Building2, Settings, Truck, Users, Workflow } from "lucide-react";
 
 // #15: descriptions are catalog keys, resolved per active locale at render time.
+// wave10 nav: operational items in daily-use order (Armada is the landing page); the
+// twin is a briefing room, so it comes last. Settings is pinned below a separator.
 export const WORKSPACES = [
-  { id: "twin", key: "nav_twin", shortKey: "nav_twin_short", descKey: "desc_twin", icon: Building2 },
   { id: "fleet", key: "nav_armada", descKey: "desc_fleet", icon: Truck },
-  { id: "forecast", key: "nav_prediksi", descKey: "desc_forecast", icon: BarChart3 },
   { id: "planning", key: "nav_rencana", descKey: "desc_planning", icon: Workflow },
+  { id: "forecast", key: "nav_prediksi", descKey: "desc_forecast", icon: BarChart3 },
   { id: "drivers", key: "nav_sopir", descKey: "desc_drivers", icon: Users },
-  { id: "audit", key: "nav_audit", shortKey: "nav_audit_short", descKey: "desc_audit", icon: ShieldCheck },
+  { id: "twin", key: "w10fleet_nav_twin", descKey: "desc_twin", icon: Building2 },
+  {
+    id: "settings",
+    key: "nav_settings",
+    descKey: "desc_settings",
+    icon: Settings,
+    separated: true,
+  },
 ];
+
+// Workspaces that moved: old deep links land on their new home, query kept.
+const MOVED = { audit: { id: "settings", tab: "data" } };
 
 export const DEFAULT_WORKSPACE = "fleet";
 
@@ -19,6 +30,13 @@ export function isWorkspace(id) {
 
 export function workspacePath(id) {
   return `/${id}`;
+}
+
+export function movedWorkspacePath(id, search) {
+  if (!Object.hasOwn(MOVED, id)) return null;
+  const query = new URLSearchParams(search);
+  query.set("tab", MOVED[id].tab);
+  return `${workspacePath(MOVED[id].id)}?${query}`;
 }
 
 // Where "/" (and any unknown command-center path) lands. ?workspace=twin and

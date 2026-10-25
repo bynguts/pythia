@@ -28,9 +28,8 @@ async function signIn(page, lang = "id", role = "dispatcher") {
 
 async function openFleet(page) {
   // Fleet is the default workspace; the SPJ panel lives inside the
-  // "Surat Perintah Jalan" detail tab (role=tab), same as the proven
-  // spj-workflow.spec.js flow.
-  await page.getByRole("button", { name: "Surat Perintah Jalan" }).click();
+  // "Surat jalan (SPJ)" tab of the fleet documents, same as spj-workflow.spec.js.
+  await page.getByRole("tab", { name: "Surat jalan (SPJ)" }).click(); // wave9 fleet composition: records tab
   await expect(page.locator(".spj-panel")).toBeVisible({ timeout: 20000 });
 }
 

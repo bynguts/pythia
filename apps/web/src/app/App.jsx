@@ -1,11 +1,10 @@
 import { lazy, Suspense, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation, useParams } from "react-router-dom";
-// Field and driver come first: their stylesheets precede the global styles in
+// The driver app comes first: its stylesheet precedes the global styles in
 // the cascade (main.jsx imports styles/index.css after this module). The lazy
 // surfaces below keep their stylesheets here, in the order they had when they
 // were static imports, so moving their code out of the main chunk does not
 // reorder the cascade.
-import "../surfaces/field/field.css";
 import DriverApp from "../surfaces/driver/DriverApp.jsx";
 import "../features/fleet/safety.css";
 import "../features/assistant/assistant.css";
@@ -14,10 +13,9 @@ import "../features/forecast/monthlyIntake.css";
 import { LoginPage } from "../surfaces/login/LoginPage.jsx";
 import { RoleGate } from "../surfaces/login/RoleGate.jsx";
 import { useLanguage } from "../shared/i18n/index.jsx";
-import { isWorkspace, landingPath } from "./workspaces.js";
+import { isWorkspace, landingPath, movedWorkspacePath } from "./workspaces.js";
 
 // /driver must not download the command centre: everything else is a lazy chunk.
-const FieldApp = lazy(() => import("../surfaces/field/FieldApp.jsx"));
 const SupervisorView = lazy(() =>
   import("../surfaces/supervisor/SupervisorView.jsx").then((m) => ({ default: m.SupervisorView })),
 );
@@ -65,6 +63,13 @@ function LoginGate({ authenticated, onLogin }) {
   return <Outlet />;
 }
 
+// wave10 L3: /field merged into /driver; its instructions are the Instruksi tab.
+function FieldRedirect() {
+  const params = new URLSearchParams(useLocation().search);
+  params.set("tab", "instruksi");
+  return <Navigate to={`/driver?${params}`} replace />;
+}
+
 function Landing() {
   const { search } = useLocation();
   return <Navigate to={landingPath(search)} replace />;
@@ -72,6 +77,9 @@ function Landing() {
 
 function WorkspaceRoute({ onLogout }) {
   const { workspace } = useParams();
+  const { search } = useLocation();
+  const moved = movedWorkspacePath(workspace, search);
+  if (moved) return <Navigate to={moved} replace />;
   if (!isWorkspace(workspace)) return <Landing />;
   return (
     <SurfaceBoot>
@@ -91,17 +99,8 @@ export function App() {
   return (
     <Routes>
       <Route path="/xr/*" element={<XrRoute />} />
-      {/* gsc P0-2: field surfaces ask for a driver sign-in in place before any write. */}
-      <Route
-        path="/field/*"
-        element={
-          <RoleGate>
-            <SurfaceBoot>
-              <FieldApp />
-            </SurfaceBoot>
-          </RoleGate>
-        }
-      />
+      {/* gsc P0-2: the driver app asks for a driver sign-in in place before any write. */}
+      <Route path="/field/*" element={<FieldRedirect />} />
       <Route
         path="/driver/*"
         element={

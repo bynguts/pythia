@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
-import { RefreshCcw, Clock, ArrowRight } from "lucide-react";
+import { RefreshCcw, Clock, ArrowRight, Info } from "lucide-react";
 
 // The landfill beacon describes the modelled peak hour of a simulated day, never the
 // wall clock; every surface labels it the same way ("modelled peak hour 09:00").
@@ -60,8 +60,14 @@ export function QueueMetricHeadline({ metric, loading, testId }) {
       <strong>
         {metric.baseline_mean} → {metric.staggered_mean} {t("qm_min")}
       </strong>
-      <small>{detail}</small>
-      {band && <small data-testid={`${testId}-band`}>{band}</small>}
+      {/* Teardown v4 F10: P95, CI, replications and seed sit behind "Metode", one tap away. */}
+      <details className="metric-method" data-testid={`${testId}-method`}>
+        <summary>
+          <Info size={14} aria-hidden="true" /> {t("dr_method")}
+        </summary>
+        <small>{detail}</small>
+        {band && <small data-testid={`${testId}-band`}>{band}</small>}
+      </details>
     </div>
   );
 }
@@ -118,12 +124,7 @@ export function StaggerSimulatorPanel() {
           </h2>
           <p>{t("stagger_subtitle")}</p>
         </div>
-        <button
-          className="primary-button"
-          onClick={runSimulation}
-          disabled={loading}
-          style={{ width: "auto", padding: "0 16px", fontSize: "12.5px" }}
-        >
+        <button className="ghost-button" type="button" onClick={runSimulation} disabled={loading}>
           <RefreshCcw size={14} /> {loading ? t("stagger_running") : t("btn_rerun_optimizer")}
         </button>
       </div>
@@ -201,7 +202,7 @@ export function StaggerSimulatorPanel() {
                       <span className="plate-badge">S-{String(slot.slot_index).padStart(2, "0")}</span>
                     </td>
                     <td>
-                      <span style={{ fontFamily: "var(--mono, monospace)", fontWeight: 600 }}>
+                      <span style={{ fontWeight: 600 }}>
                         <Clock
                           size={12}
                           style={{ display: "inline-block", verticalAlign: "-1px", marginRight: "4px" }}

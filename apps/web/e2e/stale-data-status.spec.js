@@ -5,30 +5,31 @@ import { expect, test } from "@playwright/test";
  *
  * Scenario: the backend becomes unreachable while the browser network stays
  * up. The service worker serves the cached /api response with stale metadata,
- * and the Field header must show a degraded/stale state with the age of the
- * cached data — not "Daring".
+ * and the instructions must say they are cached, with the age of the cached
+ * data — never shown as live. wave10 driver-field-app: /field merged into the
+ * driver app's Instruksi tab.
  */
 
-const FIELD = "/field";
+const FIELD = "/driver?tab=instruksi";
 
 async function signInAsField(page, truckCode = "T-047") {
   await page.addInitScript(
     ({ code }) => {
       localStorage.setItem("pythia_field_token", "e2e-field-token");
       localStorage.setItem("pythia_field_role", "driver");
-      localStorage.setItem("pythia_field_truck", code);
+      localStorage.setItem("pythia_driver", JSON.stringify({ driver_name: "E2E", truck_code: code }));
       localStorage.setItem("pythia_lang", "id");
     },
     { code: truckCode },
   );
-  // gsc-2026 P0-2: the /field sign-in gate validates the stored token; this
+  // gsc-2026 P0-2: the driver sign-in gate validates the stored token; this
   // scenario stubs the backend, so the session check is stubbed too.
   await page.route("**/api/auth/session", (route) =>
     route.fulfill({ json: { role: "driver", permissions: ["dispatch:confirm"] } }),
   );
 }
 
-test("stale cached dispatch shows a degraded status with data age, not Daring", async ({ page }) => {
+test("stale cached dispatch is labelled as cached with its age, not as live", async ({ page }) => {
   await signInAsField(page);
 
   // Phase 1: live backend. Phase 2: the service worker's cached-API fallback
@@ -63,16 +64,16 @@ test("stale cached dispatch shows a degraded status with data age, not Daring", 
   });
 
   await page.goto(FIELD);
-  await expect(page.getByTestId("conn-status")).toHaveText("Daring");
+  await expect(page.getByText("cached instruction")).toBeVisible();
+  await expect(page.getByTestId("driver-instructions-cached")).toHaveCount(0);
 
   // Backend dies while the browser network stays up (navigator.onLine === true).
   backendUp = false;
   await page.reload();
 
-  // The SW/layer serving the stale copy exposes metadata; the header must NOT
-  // claim "Daring" and must surface the age of the cached operational data.
-  const status = page.getByTestId("conn-status");
-  await expect(status).not.toHaveText("Daring");
+  // The SW/layer serving the stale copy exposes metadata; the card must say
+  // the data is cached and surface the age of the cached operational data.
+  const status = page.getByTestId("driver-instructions-cached");
   await expect(status).toContainText(/Cache/i);
   // Age is surfaced to operators (cached ~5 minutes ago).
   await expect(status).toContainText(/menit|minute/i);

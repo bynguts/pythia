@@ -4,6 +4,13 @@ import { useLanguage } from "../../shared/i18n/index.jsx";
 import { Clock } from "lucide-react";
 import { modelledPeakLabel, QueueMetricHeadline } from "./StaggerSimulatorPanel.jsx";
 
+// Teardown v4 F5: two numbers, each saying which it is. "Puncak 09.00: ±89 mnt" is the
+// modelled peak hour of the normal day (the Fleet KPI's number, /tpa/queue-status);
+// "Sekarang: 0 mnt" is the AI engine's current estimate. Minutes read "mnt", never "m".
+export function peakHourText(t, hour) {
+  return t("w10num_hour_fmt").replace("{h}", String(hour).padStart(2, "0"));
+}
+
 export function TpaQueuePanel() {
   const { t } = useLanguage();
   const [live, setLive] = useState(null);
@@ -43,9 +50,8 @@ export function TpaQueuePanel() {
   }, []);
 
   useEffect(() => {
-    if (mode !== "whatif") return;
     fetchQueue();
-    const interval = setInterval(fetchQueue, 6000);
+    const interval = setInterval(fetchQueue, mode === "whatif" ? 6000 : 30000);
     return () => clearInterval(interval);
   }, [mode]);
 
@@ -84,6 +90,34 @@ export function TpaQueuePanel() {
           <Clock size={18} />
         </div>
       </div>
+      <div className="tpa-headline-pair" data-testid="tpa-headline">
+        <div data-testid="tpa-headline-peak">
+          <strong>
+            {queue?.avg_wait_minutes != null && queue?.modelled_hour != null
+              ? t("w10num_tpa_peak")
+                  .replace("{hour}", peakHourText(t, queue.modelled_hour))
+                  .replace("{n}", Math.round(queue.avg_wait_minutes))
+              : t("w10num_tpa_peak_pending")}
+          </strong>
+          <small>
+            {queue?.queue_trucks_max != null
+              ? t("w10num_tpa_peak_helper").replace("{n}", queue.queue_trucks_max)
+              : t("honesty_sim_badge")}
+          </small>
+        </div>
+        <div data-testid="tpa-headline-now">
+          <strong>
+            {live && live.status !== "no_data"
+              ? t("w10num_tpa_now").replace("{n}", Math.round(live.predicted_wait_min))
+              : t("w10num_tpa_now_pending")}
+          </strong>
+          <small>
+            {live?.congestion_level
+              ? t(`w10num_congestion_${live.congestion_level}`)
+              : t("w10num_tpa_now_helper")}
+          </small>
+        </div>
+      </div>
       <QueueMetricHeadline metric={metric} loading={metricLoading} testId="tpa-queue-metric" />
       {mode === "live" ? (
         !live || live.status === "no_data" ? (
@@ -92,7 +126,7 @@ export function TpaQueuePanel() {
           <div className="tpa-live-gauge">
             <div className={`tpa-wait-number ${congestionClass}`}>
               {Math.round(live.predicted_wait_min)}
-              <span> {t("qm_min")}</span> {trendArrow}
+              <span> {t("w10num_min_short")}</span> {trendArrow}
             </div>
             <div className="tpa-live-stats">
               <div>
@@ -117,11 +151,13 @@ export function TpaQueuePanel() {
               <div>
                 <span>CI95</span>
                 <strong>
-                  {live.wait_ci95.map((v) => v.toFixed(0)).join("–")} {t("qm_min")}
+                  {live.wait_ci95.map((v) => v.toFixed(0)).join("–")} {t("w10num_min_short")}
                 </strong>
               </div>
             </div>
-            <div className={`pill ${congestionClass}`}>{live.congestion_level.toUpperCase()}</div>
+            <div className={`pill ${congestionClass}`} data-testid="tpa-congestion">
+              {t(`w10num_congestion_${live.congestion_level}`)}
+            </div>
           </div>
         )
       ) : (
@@ -160,7 +196,7 @@ export function TpaQueuePanel() {
                 <div className="tpa-status-card">
                   <span>{t("tpa_est_wait")}</span>
                   <strong className={queue.avg_wait_minutes > 60 ? "text-danger" : "text-success"}>
-                    {queue.avg_wait_minutes} {t("qm_min")}
+                    {Math.round(queue.avg_wait_minutes)} {t("w10num_min_short")}
                   </strong>
                 </div>
                 <div className="tpa-status-card">

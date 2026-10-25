@@ -1,43 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, Clock, Route, Send } from "lucide-react";
-import { useLanguage } from "../../shared/i18n/index.jsx";
+import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { apiFetch } from "../../shared/api/client.js";
 import { createAlertDispatch } from "./alertDispatch.js";
+import {
+  alertDetail,
+  alertTitle,
+  decisionRoute,
+  routeMeta,
+  routeName,
+  routeSource,
+} from "./decisionRoute.js";
 
 function pickAlert(alerts) {
   if (!Array.isArray(alerts) || alerts.length === 0) return null;
   return alerts.find((a) => (a.recommended_routes?.length || 0) > 0) || alerts[0];
 }
 
-function localizeIssue(text, lang) {
-  if (lang !== "id") return text;
-  const corridor = String(text).match(/Truck is ([\d.]+) meters from the assigned corridor\.?/i);
-  if (String(text).trim() === "Move this truck to lower-priority pickups and assign backup capacity.") {
-    return "Alihkan kendaraan ini ke pengangkutan prioritas lebih rendah dan tugaskan armada cadangan.";
-  }
-  if (
-    String(text).trim() ===
-    "Truck remains off the assigned corridor (sustained-deviation latch, clears under 50 m)."
-  ) {
-    return "Kendaraan masih di luar koridor tugas (deviasi berlanjut, pulih saat jarak di bawah 50 m).";
-  }
-  if (!corridor) return text;
-  const meters = Number(corridor[1]);
-  const distance =
-    meters >= 1000
-      ? `${(meters / 1000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} km`
-      : `${Math.round(meters)} m`;
-  return `Kendaraan berada ${distance} di luar koridor tugas.`;
-}
-
-function localizeRoute(name, lang) {
-  if (lang !== "id") return name;
-  return String(name)
-    .replace(/^Route /i, "Rute ")
-    .replace("Recovery", "Pemulihan");
-}
-
-export function ActionCard({ snapshot, targetTruck = null }) {
+// `alert` pins the card to one decision (the fleet rail); without it the card picks
+// the first alert with a route (supervisor view). `onSent` fires once a dispatch is saved.
+export function ActionCard({ snapshot, alert: pinnedAlert = null, targetTruck = null, onSent }) {
   const { t, lang } = useLanguage();
   const [phase, setPhase] = useState("idle"); // idle | sending | sent | confirmed | escalated | cancelled | error
   const [waConnected, setWaConnected] = useState(null);
@@ -49,18 +31,17 @@ export function ActionCard({ snapshot, targetTruck = null }) {
   const inFlightRef = useRef(false);
   const requestGeneration = useRef(0);
 
-  const fallbackAlert = pickAlert(snapshot?.alerts);
   const alerts = Array.isArray(snapshot?.alerts) ? snapshot.alerts : [];
   const targetedAlert = targetTruck ? alerts.find((a) => a.truck_code === targetTruck) : null;
-  const alert = targetedAlert || fallbackAlert;
+  const alert = pinnedAlert || targetedAlert || pickAlert(alerts);
   const truckCode = alert?.truck_code || "";
   const truck = (snapshot?.trucks || []).find((item) => item.truck_code === truckCode);
   const driverName = truck?.driver_name || t("ac_unknown_driver");
-  const route = alert?.recommended_routes?.[0] || null;
-  const issueText = localizeIssue(alert?.description || alert?.title || "", lang);
+  const route = decisionRoute(alert);
+  const issueText = alert ? `${alertTitle(t, alert)}. ${alertDetail(t, alert, lang)}` : "";
   // A map/table click on a truck with no active alert shows that truck as an
   // informational target; the action stays bound to the live alert flow.
-  const targetOnly = Boolean(targetTruck) && !targetedAlert;
+  const targetOnly = !pinnedAlert && Boolean(targetTruck) && !targetedAlert;
   const infoTruck = targetOnly
     ? (snapshot?.trucks || []).find((item) => item.truck_code === targetTruck)
     : null;
@@ -84,7 +65,7 @@ export function ActionCard({ snapshot, targetTruck = null }) {
     setWaConnected(null);
     clearInterval(pollRef.current);
     pollRef.current = null;
-  }, [truckCode]);
+  }, [alert?.id]);
 
   function startConfirmationPoll(dispatchId, generation) {
     clearInterval(pollRef.current);
@@ -95,13 +76,7 @@ export function ActionCard({ snapshot, targetTruck = null }) {
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
             setStatusError(
-              response.status === 401
-                ? lang === "id"
-                  ? "Sesi berakhir. Masuk kembali untuk memeriksa respons lapangan."
-                  : "Session expired. Sign in again to check the field response."
-                : lang === "id"
-                  ? "Akses ditolak. Tidak dapat memeriksa respons lapangan."
-                  : "Access denied. Cannot check the field response.",
+              t(response.status === 401 ? "w10fleet_err_session_status" : "w10fleet_err_denied_status"),
             );
             clearInterval(pollRef.current);
             pollRef.current = null;
@@ -118,10 +93,10 @@ export function ActionCard({ snapshot, targetTruck = null }) {
           setFieldNote(dispatch.confirmed_note || "");
           if (status === "READY") {
             setConfirmedAt(
-              new Date(dispatch.confirmed_at || Date.now()).toLocaleTimeString(
-                lang === "id" ? "id-ID" : "en-US",
-                { hour: "2-digit", minute: "2-digit" },
-              ),
+              new Date(dispatch.confirmed_at || Date.now()).toLocaleTimeString(localeFor(lang), {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
             );
             setPhase("confirmed");
           } else {
@@ -149,13 +124,9 @@ export function ActionCard({ snapshot, targetTruck = null }) {
       if (!dispatchRes.ok) {
         setSendError(
           dispatchRes.status === 401
-            ? lang === "id"
-              ? "Sesi berakhir. Masuk kembali untuk mengirim instruksi."
-              : "Session expired. Sign in again to dispatch."
+            ? t("w10fleet_err_session_dispatch")
             : dispatchRes.status === 403
-              ? lang === "id"
-                ? "Akses ditolak. Anda tidak dapat mengirim instruksi."
-                : "Access denied. You cannot dispatch this instruction."
+              ? t("w10fleet_err_denied_dispatch")
               : t("ac_send_failed"),
         );
         setPhase("error");
@@ -164,6 +135,7 @@ export function ActionCard({ snapshot, targetTruck = null }) {
       const created = await dispatchRes.json();
       if (generation !== requestGeneration.current) return;
       setPhase("sent");
+      onSent?.(alert, route);
       if (created.id) startConfirmationPoll(created.id, generation);
 
       // Notification failure does not undo an already persisted dispatch.
@@ -179,20 +151,14 @@ export function ActionCard({ snapshot, targetTruck = null }) {
             truck_code: truckCode,
             issue: issueText,
             recommendation: route
-              ? `${route.name} (ETA ${route.eta_minutes} ${t("ac_minutes")})`
+              ? `${routeName(t, route)} (${routeMeta(t, route, lang)})`
               : t("ac_instruction_handle"),
           }),
         });
         if (generation !== requestGeneration.current) return;
         if (notification.status === 401 || notification.status === 403) {
           setStatusError(
-            notification.status === 401
-              ? lang === "id"
-                ? "Instruksi tersimpan, tetapi sesi berakhir sebelum notifikasi WhatsApp dikirim."
-                : "Dispatch saved, but the session expired before WhatsApp notification."
-              : lang === "id"
-                ? "Instruksi tersimpan, tetapi akses notifikasi WhatsApp ditolak."
-                : "Dispatch saved, but WhatsApp notification access was denied.",
+            t(notification.status === 401 ? "w10fleet_err_session_wa_after" : "w10fleet_err_denied_wa_after"),
           );
         } else if (!notification.ok) {
           setWaConnected(false);
@@ -228,7 +194,6 @@ export function ActionCard({ snapshot, targetTruck = null }) {
 
   if (infoTruck) {
     const zone = infoTruck.assigned_zone || infoTruck.zone || "";
-    const activity = infoTruck.activity || infoTruck.status || "";
     return (
       <section className="action-card action-card-info" data-testid="action-card">
         <div className="action-card-head">
@@ -240,17 +205,16 @@ export function ActionCard({ snapshot, targetTruck = null }) {
               {infoTruck.truck_code} — {infoTruck.driver_name || t("ac_unknown_driver")}
             </h2>
             <p className="action-card-issue">
-              {lang === "id"
-                ? "Tidak ada peringatan aktif untuk unit ini."
-                : "No active alert for this unit."}
+              {t("w10fleet_no_alert_for_unit")}
               {zone ? ` ${zone}` : ""}
-              {activity ? ` · ${activity}` : ""}
             </p>
           </div>
         </div>
       </section>
     );
   }
+
+  const note = fieldNote ? ` ${t("w10fleet_note").replace("{note}", fieldNote)}` : "";
 
   return (
     <section className="action-card" data-testid="action-card">
@@ -260,20 +224,22 @@ export function ActionCard({ snapshot, targetTruck = null }) {
         </span>
         <div>
           <h2 className="action-card-title">
-            {truckCode} — {driverName}
+            <span className="mono-id">{truckCode}</span> — {driverName}
           </h2>
-          <p className="action-card-issue">{issueText}</p>
+          <p className="action-card-issue">{alertDetail(t, alert, lang)}</p>
         </div>
       </div>
 
       {route && (
-        <div className="action-card-route">
+        <div className="action-card-route" data-testid="decision-route">
           <Route size={18} />
           <div>
-            <strong>{localizeRoute(route.name, lang)}</strong>
+            <strong data-testid="decision-route-name">{routeName(t, route)}</strong>
             <span className="action-card-route-meta">
-              <Clock size={14} /> ETA {route.eta_minutes} {t("ac_minutes")}
+              <Clock size={14} />
+              <span data-testid="decision-route-eta">{routeMeta(t, route, lang)}</span>
             </span>
+            <span className="action-card-route-source">{routeSource(t, route)}</span>
           </div>
         </div>
       )}
@@ -301,28 +267,14 @@ export function ActionCard({ snapshot, targetTruck = null }) {
       )}
       {phase === "escalated" && (
         <p className="action-card-warning" role="alert" data-testid="action-card-escalated">
-          {lang === "id"
-            ? "Masalah dilaporkan dari lapangan. Eskalasi ke pengawas."
-            : "Field issue reported. Escalate to the supervisor."}
-          {fieldNote && (
-            <>
-              {" "}
-              {lang === "id" ? "Catatan:" : "Note:"} {fieldNote}
-            </>
-          )}
+          {t("w10fleet_field_issue")}
+          {note}
         </p>
       )}
       {phase === "cancelled" && (
         <p className="action-card-issue" role="status" data-testid="action-card-cancelled">
-          {lang === "id"
-            ? "Instruksi dibatalkan di lapangan. Tinjau sebelum mengirim ulang."
-            : "Instruction cancelled in the field. Review before dispatching again."}
-          {fieldNote && (
-            <>
-              {" "}
-              {lang === "id" ? "Catatan:" : "Note:"} {fieldNote}
-            </>
-          )}
+          {t("w10fleet_field_cancelled")}
+          {note}
         </p>
       )}
       {phase === "error" && (

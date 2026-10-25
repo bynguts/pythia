@@ -4,8 +4,8 @@ import { expect, test } from "@playwright/test";
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
 const COPY = {
-  id: { sim: "SIMULASI", queueTab: /Antrean TPA/, carbonLink: "Jejak Karbon" },
-  en: { sim: "SIMULATED", queueTab: /TPA Queue/, carbonLink: "Carbon Footprint" },
+  id: { sim: "SIMULASI", queueTab: /Antrean TPA/, actionTab: /Perlu tindakan/ },
+  en: { sim: "SIMULATED", queueTab: /TPA Queue/, actionTab: /Needs action/ },
 };
 
 async function signIn(page, lang) {
@@ -56,8 +56,10 @@ test("stagger panel shows a loading state, not the old fixed figures, before the
   await expect(page.getByTestId("stagger-panel")).not.toContainText("58.6%");
 });
 
+// wave9 fleet composition: the carbon panel left /fleet (teardown v4 F8) and the reroute
+// panel moved from the layers panel into the "Perlu tindakan" rail tab.
 for (const lang of ["id", "en"]) {
-  test(`queue, stagger, carbon and A* panels are labelled simulated (${lang})`, async ({ page }) => {
+  test(`queue, stagger and reroute panels are labelled simulated (${lang})`, async ({ page }) => {
     const copy = COPY[lang];
     await signIn(page, lang);
 
@@ -67,11 +69,7 @@ for (const lang of ["id", "en"]) {
     await expect(page.getByTestId("tpa-queue-panel")).not.toContainText(/real-time|live clock|waktu nyata/i);
     await expect(page.getByTestId("tpa-queue-metric-sim-badge")).toHaveText(copy.sim, { timeout: 30000 });
 
-    await page.locator(".records-doc-link", { hasText: copy.carbonLink }).click();
-    await expect(page.getByTestId("carbon-sim-badge")).toHaveText(copy.sim, { timeout: 15000 });
-    await expect(page.getByTestId("carbon-panel")).not.toContainText(/route telemetry|telemetri rute/i);
-
-    await page.getByTestId("deck-tools-toggle").click();
+    await page.getByRole("tab", { name: copy.actionTab }).click();
     await expect(page.getByTestId("astar-sim-badge")).toHaveText(copy.sim, { timeout: 15000 });
     await expect(page.getByTestId("astar-panel")).not.toContainText(/real-time/i);
   });
@@ -80,9 +78,11 @@ for (const lang of ["id", "en"]) {
 // gsc teardown #3: the fleet is a simulated pilot fleet, so the fleet KPI area never claims
 // "live" / "langsung", and the landfill KPI names the modelled peak hour the API serves
 // (never the wall-clock hour of a modelled profile).
+// wave9 fleet composition: the landfill tile reads "Puncak 09.00: ±89 mnt" (never "89m"),
+// labelled simulated in its helper; the problem strip and fleet heading are gone.
 const FLEET_COPY = {
-  id: { simulated: "armada pilot simulasi", peak: "jam puncak model" },
-  en: { simulated: "simulated pilot fleet", peak: "modelled peak hour" },
+  id: { simulated: "armada pilot simulasi", peak: "jam puncak model", tile: "Puncak", min: "mnt", sep: "." },
+  en: { simulated: "simulated pilot fleet", peak: "modelled peak hour", tile: "Peak", min: "min", sep: ":" },
 };
 
 for (const lang of ["id", "en"]) {
@@ -97,17 +97,18 @@ for (const lang of ["id", "en"]) {
 
     await signIn(page, lang);
     const strip = page.getByTestId("metric-strip");
+    const tileHour = `${String(status.modelled_hour).padStart(2, "0")}${copy.sep}00`;
+    const tile = strip.locator("[data-metric=queue]");
     await expect(strip).toContainText(copy.simulated, { timeout: 15000 });
-    await expect(strip).toContainText(`${copy.peak} ${hour}`, { timeout: 30000 });
-    await expect(strip).toContainText(`${Math.trunc(status.avg_wait_minutes)}m`);
+    await expect(tile).toContainText(
+      `${copy.tile} ${tileHour}: ±${Math.trunc(status.avg_wait_minutes)} ${copy.min}`,
+      { timeout: 30000 },
+    );
+    await expect(tile).not.toContainText(/\d+m\b/);
 
-    const kpiArea = [
-      await strip.innerText(),
-      await page.locator(".workspace-heading").first().innerText(),
-      await page.getByTestId("problem-chip-queue").innerText(),
-    ].join("\n");
+    const kpiArea = await strip.innerText();
     expect(kpiArea).not.toMatch(/\blive\b|langsung/i);
-    expect(kpiArea).toContain(hour);
+    expect(kpiArea).toContain(tileHour);
 
     // The what-if beacon and the headline band come from the same model.
     await page.getByRole("tab", { name: COPY[lang].queueTab }).click();
@@ -210,12 +211,12 @@ const FORECAST_COPY = {
   id: {
     empty: "Tidak ada wilayah yang diprakirakan ≥ 10% di atas hari normalnya minggu ini (hasil model).",
     sample: "CONTOH OFFLINE",
-    normalDay: "hari normal (tanpa hujan, tanpa acara)",
+    normalDayTile: "hari normal (simulasi)",
   },
   en: {
     empty: "No district is forecast ≥ 10% above its normal day this week (model output).",
     sample: "OFFLINE SAMPLE",
-    normalDay: "normal day (no rain, no event)",
+    normalDayTile: "normal day (simulated)",
   },
 };
 
@@ -238,7 +239,8 @@ for (const lang of ["id", "en"]) {
     });
     await signIn(page, lang);
     // The Fleet queue KPI names its basis (the normal day), unlike the twin's scaled beacon (#N6).
-    await expect(page.getByTestId("metric-strip")).toContainText(copy.normalDay, { timeout: 30000 });
+    // wave9 fleet composition: the tile helper reads "… hari normal (simulasi)".
+    await expect(page.getByTestId("metric-strip")).toContainText(copy.normalDayTile, { timeout: 30000 });
     await page.goto("/forecast");
     const workspace = page.getByTestId("forecast-workspace");
     await expect(page.getByTestId("forecast-empty")).toHaveText(copy.empty, { timeout: 30000 });
@@ -246,7 +248,10 @@ for (const lang of ["id", "en"]) {
     await expect(workspace).not.toContainText("41%");
     await expect(workspace).not.toContainText("2026-06-01");
     await expect(workspace).not.toContainText("+-");
-    await expect(workspace.getByTestId("metric-strip")).toContainText("−2%");
+    // Teardown v4 T1: the strip is the canonical baseline (/api/baseline/today), not the
+    // city-level snapshot spike, so it never echoes the stubbed −2% as a headline.
+    await expect(workspace.getByTestId("baseline-total")).toBeVisible();
+    await expect(workspace.getByTestId("metric-strip")).not.toContainText("−2%");
   });
 
   test(`the canned sample appears only offline, badged as not a forecast (${lang})`, async ({ page }) => {
@@ -258,3 +263,15 @@ for (const lang of ["id", "en"]) {
     await expect(page.getByTestId("forecast-empty")).toHaveCount(0);
   });
 }
+
+// wave9 numbers coherence: the carbon estimate moved to Prediksi → Ringkasan, collapsed at the
+// bottom, and keeps its SIMULATED label.
+test("the carbon estimate on Prediksi keeps its simulated label", async ({ page }) => {
+  await signIn(page, "id");
+  await page.goto("/forecast");
+  const carbon = page.getByTestId("forecast-carbon");
+  await expect(carbon).toBeVisible({ timeout: 30000 });
+  await expect(carbon).not.toHaveAttribute("open", "");
+  await carbon.locator("summary").click();
+  await expect(carbon.getByTestId("carbon-sim-badge")).toHaveText("SIMULASI");
+});

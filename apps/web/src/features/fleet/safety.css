@@ -167,8 +167,7 @@
 .safety-override-button,
 .safety-toggle,
 .safety-dialog-cancel,
-.safety-dialog-submit,
-.problem-chip.safety-chip-strip {
+.safety-dialog-submit {
   min-height: var(--tap-min);
   min-width: var(--tap-min);
 }
@@ -249,7 +248,4 @@
   .safety-panel {
     padding: var(--space-4);
   }
-}
-.problem-chip.safety-chip-strip em {
-  color: var(--ui-warning);
 }

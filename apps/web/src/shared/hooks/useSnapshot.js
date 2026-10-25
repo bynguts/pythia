@@ -5,7 +5,7 @@ import { apiFetch } from "../api/client.js";
 // (app/fleet/data.py: same codes, plates and "Pengemudi Sim NN" names).
 export const fallbackSnapshot = {
   kpis: {
-    active_trucks: 5,
+    active_trucks: 3, // the three sample trucks below: never more active than the fleet shown
     trucks_with_issues: 2,
     // No invented queue figures before the API answers (the old 47 / 116 demo numbers).
     tpa_queue_trucks: null,
@@ -76,9 +76,13 @@ export const fallbackSnapshot = {
       truck_code: "T-047",
       title: "T-047 deviated from assigned corridor",
       description: "Truck is 2924 meters from the assigned corridor.",
+      distance_meters: 2924,
+      sustained: false,
       recommended_routes: [
         {
+          code: "B",
           name: "Route B - Daan Mogot Recovery",
+          source: "scenario",
           eta_minutes: 48,
           score: 39.0,
           reason:

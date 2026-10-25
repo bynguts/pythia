@@ -69,7 +69,7 @@ test("evidence thumbnails and the approximate-geotag label render in the SPJ pan
       localStorage.setItem("pythia_role", role);
     }, operator);
     await page.reload({ waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Surat Perintah Jalan" }).click();
+    await page.getByRole("tab", { name: "Surat jalan (SPJ)" }).click(); // wave9 fleet composition: records tab
     const panel = page.locator(".spj-panel");
     await panel.getByRole("button", { name: new RegExp(spj.spj_number.replace(/[/.]/g, "\\$&")) }).click();
 

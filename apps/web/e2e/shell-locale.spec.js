@@ -75,8 +75,8 @@ test("mobile navigation and active workspace description follow the locale", asy
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, "en");
   await expect(page.locator(".command-mobile-nav")).toHaveAccessibleName("Mobile workspace navigation");
-  // the Digital Twin is the first workspace.
-  await expect(page.locator(".command-mobile-nav button").first()).toContainText("Twin");
+  // wave9 fleet composition: Fleet is the first workspace again; the 3D city sits last.
+  await expect(page.locator(".command-mobile-nav button").first()).toContainText("Fleet");
 
   // Workspace description next to the title follows the locale too.
   await expect(page.locator(".command-title-row span")).toHaveText("Monitor and act on today's operations");
@@ -92,7 +92,8 @@ test("workspace descriptions localize for every navigation item", async ({ page 
     ["Forecast", "Anticipate the next service load"],
     ["Planning", "Compose and approve operations plans"],
     ["Drivers", "Manage driver compliance and performance"],
-    ["Data & ML Audit", "Audit data and model quality"],
+    // wave9 settings: Settings replaced the audit workspace in the rail.
+    ["Settings", "Integrations, team access and data sources"],
   ]) {
     await page.locator(".command-nav").getByRole("button", { name, exact: true }).click();
     await expect(page.locator(".command-title-row span")).toHaveText(description);

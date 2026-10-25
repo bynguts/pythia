@@ -1,234 +1,218 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  AlertTriangle,
-  Clock3,
-  FileText,
-  HeartPulse,
-  Layers,
-  Radio,
-  Route,
-  Truck,
-  Wrench,
-} from "lucide-react";
-import { MetricStrip } from "../../shared/ui/MetricStrip.jsx";
+import { useNavigate } from "react-router-dom";
+import { Layers } from "lucide-react";
+import { apiFetch } from "../../shared/api/client.js";
+import { fleetDenominator } from "../../shared/hooks/useBaseline.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { AlertQueue, sortAlerts } from "./AlertQueue.jsx";
+import { AStarReroutingPanel } from "./AStarReroutingPanel.jsx";
+import { decisionRoute, drawableRoute, formatDistance } from "./decisionRoute.js";
+import {
+  DriverExceptionAlerts,
+  exceptionAlertId,
+  useDriverExceptions,
+  useHandledExceptions,
+} from "./DriverExceptionAlerts.jsx";
 import { SafetyPanel, safetyAttentionCount, useSafetyOverview } from "./SafetyPanel.jsx";
+import { peakHourText } from "./TpaQueuePanel.jsx";
+import { TRUCK_FILTERS, TruckDrawer, TruckList } from "./TruckPanel.jsx";
+import { UnlicensedCollectorAlerts } from "./UnlicensedCollectorAlerts.jsx";
 
-const detailTabs = [
-  { id: "fleet", key: "tab_fleet", label: "Kondisi armada", surface: "fleet-table-surface" },
-  { id: "history", key: "tab_history", label: "Riwayat perjalanan", surface: "fleet-history-surface" },
-  { id: "queue", key: "tab_queue", label: "Antrean TPA", surface: "fleet-queue-surface" },
-  { id: "safety", key: "saf_tab", label: "Keselamatan sopir", surface: "fleet-safety-surface" },
-  { id: "evidence", key: "tab_evidence", label: "Bukti rute", surface: "fleet-evidence-surface" },
-  { id: "unlicensed", key: "tab_unlicensed", label: "Kolektor liar", surface: "fleet-unlicensed-surface" },
-  { id: "impact", key: "tab_impact", label: "Jejak karbon", surface: "fleet-impact-surface" },
-  { id: "spj", key: "tab_spj", label: "Surat jalan", surface: "fleet-spj-surface" },
-  { id: "damage", key: "tab_damage", label: "Kerusakan", surface: "fleet-damage-surface" },
+const RAIL_TABS = ["action", "trucks", "queue"];
+const RECORD_TABS = [
+  { id: "spj", key: "w10fleet_tab_spj", surface: "fleet-spj-surface" },
+  { id: "damage", key: "tab_damage", surface: "fleet-damage-surface" },
+  { id: "safety", key: "saf_tab", surface: "fleet-safety-surface" },
 ];
+const TRIPS_POLL_MS = 30000;
 
-const documentTabs = detailTabs.filter((tab) => ["spj", "damage", "unlicensed", "impact"].includes(tab.id));
-const primaryTabs = detailTabs.filter((tab) => !documentTabs.includes(tab));
+// "Ritase selesai": today's work orders closed in the driver app (SPJ store, Jakarta day).
+function useTripsToday() {
+  const [trips, setTrips] = useState(null);
+  useEffect(() => {
+    const load = () =>
+      apiFetch("/spj?limit=500")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((body) => {
+          if (!body) return;
+          const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+          const issued = (body.spj || []).filter(
+            (item) => item.date === today && item.status !== "draft" && item.status !== "batal",
+          );
+          setTrips({ done: issued.filter((item) => item.status === "selesai").length, total: issued.length });
+        })
+        .catch(() => {});
+    load();
+    const id = setInterval(load, TRIPS_POLL_MS);
+    return () => clearInterval(id);
+  }, []);
+  return trips;
+}
 
-function truckDeviationMeters(truck) {
-  const value = truck?.deviation?.distance_meters ?? truck?.deviation_m ?? 0;
-  const parsed = Number(value);
+function deviationMeters(truck) {
+  const parsed = Number(truck?.deviation?.distance_meters ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function formatDistance(meters, lang) {
-  if (meters >= 1000) {
-    return `${(meters / 1000).toLocaleString(lang === "id" ? "id-ID" : "en-US", { maximumFractionDigits: 1 })} km`;
-  }
-  return `${Math.round(meters)} m`;
+function onTabKeys(event, ids, current, select) {
+  const index = ids.indexOf(current);
+  const next = { ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: ids.length - 1 }[event.key];
+  if (next === undefined) return;
+  event.preventDefault();
+  // Roving tabindex: selection and focus move together.
+  const id = ids[(next + ids.length) % ids.length];
+  select(id);
+  event.currentTarget.parentElement.querySelector(`[data-tab="${id}"]`)?.focus();
 }
 
+// Teardown v4 F1–F5 / research P0-5: one flat metric strip, the map large, and a right
+// rail (a sheet under the map on phones) with Perlu tindakan · Truk · Antrean TPA.
 export function FleetOperations({
-  detailTab,
-  onDetailTabChange,
-  actionCard,
-  metrics,
-  map,
+  snapshot,
+  renderMap,
   mapTools,
-  routeEvidence,
+  aiEvents,
+  jamActive,
+  onAckEvent,
+  playbackTruck,
+  playbackOptions = [],
+  onPlayback,
+  onWhatsApp,
+  onFocusTruck,
   queue,
-  fleetTable,
-  unlicensedTable,
-  history,
-  carbon,
   spj,
   damage,
-  trucks = [],
-  queueTrucks = 0,
-  queueWaitMinutes = 0,
-  queueHourLabel = null,
-  onFocusProblem = () => {},
 }) {
   const { t, lang } = useLanguage();
-  const tabRefs = useRef([]);
+  const navigate = useNavigate();
+  const [railTab, setRailTab] = useState("action");
+  // undefined = the default decision is open; null = the operator collapsed it.
+  const [selectedAlertId, setSelectedAlertId] = useState(undefined);
+  const [drawerTruck, setDrawerTruck] = useState(null);
+  const [truckFilter, setTruckFilter] = useState("all");
+  const [recordTab, setRecordTab] = useState("spj");
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [sheetExpanded, setSheetExpanded] = useState(false);
-  const activeTab = detailTabs.find((tab) => tab.id === detailTab) || detailTabs[0];
+  const railRef = useRef(null);
+  const recordsRef = useRef(null);
   const safety = useSafetyOverview();
-  const safetyAttention = safetyAttentionCount(safety.overview);
-  const safetySimulated = safety.overview && safety.overview.classification !== "OBSERVED_APP_EVENTS";
-  const surfaces = {
-    fleet: fleetTable,
-    unlicensed: unlicensedTable,
-    history,
-    queue,
-    safety: <SafetyPanel {...safety} />,
-    evidence: routeEvidence,
-    impact: carbon,
-    spj,
-    damage,
-  };
+  const trips = useTripsToday();
+  const exceptions = useDriverExceptions();
+  const [handledExceptions, markExceptionHandled] = useHandledExceptions();
 
-  // Problem strip: counts derive from the same snapshot the map renders, so a
-  // chip click never promises a filter the map cannot show.
-  const deviating = trucks.filter((truck) => truckDeviationMeters(truck) > 500);
-  const worstDeviation = deviating.reduce(
-    (worst, truck) => (truckDeviationMeters(truck) > truckDeviationMeters(worst) ? truck : worst),
-    deviating[0] || null,
-  );
-  const damaged = trucks.filter((truck) => {
-    const status = String(truck?.status || truck?.operational_status || "").toLowerCase();
-    return (
-      status.includes("rusak") ||
-      status.includes("damage") ||
-      status.includes("maintenance") ||
-      status.includes("perawatan")
-    );
-  });
-  const showQueueChip = queueTrucks > 0 || queueWaitMinutes > 0;
+  const trucks = snapshot.trucks || [];
+  const alerts = sortAlerts(snapshot.alerts);
+  const kpis = snapshot.kpis || {};
+  const defaultAlert = alerts.find((a) => decisionRoute(a)) || alerts[0] || null;
+  const selectedAlert =
+    selectedAlertId === null
+      ? null
+      : alerts.find((a) => a.id === selectedAlertId) || (selectedAlertId === undefined ? defaultAlert : null);
+  const deviating = trucks.filter(TRUCK_FILTERS.deviation);
+  const worst = deviating.reduce((a, b) => (deviationMeters(b) > deviationMeters(a) ? b : a), deviating[0]);
+  const openDeviations = alerts.filter((a) => a.type === "route_deviation");
+  const openExceptions = exceptions.filter((e) => !handledExceptions[exceptionAlertId(e)]);
+  const actionCount = alerts.length + openExceptions.length;
+  const drawerData = drawerTruck ? trucks.find((truck) => truck.truck_code === drawerTruck) : null;
+  const drawerAlert = drawerData ? alerts.find((a) => a.truck_code === drawerData.truck_code) : null;
+  // One route on the map: the decision the operator is looking at, nothing else (M3).
+  const routeAlert = railTab === "action" ? selectedAlert : railTab === "trucks" ? drawerAlert : null;
 
-  useEffect(() => {
-    // Keep the mobile sheet aligned with the actual decision: nothing to act
-    // on means nothing covering the map.
-    if (!worstDeviation) setSheetExpanded(false);
-  }, [worstDeviation]);
-
-  function selectTab(tabId) {
-    onDetailTabChange(tabId);
+  function revealRail(tab) {
+    setRailTab(tab);
+    railRef.current?.scrollIntoView?.({ block: "nearest" });
   }
 
-  function handleTabKeyDown(event, index, tabs) {
-    let nextIndex = null;
-    if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
-    if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
-    if (event.key === "Home") nextIndex = 0;
-    if (event.key === "End") nextIndex = tabs.length - 1;
-    if (nextIndex === null) return;
-    event.preventDefault();
-    // Roving-tabindex pattern: selection and focus move together so keyboard
-    // and screen-reader users land on the tab they just activated.
-    selectTab(tabs[nextIndex].id);
-    tabRefs.current[nextIndex]?.focus();
+  function openTruck(code) {
+    setDrawerTruck(code);
+    revealRail("trucks");
   }
 
-  function focusWorstDeviation() {
-    if (worstDeviation) onFocusProblem(worstDeviation.truck_code);
+  function selectAlert(alert) {
+    setSelectedAlertId(alert ? alert.id : null);
+    if (alert) onFocusTruck(alert.truck_code);
   }
 
-  const decisionOverlay = worstDeviation ? (
-    <div className="deck-decision-body">
-      <div className="deck-decision-heading">
-        <span className="deck-decision-kicker">
-          <AlertTriangle size={13} /> {lang === "id" ? "Perlu keputusan" : "Needs a decision"}
-        </span>
-        <h2>{lang === "id" ? "Tindakan prioritas" : "Priority action"}</h2>
-      </div>
-      {actionCard}
-    </div>
-  ) : null;
+  const metrics = [
+    trucks.length > 0 && {
+      id: "active",
+      label: t("w10fleet_metric_active"),
+      value: fleetDenominator(t, { active: kpis.active_trucks, total: trucks.length }),
+      helper: t("kpi_active_trucks_sub"),
+      onSelect: () => {
+        setTruckFilter("active");
+        setDrawerTruck(null);
+        revealRail("trucks");
+      },
+    },
+    kpis.tpa_wait_minutes != null && {
+      id: "queue",
+      label: t("kpi_landfill_queue"),
+      value: t("w10num_tpa_peak")
+        .replace("{hour}", peakHourText(t, kpis.tpa_queue_hour))
+        .replace("{n}", kpis.tpa_wait_minutes),
+      helper: t("w10num_tpa_peak_helper").replace("{n}", kpis.tpa_queue_trucks),
+      tone: "warning",
+      onSelect: () => revealRail("queue"),
+    },
+    trucks.length > 0 && {
+      id: "deviation",
+      label: t("w10fleet_metric_deviation"),
+      value: String(openDeviations.length),
+      helper: worst
+        ? t("w10fleet_metric_deviation_worst")
+            .replace("{code}", worst.truck_code)
+            .replace("{d}", formatDistance(deviationMeters(worst), lang))
+        : t("w10fleet_metric_deviation_none"),
+      tone: openDeviations.length ? "danger" : "neutral",
+      onSelect: () => {
+        const target = openDeviations.find((a) => a.truck_code === worst?.truck_code) || openDeviations[0];
+        if (target) selectAlert(target);
+        revealRail("action");
+      },
+    },
+    trips?.total > 0 && {
+      id: "trips",
+      label: t("w10fleet_metric_trips"),
+      value: t("w10fleet_metric_trips_value").replace("{done}", trips.done).replace("{total}", trips.total),
+      helper: t("w10fleet_metric_trips_helper"),
+      onSelect: () => {
+        setRecordTab("spj");
+        recordsRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+      },
+    },
+  ].filter(Boolean);
+
+  const recordSurfaces = { spj, damage, safety: <SafetyPanel {...safety} /> };
+  // Drivers who need a supervisor now (blocked without override, or past the gate limit).
+  const safetyCount = safetyAttentionCount(safety.overview);
+  const activeRecord = RECORD_TABS.find((tab) => tab.id === recordTab) || RECORD_TABS[0];
 
   return (
     <section className="fleet-workspace workspace-page" data-testid="fleet-workspace">
-      <header className="workspace-heading">
-        <div>
-          <span className="workspace-kicker">
-            <Radio size={14} /> {t("fleet_live_kicker")}
-          </span>
-          <h1>{lang === "id" ? "Operasi armada hari ini" : "Today’s fleet operations"}</h1>
-          <p>
-            {lang === "id"
-              ? "Pantau pergerakan, prioritaskan gangguan, dan kirim keputusan dari satu layar."
-              : "Monitor movement, prioritize disruptions, and dispatch decisions from one screen."}
-          </p>
-        </div>
-        <div className="workspace-freshness">
-          <Clock3 size={16} />
-          <span>{t("fleet_fresh_label")}</span>
-          <strong>{t("fleet_fresh_interval")}</strong>
-        </div>
-      </header>
+      <h1 className="sr-only">{t("w10fleet_title")}</h1>
 
-      <MetricStrip metrics={metrics} />
-
-      <div
-        className="fleet-problem-strip"
-        role="group"
-        aria-label={lang === "id" ? "Masalah operasional" : "Operational problems"}
-      >
-        <button
-          type="button"
-          className="problem-chip"
-          data-testid="problem-chip-deviation"
-          disabled={deviating.length === 0}
-          onClick={focusWorstDeviation}
-        >
-          <Route size={15} />
-          <strong>{deviating.length}</strong>
-          <span>{lang === "id" ? "deviasi rute" : "route deviations"}</span>
-          {worstDeviation && (
-            <em>
-              {worstDeviation.truck_code} · {formatDistance(truckDeviationMeters(worstDeviation), lang)}
-            </em>
-          )}
-        </button>
-        <button
-          type="button"
-          className="problem-chip"
-          data-testid="problem-chip-damage"
-          disabled={damaged.length === 0}
-          onClick={() => selectTab("damage")}
-        >
-          <Wrench size={15} />
-          <strong>{damaged.length}</strong>
-          <span>{lang === "id" ? "perawatan/kerusakan" : "maintenance/damage"}</span>
-        </button>
-        <button
-          type="button"
-          className="problem-chip"
-          data-testid="problem-chip-queue"
-          disabled={!showQueueChip}
-          onClick={() => selectTab("queue")}
-        >
-          <Truck size={15} />
-          <strong>{queueWaitMinutes != null ? `${queueWaitMinutes}m` : "—"}</strong>
-          <span>
-            {lang === "id"
-              ? `antrean TPA · ${queueTrucks ?? "—"} truk`
-              : `TPA queue · ${queueTrucks ?? "—"} trucks`}
-            {queueHourLabel && ` · ${queueHourLabel}`}
-          </span>
-        </button>
-        <button
-          type="button"
-          className="problem-chip safety-chip-strip"
-          data-testid="problem-chip-safety"
-          disabled={!safety.overview}
-          onClick={() => selectTab("safety")}
-        >
-          <HeartPulse size={15} />
-          <strong>{safety.overview ? safetyAttention : "—"}</strong>
-          <span>{t("saf_chip")}</span>
-          {safetySimulated && <em>{t("honesty_sim_badge")}</em>}
-        </button>
-      </div>
+      {metrics.length > 0 && (
+        <div className="metric-strip fleet-metrics" data-testid="metric-strip">
+          {metrics.map((metric) => (
+            <button
+              key={metric.id}
+              type="button"
+              className={`metric-cell metric-button metric-${metric.tone || "neutral"}`}
+              data-testid="metric-cell"
+              data-metric={metric.id}
+              onClick={metric.onSelect}
+            >
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
+              <small>{metric.helper}</small>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="fleet-deck">
         <div className="fleet-deck-stage" data-testid="fleet-map-stage">
-          {map}
+          {renderMap({ decisionRoute: drawableRoute(decisionRoute(routeAlert)), onSelectTruck: openTruck })}
 
           <button
             type="button"
@@ -239,105 +223,142 @@ export function FleetOperations({
             onClick={() => setToolsOpen((open) => !open)}
           >
             <Layers size={16} />
-            {lang === "id" ? "Lapisan & kontrol" : "Layers & controls"}
+            {t("w10fleet_layers_toggle")}
           </button>
           {toolsOpen && (
             <div className="deck-tools-panel" id="deck-tools-panel" data-testid="deck-tools-panel">
               <div className="deck-tools-head">
-                <strong>{lang === "id" ? "Lapisan & kontrol peta" : "Map layers & controls"}</strong>
+                <strong>{t("w10fleet_layers_title")}</strong>
                 <button type="button" className="deck-tools-close" onClick={() => setToolsOpen(false)}>
-                  {lang === "id" ? "Tutup" : "Close"}
+                  {t("w10fleet_close")}
                 </button>
               </div>
               {mapTools}
             </div>
           )}
-
-          {decisionOverlay && (
-            <aside
-              className="deck-decision-overlay"
-              data-testid="decision-overlay"
-              aria-label={lang === "id" ? "Keputusan prioritas" : "Priority decision"}
-            >
-              {decisionOverlay}
-            </aside>
-          )}
         </div>
 
-        {decisionOverlay && (
-          <div
-            className={`deck-action-sheet ${sheetExpanded ? "expanded" : ""}`}
-            data-testid="deck-action-sheet"
-          >
-            <button
-              type="button"
-              className="deck-sheet-handle"
-              aria-expanded={sheetExpanded}
-              onClick={() => setSheetExpanded((open) => !open)}
-            >
-              <span className="deck-sheet-grip" />
-              <span className="deck-sheet-title">
-                {worstDeviation.truck_code} · {lang === "id" ? "deviasi" : "deviation"}{" "}
-                {formatDistance(truckDeviationMeters(worstDeviation), lang)}
-              </span>
-            </button>
-            {sheetExpanded && decisionOverlay}
-          </div>
-        )}
-      </div>
-
-      <section className="fleet-records-surface">
-        <div className="records-heading">
-          <div>
-            <span className="surface-kicker">{t("fleet_records_kicker")}</span>
-            <h2>{t("fleet_records_title")}</h2>
-          </div>
-          <nav
-            className="records-doc-links"
-            aria-label={lang === "id" ? "Dokumen operasional" : "Operational documents"}
-          >
-            <FileText size={15} />
-            {documentTabs.map((tab) => (
+        <aside
+          className="fleet-rail"
+          ref={railRef}
+          data-testid="fleet-rail"
+          aria-label={t("w10fleet_rail_label")}
+        >
+          <div className="rail-tabs" role="tablist" aria-label={t("w10fleet_rail_label")}>
+            {RAIL_TABS.map((id) => (
               <button
-                key={tab.id}
+                key={id}
+                id={`fleet-rail-tab-${id}`}
+                data-tab={id}
                 type="button"
-                className={`records-doc-link ${detailTab === tab.id ? "active" : ""}`}
-                onClick={() => selectTab(tab.id)}
+                role="tab"
+                className="rail-tab"
+                aria-selected={railTab === id}
+                aria-controls={`fleet-rail-panel-${id}`}
+                tabIndex={railTab === id ? 0 : -1}
+                onClick={() => setRailTab(id)}
+                onKeyDown={(event) => onTabKeys(event, RAIL_TABS, railTab, setRailTab)}
               >
-                {t(tab.key) || tab.label}
+                {t(`w10fleet_tab_${id}`)}
+                {id === "action" && actionCount > 0 && <b className="rail-tab-count">{actionCount}</b>}
               </button>
             ))}
-          </nav>
-        </div>
-        <div className="workspace-tabs" role="tablist" aria-label={t("fleet_records_title")}>
-          {primaryTabs.map((tab, index) => (
+          </div>
+
+          <div
+            id={`fleet-rail-panel-${railTab}`}
+            className="rail-panel"
+            role="tabpanel"
+            aria-labelledby={`fleet-rail-tab-${railTab}`}
+            data-testid={railTab === "queue" ? "fleet-queue-surface" : `fleet-rail-${railTab}`}
+          >
+            {railTab === "action" && (
+              <>
+                {actionCount === 0 && <p className="rail-empty">{t("w10fleet_action_empty")}</p>}
+                <DriverExceptionAlerts
+                  exceptions={exceptions}
+                  handled={handledExceptions}
+                  onHandled={markExceptionHandled}
+                  onWhatsApp={onWhatsApp}
+                />
+                <AlertQueue
+                  alerts={alerts}
+                  snapshot={snapshot}
+                  selectedId={selectedAlert?.id ?? null}
+                  onSelect={selectAlert}
+                  onWhatsApp={onWhatsApp}
+                />
+                <UnlicensedCollectorAlerts />
+                <AStarReroutingPanel jamActive={jamActive} aiEvents={aiEvents} onAckEvent={onAckEvent} />
+              </>
+            )}
+            {railTab === "trucks" &&
+              (drawerData ? (
+                <TruckDrawer
+                  truck={drawerData}
+                  snapshot={snapshot}
+                  alert={drawerAlert}
+                  exceptions={exceptions.filter((e) => e.truck_code === drawerTruck)}
+                  safetyTruck={(safety.overview?.trucks || []).find((s) => s.truck_code === drawerTruck)}
+                  onClose={() => setDrawerTruck(null)}
+                  onOpenDrivers={() => navigate("/drivers")}
+                  playbackTruck={playbackTruck}
+                  canReplay={playbackOptions.includes(drawerTruck)}
+                  onPlayback={onPlayback}
+                />
+              ) : (
+                <TruckList
+                  trucks={trucks}
+                  filter={truckFilter}
+                  onFilter={setTruckFilter}
+                  onOpen={openTruck}
+                />
+              ))}
+            {railTab === "queue" && queue}
+          </div>
+        </aside>
+      </div>
+
+      <section className="fleet-records-surface" ref={recordsRef} id="fleet-records">
+        <div className="workspace-tabs" role="tablist" aria-label={t("w10fleet_records_title")}>
+          {RECORD_TABS.map((tab) => (
             <button
               key={tab.id}
-              id={tab.id}
-              ref={(element) => {
-                tabRefs.current[index] = element;
-              }}
+              id={`fleet-record-tab-${tab.id}`}
+              data-tab={tab.id}
               className="workspace-tab"
               type="button"
               role="tab"
-              aria-selected={detailTab === tab.id}
+              aria-selected={recordTab === tab.id}
               aria-controls={tab.surface}
-              tabIndex={detailTab === tab.id ? 0 : -1}
-              onClick={() => selectTab(tab.id)}
-              onKeyDown={(event) => handleTabKeyDown(event, index, primaryTabs)}
+              tabIndex={recordTab === tab.id ? 0 : -1}
+              onClick={() => setRecordTab(tab.id)}
+              onKeyDown={(event) =>
+                onTabKeys(
+                  event,
+                  RECORD_TABS.map((item) => item.id),
+                  recordTab,
+                  setRecordTab,
+                )
+              }
             >
-              {t(tab.key) || tab.label}
+              {t(tab.key)}
+              {tab.id === "safety" && safetyCount > 0 && (
+                <b className="rail-tab-count" data-testid="safety-tab-count">
+                  {safetyCount}
+                </b>
+              )}
             </button>
           ))}
         </div>
         <div
-          id={activeTab.surface}
+          id={activeRecord.surface}
           className="fleet-detail-surface"
           role="tabpanel"
-          aria-labelledby={activeTab.id}
-          data-testid={activeTab.surface}
+          aria-labelledby={`fleet-record-tab-${activeRecord.id}`}
+          data-testid={activeRecord.surface}
         >
-          {surfaces[detailTab]}
+          {recordSurfaces[activeRecord.id]}
         </div>
       </section>
     </section>
