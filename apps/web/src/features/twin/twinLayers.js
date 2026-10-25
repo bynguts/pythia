@@ -4,19 +4,21 @@
 import { ArcLayer, ColumnLayer, LineLayer, PathLayer, PolygonLayer, ScatterplotLayer } from "@deck.gl/layers";
 import { TripsLayer } from "@deck.gl/geo-layers";
 
-// Status colours follow tokens.css (--ui-success / --ui-warning / --ui-danger),
-// lifted slightly so lit 3D faces stay readable over a light basemap. Mirrored
-// as --twin-risk-* in styles/twin.css for the legend swatches.
+// wave11 twin: the city is a calm stone base and only risk carries colour, so
+// the scene reads at a glance: which districts are at risk under the scenario.
+// High and critical follow tokens.css (--ui-warning / --ui-danger), lifted for lit
+// 3D faces; elevated is a pale amber "watch". Mirrored as --twin-risk-* in
+// twin.css for the legend swatches.
 export const RISK_COLORS = {
-  normal: [79, 122, 108],
-  elevated: [201, 145, 38],
+  normal: [206, 200, 189],
+  elevated: [224, 196, 140],
   high: [214, 104, 32],
   critical: [180, 47, 43],
 };
 export const RISK_ORDER = ["normal", "elevated", "high", "critical"];
 const ACCENT = [22, 97, 58];
 const INK = [29, 35, 32];
-const FLOW = [27, 111, 132];
+const FLOW = [72, 86, 80];
 const TRUCK_COLORS = { normal: [22, 97, 58], deviated: [180, 47, 43], damaged: [201, 145, 38] };
 // Constant props hoisted so per-frame rebuilds pass the same references.
 const DISTRICT_MATERIAL = { ambient: 0.5, diffuse: 0.62, shininess: 28, specularColor: [70, 74, 72] };
@@ -50,16 +52,16 @@ export const DISTRICT_LAYER_IDS = ["twin-districts", "twin-district-columns"];
 // Roof silhouette: one crisp line along each block's top edge. (An extruded
 // wireframe draws a vertical edge at every outline vertex, hundreds per
 // district, which reads as white "barcode" stripes on the walls.)
-const ROOF_EDGE = [255, 255, 255, 170];
+const ROOF_EDGE = [255, 255, 255, 120];
 const ROOF_EDGE_LIFT_M = 6;
 // Haul arcs: the heaviest districts of the selected day get their own arc,
 // the rest ride one bundle arc, so 42 arcs never fan into spaghetti.
 export const FLOW_TOP_N = 8;
-const FLOW_SOURCE_ALPHA = 24;
-const FLOW_TARGET_ALPHA = 105;
-const FLOW_BUNDLE_ALPHA = 70;
-// Districts named on the map: the same top-5 the risk list shows, plus the selection.
-export const LABEL_COUNT = 5;
+const FLOW_SOURCE_ALPHA = 14;
+const FLOW_TARGET_ALPHA = 80;
+const FLOW_BUNDLE_ALPHA = 46;
+// Districts named on the map: the top three of the risk list, plus the selection.
+export const LABEL_COUNT = 3;
 // Event venue pin: a stem rising out of the venue's block and a head above the
 // roofs, plus a ground ring at the radius the forecast spreads the crowd over.
 export const VENUE_PIN_HEIGHT_M = 3000;
@@ -71,7 +73,7 @@ const RAIN_TOP_M = 5200;
 const RAIN_STREAK_M = 520;
 // Drops falling per truck-clock period: an integer, so the loop is seamless.
 const RAIN_FALLS_PER_PERIOD = 12;
-const RAIN_COLOR = [92, 128, 160, 78];
+const RAIN_COLOR = [92, 128, 160, 60];
 // Truck animation clock: one leg along the path, one back.
 const TRUCK_LEG = 300;
 export const TRUCK_PERIOD = TRUCK_LEG * 2;
@@ -410,7 +412,7 @@ export function truckPosition(trip, time) {
  * @param {boolean} args.animate   false freezes trails into full static paths
  * @param {boolean} args.reducedMotion disables column easing
  */
-export function buildTwinLayers({ scene, prepared, view, time, animate, reducedMotion }) {
+export function buildTwinLayers({ scene, prepared, view, time, animate, reducedMotion, showTrucks = false }) {
   if (!scene || !prepared || !view) return [];
   const { metersPerTon, radius, trips, landfill, beaconHeight } = prepared;
   const { day, selectedId, event } = view;
@@ -425,7 +427,7 @@ export function buildTwinLayers({ scene, prepared, view, time, animate, reducedM
       getRadius: 45,
       radiusMinPixels: 1.4,
       radiusMaxPixels: 4,
-      getFillColor: [...INK, 120],
+      getFillColor: [...INK, 55],
       pickable: false,
     }),
   );
@@ -576,7 +578,8 @@ export function buildTwinLayers({ scene, prepared, view, time, animate, reducedM
     );
   }
 
-  if (trips.length) {
+  // The simulated fleet belongs to Armada; the decision room draws it only in footage mode.
+  if (showTrucks && trips.length) {
     layers.push(
       new TripsLayer({
         id: "twin-truck-trails",
@@ -678,14 +681,15 @@ export function buildTwinLayers({ scene, prepared, view, time, animate, reducedM
         extruded: true,
         getPosition: (f) => [f.lng, f.lat],
         getElevation: beaconHeight * 0.22,
-        getFillColor: [...INK, 210],
+        getFillColor: [...INK, 130],
         pickable: false,
       }),
     );
   }
 
   if (landfill) {
-    const pulse = animate ? 0.5 + 0.5 * Math.sin((time / TRUCK_PERIOD) * Math.PI * 4) : 0.6;
+    // A pulse only in footage mode; in the decision room the ring holds still.
+    const pulse = animate && showTrucks ? 0.5 + 0.5 * Math.sin((time / TRUCK_PERIOD) * Math.PI * 4) : 0.6;
     // The pulse rides on uniforms (radiusScale, opacity): no attribute is
     // regenerated per frame.
     layers.push(

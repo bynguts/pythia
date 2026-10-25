@@ -1,13 +1,22 @@
-/* /xr tabletop twin. The 3D canvas fills the viewport; panels
-   float over it (and become the WebXR DOM overlay in an AR session). */
+/* /xr tabletop twin (wave 11: the twin's decision room, on the table).
+   The 3D canvas fills the viewport on a cream ground. Phones: a one-line
+   header and a bottom sheet float over it as white panels (they become the
+   WebXR DOM overlay in an AR session). Desktop: the same panels join into one
+   flush white rail on the left, like the twin's rail. Vocabulary: pills, mono
+   provenance labels, flat panels split by hairlines. */
 
 .xr-shell {
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background: var(--ui-surface-muted);
+  background: var(--ui-cream);
   color: var(--ui-ink);
-  font-family: inherit;
+  font-family: var(--font-body);
+}
+
+.xr-shell ::selection {
+  color: var(--ui-ink);
+  background: var(--ui-forest-100);
 }
 
 .xr-canvas {
@@ -44,11 +53,11 @@
   pointer-events: auto;
   width: 100%;
   max-width: 420px;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-card);
-  box-shadow: var(--ui-shadow);
   padding: var(--space-3) var(--space-4);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-elevated);
+  box-shadow: var(--ui-shadow-float);
 }
 
 .xr-spacer {
@@ -61,10 +70,10 @@
 .xr-head {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 
-/* One line: city · date · total · provenance chip · chevron. */
+/* One line: back · city over date and total · provenance label · chevron. */
 .xr-head-row {
   display: flex;
   align-items: center;
@@ -72,7 +81,6 @@
   min-width: 0;
 }
 
-/* City over date · total: one row as tall as the chevron. */
 .xr-head-title {
   flex: 1;
   min-width: 0;
@@ -85,10 +93,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 20px;
-  line-height: 1.15;
-  font-weight: 650;
   color: var(--ui-ink);
+  font-family: var(--font-head);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
 }
 
 /* Date · total, then the day's rain source; the chip drops to a second line
@@ -99,10 +109,11 @@
   align-items: baseline;
   column-gap: var(--space-2);
   min-width: 0;
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
   color: var(--ui-ink-soft);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
 }
 
 .xr-head-sum-main,
@@ -115,8 +126,18 @@
 }
 
 .xr-head-wx {
-  font-size: 11px;
   color: var(--ui-info);
+  font-size: 11px;
+}
+
+/* The rain source is the one fact a phone header must not cut: the summary
+   text gives way instead (it wraps), the chip never shrinks or ellipsizes. */
+.xr-head-sum .xr-head-wx {
+  flex: none;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  letter-spacing: 0.02em;
 }
 
 .xr-head-wx[data-input="scenario"] {
@@ -132,18 +153,17 @@
   display: none;
 }
 
-/* The provenance chip may wrap to two lines rather than squeeze the city out. */
+/* The provenance label may wrap to two lines rather than squeeze the city out. */
 .xr-head-row .xr-prov {
   max-width: 45%;
   white-space: normal;
   text-align: center;
-  line-height: 1.15;
 }
 
 .xr-head-detail {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 
 .xr-head-detail[hidden] {
@@ -153,81 +173,80 @@
 .xr-head-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: var(--space-3);
 }
 
-.xr-kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ui-accent);
-}
-
-.xr-lang {
+/* Language and city switches: a dark pill on a cream track. */
+.xr-lang,
+.xr-cities {
   display: inline-flex;
   flex: none;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-control);
-  overflow: hidden;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-cream);
 }
 
-.xr-lang button {
+.xr-lang button,
+.xr-cities a {
   min-width: var(--tap-min);
   min-height: var(--tap-min);
-  border: 0;
-  background: var(--ui-surface);
-  color: var(--ui-muted);
+  padding: 0 var(--space-3);
+  display: grid;
+  place-items: center;
+  border: var(--tap-inset) solid transparent;
+  border-radius: var(--ui-radius-pill);
+  background-clip: padding-box;
+  color: var(--ui-ink-soft);
+  background-color: transparent;
   font: inherit;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
   cursor: pointer;
 }
 
-.xr-lang button + button {
-  border-left: 1px solid var(--ui-border-strong);
+.xr-lang button.active,
+.xr-cities a.active {
+  color: var(--ui-on-dark);
+  background-color: var(--ui-primary);
 }
 
-.xr-lang button.active {
-  background: var(--ui-primary);
-  color: #ffffff;
+.xr-cities {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+/* The one chip style: outlined, 11 px uppercase mono. */
 .xr-prov {
   flex: none;
-  padding: 3px 8px;
-  border-radius: 999px;
+  padding: 3px 9px;
   border: 1px solid currentColor;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  border-radius: var(--ui-radius-pill);
+  font-family: var(--mono);
+  font-size: var(--fs-label);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
 }
 
 .xr-prov.model {
   color: var(--ui-info);
-  background: #eaf4f6;
+  border-color: var(--ui-info-line);
 }
 
 .xr-prov.demo {
   color: var(--ui-warning);
-  background: var(--amber-light);
+  border-color: var(--ui-warning-line);
 }
 
-.xr-prov-note {
-  margin: 0;
-  font-size: 12px;
-  color: var(--ui-muted);
-}
-
+.xr-prov-note,
 .xr-weather {
   margin: 0;
-  font-size: 12px;
   color: var(--ui-muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .xr-presence {
@@ -235,38 +254,116 @@
   align-items: center;
   gap: var(--space-1);
   margin: 0;
+  color: var(--ui-forest-700);
   font-size: 12px;
   font-weight: 600;
-  color: var(--ui-accent);
 }
 
 .xr-scenario {
   margin: 0;
+  color: var(--ui-warning);
   font-size: 12px;
   font-weight: 600;
-  color: var(--ui-warning);
 }
 
+/* ── Decision room: back to the twin, three numbers, the method folded ── */
+.xr-back {
+  flex: none;
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  padding: 0 var(--space-3) 0 var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 0;
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-ink);
+  background: var(--ui-cream);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.xr-back:hover {
+  background: var(--ui-border);
+}
+
+.xr-briefing-name {
+  margin: 0;
+  color: var(--ui-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* The three numbers: joined cells split by hairlines, label then its source
+   in mono, the number in mono. */
+.xr-numbers,
 .xr-metrics {
+  margin: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: 0;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius);
-  background: var(--ui-surface);
+  border-block: 1px solid var(--ui-border);
 }
 
+.xr-numbers div,
 .xr-metrics div {
   min-width: 0;
-  padding: 6px var(--space-2);
+  padding: var(--space-3) var(--space-2) var(--space-3) 0;
 }
 
+.xr-numbers div + div,
 .xr-metrics div + div {
+  padding-left: var(--space-3);
   border-left: 1px solid var(--ui-border);
+}
+
+.xr-numbers dt,
+.xr-metrics dt {
+  color: var(--ui-ink-soft);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.xr-numbers dt small {
+  margin-top: 2px;
+  display: block;
+  color: var(--ui-muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+}
+
+.xr-numbers dd {
+  margin: var(--space-1) 0 0;
+  color: var(--ui-ink);
+  font-family: var(--mono);
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.xr-numbers dd.xr-number-before {
+  margin: 2px 0 0;
+  color: var(--ui-muted);
+  font-family: var(--font-body);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.xr-numbers[aria-busy="true"] dd,
+.xr-metrics[aria-busy="true"] dd {
+  color: var(--ui-muted);
 }
 
 /* Second readout row (vs normal, trucks & crews, TPA queue). */
 .xr-metrics div:nth-child(3n + 1) {
+  padding-left: 0;
   border-left: 0;
 }
 
@@ -277,6 +374,7 @@
 /* Scenario-scaled TPA queue: its own row so the normal-day comparison is not cut off. */
 .xr-metrics div.xr-metric-wide {
   grid-column: 1 / -1;
+  padding-left: 0;
   border-left: 0;
 }
 
@@ -287,26 +385,17 @@
 /* The TPA queue cell wraps; it never truncates its numbers (gsc-2026 #3/#4). */
 .xr-metrics .xr-queue-cell dd[data-testid="xr-queue"] {
   font-size: 14px;
-  line-height: 1.3;
+  line-height: 1.35;
   overflow: visible;
 }
 
-.xr-metrics[aria-busy="true"] dd {
-  color: var(--ui-muted);
-}
-
-.xr-metrics dt {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ui-muted);
-}
-
 .xr-metrics dd {
-  margin: 1px 0 0;
-  font-size: 16px;
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
+  margin: 2px 0 0;
   color: var(--ui-ink);
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -314,114 +403,10 @@
 
 /* The rule behind a figure (1 crew per truck): small, muted, allowed to wrap. */
 .xr-metrics dd.xr-metric-note {
-  font-size: 11px;
-  font-weight: 500;
   color: var(--ui-muted);
+  font-family: var(--font-body);
+  font-size: 11px;
   white-space: normal;
-}
-
-.xr-cities {
-  display: flex;
-  gap: var(--space-1);
-}
-
-.xr-cities a {
-  flex: 1;
-  min-height: var(--tap-min);
-  display: grid;
-  place-items: center;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-control);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ui-ink-soft);
-  text-decoration: none;
-  text-align: center;
-}
-
-.xr-cities a.active {
-  border-color: var(--ui-primary);
-  background: var(--ui-primary);
-  color: #ffffff;
-}
-
-/* ── Decision room (wave 10): back to the twin, three numbers, the method folded ── */
-.xr-back {
-  flex: none;
-  min-width: var(--tap-min);
-  min-height: var(--tap-min);
-  padding: 0 var(--space-2) 0 var(--space-1);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-control);
-  color: var(--ui-ink);
-  background: var(--ui-surface);
-  font-size: 13px;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.xr-briefing-name {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 650;
-  color: var(--ui-ink);
-}
-
-.xr-numbers {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: 0;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius);
-  background: var(--ui-surface);
-}
-
-.xr-numbers div {
-  min-width: 0;
-  padding: 6px var(--space-2);
-}
-
-.xr-numbers div + div {
-  border-left: 1px solid var(--ui-border);
-}
-
-.xr-numbers dt {
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.25;
-  color: var(--ui-muted);
-}
-
-.xr-numbers dt small {
-  display: block;
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 500;
-}
-
-.xr-numbers dd {
-  margin: 2px 0 0;
-  font-size: 18px;
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-  color: var(--ui-ink);
-  overflow-wrap: anywhere;
-}
-
-.xr-numbers dd.xr-number-before {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--ui-muted);
-}
-
-.xr-numbers[aria-busy="true"] dd {
-  color: var(--ui-muted);
 }
 
 .xr-method {
@@ -431,12 +416,13 @@
 }
 
 .xr-method summary {
+  width: fit-content;
   min-height: var(--tap-min);
   display: flex;
   align-items: center;
+  color: var(--ui-forest-700);
   font-size: 13px;
   font-weight: 600;
-  color: var(--ui-ink-soft);
   cursor: pointer;
 }
 
@@ -451,16 +437,20 @@
   margin: 0;
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
-  font-size: 13px;
-  line-height: 1.4;
+  gap: var(--space-3);
   color: var(--ui-ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .xr-capability svg {
   flex: none;
-  margin-top: 2px;
-  color: var(--ui-accent);
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border-radius: 9px;
+  color: var(--ui-forest-700);
+  background: var(--ui-forest-100);
 }
 
 /* ── Status & selection ── */
@@ -483,12 +473,14 @@
 
 .xr-selected strong {
   display: block;
-  font-size: 15px;
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .xr-selected span {
-  font-size: 13px;
   color: var(--ui-ink-soft);
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -501,13 +493,15 @@
   /* Shrinks and scrolls on short screens instead of pushing off the bottom. */
   min-height: 0;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-border-strong) transparent;
 }
 
-/* ── Scenario presets (P1-10) ── */
+/* ── Scenario presets ── */
 
 .xr-scenario-toggle {
   justify-content: flex-start;
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-4);
   font-size: 14px;
 }
 
@@ -522,22 +516,22 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: right;
+  color: var(--ui-muted);
   font-size: var(--fs-caption);
   font-weight: 500;
-  color: var(--ui-muted);
   font-variant-numeric: tabular-nums;
 }
 
 .xr-scenario-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
 .xr-scenario-controls {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 
 .xr-chip-group {
@@ -546,48 +540,56 @@
   gap: var(--space-1);
 }
 
-.xr-chip-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.xr-chip-label,
+.xr-session-label {
   color: var(--ui-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-label);
+  font-weight: 500;
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
 }
 
 .xr-chips {
   display: grid;
   grid-auto-columns: minmax(0, 1fr);
   grid-auto-flow: column;
-  gap: var(--space-1);
+  gap: 0;
 }
 
+/* Preset pills: quiet cream, the chosen one a dark pill; 34 px drawn in 44. */
 .xr-chip {
   min-width: 0;
   min-height: var(--tap-min);
-  padding: 0 var(--space-1);
-  border: 1px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-control);
-  background: var(--ui-surface);
-  color: var(--ui-ink-soft);
+  padding: 2px var(--space-2);
+  border: 3px solid transparent;
+  border-radius: var(--ui-radius-pill);
+  background-clip: padding-box;
+  color: var(--ui-ink);
+  background-color: var(--ui-cream);
   font: inherit;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: 500;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
 
+.xr-chip:not([aria-pressed="true"]):hover {
+  background-color: var(--ui-border);
+}
+
 .xr-chip[aria-pressed="true"] {
-  border-color: var(--ui-primary);
-  background: var(--ui-primary);
-  color: var(--ui-accent-foreground);
+  color: var(--ui-on-dark);
+  background-color: var(--ui-primary);
 }
 
 .xr-chip:focus-visible {
-  outline: none;
-  box-shadow: var(--ui-focus);
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -1px;
 }
 
-/* ── Agreement & shared session (P2) ── */
+/* ── Agreement & shared session ── */
 
 .xr-session-row {
   display: grid;
@@ -598,19 +600,19 @@
 
 .xr-agreed {
   margin: 0;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--ui-success);
-  border-radius: var(--ui-radius);
-  font-size: var(--fs-caption);
-  font-weight: 650;
+  padding: var(--space-3) var(--space-4);
+  border-radius: 14px;
   color: var(--ui-success);
+  background: var(--ui-success-soft);
+  font-size: var(--fs-caption);
+  font-weight: 600;
 }
 
 .xr-session {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding-top: var(--space-2);
+  padding-top: var(--space-3);
   border-top: 1px solid var(--ui-border);
 }
 
@@ -621,43 +623,41 @@
   gap: var(--space-2);
 }
 
-.xr-session-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ui-muted);
-}
-
 .xr-session-code {
+  color: var(--ui-ink);
+  font-family: var(--mono);
   font-size: var(--fs-kpi);
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.16em;
   font-variant-numeric: tabular-nums;
-  color: var(--ui-ink);
   user-select: all;
 }
 
 .xr-session-url {
-  font-size: 12px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 10px;
   color: var(--ui-ink-soft);
+  background: var(--ui-canvas);
+  font-family: var(--mono);
+  font-size: 12px;
   overflow-wrap: anywhere;
   user-select: all;
 }
 
 .xr-session-note {
   margin: 0;
-  font-size: 12px;
   color: var(--ui-muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .xr-hint {
   margin: 0;
-  font-size: 13px;
   color: var(--ui-ink-soft);
+  font-size: 13px;
 }
 
-/* The AR / VR entry or the orbit hint, with the lite-mode tag beside it. */
+/* The AR / VR entry or the orbit hint, with the lite-mode label beside it. */
 .xr-mode-row {
   display: flex;
   align-items: center;
@@ -680,13 +680,16 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  padding: 2px 8px;
-  border: 1px solid currentColor;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
+  padding: 3px 9px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-pill);
   color: var(--ui-ink-soft);
   background: var(--ui-surface);
+  font-family: var(--mono);
+  font-size: var(--fs-label);
+  font-weight: 500;
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
 }
 
 .xr-lite-row {
@@ -697,38 +700,47 @@
 
 .xr-error {
   margin: 0;
-  font-size: 13px;
   color: var(--ui-danger);
+  font-size: 13px;
 }
 
+/* Pills: primary forest-900, secondary outlined. */
 .xr-btn {
   width: 100%;
-  min-height: 48px;
+  min-height: var(--tap-min);
+  padding: 0 var(--space-4);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  border-radius: var(--ui-radius-control);
-  border: 1px solid transparent;
+  border: 0;
+  border-radius: var(--ui-radius-pill);
   font: inherit;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .xr-btn.primary {
-  background: var(--ui-accent);
   color: var(--ui-accent-foreground);
+  background: var(--ui-forest-900);
 }
 
 .xr-btn.primary:hover:not(:disabled) {
-  background: var(--ui-accent-hover);
+  background: var(--ui-forest-700);
 }
 
 .xr-btn.secondary {
-  background: var(--ui-surface);
-  border-color: var(--ui-border-strong);
   color: var(--ui-ink);
+  background: var(--ui-surface);
+  box-shadow: inset 0 0 0 1px var(--ui-border-strong);
+}
+
+.xr-btn.secondary:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--ui-ink-soft);
 }
 
 .xr-btn:disabled {
@@ -742,11 +754,15 @@
   height: var(--tap-min);
   display: grid;
   place-items: center;
-  border-radius: var(--ui-radius-control);
-  border: 1px solid var(--ui-border-strong);
-  background: var(--ui-surface);
+  border: 0;
+  border-radius: var(--ui-radius-pill);
   color: var(--ui-ink);
+  background: var(--ui-cream);
   cursor: pointer;
+}
+
+.xr-icon-btn:hover:not(:disabled) {
+  background: var(--ui-border);
 }
 
 .xr-icon-btn:disabled {
@@ -758,33 +774,37 @@
 .xr-icon-btn:focus-visible,
 .xr-lang button:focus-visible,
 .xr-cities a:focus-visible,
+.xr-back:focus-visible,
+.xr-method summary:focus-visible,
 .xr-range input:focus-visible {
-  outline: none;
-  box-shadow: var(--ui-focus);
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
 }
 
-/* ── Ask Pythia on the table (gsc-2026 #7) ── */
+/* ── Ask Pythia on the table ── */
 
 .xr-ask {
   display: flex;
   align-items: center;
   gap: var(--space-1);
   min-width: 0;
+  padding: 0 0 0 var(--space-3);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-cream);
 }
 
 .xr-ask-icon {
   flex: none;
-  color: var(--ui-accent);
+  color: var(--ui-forest-700);
 }
 
 .xr-ask input {
   flex: 1;
   min-width: 0;
   min-height: var(--tap-min);
-  padding: 0 var(--space-3);
-  border: 1px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-control);
-  background: var(--ui-surface);
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
   color: var(--ui-ink);
   font: inherit;
   font-size: var(--fs-body);
@@ -796,13 +816,24 @@
 
 .xr-ask input:focus-visible {
   outline: none;
-  box-shadow: var(--ui-focus);
 }
 
-.xr-icon-btn.primary {
-  border-color: var(--ui-accent);
-  background: var(--ui-accent);
+.xr-ask:focus-within {
+  box-shadow: inset 0 0 0 2px var(--ui-accent);
+}
+
+.xr-ask .xr-icon-btn {
+  background: transparent;
+}
+
+.xr-icon-btn.primary,
+.xr-ask .xr-icon-btn.primary {
   color: var(--ui-accent-foreground);
+  background: var(--ui-forest-900);
+}
+
+.xr-icon-btn.primary:hover:not(:disabled) {
+  background: var(--ui-forest-700);
 }
 
 .xr-icon-btn.primary:disabled {
@@ -830,22 +861,22 @@
 }
 
 .xr-ask-applied {
-  font-size: var(--fs-caption);
-  font-weight: 650;
   color: var(--ui-ink);
+  font-size: var(--fs-caption);
+  font-weight: 600;
 }
 
 .xr-ask-trace {
-  font-size: 12px;
   color: var(--ui-ink-soft);
+  font-size: 12px;
 }
 
 .xr-ask-link {
   display: inline-flex;
   align-items: center;
   min-height: var(--tap-min);
-  font-weight: 650;
-  color: var(--ui-accent);
+  color: var(--ui-forest-700);
+  font-weight: 600;
 }
 
 .xr-tool-row {
@@ -878,50 +909,52 @@
 }
 
 .xr-range input::-webkit-slider-runnable-track {
-  height: 6px;
+  height: 4px;
   border-radius: 999px;
-  background: var(--ui-border-strong);
+  background: var(--ui-border);
 }
 
 .xr-range input::-moz-range-track {
-  height: 6px;
+  height: 4px;
   border-radius: 999px;
-  background: var(--ui-border-strong);
+  background: var(--ui-border);
 }
 
 .xr-range input::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   margin-top: -9px;
   border-radius: 50%;
-  border: 3px solid var(--ui-surface);
-  background: var(--ui-accent);
-  box-shadow: 0 1px 4px rgba(16, 32, 26, 0.35);
+  border: 2px solid var(--ui-surface);
+  background: var(--ui-forest-700);
+  box-shadow: 0 1px 4px rgb(29 35 32 / 0.3);
 }
 
 .xr-range input::-moz-range-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  border: 3px solid var(--ui-surface);
-  background: var(--ui-accent);
-  box-shadow: 0 1px 4px rgba(16, 32, 26, 0.35);
+  border: 2px solid var(--ui-surface);
+  background: var(--ui-forest-700);
+  box-shadow: 0 1px 4px rgb(29 35 32 / 0.3);
 }
 
 .xr-range-ticks {
   display: flex;
   justify-content: space-between;
-  padding: 0 6px;
-  font-variant-numeric: tabular-nums;
   margin-top: -6px;
-  font-size: 11px;
-  font-weight: 600;
+  padding: 0 6px;
   color: var(--ui-muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 .xr-range-ticks .active {
-  color: var(--ui-accent);
+  color: var(--ui-forest-700);
+  font-weight: 600;
 }
 
 /* The day's at-risk count beside its date: a risk-coloured dot, then the number. */
@@ -963,26 +996,26 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  color: var(--ui-ink-soft);
   font-size: 12px;
   font-weight: 600;
-  color: var(--ui-ink-soft);
 }
 
 .xr-swatch {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
 }
 
 .xr-swatch.landfill {
-  border-radius: 50%;
-  background: var(--ui-accent);
+  background: var(--ui-forest-700);
 }
 
 .xr-legend p {
   margin: var(--space-1) 0 0;
-  font-size: 12px;
   color: var(--ui-muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 /* The plate's licence credit sits outside the scrolling controls, so it is never clipped. */
@@ -991,12 +1024,12 @@
   flex: none;
   max-width: 420px;
   margin: 0;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--ui-radius-card);
-  background: rgba(255, 255, 255, 0.95);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-muted);
+  background: var(--ui-surface);
   font-size: 11px;
   line-height: 1.35;
-  color: var(--ui-muted);
 }
 
 .xr-visually-hidden {
@@ -1011,6 +1044,50 @@
   border: 0;
 }
 
+/* Desktop: the panels join into one flush rail, the twin's decision room. */
+@media (min-width: 921px) {
+  .xr-shell:not(.in-session) .xr-overlay {
+    right: auto;
+    width: 400px;
+    padding: 0;
+    gap: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ui-border-strong) transparent;
+    background: var(--ui-surface);
+    border-right: 1px solid var(--ui-border);
+    pointer-events: auto;
+  }
+
+  .xr-shell:not(.in-session) .xr-panel {
+    max-width: none;
+    padding: var(--space-5);
+    border: 0;
+    border-bottom: 1px solid var(--ui-border);
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .xr-shell:not(.in-session) .xr-spacer {
+    display: none;
+  }
+
+  .xr-shell:not(.in-session) .xr-controls {
+    flex: none;
+    gap: var(--space-4);
+    overflow: visible;
+  }
+
+  .xr-shell:not(.in-session) .xr-credit {
+    max-width: none;
+    margin-top: auto;
+    padding: var(--space-3) var(--space-5);
+    border-radius: 0;
+    background: transparent;
+  }
+}
+
 /* Phones: the city first. One-line header, a bottom sheet folded to the ask
    field and the scrubber, tighter panels (gsc-2026 #3). */
 @media (max-width: 480px) {
@@ -1021,20 +1098,31 @@
   }
 
   .xr-panel {
-    padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+    padding: var(--space-1) var(--space-2) var(--space-1) var(--space-1);
+    border-radius: 26px;
   }
 
   .xr-head.open {
-    padding-bottom: var(--space-2);
+    padding: var(--space-1) var(--space-2) var(--space-3) var(--space-3);
+    border-radius: var(--ui-radius-elevated);
     max-height: 70vh;
     overflow-y: auto;
   }
 
+  .xr-head.open .xr-head-row {
+    margin-left: calc(-1 * var(--space-2));
+  }
+
   .xr-head-row h1 {
     font-size: 17px;
+    line-height: 1.1;
   }
 
   /* The back link keeps its 44 px target as an arrow; the word goes to its label. */
+  .xr-back {
+    padding: 0;
+  }
+
   .xr-back span {
     display: none;
   }
@@ -1055,25 +1143,23 @@
   .xr-head-row .xr-prov {
     padding: 2px 6px;
     font-size: 10px;
+    letter-spacing: 0.04em;
   }
 
   .xr-controls {
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
+    border-radius: var(--ui-radius-elevated);
   }
 
   .xr-controls.open {
     max-height: 72vh;
   }
 
-  .xr-controls .xr-btn {
-    min-height: var(--tap-min);
-  }
-
   .xr-credit {
+    padding: 2px var(--space-2);
     font-size: 10px;
     line-height: 1.3;
-    padding: 2px var(--space-2);
   }
 }
 
@@ -1085,12 +1171,7 @@
     padding-right: var(--space-2);
   }
 
-  /* 320 px: the back arrow keeps its 44 px target over the panel padding and gap,
-     and the provenance chip wraps sooner, so the day's rain chip stays whole. */
   .xr-back {
-    margin-left: calc(-1 * var(--space-3));
-    margin-right: calc(-1 * var(--space-2));
-    border-color: transparent;
     background: transparent;
   }
 
@@ -1103,7 +1184,7 @@
   }
 
   .xr-ask input {
-    padding: 0 var(--space-2);
+    padding: 0 var(--space-1);
   }
 }
 

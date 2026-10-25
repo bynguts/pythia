@@ -60,8 +60,8 @@ export const JAKARTA_PLATE = {
 // Status hues are semantic (styles/tokens.css); the overlay legend carries text labels
 // too, so colour is never the only signal.
 export const RISK_COLORS = {
-  normal: "#86a497",
-  elevated: "#d39b35",
+  normal: "#cec8bd",
+  elevated: "#e0c48c",
   high: "#c45f27",
   critical: "#b42f2b",
 };

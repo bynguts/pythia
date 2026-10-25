@@ -136,10 +136,12 @@ test("present mode folds the rail away and keeps the scenario chip", async ({ pa
   await expect(page.getByTestId("twin-landfill-tag")).toContainText((await hour.textContent()).trim());
   const metric = page.getByTestId("twin-present-queue-metric");
   await expect(metric).toHaveText(
-    /^TPA queue \(scenario\): [\d.,]+ min\/truck without stagger \(range [\d.,]+–[\d.,]+ if departure spread is \d+–\d+ min, assumed\) → [\d.,]+ with Pythia stagger .*\(Simulated\)$/,
+    /^TPA weighbridge queue, selected-day average: [\d.,]+ min\/truck without stagger \(range [\d.,]+–[\d.,]+ if departure spread is \d+–\d+ min, assumed\) → [\d.,]+ with Pythia stagger .*\(Simulated\)$/,
   );
   // The beacon's day average is the headline's own unstaggered figure (same simulated day).
-  const dayAverage = (await metric.textContent()).match(/^TPA queue \(scenario\): ([\d.,]+)/)[1];
+  const dayAverage = (await metric.textContent()).match(
+    /^TPA weighbridge queue, selected-day average: ([\d.,]+)/,
+  )[1];
   await expect(page.getByTestId("twin-landfill-tag")).toContainText(`Day average ${dayAverage} min/truck`);
 });
 

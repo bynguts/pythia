@@ -6,7 +6,7 @@ import { MapboxOverlay } from "@deck.gl/mapbox";
 import { WebMercatorViewport } from "@deck.gl/core";
 import {
   AlertTriangle,
-  Box,
+  ArrowRight,
   ChevronDown,
   ChevronUp,
   Clapperboard,
@@ -23,6 +23,7 @@ import {
   Users,
 } from "lucide-react";
 import { MetricStrip } from "../../shared/ui/MetricStrip.jsx";
+import { Provenance } from "../../shared/ui/Provenance.jsx";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import {
   DISTRICT_LAYER_IDS,
@@ -88,9 +89,19 @@ const STREETS_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 const OFFLINE_STYLE = {
   version: 8,
   sources: {},
-  layers: [{ id: "twin-offline-bg", type: "background", paint: { "background-color": "#e4e9e5" } }],
+  layers: [{ id: "twin-offline-bg", type: "background", paint: { "background-color": "#f4ede3" } }],
 };
 const CITIES = TWIN_CITIES;
+// A scene's data class as the one provenance-chip tone.
+const PROV_KINDS = {
+  REAL: "real",
+  MODEL_OUTPUT: "model",
+  SIMULATED: "sim",
+  APPROXIMATE: "sim",
+  SIMULATED_DEMO_CITY: "demo",
+  UNAVAILABLE: "stale",
+};
+const provKind = (value) => PROV_KINDS[value] || "proxy";
 const EVENT_PRESETS = TWIN_EVENT_PRESETS;
 const PLAY_STEP_MS = 1800;
 // Keyboard path into the map: the panel lists this many districts by risk.
@@ -112,6 +123,7 @@ const PRESENT_PADDING = { top: 120, left: 0, right: 0, bottom: 88 };
 const TAG_GAP = 14;
 const TAG_OBSTACLES = [
   ".twin-legend-bar",
+  ".twin-provenance-bar",
   ".twin-tools",
   ".twin-timeline",
   ".twin-rain-label",
@@ -580,6 +592,8 @@ export function TwinWorkspace({ onCityChange }) {
       view,
       animate,
       reducedMotion,
+      // wave11 twin: the simulated fleet only in footage mode; the room shows risk.
+      showTrucks: PRESENT,
     };
     if (mapReady) draw();
   }, [scene, prepared, view, animate, reducedMotion, mapReady, draw]);
@@ -998,8 +1012,13 @@ export function TwinWorkspace({ onCityChange }) {
   const scenarioHelper = (...parts) =>
     [t("dr_kpi_scenario").replace("{name}", kpiName), ...parts].filter(Boolean).join(" · ");
   const peakIsScenario = kpiWhatIf && scene?.summary?.peak_date === summary.date && kpiScenario;
+  // wave11 twin: every number in the strip carries the scene's class as its bare label.
+  const metricClass = scene?.provenance?.districts?.class;
+  const metricSource =
+    scene && metricClass ? { source: classLabel(metricClass), sourceKind: provKind(metricClass) } : {};
   const metrics = [
     {
+      ...metricSource,
       label: t("twin_metric_total"),
       value: scene ? `${number.format(summary.tons)} t` : "—",
       helper: kpiScenario
@@ -1017,9 +1036,9 @@ export function TwinWorkspace({ onCityChange }) {
                 : null,
           )
         : t("twin_metric_total_helper").replace("{date}", formatDate(summary.date)),
-      tone: kpiScenario ? "info" : "neutral",
     },
     {
+      ...metricSource,
       label: t("twin_metric_peak"),
       value: scene ? formatDate(scene.summary.peak_date) : "—",
       helper: scene
@@ -1030,9 +1049,9 @@ export function TwinWorkspace({ onCityChange }) {
             .filter(Boolean)
             .join(" · ")
         : "",
-      tone: "warning",
     },
     {
+      ...metricSource,
       label: t("twin_metric_risk"),
       value: scene ? number.format(summary.atRisk) : "—",
       helper: kpiScenario
@@ -1051,9 +1070,10 @@ export function TwinWorkspace({ onCityChange }) {
           ]
             .filter(Boolean)
             .join(" · "),
-      tone: summary.atRisk > 0 ? "danger" : kpiScenario ? "info" : "neutral",
+      tone: summary.atRisk > 0 ? "danger" : undefined,
     },
     {
+      ...metricSource,
       label: t("twin_metric_trucks"),
       value: scene ? number.format(summary.trucks) : "—",
       helper: kpiScenario
@@ -1070,7 +1090,6 @@ export function TwinWorkspace({ onCityChange }) {
         : truckCapacity
           ? trucksHelper
           : "",
-      tone: kpiScenario ? "info" : "neutral",
     },
   ];
 
@@ -1096,8 +1115,9 @@ export function TwinWorkspace({ onCityChange }) {
       params.set("event_lat", String(venue.lat));
       params.set("event_lng", String(venue.lng));
     }
-    // The tabletop puts the what-if on the same day as the twin.
-    if (whatIf && scenarioDay > 0) params.set("scenario_day", String(scenarioDay));
+    // The tabletop opens on the twin's selected day, and the what-if on its own day.
+    if (safeDay > 0) params.set("day", String(safeDay));
+    if (whatIf && scenarioDay !== safeDay) params.set("scenario_day", String(scenarioDay));
     return `/xr?${params}`;
   })();
   // Data honesty: the selected day's rain says where it comes from (scene.weather):
@@ -1256,7 +1276,7 @@ export function TwinWorkspace({ onCityChange }) {
           <h2 id="twin-city-label" className="twin-panel-title">
             {t("twin_city_label")}
           </h2>
-          <div className="twin-choice" role="group" aria-labelledby="twin-city-label">
+          <div className="twin-choice twin-segmented" role="group" aria-labelledby="twin-city-label">
             {CITIES.map((id) => (
               <button
                 key={id}
@@ -1307,7 +1327,7 @@ export function TwinWorkspace({ onCityChange }) {
           <span className="twin-field-label" id="twin-event-label">
             <Users size={15} aria-hidden="true" /> {t("twin_event")}
           </span>
-          <div className="twin-choice twin-choice-3" role="group" aria-labelledby="twin-event-label">
+          <div className="twin-choice" role="group" aria-labelledby="twin-event-label">
             {EVENT_PRESETS.map((p) => (
               <button
                 key={p.id}
@@ -1332,7 +1352,7 @@ export function TwinWorkspace({ onCityChange }) {
             <MapPin size={15} aria-hidden="true" /> {t("twin_venue")}
           </span>
           <div
-            className={`twin-choice${venues.length >= 3 ? " twin-choice-3" : ""}`}
+            className="twin-choice"
             role="group"
             aria-labelledby="twin-venue-label"
             data-testid="twin-venues"
@@ -1368,7 +1388,7 @@ export function TwinWorkspace({ onCityChange }) {
         <section className="twin-panel-section twin-actions">
           <button
             type="button"
-            className="twin-btn primary"
+            className="twin-btn quiet"
             data-testid="twin-tour"
             onClick={tour ? stopTour : startTour}
             disabled={!ready && !tour}
@@ -1453,27 +1473,25 @@ export function TwinWorkspace({ onCityChange }) {
 
   return (
     <section
-      className={`twin-workspace workspace-page${PRESENT ? " is-present" : ""}${askOpen ? " has-ask" : ""}`}
+      className={`twin-workspace workspace-page ui-bleed-page${PRESENT ? " is-present" : ""}${askOpen ? " has-ask" : ""}`}
       data-testid="twin-workspace"
       aria-labelledby="twin-title"
     >
-      <header className="workspace-heading twin-heading">
-        <div>
-          <span className="workspace-kicker">
-            <Box size={14} /> {t("twin_kicker")}
-          </span>
-          <h1 id="twin-title">{t("twin_title")}</h1>
-          <p>{t("twin_sub")}</p>
-        </div>
+      {/* wave11 twin: the title sits in the strip's band, above the decision rail. */}
+      <header className="twin-heading">
+        <h1 id="twin-title">{t("twin_title")}</h1>
+        <p className="sr-only">{t("twin_sub")}</p>
         {generatedAt && (
-          <div className="workspace-freshness" data-testid="twin-freshness">
+          <p className="twin-freshness" data-testid="twin-freshness">
             <span>{t("twin_generated").replace("{time}", generatedAt)}</span>
-            <strong>{classLabel(scene.provenance?.districts?.class)}</strong>
-          </div>
+            <Provenance kind={provKind(scene.provenance?.districts?.class)}>
+              {classLabel(scene.provenance?.districts?.class)}
+            </Provenance>
+          </p>
         )}
       </header>
 
-      <MetricStrip metrics={metrics} />
+      <MetricStrip metrics={metrics} bleed label={t("twin_title")} />
 
       <div className="twin-deck" data-testid="twin-deck">
         {isDemoCity && (
@@ -1488,9 +1506,19 @@ export function TwinWorkspace({ onCityChange }) {
 
         <div className="twin-stage">
           {(askOpen || !PRESENT) && (
-            // One column beside the map: the scenario briefing (the decision), the
-            // what-if controls, then Ask Pythia.
-            <div className="twin-side">
+            // wave11 twin: one decision room beside the map. Ask Pythia leads, the
+            // scenario briefing (numbers, approve, the table) follows, then the
+            // what-if controls.
+            <div className="twin-side" data-testid="twin-side">
+              {askOpen && (
+                <TwinAskRail
+                  onApply={applyScenario}
+                  appliedText={scenarioText}
+                  queueText={queueMetricText}
+                  collapsible={PRESENT}
+                  onCollapse={() => setAskOpen(false)}
+                />
+              )}
               {/* The briefing compares against Jakarta's baseline; the demo city has none. */}
               {!PRESENT && city === "jakarta" && (
                 <ScenarioBriefing
@@ -1502,15 +1530,6 @@ export function TwinWorkspace({ onCityChange }) {
                 />
               )}
               {!PRESENT && controlPanel}
-              {askOpen && (
-                <TwinAskRail
-                  onApply={applyScenario}
-                  appliedText={scenarioText}
-                  queueText={queueMetricText}
-                  collapsible={PRESENT}
-                  onCollapse={() => setAskOpen(false)}
-                />
-              )}
             </div>
           )}
           <div className={`twin-viewport${sceneRain > 0 ? " is-raining" : ""}`}>
@@ -1591,6 +1610,18 @@ export function TwinWorkspace({ onCityChange }) {
                 aria-label={t("dr_tpa_toggle").replace("{name}", landfillName)}
                 onClick={() => setLandfillOpen((open) => !open)}
               >
+                {/* wave11 twin: folded, the card reads like the comp: the queue before → after. */}
+                {!landfillOpen && queueMetricOk && (
+                  <span className="is-metric" data-testid="twin-landfill-metric">
+                    <small>{t("w11twin_queue_card")}</small>
+                    <span>
+                      <i>{minutesNumber.format(queueMetric.baseline_mean)}</i>
+                      <ArrowRight size={14} aria-hidden="true" />
+                      <b>{minutesNumber.format(queueMetric.staggered_mean)}</b>
+                    </span>
+                    <em>{t("w11twin_queue_card_pair")}</em>
+                  </span>
+                )}
                 {(landfillOpen
                   ? landfillLines
                   : landfillLines.filter((line, i) => i === 0 || line === queueClassText)
@@ -1743,6 +1774,10 @@ export function TwinWorkspace({ onCityChange }) {
                   </span>
                 ))}
               </div>
+              {basemapOffline && <small className="twin-legend-note">{t("twin_offline_basemap")}</small>}
+            </div>
+            {/* wave11 twin: the layers' provenance is the map's mono footer chip. */}
+            <div className="twin-provenance-bar">
               {provenance.length > 0 && (
                 <button
                   type="button"
@@ -1785,7 +1820,6 @@ export function TwinWorkspace({ onCityChange }) {
                   </li>
                 ))}
               </ul>
-              {basemapOffline && <small className="twin-legend-note">{t("twin_offline_basemap")}</small>}
             </div>
             <div className="twin-tools">
               {!askOpen && (

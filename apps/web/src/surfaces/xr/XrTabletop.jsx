@@ -70,7 +70,8 @@ import {
 import { IMAGERY_CREDIT } from "../../features/twin/cityBase3d.js";
 import "./xr.css";
 
-const BACKGROUND = "#e9eeeb";
+// wave11: the cream canvas of the approved world (tokens.css --ui-cream).
+const BACKGROUND = "#f4ede3";
 const VR_ANCHOR = new THREE.Vector3(0, 1.0, -0.7);
 const MIN_SCALE = 0.3;
 const MAX_SCALE = 3;
@@ -111,8 +112,13 @@ function readParams() {
   const lng = finiteParam(params, "event_lng");
   const linkedVenue = lat !== null && lng !== null ? { name: null, lat, lng } : null;
   const session = (params.get("session") || "").toUpperCase();
-  // The day a linked what-if applies to (the twin's `day`, or `scenario_day`).
-  const linkedDay = finiteParam(params, "scenario_day") ?? finiteParam(params, "day");
+  const dayParam = (name) => {
+    const d = finiteParam(params, name);
+    return Number.isInteger(d) && d >= 0 && d <= 6 ? d : null;
+  };
+  // The selected day (the twin's `day`), and the day a linked what-if applies to
+  // (`scenario_day`, by default the selected day).
+  const day = dayParam("day") ?? dayParam("scenario_day") ?? 0;
   // A decision-room briefing scenario (twinLinks TWIN_SCENARIOS) sets rain, crowd and venue on today.
   const briefing = city === "jakarta" ? twinScenario(params.get("scenario")) : null;
   if (briefing)
@@ -123,7 +129,9 @@ function readParams() {
       eventPreset: briefing.event,
       venue: TWIN_VENUES[city].find((v) => v.id === briefing.venue) || TWIN_VENUES[city][0],
       session: SESSION_CODE.test(session) ? session : null,
-      day: 0,
+      day,
+      // A briefing applies to today.
+      scenarioDay: 0,
       scenarioId: briefing.id,
     };
   return {
@@ -134,7 +142,8 @@ function readParams() {
     eventPreset: attendance <= 0 ? "none" : attendance > 75000 ? "100k" : "50k",
     venue: linkedVenue || TWIN_VENUES[city][0],
     session: SESSION_CODE.test(session) ? session : null,
-    day: Number.isInteger(linkedDay) && linkedDay >= 0 && linkedDay <= 6 ? linkedDay : 0,
+    day,
+    scenarioDay: dayParam("scenario_day") ?? day,
     scenarioId: null,
   };
 }
@@ -777,7 +786,7 @@ export function XrTabletop() {
     eventPreset: params.eventPreset,
     day: params.day,
     // The horizon day the what-if (rain / event) applies to.
-    scenarioDay: params.day,
+    scenarioDay: params.scenarioDay,
     agreed: false,
     // The district pointed at on any device in the session (last writer wins).
     selectedId: null,
@@ -1495,7 +1504,13 @@ export function XrTabletop() {
   // Data honesty: where the selected day's rain comes from (scene.weather): the
   // what-if, the Open-Meteo forecast (never observed weather) or assumed dry.
   const weather = cityScene?.weather;
-  const weatherDay = weather?.days?.[day] || null;
+  // The applied what-if names its own day's rain at once: until its scene lands, the
+  // table still holds the previous scene, whose forecast is not this scenario's rain.
+  const sceneWeatherDay = weather?.days?.[day] || null;
+  const weatherDay =
+    sceneWeatherDay && scenario.rain > 0 && day === scenario.scenarioDay
+      ? { ...sceneWeatherDay, input: "scenario", rainfall_mm: scenario.rain }
+      : sceneWeatherDay;
   const weatherKey = !weatherDay
     ? null
     : weatherDay.input === "scenario"
@@ -1863,9 +1878,6 @@ export function XrTabletop() {
 
           <div className="xr-head-detail" id="xr-head-detail" hidden={!headOpen}>
             <div className="xr-head-meta">
-              <span className="xr-kicker">
-                <Box size={13} aria-hidden="true" /> {t("xr_kicker")}
-              </span>
               <div className="xr-lang" role="group" aria-label={t("xr_language")}>
                 {["id", "en"].map((code) => (
                   <button

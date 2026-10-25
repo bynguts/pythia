@@ -130,7 +130,7 @@ test("present mode shows the scenario chip and the simulated queue headline", as
   );
   await expect(page.getByTestId("twin-present-queue-metric")).toHaveText(
     // #twinrender: each side of the arrow says which arm it is.
-    "TPA queue: 42 min/truck without stagger → 18.5 with Pythia stagger (Simulated)",
+    "TPA weighbridge queue, day average: 42 min/truck without stagger → 18.5 with Pythia stagger (Simulated)",
   );
   // Provenance stays on screen in footage mode.
   await expect(page.getByTestId("twin-provenance-landfill_queue")).toBeVisible();
@@ -226,7 +226,7 @@ test("present mode names the venue and shows the scenario-scaled queue next to t
     /^No rain forecast \(Open-Meteo\) · Concert 100k at Monas · Today$/i,
   );
   await expect(page.getByTestId("twin-present-queue-metric")).toHaveText(
-    "TPA queue (scenario): 55 min/truck without stagger → 24.5 with Pythia stagger · normal day 42 → 18.5 (Simulated)",
+    "TPA weighbridge queue, selected-day average: 55 min/truck without stagger → 24.5 with Pythia stagger · normal day 42 → 18.5 (Simulated)",
   );
   await expect(page.getByTestId("twin-present-queue")).toHaveText("Queue data: Simulated");
 });

@@ -151,3 +151,36 @@ def test_web_briefing_scenarios_match_the_backend_catalogue():
         for sid, spec in BRIEFING_SCENARIOS.items()
     ]
     assert web == backend
+
+
+def test_briefing_shows_the_staggered_answer_on_the_same_lanes(api_client, dry_week):
+    """Each column carries both arms of one simulated day: current practice and the stagger.
+
+    The lane-closed what-if runs the stagger on the reduced lane count too, so the
+    answer is never borrowed from the full four-lane day.
+    """
+    body = api_client.get("/api/twin/briefing", params={"scenario": "weighbridge_lane_down"}).json()
+    for side in ("before", "after"):
+        column = body[side]
+        assert column["queue_staggered_minutes_per_truck"] < column["queue_minutes_per_truck"]
+        assert column["queue_staggered_p95_minutes"] <= column["queue_p95_minutes"]
+    after, before = body["after"], body["before"]
+    assert after["weighbridge_lanes"] == WEIGHBRIDGE_LANES - 1
+    outlook = baseline_module.build_outlook(days=7)
+    lanes_down = scenario_queue_metric(
+        outlook["total_tonnage_t"], outlook["normal_day_tonnage_t"], lanes=WEIGHBRIDGE_LANES - 1
+    )
+    assert after["queue_staggered_minutes_per_truck"] == lanes_down["staggered_mean"]
+    # Closing a lane lengthens the staggered day as well; it is not the four-lane figure.
+    assert after["queue_staggered_minutes_per_truck"] > before["queue_staggered_minutes_per_truck"]
+    assert body["classification"]["queue"] == "SIMULATED"
+
+
+def test_twin_payloads_carry_no_mojibake(api_client, dry_week):
+    """Provenance prose keeps its UTF-8 punctuation (an em dash, never cp1252 'â€')."""
+    scene = api_client.get("/api/twin/scene", params={"city": "jakarta", "days": 7})
+    briefing = api_client.get("/api/twin/briefing", params={"scenario": "gbk_event"})
+    for response in (scene, briefing):
+        text = response.content.decode("utf-8")
+        assert "â€" not in text and "Ã" not in text
+    assert scene.json()["provenance"]["tps"]["source"].startswith("SILIKA DLH —")

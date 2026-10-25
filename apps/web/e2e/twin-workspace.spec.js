@@ -159,11 +159,12 @@ test("Ho Chi Minh City is labelled as a simulated demo city", async ({ page }) =
   await expect(page.getByTestId("twin-provenance-districts")).toContainText("Simulated demo city");
   await expect(page.getByTestId("twin-provenance-trucks")).toContainText("Unavailable");
   // The shell header names the city on screen, so it follows the switch.
-  await expect(page.locator(".command-eyebrow")).toHaveText(/Ho Chi Minh/);
+  // wave11 design system: the city context moved into the top-bar status chip.
+  await expect(page.getByTestId("shell-status")).toContainText(/Ho Chi Minh/);
 
   await page.getByTestId("twin-city-jakarta").click();
   await waitForTwin(page, "window.__pythiaTwin.city === 'jakarta'");
-  await expect(page.locator(".command-eyebrow")).toHaveText(/Jakarta/);
+  await expect(page.getByTestId("shell-status")).toContainText(/Jakarta/);
   await expect(banner).toHaveCount(0);
 });
 
@@ -336,14 +337,15 @@ test("district blocks have no wireframe stripes, labels sit on top without overl
   expect(state.flowBundled).toBe(34);
   expect((await layer("twin-flows")).count).toBe(9);
 
-  // The map names the same five districts the risk list ranks, in that order.
+  // The map names the top three districts the risk list ranks, in that order (wave11 twin:
+  // fewer names so the at-risk colour reads first).
   const listed = await page
     .getByTestId("twin-risk-list")
     .getByRole("button")
     .evaluateAll((buttons) => buttons.map((b) => b.dataset.testid.replace("twin-risk-item-", "")));
-  expect(state.labelledDistricts).toEqual(listed);
+  expect(state.labelledDistricts).toEqual(listed.slice(0, 3));
   const labels = page.getByTestId("twin-label");
-  await expect(labels).toHaveCount(5);
+  await expect(labels).toHaveCount(3);
   await expect(page.locator('[data-testid=twin-label][data-placed="true"]').first()).toBeVisible();
 
   const geometry = await page.evaluate(() => {
@@ -375,7 +377,7 @@ test("district blocks have no wireframe stripes, labels sit on top without overl
       ),
     };
   });
-  expect(geometry.placed).toBeGreaterThanOrEqual(3);
+  expect(geometry.placed).toBeGreaterThanOrEqual(2);
   expect(geometry).toMatchObject({ overlaps: 0, onTag: 0, inside: true, afterCanvas: true });
 
   // The selected district's label is marked, and leads the placement order.
@@ -422,8 +424,8 @@ for (const [lang, copy] of [
       peak: /Without stagger · Peak hour \d{2}:00 \(modelled\): [\d,]+ trucks queued · [\d,]+ min wait/,
       day: /Day average [\d.,]+ min\/truck without stagger → [\d.,]+ with Pythia stagger/,
       staggered: "With Pythia stagger, same hour: 12 queued · 9 min wait",
-      band: /^TPA queue( \(scenario\))?: [\d.,]+ min\/truck without stagger \(range [\d.,]+–[\d.,]+ if departure spread is 10–60 min, assumed\) → [\d.,]+ with Pythia stagger .*\(Simulated\)$/,
-      trips: /≈[\d.,]+ TPA gate trips each \([\d,]+\/day, (real median|scaled real median)\)/,
+      band: /^TPA weighbridge queue, (day|selected-day) average: [\d.,]+ min\/truck without stagger \(range [\d.,]+–[\d.,]+ if departure spread is 10–60 min, assumed\) → [\d.,]+ with Pythia stagger .*\(Simulated\)$/,
+      trips: /≈[\d.,]+ TPA gate trips each \([\d,]+ trips\/day, (real median|scaled real median)\)/,
     },
   ],
   [
@@ -432,8 +434,8 @@ for (const [lang, copy] of [
       peak: /Tanpa keberangkatan bertahap · Jam puncak \d{2}:00 \(model\): [\d.]+ truk antre · tunggu [\d.]+ mnt/,
       day: /Rata-rata harian [\d.,]+ mnt\/truk tanpa bertahap → [\d.,]+ dengan bertahap Pythia/,
       staggered: "Dengan bertahap Pythia, jam yang sama: 12 truk antre · tunggu 9 mnt",
-      band: /^Antrean TPA( \(skenario\))?: [\d.,]+ mnt\/truk tanpa bertahap \(rentang [\d.,]+–[\d.,]+ bila sebaran keberangkatan 10–60 mnt, asumsi\) → [\d.,]+ dengan bertahap Pythia .*\(Simulasi\)$/,
-      trips: /≈[\d.,]+ rit gerbang TPA per truk \([\d.]+\/hari, (median riil|median riil diskalakan)\)/,
+      band: /^Antre timbang TPA, rata-rata (sehari|hari terpilih): [\d.,]+ mnt\/truk tanpa bertahap \(rentang [\d.,]+–[\d.,]+ bila sebaran keberangkatan 10–60 mnt, asumsi\) → [\d.,]+ dengan bertahap Pythia .*\(Simulasi\)$/,
+      trips: /≈[\d.,]+ rit gerbang TPA per truk \([\d.]+ rit\/hari, (median riil|median riil diskalakan)\)/,
     },
   ],
 ])

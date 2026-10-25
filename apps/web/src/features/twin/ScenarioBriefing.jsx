@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, CloudRain, QrCode, Scale, Users } from "lucide-react";
+import { ArrowRight, Check, CloudRain, QrCode, Scale, Users } from "lucide-react";
 import { apiGet } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import { TWIN_SCENARIOS, WEIGHBRIDGE_LANES, twinScenario } from "./twinLinks.js";
@@ -11,7 +11,16 @@ const ROWS = [
   { key: "tons", field: "total_tonnage_t", label: "dr_row_tons", unit: " t", source: "tonnage" },
   { key: "trucks", field: "trucks_needed", label: "dr_row_trucks", unit: "", source: "trucks" },
   { key: "queue", field: "queue_minutes_per_truck", label: "dr_row_queue", unit: "", source: "queue" },
+  // Pythia's answer from the same simulated day and lanes: staggered departures.
+  {
+    key: "staggered",
+    field: "queue_staggered_minutes_per_truck",
+    label: "w11twin_row_queue_staggered",
+    unit: "",
+    source: "queue",
+  },
 ];
+const STEPS = ["w11twin_step_pick", "w11twin_step_compare", "w11twin_step_send"];
 
 /**
  * "This week's scenario briefing": today's canonical baseline (forecast/baseline,
@@ -43,7 +52,9 @@ export function ScenarioBriefing({ scenarioId, onSelect, onApply, onOpenTable, o
   const whole = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
   const minutes = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
   const format = (row, value) =>
-    Number.isFinite(value) ? `${(row.key === "queue" ? minutes : whole).format(value)}${row.unit}` : "—";
+    Number.isFinite(value)
+      ? `${(row.key === "queue" || row.key === "staggered" ? minutes : whole).format(value)}${row.unit}`
+      : "—";
   const delta = (before, after) =>
     Number.isFinite(before) && Number.isFinite(after) && before > 0
       ? `${after >= before ? "+" : "−"}${minutes.format(Math.abs(((after - before) / before) * 100))}%`
@@ -55,6 +66,8 @@ export function ScenarioBriefing({ scenarioId, onSelect, onApply, onOpenTable, o
         .replace("{closed}", WEIGHBRIDGE_LANES - lanes)
         .replace("{total}", WEIGHBRIDGE_LANES)
     : null;
+  // Step 0 picks a scenario; once its numbers are in, the next click approves.
+  const step = !scenarioId ? 0 : body?.after ? 2 : 1;
   const date = body?.date
     ? new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "short" }).format(
         new Date(`${body.date}T00:00:00`),
@@ -73,19 +86,43 @@ export function ScenarioBriefing({ scenarioId, onSelect, onApply, onOpenTable, o
       <h2 id="twin-briefing-title" className="twin-panel-title">
         {t("dr_title")}
       </h2>
-      <div className="twin-choice twin-briefing-choices" role="group" aria-labelledby="twin-briefing-title">
+      {/* wave11 twin: the three clicks of the decision, the current one marked. */}
+      <ol
+        className="twin-briefing-steps"
+        aria-label={t("w11twin_steps_label")}
+        data-testid="twin-briefing-steps"
+      >
+        {STEPS.map((key, index) => (
+          <li
+            key={key}
+            data-state={index < step ? "done" : index === step ? "current" : "next"}
+            aria-current={index === step ? "step" : undefined}
+          >
+            <b aria-hidden="true">{index < step ? <Check size={12} /> : index + 1}</b>
+            {t(key)}
+          </li>
+        ))}
+      </ol>
+      {/* wave11 twin: the week's scenarios as a flat work rail, one row each. */}
+      <div className="twin-briefing-choices" role="group" aria-labelledby="twin-briefing-title">
         {TWIN_SCENARIOS.map(({ id }) => {
           const Icon = SCENARIO_ICONS[id];
           return (
             <button
               key={id}
               type="button"
+              className="twin-briefing-choice"
               data-testid={`twin-briefing-${id}`}
               aria-pressed={scenarioId === id}
               onClick={() => onSelect(scenarioId === id ? null : id)}
             >
-              {Icon && <Icon size={15} aria-hidden="true" />}
-              {t(`dr_scn_${id}`)}
+              <span className="twin-briefing-icon" aria-hidden="true">
+                {Icon && <Icon size={16} />}
+              </span>
+              <span className="twin-briefing-choice-name">{t(`dr_scn_${id}`)}</span>
+              <span className="twin-briefing-choice-mark" aria-hidden="true">
+                <Check size={14} />
+              </span>
             </button>
           );
         })}

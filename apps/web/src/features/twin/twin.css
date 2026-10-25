@@ -1,32 +1,35 @@
-/* Pythia Twin — 3D digital twin workspace.
-   Composition: the city is the hero. On desktop the map runs full-bleed to
-   the right of one side column (Ask Pythia, then the scenario controls);
-   instruments float on the map as slim glass pieces at its edges — legend
-   card top-left, tools top-right, timeline bottom-left — so the districts
-   keep the middle of the frame. Footage mode (?present=1) drops the shell
-   and the column and keeps the HUD, scenario chip and provenance on screen. */
+/* Pythia Twin — the city decision room (wave 11, approved world: app-twin.png).
+   Desktop: the title shares the metric strip's band; under it one white rail
+   (Ask Pythia, the scenario briefing, the what-if controls) runs flush beside
+   a full-bleed map. Instruments float on the map as white pills: legend top
+   left, tools top right, the week bottom left, the provenance footer chip
+   bottom right. Phones: the map window first, the week docked above the
+   bottom nav, then the rail's sections as flat full-width blocks. Footage
+   mode (?present=1) drops the shell and keeps the HUD, scenario and labels. */
 
 .twin-workspace {
-  /* Risk palette mirrors RISK_COLORS in src/twin/twinLayers.js: tokens.css
-     status colours lifted for lit 3D faces over a light basemap. */
-  --twin-risk-normal: rgb(79, 122, 108);
-  --twin-risk-elevated: rgb(201, 145, 38);
+  /* Risk palette mirrors RISK_COLORS in twinLayers.js: tokens.css status
+     colours lifted for lit 3D faces over a light basemap. */
+  --twin-risk-normal: rgb(206, 200, 189);
+  --twin-risk-elevated: rgb(224, 196, 140);
   --twin-risk-high: rgb(214, 104, 32);
   --twin-risk-critical: rgb(180, 47, 43);
-  --twin-overlay: var(--ui-glass);
+  --twin-overlay: var(--ui-surface);
   --twin-overlay-line: var(--ui-border);
   --twin-overlay-ink: var(--ui-ink);
   --twin-overlay-muted: var(--ui-muted);
   --twin-overlay-accent: var(--ui-accent);
-  /* gsc n29: overlay control colours as tokens (city-base toggle, imagery credit). */
   --twin-overlay-line-soft: var(--ui-border);
   --twin-overlay-line-strong: var(--ui-border-strong);
   --twin-overlay-ink-soft: var(--ui-ink-soft);
   --twin-overlay-highlight: var(--ui-warning);
-  /* Side column (Ask Pythia + controls); 0 on phones and in footage mode. */
+  /* The decision rail; 0 on phones and in footage mode. */
   --twin-rail-width: 0px;
+  --twin-rail-pad: var(--space-5);
   /* Gap between floating instruments and the canvas edge. */
-  --twin-edge: var(--space-3);
+  --twin-edge: var(--space-4);
+  /* Drawn height of a floating pill (its hit box stays 44 px). */
+  --twin-pill: 36px;
   /* The MapLibre zoom column (44 px buttons, 10 px control margin). */
   --twin-nav-clear: calc(var(--tap-min) + 10px + var(--space-3));
   --twin-timeline-width: 560px;
@@ -35,99 +38,99 @@
 }
 @media (min-width: 921px) {
   .twin-workspace:not(.is-present) {
-    --twin-rail-width: 312px;
+    --twin-rail-width: 320px;
   }
 }
 @media (min-width: 1181px) {
   .twin-workspace:not(.is-present) {
-    --twin-rail-width: 340px;
+    --twin-rail-width: 360px;
   }
 }
 
-/* ---- focused header: title and metrics share one slim row ---------------- */
-.twin-workspace .workspace-heading {
-  min-height: 0;
-  margin-bottom: var(--space-3);
-  align-items: flex-end;
+.twin-workspace ::selection {
+  color: var(--ui-ink);
+  background: var(--ui-forest-100);
 }
-.twin-workspace .workspace-heading h1 {
-  font-size: 26px;
+
+/* ---- title + strip: one band under the top bar -------------------------- */
+.twin-heading {
+  min-width: 0;
+  padding: var(--space-4) var(--twin-rail-pad);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-2);
+  background: var(--ui-surface);
 }
-.twin-workspace .metric-strip {
-  margin-bottom: 0;
+.twin-heading h1 {
+  margin: 0;
+  color: var(--ui-ink);
+  font-family: var(--font-head);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
 }
-.twin-workspace .metric-cell {
-  min-height: 0;
-  padding: 10px 16px;
-}
-.twin-workspace .metric-cell span {
+.twin-freshness {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  color: var(--ui-muted);
   font-size: 12px;
-}
-.twin-workspace .metric-cell strong {
-  margin: 2px 0;
-  display: block;
-  font-size: 22px;
-  line-height: 1.15;
   font-variant-numeric: tabular-nums;
 }
-.twin-workspace .metric-cell small {
-  display: block;
-  line-height: 1.35;
+.twin-workspace .metric-strip {
+  margin: 0;
 }
-.twin-workspace .workspace-freshness {
-  flex: none;
-  gap: var(--space-2);
+/* The twin's band stays slim: the map gets the height. */
+.twin-workspace .metric-strip.is-bleed .metric-cell {
+  padding: 14px var(--space-5) 12px;
+  gap: 2px;
+}
+.twin-workspace .metric-cell strong {
+  font-size: 26px;
+}
+.twin-workspace .metric-cell small {
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 @media (min-width: 921px) {
-  /* The twin gets the canvas: less shell padding above and below the deck. */
-  .command-canvas:has(.twin-workspace:not(.is-present)) {
-    padding-top: 20px;
-    padding-bottom: 20px;
-  }
-  .twin-workspace:not(.is-present) > .twin-heading {
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: flex-end;
-    gap: var(--space-2);
-  }
-  .twin-workspace:not(.is-present) > .twin-heading h1 {
-    margin: 6px 0 0;
-  }
-  .twin-workspace:not(.is-present) > .twin-heading p {
-    display: none;
-  }
-  .twin-workspace:not(.is-present) .workspace-freshness {
-    min-height: 32px;
-    padding: 0 12px;
-  }
-}
-@media (min-width: 1181px) {
+  /* The room fills the screen under the top bar: band on top, desk below. */
   .twin-workspace:not(.is-present) {
+    height: calc(100dvh - var(--ui-topbar-height));
+    min-height: 600px;
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    column-gap: var(--space-6);
-    align-items: end;
+    grid-template-columns: var(--twin-rail-width) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
   .twin-workspace:not(.is-present) > .twin-heading {
-    margin: 0;
+    grid-column: 1;
+    grid-row: 1;
+    border-right: 1px solid var(--ui-border);
+    border-bottom: 1px solid var(--ui-border);
+  }
+  .twin-workspace:not(.is-present) > .metric-strip {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
   }
   .twin-workspace:not(.is-present) > .twin-deck {
     grid-column: 1 / -1;
+    grid-row: 2;
   }
 }
 
 /* ---- deck ---------------------------------------------------------------- */
 .twin-deck {
   position: relative;
-  margin-top: var(--space-3);
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  height: clamp(540px, calc(100dvh - var(--ui-topbar-height) - 154px), 1080px);
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-elevated);
-  overflow: hidden;
-  background: var(--ui-surface-muted);
+  background: var(--ui-cream);
 }
 
 .twin-demo-banner {
@@ -135,8 +138,8 @@
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
-  padding: 10px var(--space-4);
-  border-bottom: 1px solid var(--ui-warning);
+  padding: 10px var(--twin-rail-pad);
+  border-bottom: 1px solid var(--ui-warning-line);
   color: var(--ui-warning);
   background: var(--ui-warning-soft);
 }
@@ -152,9 +155,9 @@
 }
 .twin-demo-banner strong {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-label);
   font-weight: 500;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
 }
 .twin-demo-banner span {
@@ -182,14 +185,18 @@
   outline-offset: -3px;
 }
 
-/* Map chrome: 44px targets. */
+/* Map chrome: 44 px targets, drawn as one white column. */
 .twin-map .maplibregl-ctrl-group button {
   width: var(--tap-min);
   height: var(--tap-min);
 }
 .twin-map .maplibregl-ctrl-group {
+  border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-card);
   box-shadow: var(--ui-shadow-float);
+}
+.twin-map .maplibregl-ctrl-group button + button {
+  border-top-color: var(--ui-border);
 }
 .twin-map .maplibregl-ctrl-attrib.maplibregl-compact {
   min-height: 24px;
@@ -200,38 +207,47 @@
   background-position: center;
 }
 
-/* Shared instrument surface */
+/* One floating surface for every instrument: flat white, hairline, soft lift. */
 .twin-legend-bar,
+.twin-provenance-toggle,
+.twin-rain-label,
 .twin-timeline,
 .twin-tooltip,
 .twin-status,
 .twin-tour-caption,
 .twin-present-hud,
-.twin-present-scenario {
+.twin-present-scenario,
+.twin-landfill-tag,
+.twin-base-toggle,
+.twin-ask-toggle,
+.twin-table-toggle {
   color: var(--twin-overlay-ink);
   background: var(--twin-overlay);
   border: 1px solid var(--twin-overlay-line);
   box-shadow: var(--ui-shadow-float);
-  backdrop-filter: var(--ui-glass-blur);
 }
 
-.twin-workspace button:focus-visible,
-.twin-workspace a:focus-visible,
-.twin-workspace input:focus-visible {
+.twin-workspace :is(button, a, input, summary, textarea):focus-visible {
   outline: 2px solid var(--twin-overlay-accent);
   outline-offset: 2px;
 }
 
-/* ---- legend card: risk key + one-line provenance summary ----------------- */
+/* ---- legend pill: the risk key ------------------------------------------- */
 .twin-legend-bar {
-  display: grid;
-  border-radius: var(--ui-radius-card);
-}
-.twin-legend-risk {
-  padding: 10px 14px 8px;
+  min-height: var(--twin-pill);
+  padding: 0 var(--space-4);
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 12px;
+  align-items: center;
+  gap: 4px var(--space-3);
+  border-radius: var(--ui-radius-pill);
+}
+.twin-legend-risk {
+  min-height: var(--twin-pill);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--space-3);
 }
 .twin-risk-tag {
   display: inline-flex;
@@ -242,12 +258,11 @@
   white-space: nowrap;
 }
 .twin-risk-tag i {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   flex: none;
   border-radius: 50%;
   background: var(--twin-risk-normal);
-  box-shadow: 0 0 0 1px var(--ui-surface);
 }
 .twin-risk-tag.risk-elevated i {
   background: var(--twin-risk-elevated);
@@ -258,51 +273,54 @@
 .twin-risk-tag.risk-critical i {
   background: var(--twin-risk-critical);
 }
+.twin-legend-note {
+  color: var(--ui-warning);
+  font-size: 12px;
+  line-height: 1.35;
+}
 
+/* ---- provenance footer chip + its layer list ----------------------------- */
+.twin-provenance-bar {
+  position: relative;
+}
 .twin-provenance-toggle {
-  width: 100%;
+  max-width: 100%;
   min-height: var(--tap-min);
-  padding: 0 10px 0 14px;
-  display: flex;
+  padding: 0 var(--space-2) 0 var(--space-4);
+  display: inline-flex;
   align-items: center;
   gap: var(--space-3);
-  border: 0;
-  border-top: 1px solid var(--twin-overlay-line);
-  border-radius: 0 0 var(--ui-radius-card) var(--ui-radius-card);
-  color: var(--twin-overlay-ink);
-  background: transparent;
+  border-radius: var(--ui-radius-pill);
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: border-color 0.15s ease;
 }
 .twin-provenance-toggle:hover {
-  background: var(--ui-surface-muted);
+  border-color: var(--ui-border-strong);
 }
 .twin-provenance-summary {
   min-width: 0;
-  flex: 1;
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 12px;
+  gap: 2px var(--space-3);
 }
 .twin-provenance-summary b,
 .twin-chip b {
   font-family: var(--mono);
+  font-size: var(--fs-label);
   font-weight: 500;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
   white-space: nowrap;
   color: var(--ui-ink-soft);
-}
-.twin-provenance-summary b {
-  font-size: 10.5px;
 }
 .twin-provenance-summary b::before,
 .twin-chip b::before {
   content: "";
   width: 6px;
   height: 6px;
-  margin-right: 5px;
+  margin-right: 6px;
   display: inline-block;
   border-radius: 50%;
   background: currentColor;
@@ -334,15 +352,15 @@
   display: none;
 }
 .twin-chip {
-  min-height: 26px;
+  min-height: 28px;
   padding: 2px 10px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-pill);
   background: var(--ui-surface);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.2;
   cursor: help;
 }
@@ -378,14 +396,8 @@
 .twin-provenance-summary .class-unavailable {
   color: var(--twin-overlay-muted);
 }
-.twin-legend-note {
-  padding: 0 14px 10px;
-  color: var(--ui-warning);
-  font-size: 12px;
-  line-height: 1.35;
-}
 
-/* ---- map tools: city base + (footage mode) Ask Pythia ---------------------- */
+/* ---- map tools: Ask, the table, the city base ---------------------------- */
 .twin-tools {
   display: flex;
   flex-wrap: wrap;
@@ -401,12 +413,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  border: 1px solid var(--twin-overlay-line);
   border-radius: var(--ui-radius-pill);
-  color: var(--twin-overlay-ink);
-  background: var(--twin-overlay);
-  box-shadow: var(--ui-shadow-float);
-  backdrop-filter: var(--ui-glass-blur);
   font-size: var(--fs-caption);
   font-weight: 600;
   white-space: nowrap;
@@ -466,16 +473,16 @@
 .twin-status {
   position: absolute;
   z-index: 4;
-  top: 108px;
+  top: calc(var(--twin-edge) + var(--tap-min) + var(--space-3));
   left: 50%;
   transform: translateX(-50%);
   max-width: calc(100% - 24px);
-  min-height: 36px;
-  padding: 6px 14px;
+  min-height: var(--twin-pill);
+  padding: 4px 14px;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  border-radius: 999px;
+  border-radius: var(--ui-radius-pill);
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
@@ -485,12 +492,12 @@
 }
 .twin-status button {
   min-height: var(--tap-min);
-  margin: -6px -8px -6px 4px;
+  margin: -6px -10px -6px 4px;
   padding: 0 16px;
   border: 0;
   border-radius: var(--ui-radius-pill);
   color: var(--ui-on-dark);
-  background: var(--ui-primary);
+  background: var(--ui-forest-900);
   font-weight: 600;
   cursor: pointer;
 }
@@ -508,14 +515,16 @@
   z-index: 6;
   top: 0;
   left: 0;
-  width: 248px;
-  padding: var(--space-3);
+  width: 256px;
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--ui-radius-card);
   pointer-events: none;
 }
 .twin-tooltip > strong {
   display: block;
+  font-family: var(--font-head);
   font-size: 15px;
+  font-weight: 600;
 }
 .twin-tooltip > small {
   color: var(--twin-overlay-muted);
@@ -527,7 +536,7 @@
   color: var(--ui-warning);
   font-size: 12px;
   font-style: normal;
-  font-weight: 650;
+  font-weight: 600;
 }
 .twin-tooltip dl,
 .twin-detail dl {
@@ -536,7 +545,7 @@
 }
 .twin-tooltip dl div,
 .twin-detail dl div {
-  min-height: 26px;
+  min-height: 30px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -565,15 +574,16 @@
   left: 50%;
   transform: translateX(-50%);
   max-width: calc(100% - 48px);
-  padding: 6px 6px 6px 16px;
+  padding: 4px 4px 4px 18px;
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  border-radius: 999px;
+  border-radius: var(--ui-radius-pill);
 }
 .twin-tour-caption span {
   color: var(--twin-overlay-muted);
-  font-size: 12px;
+  font-family: var(--mono);
+  font-size: var(--fs-label);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -589,26 +599,26 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid var(--twin-overlay-line);
+  border: 0;
   border-radius: var(--ui-radius-pill);
-  color: var(--twin-overlay-ink);
-  background: var(--ui-surface);
+  color: var(--ui-ink);
+  background: var(--ui-cream);
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
 }
 
-/* ---- timeline ------------------------------------------------------------ */
+/* ---- the week: a segmented pill, play first ------------------------------ */
 .twin-timeline {
-  padding: 6px;
+  padding: 5px;
   display: flex;
   align-items: stretch;
-  gap: 6px;
-  border-radius: var(--ui-radius-pill);
+  gap: 4px;
+  border-radius: 30px;
 }
 .twin-play {
-  width: 52px;
+  width: 50px;
   min-height: var(--tap-min);
   flex: none;
   display: grid;
@@ -616,7 +626,7 @@
   border: 0;
   border-radius: var(--ui-radius-pill);
   color: var(--ui-ink);
-  background: var(--ui-surface-muted);
+  background: var(--ui-cream);
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
@@ -625,7 +635,7 @@
 }
 .twin-play[aria-pressed="true"] {
   color: var(--ui-accent-foreground);
-  background: var(--ui-accent-strong);
+  background: var(--ui-forest-900);
 }
 .twin-play:disabled {
   opacity: 0.5;
@@ -646,7 +656,7 @@
   grid-template-rows: 1fr auto;
   gap: 3px;
   border: 1px solid transparent;
-  border-radius: 20px;
+  border-radius: 24px;
   color: var(--ui-ink-soft);
   background: transparent;
   cursor: pointer;
@@ -656,7 +666,7 @@
 }
 .twin-day:hover {
   color: var(--ui-ink);
-  background: var(--ui-surface-muted);
+  background: var(--ui-cream);
 }
 .twin-day[aria-pressed="true"] {
   color: var(--ui-on-dark);
@@ -668,26 +678,24 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  gap: 3px;
 }
 .twin-day-bar i {
-  width: min(100%, 16px);
-  border-radius: 4px 4px 0 0;
+  width: min(100%, 14px);
+  border-radius: 3px 3px 0 0;
   background: var(--ui-border-strong);
 }
 .twin-day[aria-pressed="true"] .twin-day-bar i {
   background: var(--ui-forest-500);
 }
 /* The day's at-risk count: a risk-coloured dot, the number in the label colour. */
-.twin-day-bar {
-  gap: 3px;
-}
 .twin-day-risk {
   display: inline-flex;
   align-items: center;
   gap: 2px;
   font-family: var(--mono);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -718,7 +726,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- side column: Ask Pythia, then the scenario controls ----------------- */
+/* ---- the decision rail ---------------------------------------------------- */
 .twin-side {
   position: absolute;
   z-index: 4;
@@ -731,75 +739,94 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+  scrollbar-color: var(--ui-border-strong) transparent;
   color: var(--ui-ink);
   background: var(--ui-surface);
   border-right: 1px solid var(--ui-border);
 }
+.twin-side > * + * {
+  border-top: 1px solid var(--ui-border);
+}
 
 .twin-panel {
-  border-top: 1px solid var(--ui-border);
   background: var(--ui-surface);
 }
 .twin-sheet-toggle {
   display: none;
 }
 .twin-panel-section {
-  padding: var(--space-4);
+  padding: var(--space-5) var(--twin-rail-pad);
   border-bottom: 1px solid var(--twin-overlay-line);
 }
 .twin-panel-section:last-child {
   border-bottom: 0;
 }
+/* Rail section names: the approved mono label, never a heading in disguise. */
 .twin-panel-title {
   margin: 0 0 var(--space-3);
   color: var(--twin-overlay-muted);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-label);
   font-weight: 500;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
 }
 .twin-field-label {
-  margin: var(--space-4) 0 var(--space-2);
+  margin: var(--space-5) 0 var(--space-2);
   display: flex;
   align-items: center;
   gap: 6px;
+  color: var(--ui-ink-soft);
   font-size: 13px;
   font-weight: 600;
 }
 
+/* Choices are pills: quiet cream, the chosen one a dark pill. Each draws
+   34 px inside its 44 px hit box. */
 .twin-choice {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-}
-.twin-choice-3 {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
 }
 .twin-choice button {
-  min-width: 0;
+  max-width: 100%;
   min-height: var(--tap-min);
-  padding: 6px 10px;
-  border: 1px solid var(--ui-border);
-  border-radius: 22px;
+  padding: 4px 14px;
+  border: var(--tap-inset) solid transparent;
+  border-radius: var(--ui-radius-pill);
+  background-clip: padding-box;
   color: var(--ui-ink);
-  background: var(--ui-surface-muted);
+  background-color: var(--ui-cream);
   font-size: 13px;
   font-weight: 500;
   line-height: 1.25;
+  text-align: center;
   cursor: pointer;
   transition:
     background-color 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease;
+    color 0.15s ease;
 }
-.twin-choice button:hover {
-  border-color: var(--ui-border-strong);
+.twin-choice button:not([aria-pressed="true"]):hover {
+  background-color: var(--ui-border);
 }
 .twin-choice button[aria-pressed="true"] {
   color: var(--ui-on-dark);
-  background: var(--ui-primary);
-  border-color: var(--ui-primary);
+  background-color: var(--ui-primary);
+}
+/* Two cities: a segmented control, a dark pill on a cream track. */
+.twin-segmented {
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-cream);
+}
+.twin-segmented button {
+  background-color: transparent;
+}
+.twin-segmented button:not([aria-pressed="true"]):hover {
+  background-color: var(--ui-border);
 }
 
 .twin-slider {
@@ -807,6 +834,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+  color: var(--ui-ink-soft);
   font-size: 13px;
   font-weight: 600;
 }
@@ -816,6 +844,7 @@
   gap: 6px;
 }
 .twin-slider output {
+  color: var(--ui-ink);
   font-family: var(--mono);
   font-size: 18px;
   font-weight: 500;
@@ -831,36 +860,38 @@
   -webkit-appearance: none;
 }
 .twin-panel input[type="range"]::-webkit-slider-runnable-track {
-  height: 6px;
-  border-radius: 3px;
+  height: 4px;
+  border-radius: 2px;
   background: var(--ui-border);
 }
 .twin-panel input[type="range"]::-moz-range-track {
-  height: 6px;
-  border-radius: 3px;
+  height: 4px;
+  border-radius: 2px;
   background: var(--ui-border);
 }
 .twin-panel input[type="range"]::-moz-range-progress {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--twin-overlay-accent);
+  height: 4px;
+  border-radius: 2px;
+  background: var(--ui-forest-700);
 }
 .twin-panel input[type="range"]::-webkit-slider-thumb {
   width: 22px;
   height: 22px;
-  margin-top: -8px;
-  border: 3px solid var(--twin-overlay-accent);
+  margin-top: -9px;
+  border: 2px solid var(--ui-surface);
   border-radius: 50%;
-  background: var(--ui-surface);
+  background: var(--ui-forest-700);
+  box-shadow: 0 1px 4px rgb(29 35 32 / 0.3);
   -webkit-appearance: none;
   appearance: none;
 }
 .twin-panel input[type="range"]::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border: 3px solid var(--twin-overlay-accent);
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ui-surface);
   border-radius: 50%;
-  background: var(--ui-surface);
+  background: var(--ui-forest-700);
+  box-shadow: 0 1px 4px rgb(29 35 32 / 0.3);
 }
 
 .twin-note {
@@ -870,26 +901,117 @@
   line-height: 1.5;
 }
 
-/* ---- decision room: this week's scenario briefing ------------------------ */
+/* ---- the briefing: this week's scenarios, the numbers, the decision ------- */
 .twin-briefing {
   min-width: 0;
-  padding: var(--space-4);
+  padding: var(--space-5) var(--twin-rail-pad);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 .twin-briefing .twin-panel-title {
   margin: 0;
 }
-.twin-briefing-choices {
-  grid-template-columns: repeat(auto-fit, minmax(min(128px, 100%), 1fr));
+/* The decision in three clicks: pick, compare, approve. */
+.twin-briefing-steps {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  list-style: none;
+  counter-reset: none;
 }
-.twin-briefing-choices button {
+.twin-briefing-steps li {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
+  color: var(--ui-muted);
+  font-size: 12px;
+  font-weight: 500;
 }
+.twin-briefing-steps b {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 50%;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+}
+.twin-briefing-steps [data-state="current"] {
+  color: var(--ui-ink);
+  font-weight: 600;
+}
+.twin-briefing-steps [data-state="current"] b {
+  border-color: var(--ui-forest-900);
+  color: var(--ui-on-dark);
+  background: var(--ui-forest-900);
+}
+.twin-briefing-steps [data-state="done"] b {
+  border-color: var(--ui-forest-100);
+  color: var(--ui-forest-700);
+  background: var(--ui-forest-100);
+}
+/* The scenarios as a flat work rail: tinted icon square, name, a check. */
+.twin-briefing-choices {
+  margin: 0 calc(-1 * var(--space-3));
+  display: grid;
+  gap: 2px;
+}
+.twin-briefing-choice {
+  width: 100%;
+  min-height: 52px;
+  padding: 8px var(--space-3);
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: var(--space-3);
+  border: 0;
+  border-radius: 14px;
+  color: var(--ui-ink);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.twin-briefing-choice:hover {
+  background: var(--ui-canvas);
+}
+.twin-briefing-choice[aria-pressed="true"] {
+  background: var(--ui-cream);
+}
+.twin-briefing-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--ui-forest-700);
+  background: var(--ui-forest-100);
+}
+.twin-briefing-choice[aria-pressed="true"] .twin-briefing-icon {
+  color: var(--ui-on-dark);
+  background: var(--ui-forest-900);
+}
+.twin-briefing-choice-mark {
+  display: grid;
+  place-items: center;
+  color: var(--ui-forest-700);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.twin-briefing-choice[aria-pressed="true"] .twin-briefing-choice-mark {
+  opacity: 1;
+}
+
+/* Today beside the scenario: key-value rows, labels in sans with their
+   source under them, numbers in mono. */
 .twin-briefing-table {
   width: 100%;
   table-layout: fixed;
@@ -898,59 +1020,99 @@
 }
 .twin-briefing-table th,
 .twin-briefing-table td {
-  padding: var(--space-2) 0;
+  height: auto;
+  padding: var(--space-3) 0;
   border-bottom: 1px solid var(--twin-overlay-line);
+  background: transparent;
   text-align: right;
   vertical-align: top;
 }
+.twin-briefing-table tbody tr:hover td {
+  background: transparent;
+}
 .twin-briefing-table thead th {
-  padding-top: 0;
+  padding: 0 0 var(--space-2);
   color: var(--twin-overlay-muted);
-  font-size: 11px;
-  font-weight: 600;
+  font-family: var(--mono);
+  font-size: var(--fs-label);
+  font-weight: 500;
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+}
+.twin-briefing-table thead td {
+  border-bottom: 1px solid var(--twin-overlay-line);
 }
 .twin-briefing-table tbody th {
+  width: 46%;
+  color: var(--ui-ink-soft);
+  font-family: var(--font-body);
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: normal;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
   text-align: left;
-  font-weight: 600;
 }
-.twin-briefing-table tbody th small,
-.twin-briefing-table td small {
+.twin-briefing-table tbody th small {
+  margin-top: 3px;
   display: block;
   color: var(--twin-overlay-muted);
   font-family: var(--mono);
   font-size: 10px;
   font-weight: 500;
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
 }
 .twin-briefing-table td {
   padding-left: var(--space-2);
+  letter-spacing: 0;
+  color: var(--ui-muted);
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .twin-briefing-table td:last-child {
-  font-weight: 600;
+  color: var(--ui-ink);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+/* Pythia's staggered answer reads in the accent. */
+.twin-briefing-table tr[data-metric="staggered"] td:last-child {
+  color: var(--ui-forest-700);
+}
+.twin-briefing-table td small {
+  margin-top: 2px;
+  display: block;
+  color: var(--ui-forest-700);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 .twin-briefing .twin-note {
   margin: 0;
 }
 .twin-briefing-actions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
 }
-.twin-side > .twin-ask {
-  border-top: 1px solid var(--ui-border);
+.twin-briefing-actions .twin-btn {
+  flex: 1 1 auto;
 }
 /* The methodology behind the what-if: one tap away, under the controls. */
 .twin-method {
-  margin-top: var(--space-3);
+  margin-top: var(--space-2);
 }
 .twin-method summary {
+  width: fit-content;
   min-height: var(--tap-min);
   display: flex;
   align-items: center;
-  color: var(--ui-ink-soft);
+  gap: 6px;
+  color: var(--ui-forest-700);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -961,13 +1123,16 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
 }
+/* Pills: primary forest-900, secondary outlined, quiet cream. */
 .twin-btn {
+  min-width: 0;
   min-height: var(--tap-min);
   padding: 0 var(--space-4);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
+  border: 0;
   border-radius: var(--ui-radius-pill);
   font-size: 14px;
   font-weight: 600;
@@ -976,61 +1141,69 @@
   cursor: pointer;
   transition:
     background-color 0.15s ease,
-    border-color 0.15s ease;
+    box-shadow 0.15s ease;
 }
 .twin-btn.primary {
-  border: 0;
   color: var(--ui-accent-foreground);
-  background: var(--ui-accent-strong);
+  background: var(--ui-forest-900);
 }
 .twin-btn.primary:hover {
-  background: var(--ui-accent);
+  background: var(--ui-forest-700);
 }
 .twin-btn.primary:disabled {
-  opacity: 0.55;
+  color: var(--ui-muted);
+  background: var(--ui-cream);
   cursor: default;
 }
 .twin-btn.secondary {
-  border: 1px solid var(--ui-border-strong);
   color: var(--ui-ink);
   background: var(--ui-surface);
+  box-shadow: inset 0 0 0 1px var(--ui-border-strong);
 }
 .twin-btn.secondary:hover {
-  background: var(--ui-canvas);
+  box-shadow: inset 0 0 0 1px var(--ui-ink-soft);
+}
+.twin-btn.quiet {
+  color: var(--ui-ink);
+  background: var(--ui-cream);
+}
+.twin-btn.quiet:hover {
+  background: var(--ui-border);
+}
+.twin-btn.quiet:disabled {
+  color: var(--ui-muted);
+  cursor: default;
 }
 
-/* Keyboard path to a district: the highest-risk districts as buttons. */
+/* Keyboard path to a district: the highest-risk districts as a flat list. */
 .twin-risk-list {
-  margin: 0;
+  margin: 0 calc(-1 * var(--space-3));
   padding: 0;
   display: grid;
-  gap: 4px;
+  gap: 2px;
   list-style: none;
 }
 .twin-risk-list button {
   width: 100%;
   min-height: var(--tap-min);
-  padding: 6px 10px;
+  padding: 6px var(--space-3);
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-control);
+  gap: var(--space-3);
+  border: 0;
+  border-radius: 12px;
   color: var(--ui-ink);
-  background: var(--ui-surface);
-  font-size: 13px;
+  background: transparent;
+  font-size: 14px;
   text-align: left;
   cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 .twin-risk-list button:hover {
-  border-color: var(--ui-border-strong);
+  background: var(--ui-canvas);
 }
 .twin-risk-list button[aria-pressed="true"] {
-  border-color: var(--ui-primary);
-  background: var(--ui-surface-muted);
+  background: var(--ui-cream);
 }
 .twin-risk-name {
   flex: 1;
@@ -1049,7 +1222,9 @@
 
 .twin-detail-head strong {
   display: block;
-  font-size: 16px;
+  font-family: var(--font-head);
+  font-size: 17px;
+  font-weight: 600;
 }
 .twin-detail-head small {
   color: var(--twin-overlay-muted);
@@ -1085,9 +1260,9 @@
   box-shadow: 0 0 0 2px var(--ui-primary);
 }
 
-/* ---- Ask Pythia ----------------------------------------------------------- */
+/* ---- Ask Pythia: the room's first question -------------------------------- */
 .twin-ask {
-  padding: var(--space-4);
+  padding: var(--space-5) var(--twin-rail-pad);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -1105,28 +1280,31 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--ui-accent);
 }
+.twin-ask-head .twin-panel-title svg {
+  color: var(--ui-forest-700);
+}
+/* The question box reads as the comp's cream bubble. */
 .twin-ask-form textarea {
   width: 100%;
-  min-height: 68px;
-  padding: 11px 14px;
+  min-height: 76px;
+  padding: 14px 16px;
   display: block;
   resize: vertical;
-  border: 1px solid var(--ui-border);
+  border: 1px solid transparent;
   border-radius: var(--ui-radius-card);
   color: var(--ui-ink);
-  background: var(--ui-surface-muted);
+  background: var(--ui-cream);
   font: inherit;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.45;
+  transition: border-color 0.15s ease;
+}
+.twin-ask-form textarea:hover {
+  border-color: var(--ui-border-strong);
 }
 .twin-ask-form textarea::placeholder {
   color: var(--ui-muted);
-}
-.twin-ask-form textarea:focus-visible {
-  outline: 2px solid var(--twin-overlay-accent);
-  outline-offset: 2px;
 }
 .twin-ask-actions {
   margin-top: var(--space-2);
@@ -1138,10 +1316,10 @@
 .twin-btn.primary.twin-ask-send {
   min-width: 104px;
   color: var(--ui-accent-foreground);
-  background: var(--ui-accent-strong);
+  background: var(--ui-forest-900);
 }
 .twin-btn.primary.twin-ask-send:hover {
-  background: var(--ui-accent);
+  background: var(--ui-forest-700);
 }
 .twin-btn.primary.twin-ask-send:disabled {
   opacity: 0.8;
@@ -1153,19 +1331,21 @@
   flex: none;
   display: grid;
   place-items: center;
-  border: 1px solid var(--ui-border);
+  border: 0;
   border-radius: var(--ui-radius-pill);
   color: var(--ui-ink-soft);
-  background: var(--ui-surface);
+  background: var(--ui-cream);
   cursor: pointer;
   transition:
     background-color 0.15s ease,
     color 0.15s ease;
 }
+.twin-ask-icon:hover {
+  background: var(--ui-border);
+}
 .twin-ask-icon[aria-pressed="true"] {
   color: var(--ui-accent-foreground);
-  border-color: var(--ui-accent);
-  background: var(--ui-accent);
+  background: var(--ui-forest-700);
 }
 .twin-ask > .twin-note {
   margin: 0;
@@ -1174,10 +1354,10 @@
 .twin-ask-question {
   max-width: 92%;
   margin: 0 0 0 auto;
-  padding: 9px 14px;
+  padding: 10px 14px;
   border-radius: 16px 16px 4px 16px;
   color: var(--ui-ink);
-  background: var(--ui-accent-soft);
+  background: var(--ui-forest-100);
   font-size: 14px;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -1191,24 +1371,24 @@
   margin-top: 0;
 }
 .twin-ask-applied-block {
-  padding-left: 10px;
+  padding: var(--space-3) var(--space-4);
   display: grid;
   gap: 4px;
-  border-left: 3px solid var(--ui-forest-500);
+  border-radius: 14px;
+  background: var(--ui-success-soft);
 }
 .twin-ask-applied {
   margin: 0;
   color: var(--ui-success);
   font-size: var(--fs-caption);
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.4;
 }
 /* The twin's queue headline for the applied scenario, band and class included. */
 .twin-ask-queue {
   margin: 0;
   color: var(--ui-ink);
-  font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
   font-variant-numeric: tabular-nums;
 }
@@ -1218,58 +1398,107 @@
   font-size: var(--fs-caption);
 }
 
-/* ---- landfill tag + rain overlay ------------------------------------------ */
-/* The beacon's tag is DOM, placed beside the beacon top and clamped inside the canvas. */
+/* ---- landfill card + rain overlay ----------------------------------------- */
+/* The beacon's card is DOM, placed beside the beacon top and clamped inside the canvas. */
 .twin-landfill-tag {
   position: absolute;
   z-index: 2;
   top: 0;
   left: 0;
-  max-width: 264px;
-  padding: 6px 10px 7px 11px;
-  display: grid;
+  max-width: 272px;
   min-height: var(--tap-min);
-  gap: 1px;
+  padding: 8px 14px 9px;
+  display: grid;
+  gap: 2px;
   visibility: hidden;
-  border: 0;
-  border-left: 3px solid var(--ui-forest-500);
-  border-radius: 4px var(--ui-radius-control) var(--ui-radius-control) 4px;
-  color: var(--ui-on-dark);
-  background: var(--ui-primary);
-  box-shadow: var(--ui-shadow-float);
+  border-radius: var(--ui-radius-card);
   font-family: inherit;
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: 12px;
+  line-height: 1.4;
   text-align: left;
   cursor: pointer;
 }
 .twin-landfill-tag[data-side="left"] {
-  padding: 6px 11px 7px 10px;
-  border-left: 0;
-  border-right: 3px solid var(--ui-forest-500);
-  border-radius: var(--ui-radius-control) 4px 4px var(--ui-radius-control);
   text-align: right;
 }
 .twin-landfill-tag .is-name {
-  font-size: 12px;
-  font-weight: 650;
+  font-family: var(--font-head);
+  font-size: 14px;
+  font-weight: 600;
+  order: -1;
+}
+/* Folded: the comp's queue card, without stagger → with Pythia's stagger. */
+.twin-landfill-tag .is-metric {
+  margin: 6px 0 2px;
+  display: grid;
+  gap: 2px;
+}
+.twin-landfill-tag .is-metric small {
+  color: var(--ui-muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+}
+.twin-landfill-tag .is-metric > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.twin-landfill-tag[data-side="left"] .is-metric > span {
+  justify-content: flex-end;
+}
+.twin-landfill-tag .is-metric i {
+  color: var(--ui-muted);
+  font-size: 17px;
+  font-style: normal;
+}
+.twin-landfill-tag .is-metric svg {
+  align-self: center;
+  color: var(--ui-muted);
+}
+.twin-landfill-tag .is-metric b {
+  color: var(--ui-forest-700);
+  font-family: var(--font-head);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.twin-landfill-tag .is-metric em {
+  color: var(--ui-ink-soft);
+  font-size: 11px;
+  font-style: normal;
+}
+.twin-landfill-tag .is-hour {
+  color: var(--ui-ink-soft);
 }
 .twin-landfill-tag .is-hour::first-letter {
   text-transform: uppercase;
 }
 /* The before/after pair: Pythia's stagger reads in the accent, never as the current state. */
 .twin-landfill-tag .is-staggered {
-  color: var(--ui-forest-500);
+  color: var(--ui-forest-700);
+  font-weight: 600;
 }
-/* Phones: the tag keeps the "without stagger" peak line and its class; the
-   day pair stays in the Ask Pythia headline, so the tag never buries the city. */
+.twin-landfill-tag .is-class {
+  color: var(--ui-warning);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+}
+/* Phones: the card keeps the "without stagger" peak line and its class; the
+   day pair stays in the Ask Pythia headline, so the card never buries the city. */
 @media (max-width: 480px) {
   .twin-landfill-tag .is-staggered {
     display: none;
   }
 }
 
-/* ---- map labels: DOM chips over the 3D scene ------------------------------
+/* ---- map labels: DOM pills over the 3D scene -------------------------------
    Placed by placeLabels() (always above the blocks and arcs, hidden on
    collision). They are names, not controls: no pointer events. */
 .twin-labels {
@@ -1282,14 +1511,15 @@
   position: absolute;
   top: 0;
   left: 0;
-  padding: 3px 8px 3px 7px;
+  padding: 3px 9px 3px 8px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   visibility: hidden;
+  border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-pill);
-  color: var(--ui-on-dark);
-  background: var(--ui-primary);
+  color: var(--ui-ink);
+  background: var(--ui-surface);
   box-shadow: var(--ui-shadow-float);
   font-size: 12px;
   font-weight: 600;
@@ -1302,7 +1532,6 @@
   flex: none;
   border-radius: 50%;
   background: var(--twin-risk-normal);
-  box-shadow: 0 0 0 1.5px var(--ui-on-dark);
 }
 .twin-label.risk-elevated > i {
   background: var(--twin-risk-elevated);
@@ -1314,10 +1543,11 @@
   background: var(--twin-risk-critical);
 }
 .twin-label > b {
-  color: var(--ui-on-dark-muted);
+  color: var(--ui-muted);
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 .twin-label.is-selected {
   outline: 2px solid var(--ui-forest-500);
@@ -1325,21 +1555,16 @@
 }
 .twin-label.is-venue {
   padding: 4px 10px 4px 8px;
-  border-radius: var(--ui-radius-control);
-  background: var(--ui-accent);
+  border-color: var(--ui-forest-900);
+  color: var(--ui-on-dark);
+  background: var(--ui-forest-900);
 }
 .twin-label.is-venue > small {
-  color: var(--ui-on-dark);
+  color: var(--ui-on-dark-muted);
   font-size: 11px;
   font-weight: 500;
 }
 
-.twin-landfill-tag .is-class {
-  color: var(--ui-on-dark-muted);
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.04em;
-}
 .twin-viewport.is-raining::after {
   content: "";
   position: absolute;
@@ -1355,22 +1580,23 @@
   left: var(--twin-edge);
   bottom: 92px;
   margin: 0;
-  padding: 4px 12px;
+  min-height: var(--twin-pill);
+  padding: 4px 14px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid var(--twin-overlay-line);
   border-radius: var(--ui-radius-pill);
-  color: var(--twin-overlay-ink);
-  background: var(--twin-overlay);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   pointer-events: none;
+}
+.twin-rain-label[data-input="scenario"] svg {
+  color: var(--ui-warning);
 }
 
 /* ---- desktop: instruments float at the map's edges ------------------------ */
 @media (min-width: 921px) {
-  /* The legend wrapper adds no box: its card and tools place themselves. */
+  /* The legend wrapper adds no box: its pills place themselves. */
   .twin-legend {
     display: contents;
   }
@@ -1379,28 +1605,20 @@
     z-index: 3;
     top: var(--twin-edge);
     left: calc(var(--twin-rail-width) + var(--twin-edge));
-    width: max-content;
-    max-width: min(400px, calc(100% - var(--twin-rail-width) - 300px));
+    max-width: calc(100% - var(--twin-rail-width) - 420px);
   }
-  /* Full provenance list: a popover under the card, one tap away. */
-  .twin-legend-bar .twin-provenance {
-    position: absolute;
-    top: calc(100% + var(--space-2));
-    left: 0;
-    width: max-content;
-    max-width: min(460px, calc(100vw - var(--twin-rail-width) - 320px));
-    padding: var(--space-3);
-    border: 1px solid var(--twin-overlay-line);
-    border-radius: var(--ui-radius-card);
-    background: var(--ui-surface);
-    box-shadow: var(--ui-shadow-float);
+  /* The scenario pill sits under the legend, like the comp's scenario chips. */
+  .twin-rain-label {
+    top: calc(var(--twin-edge) + var(--twin-pill) + var(--space-2));
+    bottom: auto;
+    max-width: calc(100% - 2 * var(--twin-edge) - 380px);
   }
   .twin-tools {
     position: absolute;
     z-index: 3;
     top: var(--twin-edge);
     right: var(--twin-nav-clear);
-    max-width: 320px;
+    max-width: 380px;
   }
   .twin-timeline {
     position: absolute;
@@ -1409,10 +1627,49 @@
     bottom: var(--twin-edge);
     width: min(var(--twin-timeline-width), calc(100% - var(--twin-rail-width) - 2 * var(--twin-edge)));
   }
+  /* Provenance: the mono footer chip, the full layer list opening above it. */
+  .twin-provenance-bar {
+    position: absolute;
+    z-index: 3;
+    right: calc(var(--tap-min) + var(--twin-edge));
+    bottom: var(--twin-edge);
+    max-width: calc(100% - var(--twin-rail-width) - var(--twin-timeline-width) - 4 * var(--twin-edge));
+  }
+  .twin-provenance-bar .twin-provenance {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + var(--space-2));
+    width: max-content;
+    max-width: min(460px, calc(100vw - var(--twin-rail-width) - 96px));
+    padding: var(--space-3);
+    border: 1px solid var(--twin-overlay-line);
+    border-radius: var(--ui-radius-card);
+    background: var(--ui-surface);
+    box-shadow: var(--ui-shadow-float);
+  }
+}
+/* Narrow desktops: the week takes the bottom edge, provenance joins the top-left stack. */
+@media (min-width: 921px) and (max-width: 1280px) {
+  .twin-workspace:not(.is-present) .twin-provenance-bar {
+    top: calc(var(--twin-edge) + var(--twin-pill) + var(--space-2));
+    left: calc(var(--twin-rail-width) + var(--twin-edge));
+    right: auto;
+    bottom: auto;
+    max-width: calc(100% - var(--twin-rail-width) - 420px);
+  }
+  .twin-workspace:not(.is-present) .twin-provenance-bar .twin-provenance {
+    top: calc(100% + var(--space-2));
+    left: 0;
+    right: auto;
+    bottom: auto;
+  }
+  .twin-workspace:not(.is-present) .twin-rain-label {
+    top: calc(var(--twin-edge) + var(--twin-pill) + var(--tap-min) + 2 * var(--space-2));
+  }
 }
 
 /* ---- presentation mode (?present=1): clean footage, provenance kept ------ */
-.twin-workspace.is-present > .workspace-heading,
+.twin-workspace.is-present > .twin-heading,
 .twin-workspace.is-present > .metric-strip {
   display: none;
 }
@@ -1422,8 +1679,6 @@
   inset: 0;
   height: auto;
   margin: 0;
-  border: 0;
-  border-radius: 0;
 }
 /* Footage frame: no zoom column; the canvas is still draggable and keyboard-focusable. */
 .twin-workspace.is-present .twin-map .maplibregl-ctrl-top-right {
@@ -1441,12 +1696,12 @@
   left: var(--twin-edge);
   max-width: calc(100% - var(--twin-present-card) - 3 * var(--twin-edge));
   min-height: 54px;
-  padding: 10px 18px;
+  padding: 10px 20px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px var(--space-4);
-  border-radius: var(--ui-radius-card);
+  border-radius: var(--ui-radius-elevated);
   font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
@@ -1468,12 +1723,12 @@
   left: var(--twin-edge);
   max-width: min(760px, calc(100% - var(--twin-present-card) - 3 * var(--twin-edge)));
   min-height: var(--tap-min);
-  padding: 8px 18px;
+  padding: 8px 20px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1) var(--space-4);
-  border-radius: var(--ui-radius-card);
+  border-radius: var(--ui-radius-elevated);
   font-size: 14px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1482,30 +1737,43 @@
   padding-left: var(--space-4);
   border-left: 1px solid var(--twin-overlay-line);
   color: var(--twin-overlay-accent);
-  font-weight: 650;
+  font-weight: 600;
 }
 @media (min-width: 921px) {
-  /* Legend card: top right under the tools, provenance listed in full. */
+  /* Legend and provenance: top right under the tools, provenance listed in full. */
   .twin-workspace.is-present .twin-legend-bar {
     top: calc(var(--twin-edge) + var(--tap-min) + var(--space-2));
     left: auto;
     right: var(--twin-edge);
+    max-width: var(--twin-present-card);
+  }
+  .twin-workspace.is-present .twin-provenance-bar {
+    top: calc(var(--twin-edge) + var(--tap-min) + var(--twin-pill) + 2 * var(--space-2));
+    right: var(--twin-edge);
+    bottom: auto;
     width: var(--twin-present-card);
     max-width: calc(100% - 2 * var(--twin-edge));
+    padding: var(--space-2);
+    display: grid;
+    gap: var(--space-2);
+    border: 1px solid var(--twin-overlay-line);
+    border-radius: var(--ui-radius-elevated);
+    background: var(--twin-overlay);
+    box-shadow: var(--ui-shadow-float);
   }
-  .twin-workspace.is-present .twin-legend-bar .twin-provenance {
+  .twin-workspace.is-present .twin-provenance-toggle {
+    border: 0;
+    box-shadow: none;
+  }
+  .twin-workspace.is-present .twin-provenance-bar .twin-provenance {
     position: static;
     width: auto;
     max-width: none;
-    padding: 0 14px 12px;
+    padding: 0 var(--space-2) var(--space-2);
     border: 0;
     border-radius: 0;
     background: transparent;
     box-shadow: none;
-  }
-  .twin-workspace.is-present .twin-provenance-toggle[aria-expanded="true"] {
-    border-radius: 0;
-    margin-bottom: var(--space-2);
   }
   .twin-workspace.is-present .twin-tools {
     right: var(--twin-edge);
@@ -1523,7 +1791,7 @@
     border-radius: var(--ui-radius-elevated);
     box-shadow: var(--ui-shadow-float);
   }
-  .twin-workspace.is-present.has-ask .twin-legend-bar {
+  .twin-workspace.is-present.has-ask :is(.twin-legend-bar, .twin-provenance-bar) {
     right: calc(min(360px, 100% - 2 * var(--twin-edge)) + 2 * var(--twin-edge));
   }
   .twin-workspace.is-present.has-ask :is(.twin-present-hud, .twin-present-scenario) {
@@ -1541,85 +1809,93 @@
   }
 }
 
-/* ---- tablet + mobile: map window, timeline below, controls as a sheet ---- */
+/* ---- tablet + mobile: map window, the week, then the rail's sections ---- */
 @media (max-width: 920px) {
-  /* T4: the last card scrolls clear of the fixed bottom nav (62 px + 10 px inset). */
   .twin-workspace {
-    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    --twin-rail-pad: var(--space-4);
+    display: flex;
+    flex-direction: column;
   }
-  .twin-deck {
-    height: auto;
-    overflow: visible;
-    border: 0;
-    border-radius: 0;
+  .twin-heading {
+    padding: var(--space-4);
     background: transparent;
   }
-  .twin-demo-banner {
-    margin-bottom: var(--space-2);
-    border: 1px solid var(--ui-warning);
-    border-radius: var(--ui-radius-card);
+  .twin-heading h1 {
+    font-size: 22px;
+  }
+  .twin-deck {
+    background: transparent;
   }
   .twin-stage {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
   }
   .twin-viewport {
     position: relative;
     inset: auto;
+    order: 0;
     height: 56dvh;
     min-height: 320px;
-    border: 1px solid var(--ui-border);
-    border-radius: var(--ui-radius-card);
-    background: var(--ui-surface-muted);
+    border-block: 1px solid var(--ui-border);
+    background: var(--ui-cream);
   }
   .twin-map .maplibregl-ctrl-top-right {
     right: 0;
   }
-  /* The side column dissolves: Ask and the controls take their places in the page flow. */
+  /* The rail dissolves: its sections take their places in the page flow,
+     flat white blocks split by hairlines. */
   .twin-side {
     display: contents;
   }
-  .twin-briefing {
-    order: 3;
-    border: 1px solid var(--ui-border);
-    border-radius: var(--ui-radius-card);
-    background: var(--ui-surface);
+  .twin-side > * + * {
+    border-top: 0;
   }
   .twin-workspace:not(.is-present) .twin-ask {
+    order: 3;
+  }
+  .twin-briefing {
+    order: 4;
+  }
+  .twin-panel {
     order: 5;
-    border: 1px solid var(--ui-border);
-    border-radius: var(--ui-radius-card);
+  }
+  .twin-workspace:not(.is-present) :is(.twin-ask, .twin-briefing, .twin-panel) {
+    border-bottom: 1px solid var(--ui-border);
+    background: var(--ui-surface);
   }
   .twin-legend {
     order: 6;
+    padding: var(--space-4);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+  .twin-legend-bar,
+  .twin-provenance-toggle {
+    box-shadow: none;
+  }
+  .twin-provenance-bar {
     display: grid;
     gap: var(--space-2);
   }
-  .twin-legend-bar {
-    box-shadow: none;
-  }
-  .twin-legend-bar .twin-provenance {
-    padding: 0 14px 12px;
-  }
-  .twin-provenance-toggle[aria-expanded="true"] {
-    border-radius: 0;
-    margin-bottom: var(--space-2);
-  }
   .twin-tools {
     justify-content: flex-start;
+  }
+  .twin-tools :is(.twin-base-toggle, .twin-ask-toggle, .twin-table-toggle) {
+    box-shadow: none;
   }
   .twin-tools .twin-legend-note {
     margin-left: 0;
     text-align: left;
   }
-  /* Docked above the fixed bottom nav (62 px + 10 px inset) so the nav never
-     covers the day buttons while the map is in view. */
+  /* Docked above the fixed bottom nav so the nav never covers the day buttons. */
   .twin-timeline {
     position: sticky;
     z-index: 5;
     order: 2;
-    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    bottom: var(--ui-bottomnav-space);
+    margin: var(--space-2) var(--space-3);
   }
   .twin-status,
   .twin-tour-caption {
@@ -1632,41 +1908,38 @@
     top: 56px;
     bottom: auto;
   }
-  /* T4: the rain chip stops short of the map's credit button in the corner. */
+  /* The rain chip stops short of the map's credit button in the corner. */
   .twin-rain-label {
     bottom: var(--twin-edge);
     right: calc(var(--tap-min) + var(--twin-edge));
+    width: fit-content;
+    max-width: calc(100% - var(--tap-min) - 2 * var(--twin-edge));
+    font-size: 12px;
   }
 
-  /* The controls sheet sits in the page flow under the timeline: a fixed
-     dock covered the day buttons on phones. */
-  .twin-panel {
-    order: 4;
-    border: 1px solid var(--ui-border);
-    border-radius: var(--ui-radius-card);
-  }
+  /* The controls fold behind one row in the page flow. */
   .twin-sheet-toggle {
     position: sticky;
     z-index: 1;
     top: 0;
     width: 100%;
-    min-height: 52px;
+    min-height: 56px;
     padding: 0 var(--space-4);
     display: flex;
     align-items: center;
     gap: var(--space-3);
     border: 0;
     border-bottom: 1px solid var(--twin-overlay-line);
-    border-radius: var(--ui-radius-card) var(--ui-radius-card) 0 0;
     color: var(--ui-ink);
     background: var(--ui-surface);
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     cursor: pointer;
   }
   .twin-sheet-toggle small {
     flex: 1;
     color: var(--twin-overlay-muted);
+    font-family: var(--mono);
     font-size: 12px;
     font-weight: 500;
     text-align: right;
@@ -1676,7 +1949,6 @@
   }
   .twin-panel:not(.is-open) .twin-sheet-toggle {
     border-bottom: 0;
-    border-radius: var(--ui-radius-card);
   }
   .twin-imagery-credit {
     top: auto;
@@ -1692,25 +1964,14 @@
 
 @media (max-width: 640px) {
   /* The twin is the decision surface: on phones the map window comes
-     straight after the title and the metrics follow it. */
-  .twin-workspace {
-    display: flex;
-    flex-direction: column;
-  }
-  .twin-workspace > .workspace-heading {
-    margin-bottom: 0;
-  }
-  .twin-workspace .workspace-heading p {
-    display: none;
-  }
-  .twin-workspace .workspace-freshness {
-    margin-top: var(--space-2);
-  }
+     straight after the title and the metrics follow the rail. */
   .twin-workspace > .metric-strip {
     order: 2;
-    margin-top: var(--space-3);
   }
-  /* Map and timeline fit the first screen above the bottom nav. */
+  .twin-freshness {
+    font-size: 11px;
+  }
+  /* Map and week fit the first screen above the bottom nav. */
   .twin-viewport {
     height: clamp(300px, calc(100dvh - 400px), 520px);
   }
@@ -1720,7 +1981,7 @@
   .twin-timeline {
     padding: 4px;
     gap: 4px;
-    border-radius: var(--ui-radius-card);
+    border-radius: 26px;
   }
   .twin-play {
     width: var(--tap-min);
@@ -1730,12 +1991,12 @@
     grid-template-columns: repeat(7, minmax(var(--tap-min), 1fr));
     overflow-x: auto;
     overscroll-behavior-x: contain;
-    scrollbar-width: thin;
+    scrollbar-width: none;
   }
   .twin-day {
     min-height: 54px;
     padding-inline: 2px;
-    border-radius: 14px;
+    border-radius: 22px;
   }
   .twin-day-label {
     flex-direction: column;
@@ -1799,6 +2060,7 @@
   align-items: center;
   gap: var(--space-2);
   font-family: var(--font-head);
+  font-weight: 600;
   font-size: 20px;
   line-height: 1.25;
 }
@@ -1809,10 +2071,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--ui-border);
+  border: 0;
   border-radius: var(--ui-radius-pill);
   color: var(--ui-ink);
-  background: var(--ui-surface);
+  background: var(--ui-cream);
   cursor: pointer;
 }
 .twin-handoff-lead,
@@ -1950,8 +2212,8 @@
   font-size: var(--fs-caption);
 }
 .twin-handoff-honesty {
-  padding: var(--space-2) var(--space-3);
-  border-left: 3px solid var(--ui-info);
+  padding: var(--space-3) var(--space-4);
+  border-radius: 14px;
   color: var(--ui-ink-soft);
   background: var(--ui-info-soft);
   font-size: var(--fs-caption);

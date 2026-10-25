@@ -251,6 +251,8 @@ def _briefing_column(outlook: dict[str, Any], lanes: int | None = None) -> dict[
     The queue is the twin beacon's day-0 metric: trips scaled by this day's tonnes
     against its normal day (queue_simulation.scenario_queue_metric), SIMULATED;
     `lanes` below the assumed set is the lane-closed what-if.
+    Both arms of that one simulation are returned: current practice and
+    Pythia's staggered departures, on the same lanes.
     """
     queue = scenario_queue_metric(
         outlook["total_tonnage_t"], outlook["normal_day_tonnage_t"], lanes=lanes or WEIGHBRIDGE_LANES
@@ -262,6 +264,10 @@ def _briefing_column(outlook: dict[str, Any], lanes: int | None = None) -> dict[
         "kecamatan_at_risk": outlook["kecamatan_at_risk"],
         "kecamatan_count": outlook["kecamatan_count"],
         "queue_minutes_per_truck": queue["baseline_mean"] if queue else None,
+        # Pythia's answer from the same simulated day (same lanes): staggered departures.
+        "queue_staggered_minutes_per_truck": queue["staggered_mean"] if queue else None,
+        "queue_p95_minutes": queue["baseline_p95"] if queue else None,
+        "queue_staggered_p95_minutes": queue["staggered_p95"] if queue else None,
         "queue_trips_per_day": queue["trucks_per_day"] if queue else None,
         "weighbridge_lanes": lanes or WEIGHBRIDGE_LANES,
     }
