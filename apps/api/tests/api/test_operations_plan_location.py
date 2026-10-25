@@ -9,6 +9,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from app.forecast.twin import event_attendance_by_district
 from app.main import app
 
 
@@ -56,10 +57,13 @@ class OperationsPlanLocationTests(unittest.TestCase):
         north = self._plan(event_attendance=50000, event_lat=-6.1200, event_lng=106.8900)  # Cilincing side
         south = self._plan(event_attendance=50000, event_lat=-6.2900, event_lng=106.7900)  # Cilandak side
         self.assertNotEqual(north["scenario"]["targeted_kecamatan"], south["scenario"]["targeted_kecamatan"])
-        self.assertNotEqual(
-            [(a["area"], a["assigned_tons"]) for a in north["assignments"]],
-            [(a["area"], a["assigned_tons"]) for a in south["assignments"]],
-        )
+        # The plan localizes each crowd with the twin's boundary reach. The crowd is
+        # shared by the reached kecamatan (not copied to each), so a 50k event (60 t)
+        # need not reshuffle a fleet-capped top-N assignment; the targeting must follow.
+        for plan, (lat, lng) in ((north, (-6.1200, 106.8900)), (south, (-6.2900, 106.7900))):
+            self.assertEqual(
+                plan["scenario"]["targeted_kecamatan"], sorted(event_attendance_by_district(50000, lat, lng))
+            )
 
     def test_without_attendance_the_location_does_not_move_demand(self):
         """A location with no crowd attached must not fabricate demand."""

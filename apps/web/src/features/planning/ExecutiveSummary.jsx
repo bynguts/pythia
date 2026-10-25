@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "../../shared/api/client.js";
-import { useLanguage } from "../../shared/i18n/index.jsx";
+import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
+import { AT_RISK_LEVELS, signedPercent } from "../../shared/hooks/useSnapshot.js";
 import { ShieldCheck } from "lucide-react";
 
 export function ExecutiveSummary({ snapshot, queue }) {
-  const { lang } = useLanguage();
-  const locale = lang === "id" ? "id-ID" : "en-US";
+  const { lang, t } = useLanguage();
+  const locale = localeFor(lang);
   const number = (value) => Number(value ?? 0).toLocaleString(locale, { maximumFractionDigits: 1 });
+  const fill = (key, values) =>
+    Object.entries(values).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, value), t(key));
   const [impact, setImpact] = useState(null);
 
   useEffect(() => {
@@ -26,8 +29,12 @@ export function ExecutiveSummary({ snapshot, queue }) {
 
   // Summary prose supplied by the snapshot is English-only. Compose both languages
   // from its typed evidence so a locale change never reparses or mistranslates prose.
-  const predictions = snapshot?.predictions || [];
-  const peak = predictions.reduce(
+  // The offline sample (useSnapshot `is_sample`) is never summarised as a forecast.
+  const predictions = (!snapshot?.is_sample && snapshot?.predictions) || [];
+  // Teardown v3 N2: the headline district is the largest increase among the days
+  // really at risk (high or critical vs the normal day, engine.spike_risk), if any.
+  const atRisk = predictions.filter((item) => AT_RISK_LEVELS.includes(item.risk_level));
+  const peak = (atRisk.length ? atRisk : predictions).reduce(
     (best, item) =>
       !best || item.predicted_tons - item.baseline_tons > best.predicted_tons - best.baseline_tons
         ? item
@@ -41,64 +48,53 @@ export function ExecutiveSummary({ snapshot, queue }) {
     (alert) => alert.type === "route_deviation" && alert.status === "active",
   );
   const routeName = deviation?.recommended_routes?.[0]?.name;
-  const route =
-    lang === "id" && routeName
-      ? routeName.replace(/^Route /i, "Rute ").replace("Recovery", "Pemulihan")
-      : routeName;
+  // The backend names routes in English ("Route B - Daan Mogot Recovery"): localise the two words.
+  const route = routeName
+    ?.replace(/^Route /i, `${t("ufx_exec_route_word")} `)
+    .replace("Recovery", t("ufx_exec_route_recovery"));
   const hasQueue =
     queue?.estimated_wait_minutes != null && Number.isFinite(Number(queue.estimated_wait_minutes));
   const wait = queue?.estimated_wait_minutes;
   const queueDelayed = hasQueue && Number(wait) >= 45;
-  const headline = peak
-    ? lang === "id"
-      ? `${peak.district} membutuhkan tambahan kapasitas.`
-      : `${peak.district} needs additional capacity.`
-    : lang === "id"
-      ? "Belum ada prediksi wilayah untuk ditinjau."
-      : "No district forecast is available for review.";
+  // The "before" arm is the assumed current practice (departure SD), as in the PDF.
+  const baselineSd = Number(impact?.minutes_per_truck?.baseline_departure_sd_minutes);
+  const headline = atRisk.length
+    ? fill("exec_headline_peak", { district: peak.district })
+    : t(peak ? "ufx_exec_headline_not_elevated" : "exec_headline_none");
   const points = [];
   if (peak) {
     points.push(
-      lang === "id"
-        ? `Lonjakan prediksi terbesar +${number(peak.spike_percent)}% di ${peak.district}; kebutuhan tanggal tersebut: ${number(extraTrucks)} truk tambahan dan ${number(extraCrews)} kru tambahan.`
-        : `Largest forecast increase: +${number(peak.spike_percent)}% in ${peak.district}; that day's need is ${number(extraTrucks)} extra trucks and ${number(extraCrews)} extra crews.`,
+      fill("exec_point_peak", {
+        pct: signedPercent(peak.spike_percent),
+        district: peak.district,
+        trucks: number(extraTrucks),
+        crews: number(extraCrews),
+      }),
     );
   }
   if (deviation) {
     points.push(
-      lang === "id"
-        ? `${deviation.truck_code} menyimpang dari koridor yang ditetapkan.${route ? ` Tinjau ${route} sebagai rute alternatif.` : " Tinjau rute alternatif."}`
-        : `${deviation.truck_code} has deviated from its assigned corridor.${route ? ` Review ${route} as an alternative route.` : " Review alternative routes."}`,
+      route
+        ? fill("exec_point_deviation_route", { truck: deviation.truck_code, route })
+        : fill("exec_point_deviation", { truck: deviation.truck_code }),
     );
   }
   if (hasQueue) {
-    points.push(
-      queueDelayed
-        ? lang === "id"
-          ? `Antrean TPA Bantargebang diperkirakan ${number(wait)} menit; pertimbangkan keberangkatan bertahap.`
-          : `The TPA Bantargebang queue is estimated at ${number(wait)} minutes; consider staggered dispatch.`
-        : lang === "id"
-          ? `Antrean TPA Bantargebang diperkirakan ${number(wait)} menit.`
-          : `The TPA Bantargebang queue is estimated at ${number(wait)} minutes.`,
-    );
+    points.push(fill(queueDelayed ? "exec_point_queue_delayed" : "exec_point_queue", { n: number(wait) }));
   }
 
   return (
     <section className="panel">
       <div className="panel-title">
         <div>
-          <h2>{lang === "id" ? "Ringkasan eksekutif" : "Executive summary"}</h2>
-          <p>
-            {lang === "id"
-              ? "Disiapkan untuk pimpinan Dinas Lingkungan Hidup (DLH) DKI Jakarta."
-              : "Prepared for DLH Jakarta leadership."}
-          </p>
+          <h2>{t("exec_title")}</h2>
+          <p>{t("exec_sub")}</p>
         </div>
         <div className="panel-header-icon-wrap">
           <ShieldCheck size={18} />
         </div>
       </div>
-      <h3>{headline}</h3>
+      <h3 data-testid="exec-headline">{headline}</h3>
       {points.length > 0 && (
         <ul>
           {points.map((point) => (
@@ -107,70 +103,56 @@ export function ExecutiveSummary({ snapshot, queue }) {
         </ul>
       )}
       <div className="queue-box">
-        <strong>{lang === "id" ? "Antrean TPA Bantargebang" : "TPA Bantargebang queue"}</strong>
+        <strong>{t("exec_queue_title")}</strong>
         {hasQueue ? (
           <>
             <span>
               {queue.trucks_waiting != null
-                ? `${number(queue.trucks_waiting)} ${lang === "id" ? "truk mengantre" : "trucks waiting"} · `
+                ? `${fill("exec_queue_waiting", { n: number(queue.trucks_waiting) })} · `
                 : ""}
-              {number(wait)} {lang === "id" ? "menit perkiraan tunggu" : "min estimated wait"}
+              {fill("exec_queue_wait", { n: number(wait) })}
             </span>
-            <p>
-              {queueDelayed
-                ? lang === "id"
-                  ? "Tunda keberangkatan truk yang tidak mendesak selama 30–45 menit untuk mengurangi antrean."
-                  : "Delay non-essential departures by 30–45 minutes to ease the queue."
-                : lang === "id"
-                  ? "Koridor lancar; keberangkatan normal dapat dilanjutkan."
-                  : "The corridor is clear; normal dispatch may continue."}
-            </p>
+            <p>{t(queueDelayed ? "exec_queue_advice_delayed" : "exec_queue_advice_clear")}</p>
           </>
         ) : (
-          <p>{lang === "id" ? "Data antrean belum tersedia." : "Queue data is unavailable."}</p>
+          <p>{t("exec_queue_none")}</p>
         )}
       </div>
       {impact && (
         <div className="exec-impact">
           <div className="exec-impact-head">
-            <strong>
-              {lang === "id"
-                ? "Dampak optimasi — keberangkatan bertahap"
-                : "Optimization impact — staggered dispatch"}
-            </strong>
+            <strong>{t("exec_impact_title")}</strong>
           </div>
           <div className="exec-impact-grid">
             <div className="exec-impact-col">
-              <span className="exec-impact-label">
-                {lang === "id" ? "Awal (semua truk saat jam puncak)" : "Baseline (all trucks at peak)"}
+              <span className="exec-impact-label" data-testid="exec-impact-baseline">
+                {Number.isFinite(baselineSd)
+                  ? fill("exec_impact_baseline", { sd: number(baselineSd) })
+                  : t("ufx_exec_impact_baseline_nosd")}
               </span>
               <strong>
-                {number(impact.baseline_queue_trucks)} {lang === "id" ? "truk" : "trucks"} ·{" "}
-                {number(impact.baseline_wait_minutes)} {lang === "id" ? "menit tunggu" : "min wait"}
+                {fill("exec_impact_value", {
+                  trucks: number(impact.baseline_queue_trucks),
+                  wait: number(impact.baseline_wait_minutes),
+                })}
               </strong>
-              <small>
-                p95 {number(impact.baseline_p95_minutes)} {lang === "id" ? "menit" : "min"}
-              </small>
+              <small>{fill("exec_impact_p95", { n: number(impact.baseline_p95_minutes) })}</small>
             </div>
             <div className="exec-impact-arrow" aria-hidden="true">
               →
             </div>
             <div className="exec-impact-col">
-              <span className="exec-impact-label">
-                {lang === "id" ? "Dengan keberangkatan bertahap" : "With staggered dispatch"}
-              </span>
+              <span className="exec-impact-label">{t("exec_impact_staggered")}</span>
               <strong>
-                {number(impact.optimized_queue_trucks)} {lang === "id" ? "truk" : "trucks"} ·{" "}
-                {number(impact.optimized_wait_minutes)} {lang === "id" ? "menit tunggu" : "min wait"}
+                {fill("exec_impact_value", {
+                  trucks: number(impact.optimized_queue_trucks),
+                  wait: number(impact.optimized_wait_minutes),
+                })}
               </strong>
-              <small>
-                p95 {number(impact.optimized_p95_minutes)} {lang === "id" ? "menit" : "min"}
-              </small>
+              <small>{fill("exec_impact_p95", { n: number(impact.optimized_p95_minutes) })}</small>
             </div>
             <div className="exec-impact-delta">
-              <strong>
-                −{number(impact.queue_reduction_percent)}% {lang === "id" ? "antrean" : "queue"}
-              </strong>
+              <strong>{fill("exec_impact_delta", { n: number(impact.queue_reduction_percent) })}</strong>
             </div>
           </div>
         </div>

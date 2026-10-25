@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { apiFetch } from "../../shared/api/client.js";
+import { spikeRisk } from "../../shared/hooks/useSnapshot.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import { IntegratedPlanning } from "./IntegratedPlanning.jsx";
 import { ExecutiveSummary } from "./ExecutiveSummary.jsx";
 import { PlanningApproval, ScenarioPanel } from "./PlanningApproval.jsx";
+import { PlanQuotaUsage, PlanRules } from "./PlanConstraints.jsx";
+import { isWeekendDate, localIsoDate } from "./planDate.js";
 import { Users, Workflow } from "lucide-react";
 
 export function PlanningDecisionFlow({
@@ -27,6 +30,9 @@ export function PlanningDecisionFlow({
   const [planLoading, setPlanLoading] = useState(false);
   const [approved, setApproved] = useState(false);
   const [optimizerError, setOptimizerError] = useState(null);
+  // The plan is for one calendar day; weekday or weekend follows from it.
+  const [planDate, setPlanDate] = useState(() => localIsoDate());
+  const weekend = isWeekendDate(planDate);
 
   const role = localStorage.getItem("pythia_role") || "guest";
 
@@ -57,14 +63,32 @@ export function PlanningDecisionFlow({
       const params = new URLSearchParams({
         rainfall_mm: String(rainfall),
         event_attendance: String(attendance),
-        is_weekend: "true",
+        is_weekend: String(weekend),
+        target_date: planDate,
       });
       if (eventLat !== undefined && eventLat !== null) params.append("event_lat", String(eventLat));
       if (eventLng !== undefined && eventLng !== null) params.append("event_lng", String(eventLng));
-      const res = await apiFetch(`/predictions/kecamatan?${params.toString()}`);
+      // The same request without rain or event is each district's normal day, the
+      // basis of the shared risk classes (engine.spike_risk). Without it the review
+      // makes no "needs capacity" claim.
+      const normalParams = new URLSearchParams({
+        rainfall_mm: "0",
+        event_attendance: "0",
+        is_weekend: String(weekend),
+        target_date: planDate,
+      });
+      const [res, normal] = await Promise.all([
+        apiFetch(`/predictions/kecamatan?${params.toString()}`),
+        apiFetch(`/predictions/kecamatan?${normalParams.toString()}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null),
+      ]);
       if (!res.ok) throw new Error("forecast");
       const result = await res.json();
-      if (request === forecastRequest.current) setData(result);
+      const normalTons = Object.fromEntries(
+        (normal?.kecamatan || []).map((k) => [k.kecamatan, k.predicted_tons]),
+      );
+      if (request === forecastRequest.current) setData({ ...result, normalTons });
     } catch {
       if (request === forecastRequest.current) setForecastError(true);
     } finally {
@@ -75,7 +99,7 @@ export function PlanningDecisionFlow({
   useEffect(() => {
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attendance, rainfall, eventLat, eventLng]);
+  }, [attendance, rainfall, eventLat, eventLng, planDate]);
 
   async function generatePlan() {
     const request = ++planRequest.current;
@@ -86,7 +110,7 @@ export function PlanningDecisionFlow({
       const params = new URLSearchParams({
         rainfall_mm: String(rainfall),
         event_attendance: String(attendance),
-        is_weekend: "true",
+        plan_date: planDate,
         top_n: "5",
       });
       if (eventLat !== undefined && eventLat !== null) params.append("event_lat", String(eventLat));
@@ -139,17 +163,20 @@ export function PlanningDecisionFlow({
   const scenarioReview = data
     ? {
         ...snapshot,
-        predictions: (data.kecamatan || []).map((k) => ({
-          district: k.kecamatan,
-          predicted_tons: k.predicted_tons,
-          baseline_tons: k.baseline_tons_per_day,
-          spike_percent:
-            k.baseline_tons_per_day > 0
-              ? Math.round(((k.predicted_tons - k.baseline_tons_per_day) / k.baseline_tons_per_day) * 100)
-              : 0,
-          recommended_extra_trucks: k.crews_required ? Math.ceil(k.crews_required / 2) : 0,
-          recommended_extra_crews: k.crews_required || 0,
-        })),
+        predictions: (data.kecamatan || []).map((k) => {
+          const normalTons = data.normalTons?.[k.kecamatan];
+          return {
+            district: k.kecamatan,
+            predicted_tons: k.predicted_tons,
+            baseline_tons: k.baseline_tons_per_day,
+            // Teardown v3 N2: spike and risk vs the normal day, as on every other screen.
+            ...(normalTons > 0
+              ? { normal_tons: normalTons, ...spikeRisk(k.predicted_tons, normalTons) }
+              : { spike_percent: null, risk_level: null }),
+            recommended_extra_trucks: k.crews_required ? Math.ceil(k.crews_required / 2) : 0,
+            recommended_extra_crews: k.crews_required || 0,
+          };
+        }),
       }
     : null;
   const top5 = (data?.top_hotspots || []).slice(0, 5);
@@ -161,6 +188,12 @@ export function PlanningDecisionFlow({
 
   const locale = lang === "id" ? "id-ID" : "en-US";
   const number = (value) => Number(value ?? 0).toLocaleString(locale, { maximumFractionDigits: 2 });
+  // Sign from the printed value, so a delta that rounds to zero reads "0", never "+0" or "-0".
+  const signedNumber = (value) => {
+    const text = number(value);
+    if (!/[1-9]/.test(text)) return number(0);
+    return Number(value) > 0 ? `+${text}` : text;
+  };
   const reason = (code) => {
     if (code === "no_permit_compliant_vehicle")
       return lang === "id"
@@ -172,6 +205,11 @@ export function PlanningDecisionFlow({
       return lang === "id"
         ? "Tidak ditemukan alokasi yang memenuhi kendala."
         : "No allocation satisfies the constraints.";
+    const [binding, bindingArea] = code.split(":");
+    const bindingLabel = t(`pln6_binding_${binding}`);
+    if (bindingArea && bindingLabel !== `pln6_binding_${binding}`) {
+      return `${bindingLabel}: ${bindingArea.replace(/_/g, " ")}`;
+    }
     if (code.startsWith("insufficient_capacity:")) {
       const area = code.slice("insufficient_capacity:".length).replace(/_/g, " ");
       return lang === "id"
@@ -233,6 +271,32 @@ export function PlanningDecisionFlow({
                 <Users size={18} />
               </div>
             </div>
+            <div
+              className="plan-date-row"
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: "12px",
+                marginBottom: "16px",
+              }}
+            >
+              <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--ui-muted)" }}>
+                  {t("pln6_plan_date")}
+                </span>
+                <input
+                  type="date"
+                  data-testid="plan-date"
+                  value={planDate}
+                  onChange={(event) => event.target.value && setPlanDate(event.target.value)}
+                  style={{ minHeight: "var(--tap-min)" }}
+                />
+              </label>
+              <span className="req-chip" data-testid="plan-day-kind" style={{ padding: "10px 12px" }}>
+                {t(weekend ? "pln6_day_weekend" : "pln6_day_weekday")}
+              </span>
+            </div>
             <div className="ai-outlook">
               <h3>{lang === "id" ? "Prediksi AI 7 hari" : "AI 7-day outlook"}</h3>
               {outlook.length === 0 ? (
@@ -279,8 +343,7 @@ export function PlanningDecisionFlow({
                                 : "text-normal"
                           }
                         >
-                          {d.volume_delta_pct > 0 ? "+" : ""}
-                          {number(d.volume_delta_pct)}%
+                          {signedNumber(d.volume_delta_pct)}%
                         </td>
                       </tr>
                     ))}
@@ -506,6 +569,14 @@ export function PlanningDecisionFlow({
                     </span>
                   </div>
 
+                  {plan.scope && (
+                    <p className="kec-note" data-testid="plan-scope">
+                      {t("pln6_scope")
+                        .replace("{date}", plan.plan_date || planDate)
+                        .replace("{n}", number(plan.scope.districts))
+                        .replace("{total}", number(plan.scope.district_total))}
+                    </p>
+                  )}
                   <div className="plan-stats-grid">
                     <div className="plan-stat-item">
                       <span>{lang === "id" ? "Total kebutuhan" : "Total demand"}</span>
@@ -533,6 +604,19 @@ export function PlanningDecisionFlow({
                     </div>
                   </div>
 
+                  {plan.feasible === false && plan.unassigned_tons > 0 && (
+                    <div className="unmet-reasons-box" role="status" data-testid="plan-shortfall">
+                      <strong>{t("pln6_infeasible").replace("{t}", number(plan.unassigned_tons))}</strong>{" "}
+                      {t("pln6_infeasible_note")}
+                    </div>
+                  )}
+                  {plan.feasible === true && plan.quota_usage && (
+                    <p className="kec-note" data-testid="plan-feasible">
+                      {t("pln6_feasible")}
+                    </p>
+                  )}
+                  <PlanQuotaUsage plan={plan} />
+                  <PlanRules plan={plan} />
                   {plan.unmet_reasons?.length > 0 && (
                     <div className="unmet-reasons-box">
                       <strong>{lang === "id" ? "Peringatan kendala:" : "Constraint warnings:"}</strong>
@@ -555,6 +639,18 @@ export function PlanningDecisionFlow({
                             {lang === "id" ? "Truk" : "Truck"} {a.truck_code}
                           </strong>
                           <span>&rarr; {a.area.replace(/_/g, " ").toUpperCase()}</span>
+                          {a.shift && (
+                            <span className="kec-note">
+                              {t("pln6_trip")
+                                .replace("{n}", number(a.trip_index))
+                                .replace("{shift}", t(`pln6_shift_${a.shift}`))
+                                .replace(
+                                  "{facility}",
+                                  plan.rules?.facilities?.find((f) => f.name === a.facility)?.display_name ||
+                                    a.facility,
+                                )}
+                            </span>
+                          )}
                         </div>
                         <div className="assign-evidence">
                           <span>

@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import time
+from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.api.deps import require_permission
+from app.api.deps import require_any_permission, require_permission
 from app.api.routers.forecast import predictions_kecamatan
 from app.api.schemas import EventPermitRequest
 from app.api.state import _OPERATIONS_PLAN_STORE, _tpa_cache, dispatch_center, history_store
+from app.core.env import today
 from app.core.units import (
     TRUCK_CAPACITY_TONS,
     event_tons_for_attendance,
@@ -20,6 +22,7 @@ from app.core.units import (
 from app.field.permits import PERMIT_STORE
 from app.fleet.data import TRUCKS, events_permits_payload, tpa_queue_status_payload
 from app.fleet.operations_optimizer import Demand, Vehicle, build_operational_plan
+from app.fleet.operations_rules import PlanningRules, resolve_rules
 from app.forecast.engine import simulate_staggered_dispatch
 from app.forecast.real_data import load_kecamatan_map
 
@@ -31,12 +34,98 @@ def _reload_operations_plans() -> None:
     _OPERATIONS_PLAN_STORE.reload_cache()
 
 
+_ID_MONTHS = ("Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des")
+
+
+def _id_date(value: date) -> str:
+    return f"{value.day} {_ID_MONTHS[value.month - 1]} {value.year}"
+
+
+def _kecamatan_label(name: str) -> str:
+    return " ".join(part.capitalize() for part in str(name).split())
+
+
+def _dispatch_instructions(
+    plan_id: str,
+    plan_date: date,
+    assignments: list[dict[str, Any]],
+    demands: dict[str, Demand],
+    rules: PlanningRules,
+) -> list[dict[str, Any]]:
+    """One dispatch per truck: Indonesian text from a fixed template, plus the
+    same content as structured fields (truck, stops, slot, reason) so the driver
+    PWA can render it in either language.
+    """
+    windows = {s["id"]: s.get("window", "") for s in rules.shifts}
+    facility_names = {f.name: f.display_name for f in rules.facilities}
+    by_truck: dict[str, list[dict[str, Any]]] = {}
+    for a in assignments:
+        by_truck.setdefault(a["truck_code"], []).append(a)
+    out = []
+    for truck_code in sorted(by_truck):
+        trips = sorted(by_truck[truck_code], key=lambda a: a["trip_index"])
+        stops = [
+            {
+                "order": a["trip_index"],
+                "area": a["area"],
+                "kecamatan": demands[a["area"]].label,
+                "shift": a["shift"],
+                "window": windows.get(a["shift"], ""),
+                "facility": a["facility"],
+                "facility_display": facility_names.get(a["facility"], a["facility"]),
+                "tons": a["assigned_tons"],
+            }
+            for a in trips
+        ]
+        areas = list(dict.fromkeys(a["area"] for a in trips))
+        reason_areas = [
+            {"area": area, "kecamatan": demands[area].label, "forecast_tons": round(demands[area].tons, 1)}
+            for area in areas
+        ]
+        lines = [f"Rencana {plan_id} · {_id_date(plan_date)} · Truk {truck_code}"]
+        for stop in stops:
+            window = f" ({stop['window']})" if stop["window"] else ""
+            lines.append(
+                f"{stop['order']}. Shift {stop['shift']}{window}: angkut ±{stop['tons']:.0f} t "
+                f"dari Kec. {stop['kecamatan']}, bongkar di {stop['facility_display']}"
+            )
+        forecast = ", ".join(f"Kec. {r['kecamatan']} {r['forecast_tons']:.0f} t/hari" for r in reason_areas)
+        lines.append(f"Alasan: prakiraan timbulan {forecast} (keluaran model).")
+        out.append(
+            {
+                "truck_code": truck_code,
+                "text": "\n".join(lines),
+                "fields": {
+                    "template": "plan_dispatch_v1",
+                    "locale": "id",
+                    "truck_code": truck_code,
+                    "plan_id": plan_id,
+                    "plan_date": plan_date.isoformat(),
+                    "stops": stops,
+                    "slot": {"shift": stops[0]["shift"], "window": stops[0]["window"]},
+                    "reason": {
+                        "code": "forecast_demand",
+                        "areas": reason_areas,
+                        "classification": "MODEL_OUTPUT",
+                    },
+                },
+            }
+        )
+    return out
+
+
+@router.get("/api/operations/rules")
+def get_operations_rules(plan_date: date | None = None) -> dict[str, Any]:
+    """The quota, gate and facility rules in force on `plan_date`, with sources."""
+    return resolve_rules(plan_date or today()).payload()
+
+
 @router.post("/api/operations/plan")
 def create_operations_plan(
     rainfall_mm: float = 0.0,
     event_attendance: int = 0,
-    is_weekend: bool = False,
-    top_n: int = 5,
+    top_n: int = Query(5, ge=1, le=42),
+    plan_date: date | None = Query(None, description="Day the plan is for; defaults to today"),
     event_lat: float | None = Query(
         None, ge=-90, le=90, description="Event latitude; localizes attendance demand"
     ),
@@ -45,21 +134,29 @@ def create_operations_plan(
     ),
     _role: str = Depends(require_permission("operations:plan")),
 ) -> dict[str, Any]:
-    """Build a dispatch plan from forecast hotspots + real fleet via CP-SAT.
+    """Build a day plan (truck trips per shift) for the top forecast districts via CP-SAT.
+
+    The weekday or weekend follows from `plan_date`, never from a fixed flag.
+    The kecamatan rit quotas, the Bantargebang gate caps and the facility rules
+    in force on that date are hard constraints; demand they cannot serve is
+    returned as `unassigned_tons` with the limit that binds, not hidden.
 
     The event location is part of the scenario: when `event_lat`/`event_lng`
     are supplied with a non-zero attendance, the same coordinate the map uses
     localizes the demand, so two different event sites no longer produce an
     identical plan.
     """
+    plan_date = plan_date or today()
+    is_weekend = plan_date.weekday() >= 5
     preds = predictions_kecamatan(
         rainfall_mm=rainfall_mm,
         event_attendance=event_attendance,
         is_weekend=is_weekend,
+        target_date=plan_date,
         event_lat=event_lat,
         event_lng=event_lng,
     )
-    hotspots = preds["top_hotspots"][:top_n]
+    hotspots = (preds.get("kecamatan") or preds["top_hotspots"])[:top_n]
     demands = [
         Demand(
             area=h["slug"],
@@ -67,6 +164,8 @@ def create_operations_plan(
             lat=float(h.get("lat") or 0.0),
             lng=float(h.get("lng") or 0.0),
             priority=rank,
+            label=_kecamatan_label(h.get("kecamatan") or h["slug"]),
+            city=h.get("city"),
         )
         for rank, h in enumerate(reversed(hotspots), start=1)
     ]
@@ -76,16 +175,24 @@ def create_operations_plan(
             capacity_tons=TRUCK_CAPACITY_TONS,
             available=not t["is_damaged"],
             permit_compliant=not t["deviation"]["violated"],
+            vehicle_type=t.get("vehicle_type", ""),
+            # The simulated fleet has no leachate flag: a compactor is assumed
+            # sealed (labelled as an assumption in the rules file).
+            leachate_free="compactor" in str(t.get("vehicle_type", "")).lower(),
         )
         for t in TRUCKS
     ]
-    plan = build_operational_plan(demands, vehicles)
+    city_tons = float(preds.get("total_predicted_tons") or 0.0)
+    plan_tons = sum(d.tons for d in demands)
+    rules = resolve_rules(plan_date, capacity_share=(plan_tons / city_tons) if city_tons > 0 else 1.0)
+    plan = build_operational_plan(demands, vehicles, rules=rules)
     # The stored scenario is the full normalized input, not just the subset the
     # optimizer happened to use, so an approved plan can be reproduced exactly.
     scenario = {
         "rainfall_mm": rainfall_mm,
         "event_attendance": event_attendance,
         "is_weekend": is_weekend,
+        "plan_date": plan_date.isoformat(),
         "event_lat": event_lat,
         "event_lng": event_lng,
         "top_n": top_n,
@@ -94,21 +201,44 @@ def create_operations_plan(
         "total_predicted_tons": preds["total_predicted_tons"],
         "kecamatan_count": preds["kecamatan_count"],
     }
+    assignments = [
+        {
+            "truck_code": a.truck_code,
+            "area": a.area,
+            "assigned_tons": a.assigned_tons,
+            "shift": a.shift,
+            "facility": a.facility,
+            "trip_index": a.trip_index,
+            "evidence": a.evidence,
+        }
+        for a in plan.assignments
+    ]
+    by_area = {d.area: d for d in demands}
     payload = {
         "plan_id": plan.plan_id,
         "status": "proposed",
-        "assignments": [
-            {
-                "truck_code": a.truck_code,
-                "area": a.area,
-                "assigned_tons": a.assigned_tons,
-                "evidence": a.evidence,
-            }
-            for a in plan.assignments
-        ],
+        "kind": "day_plan",
+        "plan_date": plan_date.isoformat(),
+        "is_weekend": is_weekend,
+        "scope": {
+            "kind": "day_plan",
+            "plan_date": plan_date.isoformat(),
+            "districts": len(demands),
+            "district_total": preds["kecamatan_count"],
+            "fleet_classification": "SIMULATED",
+            "demand_classification": "MODEL_OUTPUT",
+        },
+        "assignments": assignments,
+        "dispatches": _dispatch_instructions(plan.plan_id, plan_date, assignments, by_area, rules),
         "unmet_reasons": plan.unmet_reasons,
         "total_demand_tons": plan.total_demand_tons,
         "total_assigned_tons": plan.total_assigned_tons,
+        "unassigned_tons": plan.unassigned_tons,
+        "feasible": plan.feasible,
+        "shortfall_label": None if plan.feasible else f"infeasible: {plan.unassigned_tons:.0f} t unassigned",
+        "quota_usage": plan.quota_usage,
+        "facility_usage": plan.facility_usage,
+        "rules": rules.payload(),
         "scenario": scenario,
     }
     payload = _OPERATIONS_PLAN_STORE.save_proposed(plan.plan_id, payload)
@@ -116,23 +246,46 @@ def create_operations_plan(
     return payload
 
 
+@router.get("/api/operations/instructions/{truck_code}")
+def get_operations_instructions(
+    truck_code: str,
+    pending_only: bool = True,
+    _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create")),
+) -> list[dict[str, Any]]:
+    """Structured plan instructions for one truck (truck, stops, slot, reason).
+
+    The matching dispatch row (`/api/dispatch/{truck_code}`) carries the same
+    instruction as Indonesian text; `dispatch_id` links the two.
+    """
+    instructions = _OPERATIONS_PLAN_STORE.instructions_for(truck_code)
+    if not pending_only:
+        return instructions
+    pending = {d["id"] for d in history_store.pending_dispatches(truck_code)}
+    return [i for i in instructions if i["dispatch_id"] in pending]
+
+
 @router.post("/api/operations/{plan_id}/approve")
 def approve_operations_plan(
     plan_id: str, _role: str = Depends(require_permission("operations:approve"))
 ) -> dict[str, Any]:
-    """Approve a plan and push each assignment through the dispatch contract.
+    """Approve a plan and push each truck's trips through the dispatch contract.
 
     Approval is at-most-once (#17): the status transition and dispatch
     ids commit in one transaction; a retried or concurrent approval
     returns the already-committed result without creating new dispatches.
     """
 
-    def _create_dispatch(assignment):
+    def _create_dispatch(item):
+        # Plans stored before the day plan carry bare assignments: same
+        # Indonesian template, one trip, no shift.
+        area = _kecamatan_label(str(item.get("area", "")).replace("_", " "))
+        text = item.get("text") or (
+            f"Rencana {plan_id} · Truk {item['truck_code']}\n"
+            f"1. Angkut ±{item['assigned_tons']:.0f} t dari Kec. {area}"
+        )
         return history_store.save_dispatch(
-            truck_code=assignment["truck_code"],
-            instruction=(
-                f"Collect {assignment['assigned_tons']:.0f}t at {assignment['area']} (plan {plan_id})"
-            ),
+            truck_code=item["truck_code"],
+            instruction=text,
             manager_id="operations_optimizer",
         )
 

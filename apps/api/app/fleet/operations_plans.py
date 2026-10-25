@@ -65,6 +65,19 @@ class OperationsPlanStore:
                     )
                     """
                 )
+                # The structured side of each plan dispatch (truck, stops, slot,
+                # reason): the dispatch row holds only the instruction text.
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS operations_dispatch_instructions (
+                        dispatch_id TEXT PRIMARY KEY,
+                        plan_id TEXT NOT NULL,
+                        truck_code TEXT NOT NULL,
+                        payload TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    )
+                    """
+                )
 
     # -- plan lifecycle -----------------------------------------------------
 
@@ -119,10 +132,18 @@ class OperationsPlanStore:
                             return self.get(plan_id), False
                         payload = json.loads(row["payload"])
                         dispatch_ids: list[str] = []
-                        for assignment in payload["assignments"]:
-                            dispatch = create_dispatch(assignment)
-                            dispatch_ids.append(dispatch["id"])
                         now = datetime.now(UTC).isoformat()
+                        # A day plan dispatches once per truck (all its trips);
+                        # plans stored before the day plan dispatch per assignment.
+                        for item in payload.get("dispatches") or payload["assignments"]:
+                            dispatch = create_dispatch(item)
+                            dispatch_ids.append(dispatch["id"])
+                            if "fields" in item:
+                                connection.execute(
+                                    "INSERT OR REPLACE INTO operations_dispatch_instructions "
+                                    "(dispatch_id, plan_id, truck_code, payload, created_at) VALUES (?,?,?,?,?)",
+                                    (dispatch["id"], plan_id, item["truck_code"], json.dumps(item), now),
+                                )
                         connection.execute(
                             "UPDATE operations_plans SET status='approved', "
                             "dispatch_ids=?, approved_at=?, approved_by=? "
@@ -139,6 +160,23 @@ class OperationsPlanStore:
             except sqlite3.OperationalError:
                 raise
             return self.get(plan_id), True
+
+    def instructions_for(self, truck_code: str) -> list[dict[str, Any]]:
+        """Structured plan instructions sent to one truck, oldest first."""
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT * FROM operations_dispatch_instructions WHERE truck_code=? ORDER BY created_at, dispatch_id",
+                (truck_code,),
+            ).fetchall()
+        return [
+            {
+                "dispatch_id": row["dispatch_id"],
+                "plan_id": row["plan_id"],
+                "created_at": row["created_at"],
+                **json.loads(row["payload"]),
+            }
+            for row in rows
+        ]
 
     def reload_cache(self) -> None:
         """Compatibility hook: durability comes from SQLite, nothing to do."""

@@ -6,7 +6,7 @@ export function ScenarioPanel({ mode, children }) {
 }
 
 export function PlanningApproval({ plan, planLoading, approved, approvePlan, role }) {
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
   const locale = lang === "id" ? "id-ID" : "en-US";
   const number = (value) => Number(value ?? 0).toLocaleString(locale, { maximumFractionDigits: 2 });
   const roleName =
@@ -19,7 +19,14 @@ export function PlanningApproval({ plan, planLoading, approved, approvePlan, rol
       driver: lang === "id" ? "Pengemudi" : "Driver",
       guest: lang === "id" ? "Tamu" : "Guest",
     }[role] || (lang === "id" ? "Tidak diketahui" : "Unknown");
-  const unmetCount = plan?.unmet_reasons?.length || 0;
+  // R7: a quota or gate shortfall is a fact of the day, not an error the
+  // dispatcher can resolve, so it does not block approval of the feasible
+  // trips; it is stated next to the button instead. A plan with no trips, or
+  // one the solver could not build, still cannot be approved.
+  const blocked =
+    !plan?.assignments?.length ||
+    (plan?.unmet_reasons || []).some((code) => code.startsWith("no_") && !code.includes(":"));
+  const shortfall = plan?.feasible === false && plan?.unassigned_tons > 0 ? plan.unassigned_tons : 0;
 
   return (
     <div className="planning-approval">
@@ -60,7 +67,12 @@ export function PlanningApproval({ plan, planLoading, approved, approvePlan, rol
           </div>
         </dl>
       )}
-      {plan?.status === "proposed" && unmetCount === 0 && (
+      {plan?.status === "proposed" && !blocked && shortfall > 0 && (
+        <p className="planning-approval-note" data-testid="approval-shortfall-note">
+          {t("pln6_shortfall_approve_note").replace("{t}", number(shortfall))}
+        </p>
+      )}
+      {plan?.status === "proposed" && !blocked && (
         <button className="primary-button approve-dispatch-btn" onClick={approvePlan} disabled={planLoading}>
           {planLoading
             ? lang === "id"
@@ -71,7 +83,7 @@ export function PlanningApproval({ plan, planLoading, approved, approvePlan, rol
               : "Approve & dispatch plan"}
         </button>
       )}
-      {plan?.status === "proposed" && unmetCount > 0 && (
+      {plan?.status === "proposed" && blocked && (
         <p className="planning-approval-note planning-approval-blocked">
           {lang === "id"
             ? "Persetujuan belum tersedia sampai seluruh kendala ditangani."

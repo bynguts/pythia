@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "classification": "EXAMPLE_CONFIG",
+  "label": "Example planning rules from news reports plus stated assumptions. Confirm every value with DLH before operational use.",
+  "research_reference": "docs/gsc-2026/RESEARCH_v3_users.md sections 1.1, 1.3, 3.1, 3.2",
+  "shifts": {
+    "value": [
+      { "id": "pagi", "window": "06:00-14:00" },
+      { "id": "siang", "window": "14:00-22:00" },
+      { "id": "malam", "window": "22:00-06:00" }
+    ],
+    "classification": "assumption",
+    "label": "DLH confirms three shifts (morning, afternoon, night); the clock windows are assumed.",
+    "source_url": "https://www.metrotvnews.com/read/NrWC8y87-dlh-percepat-penanganan-sampah-di-dalam-kota-tps-liar-ditutup-permanen",
+    "as_of": "2026-04-02"
+  },
+  "truck_limits": {
+    "max_rit_per_truck_per_day": 2,
+    "max_rit_per_truck_per_shift": 1,
+    "classification": "example_news_report",
+    "label": "Example from Satpel LH Pasar Rebo: six 10 t tippers doing about 2 trips each per day. Confirm with DLH.",
+    "source_url": "https://www.metrotvnews.com/read/NLMC8lJZ-tps-pekayon-jaktim-tangani-120-ton-sampah-per-hari",
+    "as_of": "2026-04-09"
+  },
+  "kecamatan_quota": {
+    "by_kecamatan": {
+      "pasar_rebo": {
+        "rit_per_day": 14,
+        "classification": "example_news_report",
+        "label": "example quota (news report), confirm with DLH",
+        "source_url": "https://www.metrotvnews.com/read/NLMC8lJZ-tps-pekayon-jaktim-tangani-120-ton-sampah-per-hari",
+        "as_of": "2026-04-09"
+      }
+    },
+    "default": {
+      "rit_per_day": null,
+      "classification": "assumption",
+      "label": "No published quota for this kecamatan: no rit cap is applied (only the gate and facility limits bind). Confirm with DLH."
+    }
+  },
+  "capacity_share": {
+    "classification": "assumption",
+    "label": "Gate and facility caps are citywide. A plan that covers only some kecamatan gets the pro-rata share of each cap by its share of the citywide forecast tonnage."
+  },
+  "facilities": {
+    "TPST Bantargebang": {
+      "display_name": "TPST Bantargebang",
+      "accepts": {
+        "compactor_only": false,
+        "requires_leachate_free": false,
+        "classification": "assumption",
+        "label": "No vehicle-type restriction found in the sources."
+      },
+      "rules": [
+        {
+          "rule": "daily_rit_cap",
+          "value": 900,
+          "effective_from": "2026-03-09",
+          "classification": "reported_secondary",
+          "label": "Post-landslide receiving capacity of about 900 rit/day (secondary source, not re-fetched).",
+          "source_url": "https://investortrust.id/national/96580/pemprov-jakarta-tutup-sementara-tpst-bantargebang-setelah-longsor-maut",
+          "note": "The 900 rit/day figure comes from a Babelinsight report seen in search results; the linked report gives the pre-landslide inflow of about 1,200 trips/day."
+        },
+        {
+          "rule": "shift_rit_cap",
+          "value": 400,
+          "effective_from": "2025-04-01",
+          "classification": "assumption",
+          "label": "\"400 trucks per shift\" comes from an opinion piece, so it is treated as an estimate.",
+          "source_url": "https://mojok.co/terminal/berkendara-melewati-bantargebang-seperti-melewati-neraka/"
+        },
+        {
+          "rule": "residue_share",
+          "value": 0.25,
+          "effective_from": "2026-08-01",
+          "classification": "reported",
+          "label": "Controlled-landfill roadmap: processed residue is 25% of what Bantargebang receives from 1 Aug 2026.",
+          "source_url": "https://www.beritajakarta.id/en/read/154173/modernizing-bantargebang-jakarta-aims-to-eliminate-open-dumping-by-2029",
+          "planner_effect": "Raw (unprocessed) waste trips are capped at (1 - residue share) of the daily rit cap.",
+          "planner_effect_classification": "assumption"
+        },
+        {
+          "rule": "residue_share",
+          "value": 0.5,
+          "effective_from": "2027-01-01",
+          "classification": "assumption",
+          "label": "Roadmap: 50% in 2027. The start day (1 Jan) is assumed.",
+          "source_url": "https://www.beritajakarta.id/en/read/154173/modernizing-bantargebang-jakarta-aims-to-eliminate-open-dumping-by-2029",
+          "planner_effect": "Raw (unprocessed) waste trips are capped at (1 - residue share) of the daily rit cap.",
+          "planner_effect_classification": "assumption"
+        },
+        {
+          "rule": "residue_share",
+          "value": 0.75,
+          "effective_from": "2028-01-01",
+          "classification": "assumption",
+          "label": "Roadmap: 75% in 2028. The start day (1 Jan) is assumed.",
+          "source_url": "https://www.beritajakarta.id/en/read/154173/modernizing-bantargebang-jakarta-aims-to-eliminate-open-dumping-by-2029",
+          "planner_effect": "Raw (unprocessed) waste trips are capped at (1 - residue share) of the daily rit cap.",
+          "planner_effect_classification": "assumption"
+        },
+        {
+          "rule": "residue_share",
+          "value": 1.0,
+          "effective_from": "2029-01-01",
+          "classification": "assumption",
+          "label": "Roadmap: 100% in 2029, open dumping ends. The start day (1 Jan) is assumed; a national 2027 target is also reported.",
+          "source_url": "https://www.beritajakarta.id/en/read/154173/modernizing-bantargebang-jakarta-aims-to-eliminate-open-dumping-by-2029",
+          "planner_effect": "Raw (unprocessed) waste trips are capped at (1 - residue share) of the daily rit cap.",
+          "planner_effect_classification": "assumption"
+        }
+      ]
+    },
+    "RDF Plant Jakarta": {
+      "display_name": "RDF Rorotan",
+      "operating_from": "2025-12-01",
+      "accepts": {
+        "compactor_only": true,
+        "requires_leachate_free": true,
+        "classification": "reported",
+        "label": "Only leachate-free (closed) compactors may deliver to RDF Rorotan.",
+        "source_url": "https://lestari.kompas.com/read/2025/12/16/185509886/dlh-dki-siapkan-148-truk-tertutup-untuk-angkut-sampah-ke-rdf-rorotan",
+        "vehicle_flag_note": "The simulated fleet has no leachate flag; a compactor is assumed to be closed and leachate-free (assumption)."
+      },
+      "rules": [
+        {
+          "rule": "design_capacity_tons_per_day",
+          "value": 2400,
+          "effective_from": "2025-12-01",
+          "classification": "reported",
+          "label": "Stated design capacity 2,400 t/day.",
+          "source_url": "https://katadata.co.id/ekonomi-hijau/ekonomi-sirkular/6a79aac15ac6c/kapasitas-rdf-rorotan-baru-terpakai-20-apa-kendalanya"
+        },
+        {
+          "rule": "actual_intake_share",
+          "value": 0.083,
+          "effective_from": "2025-12-01",
+          "classification": "reported",
+          "label": "Started in Dec 2025 at about 200 t/day (about 8% of the design capacity).",
+          "source_url": "https://katadata.co.id/ekonomi-hijau/ekonomi-sirkular/6a79aac15ac6c/kapasitas-rdf-rorotan-baru-terpakai-20-apa-kendalanya"
+        },
+        {
+          "rule": "actual_intake_share",
+          "value": 0.2,
+          "effective_from": "2026-08-10",
+          "classification": "reported",
+          "label": "About 20% of the design capacity is in use (average 400-500 t/day in Aug 2026).",
+          "source_url": "https://katadata.co.id/ekonomi-hijau/ekonomi-sirkular/6a79aac15ac6c/kapasitas-rdf-rorotan-baru-terpakai-20-apa-kendalanya"
+        },
+        {
+          "rule": "served_cities",
+          "value": ["Jakarta Utara", "Jakarta Timur"],
+          "effective_from": "2025-12-01",
+          "classification": "assumption",
+          "label": "The plant serves kelurahan or kecamatan in Jakarta Utara and Jakarta Timur; the sources differ on the exact list.",
+          "source_url": "https://katadata.co.id/ekonomi-hijau/ekonomi-sirkular/6a79aac15ac6c/kapasitas-rdf-rorotan-baru-terpakai-20-apa-kendalanya"
+        }
+      ]
+    }
+  }
+}
