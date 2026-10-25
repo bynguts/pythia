@@ -29,6 +29,8 @@
   --fs-caption: 13px;
   --fs-kpi: 28px;
   --tap-min: 44px;
+  /* Transparent ring inside a 44 px hit box: the drawn control is 34 px tall. */
+  --tap-inset: 5px;
   --ui-success: var(--ui-forest-700);
   --ui-warning: #99500d;
   --ui-warning-soft: #fff1de;

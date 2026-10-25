@@ -3195,3 +3195,47 @@ th {
 .login-shell .primary-button:hover {
   background: var(--ui-accent);
 }
+
+/* Density: buttons keep the 44 px hit box (--tap-min) but draw a 34 px control
+   inside it. A transparent border pads the hit area, the fill is clipped to the
+   padding box and the outline is an inset shadow, so the e2e touch-target checks
+   and fat-finger taps are unchanged while the page stops shouting. */
+.primary-button,
+.ghost-button,
+.text-button,
+.fleet-rail .action-card-button,
+.rail-tab {
+  border: var(--tap-inset) solid transparent;
+  background-clip: padding-box;
+  font-size: 13px;
+}
+.primary-button,
+.fleet-rail .action-card-button {
+  padding-inline: 14px;
+}
+.ghost-button,
+.text-button {
+  padding-inline: 12px;
+  box-shadow: inset 0 0 0 1px var(--ui-border-strong);
+}
+.ghost-button:hover,
+.text-button:hover {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px var(--ui-ink-soft);
+}
+.primary-button:focus-visible,
+.ghost-button:focus-visible,
+.text-button:focus-visible,
+.rail-tab:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: calc(-1 * var(--tap-inset) + 1px);
+}
+/* The selected rail tab is a quiet chip, not a black slab. */
+.rail-tab[aria-selected="true"] {
+  color: var(--ui-ink);
+  background: var(--ui-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--ui-border-strong);
+}
+.rail-tabs {
+  padding: 2px 4px;
+}
