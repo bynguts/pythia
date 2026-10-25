@@ -345,6 +345,15 @@ def _parse_event_date(raw: str) -> str | None:
         return None
 
 
+def _runs_on(event: dict[str, Any], iso: str) -> bool:
+    """True when `iso` is the event's start date, or inside start..end for a multi-day event."""
+    start = _parse_event_date(event["date_raw"])
+    if start is None:
+        return False
+    end = _parse_event_date(event.get("end_date_raw") or "") or start
+    return start <= iso <= end
+
+
 @lru_cache(maxsize=1)
 def _holiday_names() -> dict[str, str]:
     """ISO date -> name of the 2026 national holidays (api-hari-libur), the engine's own holiday set."""
@@ -388,7 +397,7 @@ def tomorrow_forecast(target_date: str | None = None) -> dict[str, Any]:
             "source": "official calendar",
         }
         for e in load_official_events()
-        if _parse_event_date(e["date_raw"]) == iso
+        if _runs_on(e, iso)
     ] + [
         {
             "name": p.get("name"),

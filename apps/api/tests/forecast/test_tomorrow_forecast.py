@@ -9,6 +9,7 @@ from datetime import date, timedelta
 import pytest
 
 from app.forecast import baseline as baseline_module
+from app.forecast import real_data
 
 TOMORROW = date.today() + timedelta(days=1)
 
@@ -145,3 +146,17 @@ def test_baseline_today_is_unchanged_by_a_tomorrow_call(api_client, auth_headers
     before = today_payload()
     assert _get(api_client, auth_headers).status_code == 200
     assert today_payload() == before
+
+
+def test_multi_day_official_event_counts_on_every_day_it_runs():
+    fair = {"date_raw": "2026-6-10", "end_date_raw": "2026-6-20"}
+    assert all(baseline_module._runs_on(fair, f"2026-06-{d}") for d in (10, 15, 20))
+    assert not baseline_module._runs_on(fair, "2026-06-09")
+    assert not baseline_module._runs_on(fair, "2026-06-21")
+    assert baseline_module._runs_on({"date_raw": "2026-6-10"}, "2026-06-10")
+    assert not baseline_module._runs_on({"date_raw": "2026-6-10"}, "2026-06-11")
+
+
+def test_loader_keeps_the_end_date_of_the_scraped_fair():
+    fair = next(e for e in real_data.load_official_events() if e["name"].startswith("Jakarta Fair Kemayoran"))
+    assert fair["end_date_raw"] == "2026-7-12"

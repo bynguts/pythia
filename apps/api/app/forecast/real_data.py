@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
@@ -220,6 +221,12 @@ def baseline_tons_for(district: str, default: float) -> float:
     return default
 
 
+def _end_date_raw(notes: str) -> str:
+    """The `endDate=YYYY-M-D` a multi-day event's notes carry, or "" for a one-day event."""
+    match = re.search(r"endDate=(\d{4}-\d{1,2}-\d{1,2})", notes)
+    return match.group(1) if match else ""
+
+
 @lru_cache(maxsize=1)
 def load_official_events() -> list[dict[str, Any]]:
     """
@@ -244,6 +251,7 @@ def load_official_events() -> list[dict[str, Any]]:
                     "expected_attendance": _to_float(row.get("estimasi_pengunjung", "")),
                     "source": (row.get("sumber") or "").strip(),
                     "source_url": (row.get("source_url") or "").strip(),
+                    "end_date_raw": _end_date_raw(row.get("notes") or ""),
                 }
             )
     return events
