@@ -142,8 +142,9 @@ def _dispatch_instructions(
                 if slot["date"] == plan_date.isoformat()
                 else f" ({_id_date(date.fromisoformat(slot['date']))})"
             )
+            depart = f"Berangkat {slot['depart_at']} · " if slot.get("depart_at") else ""
             dispatch["text"] += (
-                f"\nSlot gerbang {facility} {slot['start']}–{slot['end']}{day} (keluaran model)"
+                f"\n{depart}Slot gerbang {facility} {slot['start']}–{slot['end']}{day} (keluaran model)"
             )
     return out
 

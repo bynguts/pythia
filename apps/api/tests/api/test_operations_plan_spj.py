@@ -27,6 +27,7 @@ SLOT = {
     "start": "09:00",
     "end": "09:15",
     "date": None,
+    "depart_at": "06:00",
     "classification": "MODEL_OUTPUT",
 }
 
@@ -260,7 +261,9 @@ def test_built_plan_carries_the_gate_slot_in_fields_and_text(api_client, auth_he
     for dispatch in created.json()["dispatches"]:
         assert dispatch["fields"]["gate_slot"]["classification"] == "MODEL_OUTPUT"
         assert dispatch["fields"]["slot"]["shift"]  # the shift slot stays
-        assert dispatch["text"].endswith("Slot gerbang TPST Bantargebang 09:00–09:15 (keluaran model)")
+        assert dispatch["text"].endswith(
+            "\nBerangkat 06:00 · Slot gerbang TPST Bantargebang 09:00–09:15 (keluaran model)"
+        )
 
 
 def test_without_a_slot_the_text_claims_none(api_client, auth_headers, monkeypatch):
@@ -269,3 +272,19 @@ def test_without_a_slot_the_text_claims_none(api_client, auth_headers, monkeypat
     for dispatch in created.json()["dispatches"]:
         assert dispatch["fields"]["gate_slot"] is None
         assert "Slot gerbang" not in dispatch["text"]
+        assert "Berangkat" not in dispatch["text"]
+
+
+def test_the_modelled_slot_reads_back_as_departure_and_gate_window(api_client, auth_headers):
+    """With the real slot model, every slotted dispatch says when to leave and when it reaches the gate."""
+    created = api_client.post("/api/operations/plan?top_n=2", headers=auth_headers("dispatcher"))
+    assert created.status_code == 200, created.text
+    dispatches = created.json()["dispatches"]
+    assert any(d["fields"]["gate_slot"] for d in dispatches)
+    for dispatch in dispatches:
+        slot = dispatch["fields"]["gate_slot"]
+        if slot is None:
+            continue
+        line = dispatch["text"].splitlines()[-1]
+        assert line.startswith(f"Berangkat {slot['depart_at']} · Slot gerbang ")
+        assert f"{slot['start']}–{slot['end']}" in line and line.endswith("(keluaran model)")
