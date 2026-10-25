@@ -95,7 +95,9 @@ test("logout clears the stored session and keeps the workspace URL for the next 
   await page.goto("/planning");
   await expect(navButton(page, "Rencana")).toHaveAttribute("aria-current", "page");
 
-  await page.locator(".command-logout").click();
+  // wave11 design system: log out lives in the profile menu (no sidebar footer).
+  await page.getByTestId("profile-button").click();
+  await page.getByTestId("profile-logout").click();
   await expect(page.getByRole("heading", { name: "Masuk ke pusat kendali" })).toBeVisible();
   await expect(page).toHaveURL(/\/planning$/);
   const stored = await page.evaluate(() =>

@@ -31,9 +31,11 @@ test("fleet opens as a map-led deck with the work rail beside the map", async ({
   await expect(rail.getByRole("tab", { name: /Perlu tindakan/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("fleet-rail-action")).toBeVisible();
 
-  // The map keeps the larger share; the rail sits to its right, never over it.
+  // The map keeps the larger share; the rail sits beside it, never over it.
+  // wave11 fleet: the approved design (docs/design/export/app-fleet.png) puts the rail
+  // on the left and lets the map run to the right edge.
   const [mapBox, railBox] = await Promise.all([map.boundingBox(), rail.boundingBox()]);
-  expect(railBox.x).toBeGreaterThanOrEqual(mapBox.x + mapBox.width - 2);
+  expect(mapBox.x).toBeGreaterThanOrEqual(railBox.x + railBox.width - 2);
   expect(mapBox.width).toBeGreaterThan(railBox.width);
 });
 

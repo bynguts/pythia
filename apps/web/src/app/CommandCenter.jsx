@@ -1,13 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, Check, Radio } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
 import { AppShell } from "./AppShell.jsx";
 import { workspacePath } from "./workspaces.js";
 import { apiFetch } from "../shared/api/client.js";
 import { useSnapshot } from "../shared/hooks/useSnapshot.js";
 import { useLanguage } from "../shared/i18n/index.jsx";
 import { ErrorBoundary } from "../shared/ui/ErrorBoundary.jsx";
-import { StatusPill } from "../shared/ui/StatusPill.jsx";
 import { AssistantPanel } from "../features/assistant/AssistantPanel.jsx";
 import { DriverAnalytics } from "../features/drivers/DriverAnalytics.jsx";
 import { DamageReportsPanel } from "../features/fleet/DamageReportsPanel.jsx";
@@ -44,12 +43,12 @@ function MapPanel({
   const { t } = useLanguage();
   return (
     <section className="panel map-panel">
-      <div className="map-data-notice">
-        <StatusPill tone="warning">
-          <Radio size={14} /> {t("w10fleet_map_sim")}
-        </StatusPill>
+      {/* wave11 fleet: the map's provenance is one outlined mono footer chip. */}
+      <p className="map-data-notice" data-testid="map-provenance">
+        <span>{t("w10fleet_map_sim")}</span>
+        <span aria-hidden="true">·</span>
         <span>{t("w10fleet_map_not_gps")}</span>
-      </div>
+      </p>
       <Suspense fallback={<div className="map-loading-fallback">{t("w10fleet_map_loading")}</div>}>
         <LiveFleetMap
           trucks={trucks}

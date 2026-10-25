@@ -27,7 +27,7 @@ test("assistant keeps keyboard focus inside and restores it after dismissal", as
   const dialog = page.getByRole("dialog", { name: "Asisten operasi" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("textbox", { name: "Tanya apa saja ke Ana" })).toBeFocused();
-  for (const selector of [".command-sidebar", ".command-topbar", ".command-canvas", ".command-mobile-nav"]) {
+  for (const selector of [".command-topbar", ".command-canvas", ".command-mobile-nav"]) {
     await expect(page.locator(selector)).toHaveJSProperty("inert", true);
   }
 
@@ -44,7 +44,7 @@ test("assistant keeps keyboard focus inside and restores it after dismissal", as
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
-  for (const selector of [".command-sidebar", ".command-topbar", ".command-canvas", ".command-mobile-nav"]) {
+  for (const selector of [".command-topbar", ".command-canvas", ".command-mobile-nav"]) {
     await expect(page.locator(selector)).toHaveJSProperty("inert", false);
   }
   await trigger.click();

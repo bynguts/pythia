@@ -7,14 +7,6 @@
 }
 
 @media (max-width: 860px) {
-  .login-shell {
-    padding: 20px;
-  }
-
-  .login-surface {
-    grid-template-columns: 1fr;
-  }
-
   .tpa-status-grid,
   .event-body {
     grid-template-columns: 1fr;
@@ -46,16 +38,6 @@
 
   .map-legend:not([open]) > span {
     display: none;
-  }
-
-  .login-shell {
-    min-height: 100dvh;
-    align-content: start;
-    padding: 12px;
-  }
-
-  .login-shell .login-card {
-    padding: 22px;
   }
 
   .weather-strip {

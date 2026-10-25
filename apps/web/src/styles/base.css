@@ -67,9 +67,7 @@ h2 {
 }
 
 .panel-title h2,
-.decision-stage-header h2,
 .workspace-tab,
-.nav-tab-btn,
 button,
 th,
 label {
@@ -83,13 +81,12 @@ h3 {
   line-height: 1.35;
 }
 
-table td,
-.kec-meta b,
-.scenario-result strong,
-.req-chip b {
+td {
+  font-variant-numeric: tabular-nums;
+}
+.kec-meta b {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1;
 }
 
 button:focus-visible,

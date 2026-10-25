@@ -26,23 +26,19 @@ async function signIn(page, lang = "id") {
 
 async function assertShellCopy(page, mode) {
   const id = mode === "id";
-  // Sidebar: brand subtitle, workspaces label, connectivity, logout.
-  // #honesty: Pythia is a prototype built for the DLH case, not a DLH product.
-  await expect(page.locator(".command-brand small")).toHaveText(
-    id ? "Pusat kendali operasi sampah" : "Waste operations command center",
+  // wave11 design system: the top bar replaced the sidebar. Brand, nav, the status chip
+  // (scenario + city + server link), assistant, profile and the profile-menu logout.
+  await expect(page.locator(".command-brand")).toHaveAccessibleName(
+    id ? "Pythia, ke Armada" : "Pythia, go to Fleet",
   );
-  await expect(page.locator(".command-nav-label")).toHaveText(id ? "Ruang kerja" : "Workspaces");
-  await expect(page.locator(".system-connection strong")).toHaveText(
-    id ? "Sistem terhubung" : "System connected",
+  await expect(page.getByTestId("workspace-navigation")).toHaveAccessibleName(
+    id ? "Navigasi utama Pythia" : "Pythia main navigation",
   );
-  await expect(page.locator(".system-connection small")).toHaveText(
-    id ? "Data diperbarui otomatis" : "Data refreshes automatically",
-  );
-  await expect(page.locator(".command-logout span")).toHaveText(id ? "Keluar" : "Log out");
-  // Topbar: context eyebrow, assistant, profile.
-  await expect(page.locator(".command-eyebrow")).toHaveText(
-    id ? "Operasi DKI Jakarta" : "Jakarta operations",
-  );
+  // #honesty: the shell says the scenario is simulated, on every workspace.
+  const status = page.getByTestId("shell-status");
+  await expect(status).toContainText(id ? "Simulasi" : "Simulated");
+  await expect(status).toContainText("DKI Jakarta");
+  await expect(status).toHaveAttribute("title", id ? "Server terhubung" : "Server connected");
   await expect(page.locator(".command-assistant span")).toHaveText(
     id ? "Asisten operasi" : "Operations assistant",
   );
@@ -51,10 +47,9 @@ async function assertShellCopy(page, mode) {
   await expect(page.locator(".command-profile small")).toHaveText(
     id ? "Akun demo bersama: dispatcher" : "Shared demo account: dispatcher",
   );
-  // Accessible labels.
-  await expect(page.locator(".command-sidebar")).toHaveAccessibleName(
-    id ? "Navigasi utama Pythia" : "Pythia main navigation",
-  );
+  await page.getByTestId("profile-button").click();
+  await expect(page.getByTestId("profile-logout")).toHaveText(id ? "Keluar" : "Log out");
+  await page.keyboard.press("Escape");
   await expect(page.locator(".command-language")).toHaveAccessibleName(
     id ? "Pilih bahasa" : "Select language",
   );
@@ -78,12 +73,13 @@ test("mobile navigation and active workspace description follow the locale", asy
   // wave9 fleet composition: Fleet is the first workspace again; the 3D city sits last.
   await expect(page.locator(".command-mobile-nav button").first()).toContainText("Fleet");
 
-  // Workspace description next to the title follows the locale too.
-  await expect(page.locator(".command-title-row span")).toHaveText("Monitor and act on today's operations");
+  // wave11 design system: the workspace description is the nav pill's tooltip now.
+  const active = page.getByTestId("workspace-navigation").locator('[aria-current="page"]');
+  await expect(active).toHaveAttribute("title", "Monitor and act on today's operations");
 
   await page.getByTestId("lang-switch-id").click();
   await expect(page.locator(".command-mobile-nav")).toHaveAccessibleName("Navigasi ruang kerja seluler");
-  await expect(page.locator(".command-title-row span")).toHaveText("Pantau dan tangani operasi hari ini");
+  await expect(active).toHaveAttribute("title", "Pantau dan tangani operasi hari ini");
 });
 
 test("workspace descriptions localize for every navigation item", async ({ page }) => {
@@ -95,7 +91,9 @@ test("workspace descriptions localize for every navigation item", async ({ page 
     // wave9 settings: Settings replaced the audit workspace in the rail.
     ["Settings", "Integrations, team access and data sources"],
   ]) {
-    await page.locator(".command-nav").getByRole("button", { name, exact: true }).click();
-    await expect(page.locator(".command-title-row span")).toHaveText(description);
+    const button = page.locator(".command-nav").getByRole("button", { name, exact: true });
+    await button.click();
+    await expect(button).toHaveAttribute("aria-current", "page");
+    await expect(button).toHaveAttribute("title", description);
   }
 });

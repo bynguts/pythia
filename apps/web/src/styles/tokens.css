@@ -28,6 +28,11 @@
   --fs-body: 15px;
   --fs-caption: 13px;
   --fs-kpi: 28px;
+  /* Labels: Geist Mono 11 px uppercase with tracking (provenance, table heads, timestamps). */
+  --fs-label: 11px;
+  --ls-label: 0.08em;
+  --fs-title: 19px;
+  --fs-metric: 30px;
   --tap-min: 44px;
   /* Transparent ring inside a 44 px hit box: the drawn control is 34 px tall. */
   --tap-inset: 5px;
@@ -44,6 +49,9 @@
   --ui-warning-line: #ebcb9f;
   --ui-danger-line: #efc2bf;
   --ui-info-line: #b4d6df;
+  /* Provenance labels (design-system.png): SIMULATED / DEMO amber-brown, MODEL OUTPUT teal. */
+  --ui-prov-sim: #98501b;
+  --ui-prov-sim-line: #e2c09d;
   --ui-radius: 10px;
   --ui-radius-card: 16px;
   --ui-radius-elevated: 20px;
@@ -66,8 +74,10 @@
   --space-6: 32px;
   --space-7: 40px;
   --space-8: 64px;
-  --ui-sidebar-width: 232px;
-  --ui-topbar-height: 68px;
+  /* Top-nav shell: one 60 px bar, no sidebar. Phones add a 64 px bottom nav. */
+  --ui-topbar-height: 60px;
+  --ui-bottomnav-height: 64px;
+  --ui-bottomnav-space: calc(var(--ui-bottomnav-height) + env(safe-area-inset-bottom, 0px) + 16px);
   --ui-focus: 0 0 0 3px rgba(22, 97, 58, 0.35);
   --z-dropdown: 20;
   --z-sticky: 30;

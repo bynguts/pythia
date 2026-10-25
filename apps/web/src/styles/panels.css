@@ -116,35 +116,3 @@ input[type="range"]::-webkit-slider-thumb:hover {
   border-radius: 6px;
   border: 1px solid var(--ui-success-line);
 }
-
-.audit-workspace {
-  display: grid;
-  gap: 20px;
-}
-
-.audit-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-  text-align: left;
-}
-
-.audit-table th {
-  padding: 8px 12px;
-  font-weight: bold;
-  color: var(--ui-muted);
-  border-bottom: 2px solid var(--ui-border);
-  background: var(--ui-canvas);
-}
-
-.audit-table td {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--ui-border);
-  vertical-align: top;
-}
-
-.suitability-list {
-  display: grid;
-  gap: 12px;
-  margin-bottom: 12px;
-}

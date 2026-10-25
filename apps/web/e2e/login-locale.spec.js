@@ -34,7 +34,8 @@ test("login surface follows the selected locale end to end", async ({ page }) =>
   await page.locator('input[autocomplete="username"]').fill("dispatcher");
   await page.locator('input[autocomplete="current-password"]').fill("dispatcher-demo-pass");
   await page.getByRole("button", { name: "Masuk", exact: true }).click();
-  await expect(page.locator(".command-nav-label")).toHaveText("Ruang kerja");
+  // wave11 design system: the top-nav shell has no "Workspaces" label; its nav is named instead.
+  await expect(page.getByTestId("workspace-navigation")).toHaveAccessibleName("Navigasi utama Pythia");
 });
 
 test("invalid credentials error follows the locale", async ({ page }) => {

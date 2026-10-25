@@ -49,7 +49,9 @@ test("a driver signing in on a second tab keeps the supervisor's command-center 
   expect((await session.json()).role).toBe("supervisor");
 
   // Signing out of the command center leaves the driver's session (and its outbox) alone.
-  await page.locator(".command-logout").click();
+  // wave11 design system: log out lives in the profile menu (no sidebar footer).
+  await page.getByTestId("profile-button").click();
+  await page.getByTestId("profile-logout").click();
   expect(await page.evaluate(commandSession)).toEqual([null, null, null]);
   expect(await driverTab.evaluate(() => localStorage.getItem("pythia_field_token"))).toBe(fieldToken);
   await driverTab.reload({ waitUntil: "domcontentloaded" });
