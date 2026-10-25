@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "../../shared/api/client.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
+import { etaSourceLabel } from "./decisionRoute.js";
 
 // Reroute events need the operator's confirmation: one row each, one primary action.
 export function AiNotificationFeed({ events, onAck }) {
@@ -61,6 +62,7 @@ export function AStarReroutingPanel({ jamActive, aiEvents, onAckEvent }) {
   // No route payload yet: show a dash, never a made-up distance or ETA.
   const dist = info?.active_route?.distance_km;
   const eta = info?.active_route?.eta_minutes;
+  const etaSource = eta == null ? null : etaSourceLabel(t, info.active_route.eta_source);
 
   return (
     <section className="reroute-block" data-testid="astar-panel">
@@ -95,6 +97,7 @@ export function AStarReroutingPanel({ jamActive, aiEvents, onAckEvent }) {
           <dt>{t("astar_eta")}</dt>
           <dd>
             <strong>{eta == null ? "—" : `${Math.round(eta)} ${t("fmap_min")}`}</strong>
+            {etaSource && <small data-testid="astar-eta-source">{etaSource}</small>}
           </dd>
         </div>
         <div className="astar-stat-col">

@@ -60,6 +60,7 @@ const DECISION = {
       eta_minutes: 95,
       distance_km: 34.7,
       source: "fallback",
+      eta_source: "fallback_estimate",
       path: [
         { lat: -6.221, lng: 106.785 },
         { lat: -6.21, lng: 106.81 },
@@ -250,6 +251,7 @@ test("a truck row opens its drawer in place, with Sekarang and Riwayat", async (
   await expect(page.getByTestId("fleet-queue-surface").getByTestId("tpa-queue-panel")).toBeVisible();
 });
 
+// wave12: the ETA says what it is (here the fixed-speed fallback), never "AI".
 test("a decision has one route: one name, one ETA, drawn only while it is selected", async ({ page }) => {
   await stubDecision(page);
   await signIn(page);
@@ -257,10 +259,12 @@ test("a decision has one route: one name, one ETA, drawn only while it is select
   await expect(rail.getByTestId("decision-route-name").first()).toHaveText(
     "Rute B · pemulihan via Daan Mogot",
   );
-  await expect(rail.getByTestId("decision-route-eta").first()).toHaveText("ETA 95 mnt · 34,7 km");
+  await expect(rail.getByTestId("decision-route-eta").first()).toHaveText(
+    "ETA 95 mnt · 34,7 km · perkiraan cadangan",
+  );
   const card = page.getByTestId("map-route-card");
   await expect(card).toContainText("Rute B · pemulihan via Daan Mogot");
-  await expect(card.getByTestId("map-route-eta")).toHaveText("ETA 95 mnt · 34,7 km");
+  await expect(card.getByTestId("map-route-eta")).toHaveText("ETA 95 mnt · 34,7 km · perkiraan cadangan");
   await expect(card).toContainText("rute cadangan (offline)");
   const text = await page.getByTestId("fleet-workspace").innerText();
   expect(text.match(/\bETA \d+ mnt/g)).toEqual(["ETA 95 mnt", "ETA 95 mnt"]);
@@ -275,9 +279,12 @@ test("the Indonesian /fleet shows no English backend prose or engineering jargon
   await signIn(page);
   await expect(page.getByTestId("action-queue")).toBeVisible({ timeout: 30000 });
   // Scan the live (stubbed) snapshot, not the offline sample shown while it loads.
-  await expect(page.getByTestId("decision-route-eta").first()).toHaveText("ETA 95 mnt · 34,7 km", {
-    timeout: 30000,
-  });
+  await expect(page.getByTestId("decision-route-eta").first()).toHaveText(
+    "ETA 95 mnt · 34,7 km · perkiraan cadangan",
+    {
+      timeout: 30000,
+    },
+  );
   const leaks =
     /deviated|Hauling|Maintenance hold|Recovery|Route [ABC]\b|Confidence|Auto-detected|OSRM|A\*|auto_reroute|\bseed\b|real-time/;
   const scan = async () => {

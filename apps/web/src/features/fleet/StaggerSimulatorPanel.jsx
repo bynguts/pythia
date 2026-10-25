@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../../shared/api/client.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
-import { RefreshCcw, Clock, ArrowRight, Info } from "lucide-react";
+import { ListRow } from "../../shared/ui/ListRow.jsx";
+import { Provenance } from "../../shared/ui/Provenance.jsx";
+import { ROLE_PERMISSIONS } from "../settings/roles.js";
+import { RefreshCcw, ArrowRight, Info, Hourglass } from "lucide-react";
 
 // The landfill beacon describes the modelled peak hour of a simulated day, never the
 // wall clock; every surface labels it the same way ("modelled peak hour 09:00").
@@ -139,34 +142,31 @@ export function StaggerSummary({ metric, loading, onOpen }) {
   );
 }
 
-// Roles holding operations:plan (app/core/auth.py ROLES); only they may POST the slot plan.
-const PLAN_ROLES = ["dispatcher", "administrator"];
-
-function mayPlan() {
+// Only a role holding dispatch:create may send a hold to a driver (app/core/auth.py ROLES).
+function mayDispatch() {
   try {
-    return PLAN_ROLES.includes(localStorage.getItem("pythia_role"));
+    return (ROLE_PERMISSIONS[localStorage.getItem("pythia_role")] || []).includes("dispatch:create");
   } catch {
     return false;
   }
 }
 
 export function StaggerSimulatorPanel() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [metric, setMetric] = useState(null);
-  const [plan, setPlan] = useState(null);
+  // wave12: per-truck gate-slot holds for today's approved plans (GET /api/gate/slots).
+  const [gate, setGate] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [accepting, setAccepting] = useState(null);
+  const [acceptFailed, setAcceptFailed] = useState(null);
 
   const runSimulation = useCallback(async () => {
     setLoading(true);
     try {
       const metricRes = await apiFetch("/tpa/queue-metric");
       if (metricRes.ok) setMetric(await metricRes.json());
-      // gsc n19: the slot plan needs operations:plan; other roles skip the POST
-      // (it would only 403) and still see the metric.
-      if (mayPlan()) {
-        const planRes = await apiFetch("/simulator/stagger", { method: "POST" });
-        if (planRes.ok) setPlan(await planRes.json());
-      }
+      const gateRes = await apiFetch("/gate/slots");
+      if (gateRes.ok) setGate(await gateRes.json());
     } catch {
       // API unreachable: keep whatever simulation result is already shown (never invented numbers)
     }
@@ -177,7 +177,29 @@ export function StaggerSimulatorPanel() {
     runSimulation();
   }, [runSimulation]);
 
-  const slots = plan?.dispatch_slots || [];
+  async function accept(rec) {
+    setAccepting(rec.id);
+    setAcceptFailed(null);
+    try {
+      const response = await apiFetch(`/gate/slots/recommendations/${encodeURIComponent(rec.id)}/accept`, {
+        method: "POST",
+      });
+      if (!response.ok) throw new Error(String(response.status));
+      const body = await response.json();
+      setGate((current) => ({
+        ...current,
+        recommendations: current.recommendations.map((r) =>
+          r.id === rec.id ? { ...r, accepted: true, dispatch_id: body.dispatch_id } : r,
+        ),
+      }));
+    } catch {
+      setAcceptFailed(rec.id);
+    }
+    setAccepting(null);
+  }
+
+  const recommendations = gate?.recommendations || [];
+  const canAccept = mayDispatch();
 
   return (
     <section className="panel wide stagger-panel" data-testid="stagger-panel">
@@ -241,56 +263,65 @@ export function StaggerSimulatorPanel() {
         </p>
       )}
 
-      {slots.length > 0 && (
-        <div className="stagger-schedule-wrap">
-          <h3 style={{ fontSize: "13px", fontWeight: 700, margin: "0 0 10px", color: "var(--ui-ink)" }}>
-            {t("stagger_slots_title")}
+      {gate && (
+        <div className="stagger-schedule-wrap" data-testid="gate-slot-recs">
+          <h3>
+            {t("w12_gate_title")} <Provenance kind="sim">{t("honesty_sim_badge")}</Provenance>
           </h3>
-          <p className="tpa-scenario-note" data-testid="stagger-fleet-note">
-            {t("stagger_fleet_note")
-              .replace("{fleet}", plan.fleet_per_shift)
-              .replace("{trucks}", plan.trucks_per_day)}
-          </p>
-          <div className="table-wrap">
-            <table className="audit-table">
-              <thead>
-                <tr>
-                  <th scope="col">{t("stagger_th_slot")}</th>
-                  <th scope="col">{t("stagger_th_departure")}</th>
-                  <th scope="col">{t("stagger_th_trucks")}</th>
-                  <th scope="col">{t("stagger_th_wait")}</th>
-                  <th scope="col">{t("stagger_th_status")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {slots.slice(0, 10).map((slot) => (
-                  <tr key={slot.slot_index}>
-                    <td>
-                      <span className="plate-badge">S-{String(slot.slot_index).padStart(2, "0")}</span>
-                    </td>
-                    <td>
-                      <span style={{ fontWeight: 600 }}>
-                        <Clock
-                          size={12}
-                          style={{ display: "inline-block", verticalAlign: "-1px", marginRight: "4px" }}
-                        />
-                        {slot.suggested_departure} WIB
-                      </span>
-                    </td>
-                    <td>{slot.trucks_in_slot}</td>
-                    <td>
-                      <span className="speed-badge">
-                        {slot.tpa_wait_est_minutes} {t("qm_min")}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="pill">{t("stagger_slot_planned")}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {recommendations.length === 0 ? (
+            <p className="tpa-scenario-note" data-testid="gate-slot-empty">
+              {t(
+                gate.reason === "no_approved_plan"
+                  ? "w12_gate_no_plan"
+                  : gate.reason === "saturated"
+                    ? "w12_gate_saturated"
+                    : "w12_gate_no_holds",
+              ).replace("{slots}", (gate.saturated_slots || []).join(", "))}
+            </p>
+          ) : (
+            <ul className="ui-list">
+              {recommendations.map((rec) => (
+                <ListRow
+                  key={rec.id}
+                  icon={Hourglass}
+                  tone={rec.accepted ? "success" : "warning"}
+                  title={t("w12_gate_hold")
+                    .replace("{truck}", rec.truck_code)
+                    .replace("{n}", rec.hold_minutes)
+                    .replace("{from}", rec.from_slot)
+                    .replace("{to}", rec.to_slot)}
+                  meta={t("w12_gate_gain").replace(
+                    "{n}",
+                    formatQueueMinutes(rec.expected_wait_reduction_min, lang),
+                  )}
+                  testId="gate-slot-rec"
+                >
+                  {rec.accepted ? (
+                    <p className="tpa-scenario-note" data-testid="gate-slot-accepted">
+                      {t("w12_gate_sent")}
+                    </p>
+                  ) : (
+                    canAccept && (
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        data-testid="gate-slot-accept"
+                        onClick={() => accept(rec)}
+                        disabled={accepting != null}
+                      >
+                        {t("w12_gate_apply")}
+                      </button>
+                    )
+                  )}
+                  {acceptFailed === rec.id && (
+                    <p className="tpa-scenario-note" role="alert">
+                      {t("w12_gate_apply_failed")}
+                    </p>
+                  )}
+                </ListRow>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </section>

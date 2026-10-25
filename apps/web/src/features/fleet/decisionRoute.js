@@ -32,11 +32,30 @@ export function routeSource(t, route) {
   return t("w10fleet_route_source").replace("{s}", t(key) !== key ? t(key) : route?.source || "—");
 }
 
+// wave12: what an ETA is (OSRM road duration, a fixed-speed fallback, or simulated), by
+// the backend's eta_source key. No key, no label.
+const ETA_SOURCE_KEYS = {
+  osrm_duration: "w12_eta_osrm",
+  fallback_estimate: "w12_eta_fallback",
+  simulated: "w12_eta_sim",
+};
+
+export function etaSourceLabel(t, source) {
+  return ETA_SOURCE_KEYS[source] ? t(ETA_SOURCE_KEYS[source]) : null;
+}
+
 export function routeMeta(t, route, lang) {
-  if (route?.distance_km == null) return t("w10fleet_route_meta_eta").replace("{eta}", route?.eta_minutes);
-  return t("w10fleet_route_meta")
-    .replace("{eta}", route.eta_minutes)
-    .replace("{km}", Number(route.distance_km).toLocaleString(localeFor(lang), { maximumFractionDigits: 1 }));
+  const etaSource = etaSourceLabel(t, route?.eta_source);
+  const meta =
+    route?.distance_km == null
+      ? t("w10fleet_route_meta_eta").replace("{eta}", route?.eta_minutes)
+      : t("w10fleet_route_meta")
+          .replace("{eta}", route.eta_minutes)
+          .replace(
+            "{km}",
+            Number(route.distance_km).toLocaleString(localeFor(lang), { maximumFractionDigits: 1 }),
+          );
+  return etaSource ? `${meta} · ${etaSource}` : meta;
 }
 
 // Backend alert prose ("T-047 deviated from assigned corridor") becomes locale copy.

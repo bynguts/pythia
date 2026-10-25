@@ -7,6 +7,7 @@ import { Tabs } from "../../shared/ui/Tabs.jsx";
 import { AlertQueue, sortAlerts } from "./AlertQueue.jsx";
 import { AStarReroutingPanel } from "./AStarReroutingPanel.jsx";
 import { AttentionAction, AttentionRow } from "./AttentionRow.jsx";
+import { DailyRecapList } from "./DailyRecapList.jsx";
 import { decisionRoute, drawableRoute, formatDistance } from "./decisionRoute.js";
 import {
   DriverExceptionAlerts,
@@ -14,6 +15,7 @@ import {
   useDriverExceptions,
   useHandledExceptions,
 } from "./DriverExceptionAlerts.jsx";
+import { ReadinessList } from "./ReadinessList.jsx";
 import { SafetyPanel, safetyAttentionCount, useSafetyOverview } from "./SafetyPanel.jsx";
 import { formatQueueMinutes, StaggerSummary, useQueueMetric } from "./StaggerSimulatorPanel.jsx";
 import { peakHourText } from "./TpaQueuePanel.jsx";
@@ -25,6 +27,8 @@ const RECORD_TABS = [
   { id: "spj", key: "w10fleet_tab_spj", surface: "fleet-spj-surface" },
   { id: "damage", key: "tab_damage", surface: "fleet-damage-surface" },
   { id: "safety", key: "saf_tab", surface: "fleet-safety-surface" },
+  { id: "readiness", key: "w12_tab_readiness", surface: "fleet-readiness-surface" },
+  { id: "recap", key: "w12_tab_recap", surface: "fleet-recap-surface" },
 ];
 const TRIPS_POLL_MS = 30000;
 
@@ -245,7 +249,13 @@ export function FleetOperations({
     },
   ].filter(Boolean);
 
-  const recordSurfaces = { spj, damage, safety: <SafetyPanel {...safety} /> };
+  const recordSurfaces = {
+    spj,
+    damage,
+    safety: <SafetyPanel {...safety} />,
+    readiness: <ReadinessList />,
+    recap: <DailyRecapList />,
+  };
   // Drivers who need a supervisor now (blocked without override, or past the gate limit).
   const safetyCount = safetyAttentionCount(safety.overview);
   const activeRecord = RECORD_TABS.find((tab) => tab.id === recordTab) || RECORD_TABS[0];
