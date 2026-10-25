@@ -78,6 +78,23 @@ class OperationsPlanStore:
                     )
                     """
                 )
+                # One draft SPJ per (plan, truck). The row is claimed before the
+                # SPJ exists, so a raced or retried approval never creates two;
+                # status is claimed | linked | skipped | error.
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS operations_plan_spj (
+                        plan_id TEXT NOT NULL,
+                        truck_code TEXT NOT NULL,
+                        spj_id TEXT,
+                        dispatch_id TEXT,
+                        status TEXT NOT NULL,
+                        detail TEXT,
+                        updated_at TEXT NOT NULL,
+                        PRIMARY KEY (plan_id, truck_code)
+                    )
+                    """
+                )
 
     # -- plan lifecycle -----------------------------------------------------
 
@@ -201,6 +218,14 @@ class OperationsPlanStore:
             }
             for row in rows
         ]
+
+    def spj_links(self, plan_id: str) -> list[dict[str, Any]]:
+        """The plan's draft-SPJ link rows, one per truck, by truck code."""
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT * FROM operations_plan_spj WHERE plan_id=? ORDER BY truck_code", (plan_id,)
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def reload_cache(self) -> None:
         """Compatibility hook: durability comes from SQLite, nothing to do."""

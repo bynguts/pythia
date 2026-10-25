@@ -20,6 +20,7 @@ from app.core.units import (
     resource_requirements,
 )
 from app.field.permits import PERMIT_STORE
+from app.field.spj import SPJ_STORE
 from app.fleet.data import TRUCKS, events_permits_payload, tpa_queue_status_payload
 from app.fleet.operations_optimizer import Demand, Vehicle, build_operational_plan
 from app.fleet.operations_rules import PlanningRules, resolve_rules
@@ -261,6 +262,42 @@ def list_operations_plans(
     browser, a supervisor opens Rencana in another and approves it by id.
     """
     return _OPERATIONS_PLAN_STORE.list_plans(status=status, limit=limit)
+
+
+def _spj_drafts(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    """One entry per truck of an approved plan: its draft SPJ, or why there is none."""
+    slots = {d["truck_code"]: (d.get("fields") or {}).get("gate_slot") for d in plan.get("dispatches") or []}
+    drafts = []
+    for link in _OPERATIONS_PLAN_STORE.spj_links(plan["plan_id"]):
+        spj = SPJ_STORE.get(link["spj_id"]) if link["spj_id"] else None
+        entry: dict[str, Any] = {
+            "truck_code": link["truck_code"],
+            "spj_id": link["spj_id"],
+            "spj_number": spj.spj_number if spj else None,
+            "status": spj.status if spj else None,
+            "gate_slot": slots.get(link["truck_code"]),
+        }
+        if link["status"] == "skipped":
+            entry["skipped"] = link["detail"]
+        elif link["spj_id"] is None:
+            entry["error"] = link["detail"] or "spj_not_created"
+        drafts.append(entry)
+    return drafts
+
+
+@router.get("/api/operations/plans/{plan_id}")
+def get_operations_plan(
+    plan_id: str,
+    _role: str = Depends(require_any_permission("operations:plan", "operations:approve")),
+) -> dict[str, Any]:
+    """One stored plan by id (same shape as the list items) plus its `spj_drafts`.
+
+    The dispatcher's planning page polls this while a plan waits for approval.
+    """
+    plan = _OPERATIONS_PLAN_STORE.get(plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail=f"Plan {plan_id} not found.")
+    return {**plan, "spj_drafts": _spj_drafts(plan)}
 
 
 @router.get("/api/operations/instructions/{truck_code}")
