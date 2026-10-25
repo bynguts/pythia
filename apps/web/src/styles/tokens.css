@@ -40,6 +40,7 @@
   --ui-info-soft: #e2f0f3;
   /* Hairlines for status-tinted chips and notes (outlined, never filled heavy). */
   --ui-success-line: #b7dcc4;
+  --ui-success-soft: #e8f3ec;
   --ui-warning-line: #ebcb9f;
   --ui-danger-line: #efc2bf;
   --ui-info-line: #b4d6df;

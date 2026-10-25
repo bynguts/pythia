@@ -1,24 +1,19 @@
-import { useLanguage } from "../../shared/i18n/index.jsx";
-import { Check } from "lucide-react";
+import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
+import { ArrowUp, Check } from "lucide-react";
+
+const ROLE_KEYS = ["administrator", "supervisor", "dispatcher", "executive", "auditor", "driver"];
 
 export function ScenarioPanel({ mode, children }) {
   return <div className={`scenario-panel scenario-${mode}`}>{children}</div>;
 }
 
+// Step 03's authority column: who may decide, what the plan holds, and the one
+// next action. Without a plan it points back to step 02 instead of sitting empty.
 export function PlanningApproval({ plan, planLoading, approved, approvePlan, role }) {
   const { lang, t } = useLanguage();
-  const locale = lang === "id" ? "id-ID" : "en-US";
+  const locale = localeFor(lang);
   const number = (value) => Number(value ?? 0).toLocaleString(locale, { maximumFractionDigits: 2 });
-  const roleName =
-    {
-      administrator: lang === "id" ? "Administrator" : "Administrator",
-      supervisor: lang === "id" ? "Pengawas" : "Supervisor",
-      dispatcher: lang === "id" ? "Pengatur armada" : "Dispatcher",
-      executive: lang === "id" ? "Pimpinan" : "Executive",
-      auditor: lang === "id" ? "Auditor" : "Auditor",
-      driver: lang === "id" ? "Pengemudi" : "Driver",
-      guest: lang === "id" ? "Tamu" : "Guest",
-    }[role] || (lang === "id" ? "Tidak diketahui" : "Unknown");
+  const roleName = ROLE_KEYS.includes(role) ? t(`pln6_profile_role_${role}`) : t("pln6_profile_role_unknown");
   // R7: a quota or gate shortfall is a fact of the day, not an error the
   // dispatcher can resolve, so it does not block approval of the feasible
   // trips; it is stated next to the button instead. A plan with no trips, or
@@ -27,43 +22,47 @@ export function PlanningApproval({ plan, planLoading, approved, approvePlan, rol
     !plan?.assignments?.length ||
     (plan?.unmet_reasons || []).some((code) => code.startsWith("no_") && !code.includes(":"));
   const shortfall = plan?.feasible === false && plan?.unassigned_tons > 0 ? plan.unassigned_tons : 0;
+  const compliant = (plan?.assignments || []).filter((a) => a.evidence?.permit_compliant).length;
+  const goToAllocation = () => {
+    const stage = document.getElementById("planning-stage-02")?.closest("section");
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    stage?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    stage?.querySelector("button:not([disabled])")?.focus({ preventScroll: true });
+  };
 
   return (
-    <div className="planning-approval">
+    <div className="planning-approval-body">
       <div className="planning-approval-head">
-        <strong>{lang === "id" ? "Kewenangan keputusan" : "Decision authority"}</strong>
+        <h3 id="planning-approval-title">{t("pa_title")}</h3>
         <span className="role-badge">
-          {lang === "id" ? "Peran" : "Role"}: <b>{roleName}</b>
+          {t("pa_role")}: <b>{roleName}</b>
         </span>
       </div>
       {!plan && (
-        <p className="planning-approval-note">
-          {lang === "id"
-            ? "Susun rencana penugasan untuk meninjau bukti persetujuan."
-            : "Generate a dispatch plan to review approval evidence."}
-        </p>
+        <>
+          <p className="planning-approval-note">{t("pa_no_plan")}</p>
+          <button type="button" className="ghost-button planning-approval-goto" onClick={goToAllocation}>
+            {t("pa_go_step2")} <ArrowUp size={15} aria-hidden="true" />
+          </button>
+        </>
       )}
       {plan && (
         <dl className="approval-evidence-list">
           <div>
-            <dt>{lang === "id" ? "Rencana" : "Plan"}</dt>
+            <dt>{t("pa_plan")}</dt>
             <dd>{plan.plan_id}</dd>
           </div>
           <div>
-            <dt>{lang === "id" ? "Kebutuhan teralokasi" : "Assigned demand"}</dt>
+            <dt>{t("pa_assigned")}</dt>
             <dd>
-              {number(plan.total_assigned_tons)} / {number(plan.total_demand_tons)}{" "}
-              {lang === "id" ? "ton" : "tons"}
+              {t("pa_tons")
+                .replace("{a}", number(plan.total_assigned_tons))
+                .replace("{b}", number(plan.total_demand_tons))}
             </dd>
           </div>
           <div>
-            <dt>{lang === "id" ? "Bukti izin" : "Permit evidence"}</dt>
-            <dd>
-              {number(
-                (plan.assignments || []).filter((assignment) => assignment.evidence?.permit_compliant).length,
-              )}{" "}
-              {lang === "id" ? "penugasan sesuai izin" : "compliant assignments"}
-            </dd>
+            <dt>{t("pa_permit")}</dt>
+            <dd>{t("pa_compliant").replace("{n}", number(compliant))}</dd>
           </div>
         </dl>
       )}
@@ -74,28 +73,15 @@ export function PlanningApproval({ plan, planLoading, approved, approvePlan, rol
       )}
       {plan?.status === "proposed" && !blocked && (
         <button className="primary-button approve-dispatch-btn" onClick={approvePlan} disabled={planLoading}>
-          {planLoading
-            ? lang === "id"
-              ? "Menyetujui rencana..."
-              : "Approving plan..."
-            : lang === "id"
-              ? "Setujui & kirim rencana"
-              : "Approve & dispatch plan"}
+          {planLoading ? t("pa_approving") : t("pa_approve")}
         </button>
       )}
       {plan?.status === "proposed" && blocked && (
-        <p className="planning-approval-note planning-approval-blocked">
-          {lang === "id"
-            ? "Persetujuan belum tersedia sampai seluruh kendala ditangani."
-            : "Approval is unavailable until every constraint warning is resolved."}
-        </p>
+        <p className="planning-approval-note planning-approval-blocked">{t("pa_blocked")}</p>
       )}
       {approved && (
         <div className="optimizer-success">
-          <Check size={16} />{" "}
-          {lang === "id"
-            ? "Rencana disetujui. Penugasan dibuat dan dikirim ke aplikasi lapangan."
-            : "Plan approved. Dispatches created and sent to the field app."}
+          <Check size={16} /> {t("pa_approved")}
         </div>
       )}
     </div>

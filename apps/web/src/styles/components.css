@@ -979,62 +979,6 @@ textarea:focus-visible {
   }
 }
 
-.exec-impact {
-  margin-top: 14px;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 8px;
-  padding: 14px;
-  background: var(--ui-canvas);
-}
-
-.exec-impact-head {
-  margin-bottom: 10px;
-}
-
-.exec-impact-grid {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr auto;
-  align-items: center;
-  gap: 12px;
-}
-
-.exec-impact-col {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.exec-impact-label {
-  font-size: var(--fs-caption);
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--ui-muted);
-}
-
-.exec-impact-col strong {
-  font-size: 15px;
-}
-
-.exec-impact-col small {
-  color: var(--ui-muted);
-}
-
-.exec-impact-arrow {
-  font-size: 20px;
-  color: var(--ui-muted);
-}
-
-.exec-impact-delta strong {
-  display: block;
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: var(--ui-accent-soft);
-  color: var(--ui-success);
-  font-size: 14px;
-  white-space: nowrap;
-}
-
 input[type="range"] {
   padding: 0;
   border: 0;

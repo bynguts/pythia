@@ -140,8 +140,9 @@ test("plan date sets weekday or weekend for the forecast and the plan", async ({
   );
   await dateInput.fill(mon);
   await monday;
-  await expect(page.getByTestId("plan-day-kind")).toHaveText("Hari kerja");
-  await expect(page.getByTestId("plan-outlook")).toContainText(mon);
+  // A Monday a week out falls in the 30-day window, whose first build takes ~9 s cold.
+  await expect(page.getByTestId("plan-day-kind")).toHaveText("Hari kerja", { timeout: 30000 });
+  await expect(page.getByTestId("plan-outlook")).toContainText(mon, { timeout: 30000 });
 
   const planRequest = page.waitForRequest((req) => req.url().includes("/operations/plan?"));
   await page.getByRole("button", { name: "Susun Alokasi Armada" }).click();

@@ -1711,14 +1711,6 @@ button {
   grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
   gap: 16px;
 }
-.planning-summary > .panel,
-.planning-approval > .panel {
-  height: 100%;
-  padding: 18px;
-  border-radius: var(--ui-radius-card);
-  background: var(--ui-canvas);
-  box-shadow: none;
-}
 .ai-outlook {
   max-height: 270px;
   overflow: auto;
@@ -3238,4 +3230,218 @@ th {
 }
 .rail-tabs {
   padding: 2px 4px;
+}
+
+/* Status chips are labels, not code: the UI sans in 12px semibold, tabular digits.
+   Monospace stays for data and measurements (tables, coordinates). */
+.pill,
+.status-pill,
+.status-badge,
+.deviation-badge,
+.freshness-badge,
+.classification-badge,
+.suitability-list span,
+.ai-feed-badge,
+.scentinel-gates li,
+.legend-tag {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Step 03, Tinjau & setujui: one decision brief beside its authority column.
+   No nested panels: the stage card is the only surface; groups are made by
+   proximity, one hairline column divider and one joined queue strip. */
+.planning-approval-stage .planning-review-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  gap: 0;
+  align-items: start;
+}
+.planning-approval-stage .planning-summary {
+  min-width: 0;
+  padding-right: var(--space-6);
+}
+.planning-approval-stage .planning-approval {
+  margin: 0;
+  padding: 0 0 0 var(--space-5);
+  border-top: 0;
+  border-left: 1px solid var(--ui-border);
+  align-self: stretch;
+}
+.exec-brief {
+  display: grid;
+  gap: var(--space-2);
+}
+.exec-brief-title {
+  margin: 0;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+.exec-headline {
+  margin: 0;
+  max-width: 34ch;
+  color: var(--ui-ink);
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.exec-brief-note {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--ui-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.exec-reasons {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  max-width: 70ch;
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+}
+.exec-reasons li {
+  position: relative;
+  padding-left: var(--space-4);
+  color: var(--ui-ink-soft);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.exec-reasons li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.62em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ui-border-strong);
+}
+.exec-queue {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--ui-border);
+}
+.exec-queue-head h4 {
+  margin: 0;
+  color: var(--ui-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+.exec-queue-head p {
+  margin: var(--space-1) 0 0;
+  max-width: 70ch;
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+}
+/* Joined strip: the 1px gap over a hairline-coloured ground draws the dividers,
+   so they hold whether the cells sit in a row or stack on a phone. */
+.exec-queue-strip {
+  margin: var(--space-3) 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 1px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  overflow: hidden;
+  background: var(--ui-border);
+}
+.exec-queue-strip > div {
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--ui-surface);
+}
+.exec-queue-strip dt {
+  color: var(--ui-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.exec-queue-strip dd {
+  margin: var(--space-1) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--space-2);
+}
+.exec-queue-strip strong {
+  color: var(--ui-ink);
+  font-size: 20px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.exec-queue-strip small {
+  flex-basis: 100%;
+  color: var(--ui-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.exec-queue-better {
+  background: var(--ui-success-soft);
+}
+.exec-queue-better strong {
+  color: var(--ui-success);
+}
+.exec-queue-delta {
+  color: var(--ui-success);
+  font-size: 12px;
+  font-weight: 600;
+}
+.exec-queue-foot {
+  margin: var(--space-2) 0 0;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+.planning-approval-body {
+  display: grid;
+  gap: var(--space-3);
+}
+.planning-approval-body .planning-approval-head {
+  display: grid;
+  gap: var(--space-1);
+  justify-content: start;
+}
+.planning-approval-body .planning-approval-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.planning-approval-body .role-badge {
+  justify-self: start;
+}
+.planning-approval-body .planning-approval-note {
+  margin: 0;
+}
+.planning-approval-body .approval-evidence-list {
+  margin: 0;
+}
+.planning-approval-goto {
+  justify-self: start;
+}
+.planning-stage-heading > span {
+  font-family: inherit;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 900px) {
+  .planning-approval-stage .planning-review-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .planning-approval-stage .planning-summary {
+    padding-right: 0;
+  }
+  .planning-approval-stage .planning-approval {
+    margin-top: var(--space-5);
+    padding: var(--space-4) 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--ui-border);
+  }
+  .exec-headline {
+    font-size: 19px;
+  }
 }

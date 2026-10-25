@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleDot, Workflow } from "lucide-react";
+import { CheckCircle2, CircleDot } from "lucide-react";
 import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 
@@ -23,9 +23,6 @@ export function IntegratedPlanning({ summary, scenario, evidence, unmetCount, pl
     <section className="planning-workspace workspace-page" data-testid="planning-workspace">
       <header className="workspace-heading">
         <div>
-          <span className="workspace-kicker">
-            <Workflow size={14} /> {t("w10num_plan_kicker")}
-          </span>
           <h1>{t("w10num_plan_title")}</h1>
           <p>{t("w10num_plan_sub")}</p>
         </div>
@@ -100,10 +97,12 @@ export function IntegratedPlanning({ summary, scenario, evidence, unmetCount, pl
               <p>{t("w10num_stage3_sub")}</p>
             </div>
           </header>
-          {/* Teardown v4 R3: two columns only once a plan gives the approval column content. */}
-          <div className={`planning-review-grid${planStatus ? "" : " is-single"}`}>
+          {/* The brief reads on the left; the authority column always says the next step. */}
+          <div className="planning-review-grid">
             <div className="planning-summary">{summary}</div>
-            <div className="planning-approval">{evidence}</div>
+            <aside className="planning-approval" aria-labelledby="planning-approval-title">
+              {evidence}
+            </aside>
           </div>
         </section>
       </div>

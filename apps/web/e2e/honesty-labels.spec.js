@@ -197,7 +197,7 @@ for (const [lang, copy] of [
     await page.getByTestId("workspace-navigation").getByRole("button", { name: copy.nav }).click();
     const summary = page.locator(".planning-summary");
     await expect(summary.getByRole("heading", { name: copy.title })).toBeVisible({ timeout: 20000 });
-    await expect(summary.locator(".queue-box strong")).toHaveText(copy.queue);
+    await expect(summary.getByTestId("exec-queue-title")).toHaveText(copy.queue);
     expect(await summary.innerText()).not.toMatch(/DLH|Dinas Lingkungan Hidup/);
   });
 }

@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { apiFetch } from "../../shared/api/client.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { AT_RISK_LEVELS, signedPercent } from "../../shared/hooks/useSnapshot.js";
-import { ShieldCheck } from "lucide-react";
 
 // Teardown v4 R1: the summary reads the same outlook as the rest of Rencana
 // (/api/baseline/today or its what-if). Its extra-truck figure is the tonnage above
@@ -94,18 +93,18 @@ export function ExecutiveSummary({ outlook, snapshot, queue }) {
     points.push(fill(queueDelayed ? "exec_point_queue_delayed" : "exec_point_queue", { n: number(wait) }));
   }
 
+  // Impeccable pass: one decision brief, not nested panels. The headline leads, the
+  // reasons follow at a readable measure, and the TPA queue is one joined strip
+  // (now, current practice, staggered) instead of three boxes repeating it.
   return (
-    <section className="panel">
-      <div className="panel-title">
-        <div>
-          <h2>{t("exec_title")}</h2>
-          <p>{t("exec_sub")}</p>
-        </div>
-        <div className="panel-header-icon-wrap">
-          <ShieldCheck size={18} />
-        </div>
-      </div>
-      <h3 data-testid="exec-headline">{headline}</h3>
+    <article className="exec-brief" aria-labelledby="exec-brief-title">
+      <h3 id="exec-brief-title" className="exec-brief-title">
+        {t("exec_title")}
+      </h3>
+      <p className="exec-headline" data-testid="exec-headline">
+        {headline}
+      </p>
+      <p className="exec-brief-note">{t("exec_sub")}</p>
       {outlook?.kind === "scenario" && (
         <p className="exec-scenario-note">
           <span className="scenario-badge">{t("w10num_scenario_badge")}</span>{" "}
@@ -113,67 +112,75 @@ export function ExecutiveSummary({ outlook, snapshot, queue }) {
         </p>
       )}
       {points.length > 0 && (
-        <ul>
+        <ul className="exec-reasons">
           {points.map((point) => (
             <li key={point}>{point}</li>
           ))}
         </ul>
       )}
-      <div className="queue-box">
-        <strong>{t("exec_queue_title")}</strong>
-        {hasQueue ? (
-          <>
-            <span>
-              {queue.trucks_waiting != null
-                ? `${fill("exec_queue_waiting", { n: number(queue.trucks_waiting) })} · `
-                : ""}
-              {fill("exec_queue_wait", { n: number(wait) })}
-            </span>
-            <p>{t(queueDelayed ? "exec_queue_advice_delayed" : "exec_queue_advice_clear")}</p>
-          </>
-        ) : (
-          <p>{t("exec_queue_none")}</p>
+      <section className="exec-queue" aria-labelledby="exec-queue-title">
+        <header className="exec-queue-head">
+          <h4 id="exec-queue-title" data-testid="exec-queue-title">
+            {t("exec_queue_title")}
+          </h4>
+          <p>
+            {hasQueue
+              ? t(queueDelayed ? "exec_queue_advice_delayed" : "exec_queue_advice_clear")
+              : t("exec_queue_none")}
+          </p>
+        </header>
+        {(hasQueue || impact) && (
+          <dl className="exec-queue-strip">
+            {hasQueue && (
+              <div>
+                <dt>{t("exec_v2_now")}</dt>
+                <dd>
+                  <strong>{fill("exec_v2_min", { n: number(wait) })}</strong>
+                  {queue.trucks_waiting != null && (
+                    <small>{fill("exec_queue_waiting", { n: number(queue.trucks_waiting) })}</small>
+                  )}
+                </dd>
+              </div>
+            )}
+            {impact && (
+              <>
+                <div>
+                  <dt data-testid="exec-impact-baseline">
+                    {Number.isFinite(baselineSd)
+                      ? fill("exec_impact_baseline", { sd: number(baselineSd) })
+                      : t("ufx_exec_impact_baseline_nosd")}
+                  </dt>
+                  <dd>
+                    <strong>{fill("exec_v2_min", { n: number(impact.baseline_wait_minutes) })}</strong>
+                    <small>
+                      {fill("exec_v2_trucks_p95", {
+                        trucks: number(impact.baseline_queue_trucks),
+                        p95: number(impact.baseline_p95_minutes),
+                      })}
+                    </small>
+                  </dd>
+                </div>
+                <div className="exec-queue-better">
+                  <dt>{t("exec_impact_staggered")}</dt>
+                  <dd>
+                    <strong>{fill("exec_v2_min", { n: number(impact.optimized_wait_minutes) })}</strong>
+                    <small>
+                      {fill("exec_v2_trucks_p95", {
+                        trucks: number(impact.optimized_queue_trucks),
+                        p95: number(impact.optimized_p95_minutes),
+                      })}
+                    </small>
+                    <span className="exec-queue-delta">
+                      {fill("exec_impact_delta", { n: number(impact.queue_reduction_percent) })}
+                    </span>
+                  </dd>
+                </div>
+              </>
+            )}
+          </dl>
         )}
-      </div>
-      {impact && (
-        <div className="exec-impact">
-          <div className="exec-impact-head">
-            <strong>{t("exec_impact_title")}</strong>
-          </div>
-          <div className="exec-impact-grid">
-            <div className="exec-impact-col">
-              <span className="exec-impact-label" data-testid="exec-impact-baseline">
-                {Number.isFinite(baselineSd)
-                  ? fill("exec_impact_baseline", { sd: number(baselineSd) })
-                  : t("ufx_exec_impact_baseline_nosd")}
-              </span>
-              <strong>
-                {fill("exec_impact_value", {
-                  trucks: number(impact.baseline_queue_trucks),
-                  wait: number(impact.baseline_wait_minutes),
-                })}
-              </strong>
-              <small>{fill("exec_impact_p95", { n: number(impact.baseline_p95_minutes) })}</small>
-            </div>
-            <div className="exec-impact-arrow" aria-hidden="true">
-              →
-            </div>
-            <div className="exec-impact-col">
-              <span className="exec-impact-label">{t("exec_impact_staggered")}</span>
-              <strong>
-                {fill("exec_impact_value", {
-                  trucks: number(impact.optimized_queue_trucks),
-                  wait: number(impact.optimized_wait_minutes),
-                })}
-              </strong>
-              <small>{fill("exec_impact_p95", { n: number(impact.optimized_p95_minutes) })}</small>
-            </div>
-            <div className="exec-impact-delta">
-              <strong>{fill("exec_impact_delta", { n: number(impact.queue_reduction_percent) })}</strong>
-            </div>
-          </div>
-        </div>
-      )}
-    </section>
+        {impact && <p className="exec-queue-foot">{t("exec_impact_title")}</p>}
+      </section>
+    </article>
   );
 }
