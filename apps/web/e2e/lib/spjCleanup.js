@@ -25,19 +25,18 @@ export async function disposeCleanupContext() {
 
 export async function cancelSpjIndependently(token, spjId) {
   const ctx = await cleanupContextGet();
-  const detail = await ctx.get(`${API}/spj/${spjId}`);
+  const headers = { Authorization: `Bearer ${token}` };
+  const detail = await ctx.get(`${API}/spj/${spjId}`, { headers });
   if (!detail.ok()) return `detail ${detail.status()}`;
   const state = (await detail.json()).status;
   if (!["draft", "aktif"].includes(state)) return `already ${state}`;
-  const cancel = await ctx.post(`${API}/spj/${spjId}/cancel`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const cancel = await ctx.post(`${API}/spj/${spjId}/cancel`, { headers });
   return cancel.ok() ? "cancelled" : `cancel ${cancel.status()}`;
 }
 
 export async function assertNoLeftoverActiveSpj(token, truck = "T-210") {
   const ctx = await cleanupContextGet();
-  const list = await ctx.get(`${API}/spj`);
+  const list = await ctx.get(`${API}/spj`, { headers: { Authorization: `Bearer ${token}` } });
   expect(list.ok()).toBeTruthy();
   const { spj = [] } = await list.json();
   const leftovers = spj.filter((s) => s.truck_code === truck && ["draft", "aktif"].includes(s.status));

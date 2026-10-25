@@ -16,10 +16,16 @@ const DEG = Math.PI / 180;
 export const CHEVRON_STEP_M = 4;
 /** How far ahead of the crew the street path is drawn, metres. */
 export const PATH_AHEAD_M = 150;
-/** Re-anchor the ENU origin when the fix has moved further than this. */
+/** Before the anchor locks: re-anchor when the fix has moved further than this… */
 export const REANCHOR_MOVE_M = 25;
 /** …or when the GPS accuracy improved by at least this much. */
 export const REANCHOR_ACCURACY_GAIN_M = 5;
+/** The first fix at or better than this accuracy locks the anchor for the walk. */
+export const ANCHOR_LOCK_ACCURACY_M = 15;
+/** Once locked, the path is corrected only when GPS and WebXR tracking disagree by more than this × the fix accuracy. */
+export const DRIFT_FACTOR = 2;
+/** A drift correction glides the path over about this long instead of jumping. */
+export const CORRECTION_EASE_MS = 1200;
 /** One "Align to street" press turns the path by this many degrees. */
 export const YAW_STEP_DEG = 5;
 /** The manual yaw offset is clamped to ± this. */
@@ -165,6 +171,63 @@ export function shouldReanchor(anchorFix, fix) {
   const now = Number.isFinite(fix.accuracy) ? fix.accuracy : null;
   if (now === null) return false;
   return was === null || was - now >= REANCHOR_ACCURACY_GAIN_M;
+}
+
+/**
+ * Anchor for the next fix: { fix, seq, locked } (pass null to start).
+ *
+ * Re-anchoring on every 25 m walked put the origin where the phone stood at
+ * each new fix, so the chevrons jumped by the GPS error mid-walk. Instead the
+ * anchor follows the fix only until a fix is good enough
+ * (≤ ANCHOR_LOCK_ACCURACY_M); then it locks and WebXR tracking, which is
+ * centimetre-smooth over a walk, carries the path. Large drift is handled in
+ * the scene (driftExceeds / correctedOrigin), never by a new anchor.
+ */
+export function nextAnchor(anchor, fix) {
+  if (!fix) return anchor;
+  const lockable = Number.isFinite(fix.accuracy) && fix.accuracy <= ANCHOR_LOCK_ACCURACY_M;
+  if (!anchor) return { fix, seq: 1, locked: lockable };
+  if (anchor.locked) return anchor;
+  if (lockable || shouldReanchor(anchor.fix, fix)) return { fix, seq: anchor.seq + 1, locked: lockable };
+  return anchor;
+}
+
+/** Inverse of enuToScene: a scene {x, z} back to ENU metres around the anchor. */
+export function sceneToEnu({ x, z }, heading, origin = { x: 0, z: 0 }) {
+  const h = heading * DEG;
+  const c = Math.cos(h);
+  const s = Math.sin(h);
+  const dx = x - origin.x;
+  const dz = z - origin.z;
+  return { e: dx * c - dz * s, n: -dx * s - dz * c };
+}
+
+/**
+ * Does WebXR tracking (`tracked`, ENU of the phone's pose) disagree with GPS
+ * (`gps`, ENU of the fix) by more than DRIFT_FACTOR × the fix accuracy?
+ * An unknown accuracy never triggers a correction.
+ */
+export function driftExceeds(gps, tracked, accuracy) {
+  if (!gps || !tracked || !Number.isFinite(accuracy) || accuracy <= 0) return false;
+  return Math.hypot(gps.e - tracked.e, gps.n - tracked.n) > DRIFT_FACTOR * accuracy;
+}
+
+/** Scene origin that puts the GPS fix (`gpsEnu`) where the phone stands now (`phone`, scene {x, z}). */
+export function correctedOrigin(phone, gpsEnu, heading) {
+  const offset = enuToScene(gpsEnu, heading);
+  return { x: phone.x - offset.x, z: phone.z - offset.z };
+}
+
+/**
+ * One frame of a drift correction: move `from` toward `to` (scene {x, z})
+ * with an exponential ease of time constant CORRECTION_EASE_MS / 6, so the
+ * path glides and is over 99 % of the way after CORRECTION_EASE_MS.
+ * Returns `to` itself once closer than 1 cm.
+ */
+export function easeOrigin(from, to, dtMs) {
+  const k = 1 - Math.exp((-6 * Math.max(0, dtMs)) / CORRECTION_EASE_MS);
+  const next = { x: from.x + (to.x - from.x) * k, z: from.z + (to.z - from.z) * k };
+  return Math.hypot(to.x - next.x, to.z - next.z) < 0.01 ? to : next;
 }
 
 /**

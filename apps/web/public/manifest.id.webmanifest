@@ -11,9 +11,27 @@
   "icons": [
     {
       "src": "/pythia-icon.svg",
-      "sizes": "192x192",
+      "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/pythia-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pythia-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pythia-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
@@ -22,14 +40,26 @@
       "short_name": "Lapangan",
       "description": "Buka aplikasi petugas lapangan",
       "url": "/field",
-      "icons": [{ "src": "/pythia-icon.svg", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/pythia-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Aplikasi Pengemudi",
       "short_name": "Pengemudi",
       "description": "Buka aplikasi pengemudi truk",
       "url": "/driver",
-      "icons": [{ "src": "/pythia-icon.svg", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/pythia-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }

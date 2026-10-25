@@ -152,9 +152,11 @@ function newestPendingDispatch(dispatches) {
 }
 
 export default function FieldApp() {
-  const { lang, setLang } = useLanguage();
+  const { lang, setLang, t } = useLanguage();
   const text = copy[lang] || copy.id;
   const [truckCode, setTruckCode] = useState("T-047");
+  // H5: the truck list comes from the (simulated) fleet, not a hardcoded trio.
+  const [fleetCodes, setFleetCodes] = useState([]);
   const [dispatches, setDispatches] = useState([]);
   const [status, setStatus] = useState("readyStatus");
   const [timeline, setTimeline] = useState([]);
@@ -241,6 +243,24 @@ export default function FieldApp() {
       setSyncing(false);
     }
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch("/fleet", { tokenKey: FIELD_TOKEN_KEY })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((body) => {
+        const trucks = Array.isArray(body) ? body : body?.trucks || [];
+        const codes = [...new Set(trucks.map((truck) => truck?.truck_code).filter(Boolean))].sort();
+        if (!cancelled) setFleetCodes(codes);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The selected code always stays selectable, even before the list loads or offline.
+  const truckOptions = fleetCodes.includes(truckCode) ? fleetCodes : [truckCode, ...fleetCodes];
 
   useEffect(() => {
     loadDispatches();
@@ -338,10 +358,17 @@ export default function FieldApp() {
           value={truckCode}
           onChange={(event) => setTruckCode(event.target.value)}
         >
-          <option>T-047</option>
-          <option>T-001</option>
-          <option>T-112</option>
+          {truckOptions.map((code) => (
+            <option key={code} value={code}>
+              {code}
+            </option>
+          ))}
         </select>
+        <p className="field-fleet-note" data-testid="field-fleet-note">
+          {fleetCodes.length
+            ? t("pln6_field_trucks_sim").replace("{n}", String(fleetCodes.length))
+            : t("pln6_field_trucks_loading")}
+        </p>
         <div className="field-status" role="status">
           <Truck size={19} />
           <span data-testid="field-status">{text[status]}</span>
@@ -353,7 +380,7 @@ export default function FieldApp() {
               <Send size={18} />
               <div>
                 <strong>{text.newInstruction}</strong>
-                <p>{activeDispatch.instruction}</p>
+                <p className="field-instruction-text">{activeDispatch.instruction}</p>
               </div>
             </div>
             <label className="field-label" htmlFor="incident-reason">

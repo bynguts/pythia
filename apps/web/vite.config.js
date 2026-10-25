@@ -1,16 +1,23 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 // Build-stamp the service worker cache: public/sw.js contains __BUILD_ID__;
 // replacing it with the build timestamp means every deploy ships a new
 // CACHE_NAME and `activate` evicts the old one, so no user is pinned to a
-// previous bundle.
+// previous bundle. The stamp follows `--outDir`: a hardcoded dist/ left other
+// outputs unstamped and rewrote an unrelated dist/sw.js.
 function buildStampServiceWorker() {
+  let outDir = "dist";
   return {
     name: "build-stamp-sw",
+    apply: "build",
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir);
+    },
     closeBundle() {
-      const path = "dist/sw.js";
+      const path = resolve(outDir, "sw.js");
       const stamp = Date.now().toString(36);
       writeFileSync(path, readFileSync(path, "utf8").replaceAll("__BUILD_ID__", stamp));
     },
@@ -26,6 +33,13 @@ export default defineConfig({
         // deploys re-download only the app code, and Fleet's lazy surface
         // stays small. PDF tooling already loads on demand (ReportActions).
         manualChunks(id) {
+          // R2 (/driver ≤ 250 KB gzip of JS): Rollup's CommonJS interop
+          // helpers (used by react, react-dom) otherwise land in the maplibre
+          // chunk, so the entry imported them from it and index.html
+          // modulepreloaded all of maplibre (~283 KB gzip) plus its CSS on
+          // every route, /driver included. A tiny helper chunk keeps the map
+          // engine lazy.
+          if (id.includes("commonjsHelpers")) return "cjs-helpers";
           if (id.includes("node_modules/maplibre-gl")) return "maplibre";
         },
       },

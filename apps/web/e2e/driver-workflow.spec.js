@@ -23,7 +23,7 @@ async function signIn(page) {
 }
 
 async function cancelLeftoverSpj(page, headers) {
-  const resp = await page.request.get(`${API}/spj?status=aktif`);
+  const resp = await page.request.get(`${API}/spj?status=aktif`, { headers });
   for (const s of (await resp.json()).spj || []) {
     if (s.truck_code === TEST_TRUCK) {
       await page.request.post(`${API}/spj/${s.spj_id}/cancel`, { headers });
@@ -108,19 +108,15 @@ test("driver runs full SPJ flow: pretrip, stop evidence, receipt", async ({ page
   // Only stop in the SPJ → SPJ becomes "selesai" and receipt card replaces stop cards.
   await expect(page.locator('[data-testid="delivery-card"]')).toBeVisible({ timeout: 10000 });
 
-  const afterStop = await (await page.request.get(`${API}/spj/${spj.spj_id}`)).json();
+  const afterStop = await (await page.request.get(`${API}/spj/${spj.spj_id}`, { headers })).json();
   expect(afterStop.stops[0].status).toBe("completed");
 
-  // ── Receipt: OCR may be unavailable; confirmed manual weight remains usable ──
+  // ── Receipt: optional ticket weight first, then one camera tap submits ──
+  await page.getByLabel("Berat bruto di struk (kg, opsional)").fill("12450");
   await page.locator('[data-testid="receipt-input"]').setInputFiles(PHOTO);
-  const sendReceipt = page.getByRole("button", { name: "Kirim Struk" });
-  await expect(sendReceipt).toBeDisabled();
-  await page.getByLabel("Berat truk bermuatan (kg)").fill("12450");
-  await expect(sendReceipt).toBeDisabled();
-  await page.getByLabel("Saya sudah mencocokkan berat dengan struk foto.").check();
-  await sendReceipt.click();
   await expect(page.getByText("Tugas selesai")).toBeVisible({ timeout: 10000 });
-  const receipt = (await (await page.request.get(`${API}/spj/${spj.spj_id}`)).json()).receipt;
+  await expect(page.getByTestId("receipt-weight-gross")).toContainText("12.450 kg");
+  const receipt = (await (await page.request.get(`${API}/spj/${spj.spj_id}`, { headers })).json()).receipt;
   expect(receipt.total_weight_kg).toBe(12450);
   expect(receipt.weight_source).toBe("manual");
   expect(receipt.has_photo).toBe(true);
@@ -197,17 +193,19 @@ test("driver is offered the newest receipt-pending SPJ, not the oldest", async (
   const card = page.getByTestId("delivery-card");
   await expect(card).toBeVisible({ timeout: 15000 });
   await expect(card).toHaveAttribute("data-spj-id", newer.spj_id);
-  const history = await (await page.request.get(`${API}/spj?status=selesai`)).json();
+  const history = await (await page.request.get(`${API}/spj?status=selesai`, { headers })).json();
   const mine = history.spj.filter((s) => s.truck_code === TEST_TRUCK);
   expect(mine[0].spj_id).toBe(newer.spj_id);
   expect(mine[0].receipt).toBeNull();
 });
 
 test("pretrip with a TIDAK item auto-creates a damage report", async ({ page, context }) => {
-  await signIn(page);
+  const headers = await signIn(page);
   // First test already submitted pretrip for T-220 today; use another truck.
   const PRETTRIP_TRUCK = "T-221";
-  const pretrip = await (await page.request.get(`${API}/pretrip/today/${PRETTRIP_TRUCK}`)).json();
+  const pretrip = await (
+    await page.request.get(`${API}/pretrip/today/${PRETTRIP_TRUCK}`, { headers })
+  ).json();
   test.skip(Boolean(pretrip.done), "pretrip already submitted today for this truck");
 
   await context.grantPermissions(["geolocation"]);
@@ -225,7 +223,7 @@ test("pretrip with a TIDAK item auto-creates a damage report", async ({ page, co
   await page.getByRole("button", { name: /Simpan Inspeksi/i }).click();
   await expect(page.getByText("SELESAI").first()).toBeVisible({ timeout: 10000 });
 
-  const reports = await (await page.request.get(`${API}/damage-reports?status=baru`)).json();
+  const reports = await (await page.request.get(`${API}/damage-reports?status=baru`, { headers })).json();
   const mine = (reports.reports || []).filter(
     (r) => r.truck_code === PRETTRIP_TRUCK && r.source === "pretrip" && r.component === "ban",
   );
@@ -259,7 +257,7 @@ test("admin sees damage report and resolves it", async ({ page }) => {
 test("admin sees spj evidence summary after driver flow", async ({ page }) => {
   const headers = await signIn(page);
   // A previous failed run can leave T-231 active, which blocks activation.
-  const existing = await page.request.get(`${API}/spj?status=aktif`);
+  const existing = await page.request.get(`${API}/spj?status=aktif`, { headers });
   for (const stale of (await existing.json()).spj || []) {
     if (stale.truck_code === "T-231") {
       await page.request.post(`${API}/spj/${stale.spj_id}/cancel`, { headers });

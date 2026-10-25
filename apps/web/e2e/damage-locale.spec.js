@@ -33,9 +33,10 @@ async function loginToken() {
 
 async function seedReport() {
   const login = await loginToken();
+  const headers = { Authorization: `Bearer ${login.token}` };
   const created = await fetch(`${API}/damage-reports`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${login.token}` },
+    headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify({
       truck_code: "T-210",
       driver_name: "Uji E2E",
@@ -46,7 +47,7 @@ async function seedReport() {
     }),
   });
   if (!created.ok) throw new Error(`seed failed: ${created.status}`);
-  const all = await fetch(`${API}/damage-reports`).then((r) => r.json());
+  const all = await fetch(`${API}/damage-reports`, { headers }).then((r) => r.json());
   return all.reports.find((r) => r.note === "laporan uji e2e #83");
 }
 

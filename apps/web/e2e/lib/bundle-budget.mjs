@@ -5,12 +5,18 @@
  * Budgets are recorded in bytes (raw). A chunk that exceeds its budget fails
  * CI. Chunks without an explicit budget fall under the default cap.
  *
- * Usage: node e2e/lib/bundle-budget.mjs   (exit 1 on violation)
+ * R2: the /driver startup path (dist/index.html's entry script plus its
+ * modulepreload links) is also capped by its gzip size, which is what a
+ * driver's phone downloads before the app renders.
+ *
+ * Usage: node e2e/lib/bundle-budget.mjs   (exit 1 on violation, or when dist/ is missing)
  */
-import { readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { gzipSync } from "node:zlib";
 
-const dist = join(process.cwd(), "dist", "assets");
+const root = join(process.cwd(), "dist");
+const dist = join(root, "assets");
 const KB = 1024;
 
 /** Agreed budgets (raw bytes). Lazy chunks are allowed to be larger than
@@ -38,6 +44,8 @@ const BUDGETS = {
   default: 600 * KB,
   // Single stylesheet cap.
   css: 200 * KB,
+  // R2: /driver startup JS, gzip bytes (entry script + modulepreloads).
+  driverStartupGzip: 250 * KB,
 };
 
 function budgetFor(name) {
@@ -52,6 +60,25 @@ function budgetFor(name) {
   return BUDGETS.default;
 }
 
+// The same-origin scripts index.html loads before the first render: its
+// module entry and every modulepreload link (attribute order does not matter).
+function startupScripts(html) {
+  const attr = (tag, name) => tag.match(new RegExp(`\\s${name}="([^"]+)"`))?.[1];
+  const tags = (name) => [...html.matchAll(new RegExp(`<${name}\\b[^>]*>`, "g"))].map(([tag]) => tag);
+  const entries = tags("script")
+    .filter((tag) => attr(tag, "type") === "module")
+    .map((tag) => attr(tag, "src"));
+  const preloads = tags("link")
+    .filter((tag) => attr(tag, "rel") === "modulepreload")
+    .map((tag) => attr(tag, "href"));
+  return [...new Set([...entries, ...preloads])].filter((src) => src?.startsWith("/"));
+}
+
+if (!existsSync(dist)) {
+  console.error(`No build output at ${dist}: run "npm run build" first.`);
+  process.exit(1);
+}
+
 const files = readdirSync(dist);
 const violations = [];
 const report = [];
@@ -64,6 +91,27 @@ for (const file of files) {
   report.push(`${status.padEnd(4)} ${file}  ${(size / KB).toFixed(1)} kB / ${(budget / KB).toFixed(0)} kB`);
   if (size > budget)
     violations.push(`${file}: ${(size / KB).toFixed(1)} kB exceeds ${(budget / KB).toFixed(0)} kB budget`);
+}
+
+const indexHtml = join(root, "index.html");
+if (existsSync(indexHtml)) {
+  const scripts = startupScripts(readFileSync(indexHtml, "utf8"));
+  let gzip = 0;
+  for (const src of scripts) {
+    const path = join(root, src.slice(1));
+    if (existsSync(path)) gzip += gzipSync(readFileSync(path)).length;
+    else violations.push(`index.html loads ${src}, which is not in dist/`);
+  }
+  const budget = BUDGETS.driverStartupGzip;
+  const status = gzip <= budget ? "ok" : "OVER";
+  const sizes = `${(gzip / KB).toFixed(1)} kB / ${(budget / KB).toFixed(0)} kB`;
+  report.push(`${status.padEnd(4)} /driver startup, ${scripts.length} scripts (gzip)  ${sizes}`);
+  if (gzip > budget)
+    violations.push(
+      `/driver startup: ${(gzip / KB).toFixed(1)} kB gzip exceeds ${(budget / KB).toFixed(0)} kB`,
+    );
+} else {
+  violations.push("dist/index.html is missing, so the /driver startup budget cannot be measured");
 }
 
 console.log(report.join("\n"));

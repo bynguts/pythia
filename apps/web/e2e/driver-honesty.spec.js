@@ -1,0 +1,71 @@
+// #drv6-honesty: H1 and H3 in /driver. An arrival geotag without a GPS fix is
+// shown and sent as approximate ("Lokasi perkiraan, bukan GPS"), never as
+// GPS; the simulated roster is labelled SIMULASI on the picker and header.
+import { expect, test } from "@playwright/test";
+import { apiLogin, cancelSpj, createActiveSpj, finishPretrip, openDriver, PHOTO } from "./lib/driverSpj.js";
+
+const STOP = { name: "TPS Jujur E2E", kecamatan: "Cilandak", address: "Jl. E2E", lat: -6.29, lng: 106.79 };
+
+test("without a GPS fix the arrival geotag is labelled approximate and sent as approx", async ({
+  page,
+  context,
+  request,
+}) => {
+  const { token } = await apiLogin(request);
+  const spj = await createActiveSpj(request, token, "T-252", [STOP]);
+  await context.clearPermissions();
+  try {
+    await openDriver(page, request, { token, truck: "T-252" });
+    await finishPretrip(page);
+    const card = page.getByTestId("stop-0");
+    await card.getByTestId("stop-start").click();
+    await card.getByTestId("arrival-input").setInputFiles(PHOTO);
+    const geotag = card.getByTestId("arrival-geotag");
+    await expect(geotag).toHaveAttribute("data-geotag", "approx", { timeout: 20000 });
+    await expect(geotag).toHaveText("Lokasi perkiraan, bukan GPS");
+
+    await card.getByTestId("officer-input").setInputFiles(PHOTO);
+    await card.getByLabel("Nama Petugas").fill("Petugas Jujur");
+    const posted = page.waitForRequest((r) => r.url().includes(`/spj/${spj.spj_id}/stops/0/complete`));
+    await card.getByRole("button", { name: "Selesaikan Titik" }).click();
+    const arrival = (await posted).postDataJSON().evidence.arrival;
+    expect(arrival.approx).toBe(true);
+    expect(arrival.accuracy_m).toBeUndefined();
+  } finally {
+    await cancelSpj(request, token, spj.spj_id);
+  }
+});
+
+test("with a GPS fix the geotag shows GPS and its accuracy", async ({ page, context, request }) => {
+  const { token } = await apiLogin(request);
+  const spj = await createActiveSpj(request, token, "T-253", [STOP]);
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: -6.2901, longitude: 106.7902, accuracy: 12 });
+  try {
+    await openDriver(page, request, { token, truck: "T-253" });
+    await finishPretrip(page);
+    const card = page.getByTestId("stop-0");
+    await card.getByTestId("stop-start").click();
+    await card.getByTestId("arrival-input").setInputFiles(PHOTO);
+    const geotag = card.getByTestId("arrival-geotag");
+    await expect(geotag).toHaveAttribute("data-geotag", "gps", { timeout: 20000 });
+    await expect(geotag).toHaveText("Lokasi GPS ±12 m");
+  } finally {
+    await cancelSpj(request, token, spj.spj_id);
+  }
+});
+
+test("the driver picker and header label the roster as SIMULASI", async ({ page, request }) => {
+  const { token } = await apiLogin(request);
+  await page.goto("/");
+  await page.evaluate((token) => {
+    localStorage.setItem("pythia_lang", "id");
+    localStorage.setItem("pythia_field_token", token);
+    localStorage.removeItem("pythia_driver");
+  }, token);
+  await page.goto("/driver");
+  await expect(page.getByTestId("driver-roster-sim")).toHaveText("SIMULASI");
+  await expect(page.getByText("Nama pengemudi dan truk ini simulasi, bukan data personel.")).toBeVisible();
+  await page.getByTestId("pick-T-254").getByRole("button").click();
+  await expect(page.getByTestId("driver-identity-sim")).toHaveText("SIMULASI");
+});

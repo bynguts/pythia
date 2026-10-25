@@ -71,7 +71,7 @@ test("dispatcher adds a DEMO stop at the device position and it is stored DEMO-l
   expect(login.ok()).toBeTruthy();
   const principal = await login.json();
   const headers = { Authorization: `Bearer ${principal.token}` };
-  for (const spj of (await (await page.request.get(`${API}/spj`)).json()).spj || []) {
+  for (const spj of (await (await page.request.get(`${API}/spj`, { headers })).json()).spj || []) {
     if (spj.truck_code === DEMO_TRUCK && ["draft", "aktif"].includes(spj.status)) {
       await page.request.post(`${API}/spj/${spj.spj_id}/cancel`, { headers });
     }
@@ -88,6 +88,14 @@ test("dispatcher adds a DEMO stop at the device position and it is stored DEMO-l
   const demo = page.getByTestId("spj-demo-stop");
   await expect(demo).toHaveText(/DEMO/);
   await expect(page.getByText(/Hanya DEMO: .*35 m/)).toBeVisible();
+  // #spj-demo-leg: a DEMO stop needs a real TPS stop before it, so it is stop 2 and
+  // the leg into it starts on the road network (the AR street path follows it).
+  await demo.click();
+  await expect(page.getByText(/Tambah titik TPS dulu/)).toBeVisible();
+  await expect(page.getByTestId("spj-demo-badge")).toHaveCount(0);
+  const site = await page.locator("#spj-sites option").first().getAttribute("value", { timeout: 15000 });
+  await page.getByRole("combobox", { name: "Cari lokasi TPS…" }).fill(site);
+  await page.getByRole("button", { name: "Tambah titik", exact: true }).click();
   await demo.click();
   await expect(page.getByTestId("spj-demo-badge")).toHaveText("DEMO");
   await expect(page.locator(".spj-stop-list")).toContainText("DEMO · Lokasi operator");
@@ -100,18 +108,20 @@ test("dispatcher adds a DEMO stop at the device position and it is stored DEMO-l
   await page.getByRole("button", { name: "Simpan draf" }).click();
   await expect(page.locator(".spj-stop-list")).toHaveCount(0, { timeout: 10000 });
 
-  const drafts = ((await (await page.request.get(`${API}/spj?status=draft`)).json()).spj || []).filter(
-    (spj) => spj.truck_code === DEMO_TRUCK,
-  );
+  const drafts = (
+    (await (await page.request.get(`${API}/spj?status=draft`, { headers })).json()).spj || []
+  ).filter((spj) => spj.truck_code === DEMO_TRUCK);
   const created = drafts.at(-1);
   try {
     expect(created.note).toContain("DEMO");
-    expect(created.stops).toHaveLength(2);
-    expect(created.stops[0].name).toBe("DEMO · Lokasi operator");
-    expect(created.stops[1].name).toBe("DEMO · Lokasi operator 2");
-    expect(created.stops[0].location_type).toBe("DEMO");
-    expect(created.stops[0].lat).toBeCloseTo(PHONE_FIX.latitude, 4);
-    expect(created.stops[0].lng).toBeCloseTo(PHONE_FIX.longitude, 4);
+    expect(created.stops).toHaveLength(3);
+    expect(created.stops[0].name).toBe(site);
+    expect(created.stops[0].location_type).not.toBe("DEMO");
+    expect(created.stops[1].name).toBe("DEMO · Lokasi operator");
+    expect(created.stops[2].name).toBe("DEMO · Lokasi operator 2");
+    expect(created.stops[1].location_type).toBe("DEMO");
+    expect(created.stops[1].lat).toBeCloseTo(PHONE_FIX.latitude, 4);
+    expect(created.stops[1].lng).toBeCloseTo(PHONE_FIX.longitude, 4);
   } finally {
     for (const spj of drafts) await cancelSpjIndependently(principal.token, spj.spj_id);
   }

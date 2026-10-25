@@ -255,6 +255,21 @@ export function legToStop(path, stops, index) {
 }
 
 /**
+ * True when a leg has a route vertex strictly inside it (more than 1 m from
+ * both ends): road geometry, not the bare stop-to-stop segment that is the
+ * only shape a straight-line fallback leg takes. A DEMO SPJ is stored with
+ * road geometry only on the legs OSRM resolved, so this tells them apart.
+ */
+export function legFollowsRoad(leg) {
+  if (!leg) return false;
+  const cum = leg.cum || cumulativeLengths(leg.path);
+  for (let i = leg.startSegment + 1; i <= leg.endSegment; i += 1) {
+    if (cum[i] > leg.startAlong + 1 && cum[i] < leg.endAlong - 1) return true;
+  }
+  return false;
+}
+
+/**
  * Where the AR arrow should aim on a planned leg, or null when the fix is
  * more than OFF_ROUTE_M from it (the caller falls back to the straight
  * bearing and says so). The aim is the next route vertex ahead, held inside

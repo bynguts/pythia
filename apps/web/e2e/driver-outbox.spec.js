@@ -23,7 +23,7 @@ async function apiLogin() {
 }
 
 async function cancelLeftover(headers) {
-  const res = await fetch(`${API}/spj?status=aktif`, headers);
+  const res = await fetch(`${API}/spj?status=aktif`, { headers });
   const resp = await res.json();
   for (const s of resp.spj || []) {
     if (s.truck_code === TEST_TRUCK) {
@@ -40,7 +40,7 @@ test("offline stop submission queues durably, survives reload, and syncs on reco
   const headers = { Authorization: `Bearer ${principal.token}` };
   await cancelLeftover(headers);
 
-  const fleet = await (await fetch(`${API}/fleet`, headers)).json();
+  const fleet = await (await fetch(`${API}/fleet`, { headers })).json();
   const trucks = Array.isArray(fleet) ? fleet : fleet.trucks;
   const truck = trucks.find((t) => t.truck_code === TEST_TRUCK);
   const create = await fetch(`${API}/spj`, {

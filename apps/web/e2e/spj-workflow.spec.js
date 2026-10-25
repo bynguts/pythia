@@ -31,7 +31,7 @@ async function signIn(page) {
 
 test("admin sees SPJ in panel, expands it, and activates it", async ({ page }) => {
   const headers = await signIn(page);
-  const existing = await page.request.get(`${API}/spj`);
+  const existing = await page.request.get(`${API}/spj`, { headers });
   for (const spj of (await existing.json()).spj || []) {
     if (spj.truck_code === TEST_TRUCK && ["draft", "aktif"].includes(spj.status)) {
       await page.request.post(`${API}/spj/${spj.spj_id}/cancel`, { headers });
@@ -93,7 +93,7 @@ test("Fleet SPJ mutations and lifecycle labels follow authorization and ID/EN", 
   const status = (number) => row(number).locator("td").last();
   // The scenario drives T-209, and a truck holds at most one active SPJ, so a
   // leftover from an earlier run must be cleared or activation is refused.
-  const existing = await page.request.get(`${API}/spj`);
+  const existing = await page.request.get(`${API}/spj`, { headers });
   for (const spj of (await existing.json()).spj || []) {
     if (spj.truck_code === "T-209" && ["draft", "aktif"].includes(spj.status)) {
       await page.request.post(`${API}/spj/${spj.spj_id}/cancel`, { headers });

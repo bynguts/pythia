@@ -8,7 +8,21 @@ import { request } from "@playwright/test";
 const API = (process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001").replace(/\/api\/?$/, "");
 
 export default async function globalSetup() {
-  const ctx = await request.newContext();
+  // Signed in, so the gated SPJ list warms up too; without a token everything
+  // public still pre-heats.
+  let headers = {};
+  try {
+    const login = await request.newContext();
+    const res = await login.post(`${API}/api/auth/login`, {
+      data: { username: "dispatcher", password: "dispatcher-demo-pass" },
+      timeout: 45000,
+    });
+    if (res.ok()) headers = { Authorization: `Bearer ${(await res.json()).token}` };
+    await login.dispose();
+  } catch (error) {
+    console.warn(`[global-setup] login failed: ${error.message}`);
+  }
+  const ctx = await request.newContext({ extraHTTPHeaders: headers });
   const endpoints = [
     "/api/command-center",
     "/api/predictions/kecamatan?rainfall_mm=42&event_attendance=85000&is_weekend=true",

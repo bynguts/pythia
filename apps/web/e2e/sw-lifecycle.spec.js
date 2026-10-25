@@ -55,15 +55,26 @@ test("first install caches the app shell and controls subsequent loads", async (
 
   await installWorker(page);
 
-  // Install pre-caches the app shell entries.
-  const shellCached = await page.evaluate(async () => {
+  // Install pre-caches the app shell entries, including the driver PWA's
+  // start URL, both of its manifests and their PNG icons.
+  const shell = [
+    "/",
+    "/field",
+    "/driver",
+    "/manifest.webmanifest",
+    "/manifest.driver.webmanifest",
+    "/manifest.driver.id.webmanifest",
+    "/pythia-icon.svg",
+    "/pythia-icon-192.png",
+    "/pythia-icon-512.png",
+    "/pythia-icon-maskable-512.png",
+  ];
+  const shellCached = await page.evaluate(async (paths) => {
     const names = await caches.keys();
     const cache = await caches.open(names[0]);
-    return Promise.all(
-      ["/", "/field", "/manifest.webmanifest", "/pythia-icon.svg"].map((p) => cache.match(p).then(Boolean)),
-    );
-  });
-  expect(shellCached).toEqual([true, true, true, true]);
+    return Promise.all(paths.map((p) => cache.match(p).then(Boolean)));
+  }, shell);
+  expect(shellCached).toEqual(shell.map(() => true));
 
   // A reload is SW-controlled and still renders the application shell.
   await page.reload({ waitUntil: "domcontentloaded" });

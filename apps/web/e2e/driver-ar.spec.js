@@ -35,7 +35,7 @@ async function apiLogin() {
 
 async function cancelTruckSpj(headers) {
   for (const status of ["aktif", "draft"]) {
-    const body = await (await fetch(`${API}/spj?status=${status}`)).json();
+    const body = await (await fetch(`${API}/spj?status=${status}`, { headers })).json();
     for (const s of body.spj || []) {
       if (s.truck_code === TEST_TRUCK) {
         await fetch(`${API}/spj/${s.spj_id}/cancel`, { method: "POST", headers });
@@ -287,12 +287,17 @@ test.describe("AR navigator with camera + compass", () => {
       await stop0.getByRole("button", { name: "Selesaikan Titik" }).click();
       await expect(stop0.getByText("SELESAI")).toBeVisible({ timeout: 15000 });
 
-      const detail = await (await fetch(`${API}/spj/${spj.spj_id}`)).json();
+      const detail = await (await fetch(`${API}/spj/${spj.spj_id}`, { headers })).json();
       expect(detail.stops[0].status).toBe("completed");
       const arrival = detail.stops[0].evidence.arrival;
       expect(arrival.source).toBe("ar");
       expect(arrival.photo_name).toMatch(/^ar-stop1-.*\.jpg$/);
-      expect(arrival.photo_b64.startsWith("data:image/jpeg;base64,")).toBe(true);
+      // Responses carry a reference, never the bytes; the frame is served as a JPEG.
+      expect(arrival.photo_b64).toBeUndefined();
+      expect(Number.isInteger(arrival.photo_ref)).toBe(true);
+      const frame = await fetch(`${API}/spj/${spj.spj_id}/evidence/${arrival.photo_ref}`, { headers });
+      expect(frame.status).toBe(200);
+      expect(frame.headers.get("content-type")).toBe("image/jpeg");
       expect(arrival.lat).toBeCloseTo(ARRIVED.latitude, 6);
       expect(arrival.lng).toBeCloseTo(ARRIVED.longitude, 6);
       expect(arrival.accuracy_m).toBe(12);
@@ -424,10 +429,10 @@ test.describe("AR navigator fallbacks", () => {
         },
       ],
     };
-    await page.route(/\/api\/spj\?status=aktif$/, (route) =>
+    await page.route(/\/api\/spj\?status=aktif(&|$)/, (route) =>
       route.fulfill({ json: { spj: [fake], count: 1 } }),
     );
-    await page.route(/\/api\/spj\?status=selesai$/, (route) =>
+    await page.route(/\/api\/spj\?status=selesai(&|$)/, (route) =>
       route.fulfill({ json: { spj: [], count: 0 } }),
     );
     // The /driver sign-in gate needs a valid field session even when the data is stubbed.

@@ -1,15 +1,42 @@
 import { lazy, Suspense, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation, useParams } from "react-router-dom";
 // Field and driver come first: their stylesheets precede the global styles in
-// the cascade (main.jsx imports styles/index.css after this module).
-import FieldApp from "../surfaces/field/FieldApp.jsx";
+// the cascade (main.jsx imports styles/index.css after this module). The lazy
+// surfaces below keep their stylesheets here, in the order they had when they
+// were static imports, so moving their code out of the main chunk does not
+// reorder the cascade.
+import "../surfaces/field/field.css";
 import DriverApp from "../surfaces/driver/DriverApp.jsx";
+import "../features/fleet/safety.css";
+import "../features/assistant/assistant.css";
+import "../features/audit/audit.css";
+import "../features/forecast/monthlyIntake.css";
 import { LoginPage } from "../surfaces/login/LoginPage.jsx";
 import { RoleGate } from "../surfaces/login/RoleGate.jsx";
-import { SupervisorView } from "../surfaces/supervisor/SupervisorView.jsx";
 import { useLanguage } from "../shared/i18n/index.jsx";
-import { CommandCenter } from "./CommandCenter.jsx";
 import { isWorkspace, landingPath } from "./workspaces.js";
+
+// /driver must not download the command centre: everything else is a lazy chunk.
+const FieldApp = lazy(() => import("../surfaces/field/FieldApp.jsx"));
+const SupervisorView = lazy(() =>
+  import("../surfaces/supervisor/SupervisorView.jsx").then((m) => ({ default: m.SupervisorView })),
+);
+const CommandCenter = lazy(() => import("./CommandCenter.jsx").then((m) => ({ default: m.CommandCenter })));
+
+function SurfaceBoot({ children }) {
+  const { t } = useLanguage();
+  return (
+    <Suspense
+      fallback={
+        <main className="map-loading-fallback" role="status">
+          {t("sv_loading")}
+        </main>
+      }
+    >
+      {children}
+    </Suspense>
+  );
+}
 
 // read-only XR tabletop twin, no login; three.js stays in this lazy chunk.
 const XrTabletop = lazy(() =>
@@ -46,7 +73,11 @@ function Landing() {
 function WorkspaceRoute({ onLogout }) {
   const { workspace } = useParams();
   if (!isWorkspace(workspace)) return <Landing />;
-  return <CommandCenter workspace={workspace} onLogout={onLogout} />;
+  return (
+    <SurfaceBoot>
+      <CommandCenter workspace={workspace} onLogout={onLogout} />
+    </SurfaceBoot>
+  );
 }
 
 export function App() {
@@ -65,7 +96,9 @@ export function App() {
         path="/field/*"
         element={
           <RoleGate>
-            <FieldApp />
+            <SurfaceBoot>
+              <FieldApp />
+            </SurfaceBoot>
           </RoleGate>
         }
       />
@@ -78,7 +111,14 @@ export function App() {
         }
       />
       <Route element={<LoginGate authenticated={authenticated} onLogin={() => setAuthenticated(true)} />}>
-        <Route path="/pengawas/*" element={<SupervisorView />} />
+        <Route
+          path="/pengawas/*"
+          element={
+            <SurfaceBoot>
+              <SupervisorView />
+            </SurfaceBoot>
+          }
+        />
         <Route path="/:workspace" element={<WorkspaceRoute onLogout={logout} />} />
         <Route path="*" element={<Landing />} />
       </Route>

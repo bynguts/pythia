@@ -119,10 +119,12 @@ async function installScriptedGps(page) {
 }
 
 async function stubBackend(page, { routeSource = "LIVE_EXTERNAL", path = PATH, weather } = {}) {
-  await page.route(/\/api\/spj\?status=aktif$/, (route) =>
+  await page.route(/\/api\/spj\?status=aktif(&|$)/, (route) =>
     route.fulfill({ json: { spj: [spjFixture(routeSource)], count: 1 } }),
   );
-  await page.route(/\/api\/spj\?status=selesai$/, (route) => route.fulfill({ json: { spj: [], count: 0 } }));
+  await page.route(/\/api\/spj\?status=selesai(&|$)/, (route) =>
+    route.fulfill({ json: { spj: [], count: 0 } }),
+  );
   await page.route(/\/api\/pretrip\/today\//, (route) => route.fulfill({ json: { done: true } }));
   await page.route(/\/api\/spj\/active-path\//, (route) =>
     route.fulfill({

@@ -14,11 +14,47 @@ import {
   Truck,
   User,
   WifiOff,
+  ExternalLink,
+  Flag,
+  LogIn,
 } from "lucide-react";
-import { enqueueDriverOperation, flushDriverOutbox, readDriverOutbox } from "./DriverOutbox.js";
+import {
+  dismissRejectedOperation,
+  enqueueDriverOperation,
+  flushDriverOutbox,
+  markDriverSynced,
+  OUTBOX_CHANGED_EVENT,
+  OutboxStorageFullError,
+  queuedStopKeys,
+  readDriverOutbox,
+  readLastSync,
+  readRejectedOperations,
+} from "./DriverOutbox.js";
+import {
+  announceSessionExpired,
+  InstructionCard,
+  NeedsActionList,
+  SafetyBanner,
+  SESSION_EXPIRED_EVENT,
+  SyncStatus,
+  useDriverSafety,
+} from "./DriverPanels.jsx";
+import {
+  arCapable,
+  boundDriverOf,
+  clockTime,
+  mapsDirectionsUrl,
+  pretripQueuedFor,
+  receiptWeightRows,
+  receiptWeights,
+  safetyBlocksNewWork,
+  spjListPath,
+  withQueuedStops,
+} from "./driverHelpers.js";
+import { formatBytes, shrinkPhoto } from "./photo.js";
 import "./driver.css";
-import { apiFetch, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
-import { useLanguage } from "../../shared/i18n/index.jsx";
+import { apiFetch, FIELD_ROLE_KEY, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
+import { localeFor, translate, useLanguage } from "../../shared/i18n/index.jsx";
 
 // the AR navigator is its own chunk; drivers who never open it
 // do not download it.
@@ -40,33 +76,47 @@ const PRETRIP_ITEMS = ["rem", "mesin", "ban", "bbm", "oli", "bak_compactor", "la
 const FRACTIONS = ["Residu", "Organik", "Anorganik"];
 const BERAT_COMPONENTS = new Set(["rem", "mesin", "ban"]);
 
-const photoErrors = {
-  photo_too_big: { en: "Photo must be at most 5 MB", id: "Foto maksimal 5 MB" },
-  photo_read_failed: { en: "Failed to read the photo", id: "Gagal membaca foto" },
+const PHOTO_ERROR_KEYS = {
+  photo_too_big: "drv6_photo_too_big",
+  photo_unreadable: "drv6_photo_unreadable",
+  photo_read_failed: "drv_photo_read_failed",
 };
 
 function currentLang() {
   try {
-    return localStorage.getItem("pythia_lang") || "id";
+    return localStorage.getItem("pythia_lang") === "en" ? "en" : "id";
   } catch {
     return "id";
   }
 }
 
-function readPhoto(file) {
-  const lang = currentLang();
-  return new Promise((resolve, reject) => {
-    if (file.size > 5 * 1024 * 1024) {
-      reject(new Error(photoErrors.photo_too_big[lang]));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => resolve({ name: file.name, b64: reader.result });
-    reader.onerror = () => reject(new Error(photoErrors.photo_read_failed[lang]));
-    reader.readAsDataURL(file);
-  });
+// Audit gap 1: every evidence photo is shrunk on the phone (longest side
+// 1280 px, JPEG 0.7) before it is queued or uploaded; the size is shown.
+async function readPhoto(file) {
+  try {
+    return await shrinkPhoto(file);
+  } catch (err) {
+    throw new Error(translate(currentLang(), PHOTO_ERROR_KEYS[err?.code] || "drv_photo_read_failed"));
+  }
 }
 
+function PhotoSize({ photo }) {
+  const { t, lang } = useLanguage();
+  if (!photo?.bytes) return null;
+  const size = formatBytes(photo.bytes, lang);
+  return (
+    <p className="driver-photo-size" data-testid="photo-size">
+      {photo.resized && photo.originalBytes > photo.bytes
+        ? t("drv6_photo_size_from")
+            .replace("{size}", size)
+            .replace("{orig}", formatBytes(photo.originalBytes, lang))
+        : t("drv6_photo_size").replace("{size}", size)}
+    </p>
+  );
+}
+
+// H1: a failed or missing GPS fix falls back to the stop's own coordinates,
+// flagged approx, and the screen says so; it is never shown as GPS.
 function getPosition(stop) {
   return new Promise((resolve) => {
     if (!navigator.geolocation) {
@@ -74,22 +124,82 @@ function getPosition(stop) {
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (pos) =>
+        resolve({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy_m: Number.isFinite(pos.coords.accuracy) ? Math.round(pos.coords.accuracy) : null,
+        }),
       () => resolve({ lat: stop.lat, lng: stop.lng, approx: true }),
-      { timeout: 5000 },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
     );
   });
 }
 
+function GeotagLabel({ fix }) {
+  const { t } = useLanguage();
+  if (!fix) {
+    return (
+      <p className="driver-geotag" data-testid="arrival-geotag" data-geotag="pending">
+        <MapPin size={16} /> {t("drv6_geo_locating")}
+      </p>
+    );
+  }
+  if (fix.approx) {
+    return (
+      <p className="driver-geotag approx" data-testid="arrival-geotag" data-geotag="approx">
+        <MapPin size={16} /> {t("drv6_geo_approx")}
+      </p>
+    );
+  }
+  return (
+    <p className="driver-geotag" data-testid="arrival-geotag" data-geotag="gps">
+      <MapPin size={16} /> {t("drv6_geo_gps").replace("{n}", fix.accuracy_m ?? "?")}
+    </p>
+  );
+}
+
+function MapsLink({ target, name, testId }) {
+  const { t } = useLanguage();
+  const href = mapsDirectionsUrl(target);
+  if (!href) return null;
+  return (
+    <a
+      className="driver-btn ghost driver-maps-link"
+      data-testid={testId}
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={t("drv6_maps_open_aria").replace("{name}", name)}
+    >
+      <ExternalLink size={18} /> {t("drv6_maps_open")}
+    </a>
+  );
+}
+
 // #45: a network-level failure (fetch rejected / no response) is queueable;
-// an HTTP error response is a permanent failure the driver must act on.
+// an HTTP error response is a permanent failure the driver must act on. The
+// message is Indonesian (or English) from the catalog, never the raw server
+// detail alone; a 401 means the backend no longer knows this session.
 async function post(path, data) {
   const res = await apiFetch(path, { method: "POST", body: data, tokenKey: FIELD_TOKEN_KEY });
   if (!res.ok) {
+    const lang = currentLang();
+    if (res.status === 401) {
+      announceSessionExpired();
+      const expired = new Error(translate(lang, "drv6_session_expired"));
+      expired.status = 401;
+      throw expired;
+    }
     const body = await res.json().catch(() => ({}));
-    const fallback = currentLang() === "en" ? `Request failed (${res.status})` : `Gagal (${res.status})`;
-    throw new Error(body.detail || fallback);
+    const base = translate(lang, "drv6_request_failed").replace("{code}", res.status);
+    const error = new Error(
+      typeof body.detail === "string" && body.detail ? `${base}: ${body.detail}` : base,
+    );
+    error.status = res.status;
+    throw error;
   }
+  markDriverSynced();
   return res.json();
 }
 
@@ -187,14 +297,22 @@ function PreTripForm({ driver, done, onDone, say }) {
         say(t("drv_pretrip_damage_failed"));
       } else if (err?.network) {
         // #45: keep the inspection durably; it replays on reconnect.
-        enqueueDriverOperation({
-          path: "/pretrip",
-          data: { truck_code: driver.truck_code, driver_name: driver.driver_name, items, note },
-          label: t("drv_pretrip_title"),
-        });
-        window.dispatchEvent(new Event("pythia-driver-outbox-changed"));
-        onDone();
-        say(t("drv_queued_offline"));
+        try {
+          await enqueueDriverOperation({
+            path: "/pretrip",
+            data: { truck_code: driver.truck_code, driver_name: driver.driver_name, items, note },
+            label: t("drv_pretrip_title"),
+          });
+          onDone();
+          say(t("drv_queued_offline"));
+        } catch (queueErr) {
+          say(
+            queueErr instanceof OutboxStorageFullError
+              ? t("drv6_storage_full")
+              : t("drv_pretrip_save_failed"),
+            8000,
+          );
+        }
       } else {
         say(err.message || t("drv_pretrip_save_failed"));
       }
@@ -302,31 +420,66 @@ function PreTripForm({ driver, done, onDone, say }) {
 
 // ── Stop evidence (arrival → weighing → officer) ──────────────────────────────
 
-function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
+function officerKey(stop) {
+  return `pythia_officer_${stop.name}`;
+}
+
+function StopCard({ spj, stop, index, current, locked, blocked, arEnabled, onCompleted, say }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [arrival, setArrival] = useState(null);
+  // H1: the arrival geotag is taken when the photo is attached and shown as
+  // GPS (with accuracy) or as approximate; null while locating.
+  const [arrivalFix, setArrivalFix] = useState(null);
   const [weighPhoto, setWeighPhoto] = useState(null);
   const [weighing, setWeighing] = useState([]);
   const [fraction, setFraction] = useState(FRACTIONS[0]);
   const [weight, setWeight] = useState("");
   const [officerPhoto, setOfficerPhoto] = useState(null);
-  const [officerName, setOfficerName] = useState("");
+  // R4: the officer at a TPS rarely changes; the last name used at this stop
+  // is pre-filled on this phone so the critical path needs no typing.
+  const [officerName, setOfficerName] = useState(() => {
+    try {
+      return localStorage.getItem(officerKey(stop)) || "";
+    } catch {
+      return "";
+    }
+  });
   const [busy, setBusy] = useState(false);
   const [ar, setAr] = useState(null);
+  const [storageError, setStorageError] = useState(false);
 
   const completed = stop.status === "completed";
+  // The server requires weighing only when the SPJ orders it (weigh_on_site),
+  // so the step is asked only then; an SPJ without the flag skips it.
+  const needsWeighing = spj.weigh_on_site === true;
+  const stepLabels = needsWeighing
+    ? [t("drv_step_arrival"), t("drv_step_weigh"), t("drv_step_officer")]
+    : [t("drv_step_arrival"), t("drv_step_officer")];
 
   const step = useMemo(() => {
     if (!arrival) return 1;
-    if (weighing.length === 0) return 2;
-    return 3;
-  }, [arrival, weighing]);
+    if (needsWeighing && weighing.length === 0) return 2;
+    return needsWeighing ? 3 : 2;
+  }, [arrival, weighing, needsWeighing]);
+  const officerStep = needsWeighing ? 3 : 2;
 
   const handlePhoto = async (file, setter) => {
     if (!file) return;
     try {
       setter(await readPhoto(file));
+    } catch (err) {
+      say(err.message);
+    }
+  };
+
+  const handleArrivalPhoto = async (file) => {
+    if (!file) return;
+    try {
+      const photo = await readPhoto(file);
+      setArrival(photo);
+      setArrivalFix(null);
+      setArrivalFix(await getPosition(stop));
     } catch (err) {
       say(err.message);
     }
@@ -358,6 +511,11 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
     try {
       const photo = await readPhoto(file);
       setArrival({ ...photo, fix });
+      if (Number.isFinite(fix?.lat) && Number.isFinite(fix?.lng)) {
+        setArrivalFix({ lat: fix.lat, lng: fix.lng, accuracy_m: fix.accuracy_m });
+      } else {
+        setArrivalFix(await getPosition(stop));
+      }
       say(t("drv_ar_captured"));
     } catch (err) {
       say(err.message);
@@ -389,10 +547,16 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
 
   const submit = async () => {
     setBusy(true);
+    setStorageError(false);
+    try {
+      localStorage.setItem(officerKey(stop), officerName.trim());
+    } catch {
+      // Pre-fill is a convenience only.
+    }
     // #45: evidence is hoisted so the offline catch can queue it durably.
     let evidence = null;
     try {
-      const pos = arrival.fix || (await getPosition(stop));
+      const pos = arrival.fix || arrivalFix || (await getPosition(stop));
       evidence = {
         arrival: {
           photo_name: arrival.name,
@@ -400,6 +564,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
           lat: pos.lat,
           lng: pos.lng,
           approx: Boolean(pos.approx),
+          ...(!arrival.fix && !pos.approx && pos.accuracy_m != null ? { accuracy_m: pos.accuracy_m } : {}),
           ...(arrival.fix
             ? {
                 source: "ar",
@@ -409,25 +574,35 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
               }
             : {}),
         },
-        weighing,
+        weighing: needsWeighing ? weighing : [],
         officer: { name: officerName.trim(), photo_name: officerPhoto.name, photo_b64: officerPhoto.b64 },
       };
       await postQueueable(`/spj/${spj.spj_id}/stops/${index}/complete`, { evidence });
       onCompleted();
     } catch (err) {
       if (err?.network && evidence) {
-        // #45: queue durably and optimistically complete the stop; the
-        // outbox replays the evidence when connectivity returns.
-        enqueueDriverOperation({
-          path: `/spj/${spj.spj_id}/stops/${index}/complete`,
-          data: { evidence },
-          label: t("drv_stop_title")
-            .replace("{n}", index + 1)
-            .replace("{name}", stop.name),
-        });
-        window.dispatchEvent(new Event("pythia-driver-outbox-changed"));
-        onCompleted();
-        say(t("drv_queued_offline"));
+        // #45: queue durably; the outbox overlay marks the stop done locally
+        // (the next stop unlocks) and replays the evidence on reconnect.
+        try {
+          await enqueueDriverOperation({
+            path: `/spj/${spj.spj_id}/stops/${index}/complete`,
+            data: { evidence },
+            label: t("drv_stop_title")
+              .replace("{n}", index + 1)
+              .replace("{name}", stop.name),
+          });
+          onCompleted();
+          say(t("drv_queued_offline"));
+        } catch (queueErr) {
+          // Never silent: the form stays filled and the driver is told why.
+          if (queueErr instanceof OutboxStorageFullError) setStorageError(true);
+          say(
+            queueErr instanceof OutboxStorageFullError
+              ? t("drv6_storage_full")
+              : t("drv_stop_complete_failed"),
+            8000,
+          );
+        }
       } else {
         say(err.message || t("drv_stop_complete_failed"));
       }
@@ -436,7 +611,8 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
     }
   };
 
-  const canSubmit = arrival && weighing.length > 0 && officerPhoto && officerName.trim().length > 0;
+  const canSubmit =
+    arrival && (!needsWeighing || weighing.length > 0) && officerPhoto && officerName.trim().length > 0;
 
   return (
     <article
@@ -450,7 +626,11 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
             .replace("{n}", index + 1)
             .replace("{name}", stop.name)}
         </h2>
-        {completed && <span className="driver-badge done">{t("drv_stop_selesai")}</span>}
+        {completed && (
+          <span className={`driver-badge ${stop.queued ? "queued" : "done"}`}>
+            {stop.queued ? t("drv6_stop_queued_badge") : t("drv_stop_selesai")}
+          </span>
+        )}
       </div>
       <p className="driver-muted">
         {stop.kecamatan} — {stop.address}
@@ -458,30 +638,55 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
 
       {completed && (
         <ul className="step-list">
-          {[t("drv_step_arrival"), t("drv_step_weigh"), t("drv_step_officer")].map((label) => (
+          {stepLabels.map((label) => (
             <li key={label} className="step done">
               <CheckCircle2 size={15} /> {label}
             </li>
           ))}
         </ul>
       )}
+      {completed && stop.queued && (
+        <p className="driver-muted" data-testid="stop-queued-note">
+          {t("drv6_stop_queued")}
+        </p>
+      )}
 
       {locked && !completed && <p className="driver-muted">{t("drv_stop_locked")}</p>}
 
+      {!completed && (
+        <div className="driver-actions">
+          <MapsLink target={stop} name={stop.name} testId={`stop-maps-${index}`} />
+        </div>
+      )}
+
+      {current && !completed && !open && blocked && (
+        <p className="driver-held" data-testid="stop-held">
+          {t("drv6_safety_held")}
+        </p>
+      )}
+
       {current && !completed && !open && (
         <div className="driver-actions">
-          <button type="button" className="driver-btn primary" onClick={() => setOpen(true)}>
-            <Camera size={16} /> {t("drv_stop_start")}
-          </button>
           <button
             type="button"
-            className="driver-btn ghost"
-            data-testid="ar-nav-open"
-            aria-label={t("drv_ar_open_aria").replace("{name}", stop.name)}
-            onClick={openAr}
+            className="driver-btn primary"
+            data-testid="stop-start"
+            disabled={blocked}
+            onClick={() => setOpen(true)}
           >
-            <Navigation size={16} /> {t("drv_ar_open")}
+            <Camera size={18} /> {t("drv_stop_start")}
           </button>
+          {arEnabled && (
+            <button
+              type="button"
+              className="driver-btn ghost"
+              data-testid="ar-nav-open"
+              aria-label={t("drv_ar_open_aria").replace("{name}", stop.name)}
+              onClick={openAr}
+            >
+              <Navigation size={18} /> {t("drv_ar_open")}
+            </button>
+          )}
         </div>
       )}
 
@@ -502,7 +707,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
       {current && !completed && open && (
         <div className="stop-form">
           <ol className="step-list">
-            {[t("drv_step_arrival"), t("drv_step_weigh"), t("drv_step_officer")].map((label, i) => (
+            {stepLabels.map((label, i) => (
               <li key={label} className={`step ${step > i + 1 ? "done" : step === i + 1 ? "current" : ""}`}>
                 {step > i + 1 ? <CheckCircle2 size={15} /> : <span className="step-num">{i + 1}</span>}
                 {label}
@@ -511,7 +716,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
           </ol>
 
           {/* Step 1: arrival photo (from the picker or the AR navigator) */}
-          {!arrival && (
+          {!arrival && arEnabled && (
             <div className="driver-actions">
               <button
                 type="button"
@@ -534,11 +739,13 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
             accept="image/*"
             capture="environment"
             className="driver-file"
-            onChange={(e) => handlePhoto(e.target.files?.[0], setArrival)}
+            onChange={(e) => handleArrivalPhoto(e.target.files?.[0])}
           />
           {arrival && (
             <p className="driver-muted">{t("drv_photo_attached").replace("{name}", arrival.name)}</p>
           )}
+          <PhotoSize photo={arrival} />
+          {arrival && <GeotagLabel fix={arrivalFix} />}
           {arrival?.fix && (
             <figure className="arrival-ar" data-testid="arrival-ar-evidence">
               <img src={arrival.b64} alt={t("drv_ar_photo_alt")} />
@@ -548,8 +755,8 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
             </figure>
           )}
 
-          {/* Step 2: weighing */}
-          {step >= 2 && (
+          {/* Step 2: weighing (only when this SPJ weighs on site) */}
+          {needsWeighing && step >= 2 && (
             <>
               <label className="driver-label" htmlFor={`weigh-${index}`}>
                 {t("drv_weigh_label")}
@@ -563,6 +770,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
                 className="driver-file"
                 onChange={(e) => handlePhoto(e.target.files?.[0], setWeighPhoto)}
               />
+              <PhotoSize photo={weighPhoto} />
               <div className="driver-row">
                 <div>
                   <label className="driver-label" htmlFor={`fraction-${index}`}>
@@ -612,8 +820,8 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
             </>
           )}
 
-          {/* Step 3: officer */}
-          {step >= 3 && (
+          {/* Last step: officer */}
+          {step >= officerStep && (
             <>
               <label className="driver-label" htmlFor={`officer-${index}`}>
                 {t("drv_officer_label")}
@@ -627,6 +835,7 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
                 className="driver-file"
                 onChange={(e) => handlePhoto(e.target.files?.[0], setOfficerPhoto)}
               />
+              <PhotoSize photo={officerPhoto} />
               <label className="driver-label" htmlFor={`officer-name-${index}`}>
                 {t("drv_officer_name_label")}
               </label>
@@ -644,9 +853,14 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
                   onClick={submit}
                   disabled={!canSubmit || busy}
                 >
-                  <Check size={16} /> {t("drv_stop_complete")}
+                  <Check size={18} /> {t("drv_stop_complete")}
                 </button>
               </div>
+              {storageError && (
+                <p className="driver-error" role="alert" data-testid="stop-storage-full">
+                  {t("drv6_storage_full")}
+                </p>
+              )}
             </>
           )}
         </div>
@@ -657,130 +871,190 @@ function StopCard({ spj, stop, index, current, locked, onCompleted, say }) {
 
 // ── Delivery / receipt ────────────────────────────────────────────────────────
 
+const WEIGHT_ROW_NAMES = { gross_weight_kg: "gross", tare_weight_kg: "tare", net_weight_kg: "net" };
+
+// The receipt as the server recorded it: weights plus weight_labels. The POST
+// answer carries it as `receipt`; without one the SPJ is read back.
+async function recordedReceipt(spjId, body) {
+  if (body?.receipt?.weight_labels) return body.receipt;
+  try {
+    const res = await apiFetch(`/spj/${encodeURIComponent(spjId)}`, { tokenKey: FIELD_TOKEN_KEY });
+    return res.ok ? (await res.json()).receipt || null : null;
+  } catch {
+    return null;
+  }
+}
+
+// H10: gross, tare and net exactly as recorded; one row per weight_labels key,
+// and a weight the server did not record says so instead of showing a number.
+function ReceiptWeights({ receipt }) {
+  const { t, lang } = useLanguage();
+  const rows = receiptWeightRows(receipt);
+  if (rows.length === 0) return null;
+  return (
+    <dl className="receipt-weights" data-testid="receipt-weights">
+      {rows.map((row) => {
+        const name = WEIGHT_ROW_NAMES[row.key];
+        return (
+          <div key={row.key} className="receipt-weight" data-testid={`receipt-weight-${name}`}>
+            <dt>{t(`drv7_weight_${name}`)}</dt>
+            <dd>
+              {row.kg === null
+                ? t("drv7_weight_not_recorded")
+                : `${row.kg.toLocaleString(localeFor(lang))} kg`}
+            </dd>
+            <dd className="receipt-weight-note">{t(`drv7_weight_${name}_desc`)}</dd>
+          </div>
+        );
+      })}
+    </dl>
+  );
+}
+
+// One tap opens the camera; the photo submits the receipt (or queues it
+// offline). The ticket weights are optional and typed before the photo.
 function DeliveryCard({ spj, say, onDone }) {
   const { t } = useLanguage();
   const [receipt, setReceipt] = useState(null);
-  const [totalWeight, setTotalWeight] = useState("");
-  const [weightSource, setWeightSource] = useState("manual");
-  const [confirmed, setConfirmed] = useState(false);
-  const [ocr, setOcr] = useState({ status: "idle", source: "" });
+  const [failed, setFailed] = useState(false);
+  const [gross, setGross] = useState("");
+  // The empty truck's weight rarely changes: the last tare used for this
+  // truck is pre-filled on this phone.
+  const tareKey = `pythia_driver_tare_${spj.truck_code}`;
+  const [tare, setTare] = useState(() => {
+    try {
+      return localStorage.getItem(tareKey) || "";
+    } catch {
+      return "";
+    }
+  });
   const [busy, setBusy] = useState(false);
-  const photoVersion = useRef(0);
   // One id per submission attempt: a retry after a dropped response replays the
   // same id, so the server returns the original receipt instead of a conflict.
   const operationId = useRef(null);
-  const kg = Number(totalWeight);
-  const validWeight = totalWeight.trim() !== "" && Number.isFinite(kg) && kg > 0;
-
-  const handlePhoto = async (file) => {
-    if (!file) return;
-    const version = ++photoVersion.current;
-    operationId.current = null;
-    setReceipt(null);
-    setTotalWeight("");
-    setWeightSource("manual");
-    setConfirmed(false);
-    setOcr({ status: "loading", source: "" });
-    let photo;
+  // R5: the gate wait starts when the driver reports arrival at the disposal
+  // gate (device time, so an offline replay does not shorten the wait).
+  const gateKey = `pythia_gate_${spj.spj_id}`;
+  const [gateAt, setGateAt] = useState(() => {
     try {
-      photo = await readPhoto(file);
-    } catch (err) {
-      if (version === photoVersion.current) {
-        setOcr({ status: "idle", source: "" });
-        say(err.message);
-      }
-      return;
-    }
-    if (version !== photoVersion.current) return;
-    setReceipt(photo);
-    try {
-      const result = await post("/ocr/timbangan", { photo_b64: photo.b64 });
-      if (version !== photoVersion.current) return;
-      if (
-        result.confidence === "high" &&
-        typeof result.weight_kg === "number" &&
-        Number.isFinite(result.weight_kg) &&
-        result.weight_kg > 0
-      ) {
-        setTotalWeight(String(result.weight_kg));
-        setWeightSource("ocr");
-        setOcr({
-          status: "suggested",
-          source: result.source || "GutsAI",
-          suggestion: result.weight_kg,
-        });
-      } else {
-        setOcr({
-          status: result.confidence === "failed" ? "unavailable" : "unreadable",
-          source: "",
-        });
-      }
+      return localStorage.getItem(gateKey);
     } catch {
-      if (version === photoVersion.current) {
-        setOcr({ status: "unavailable", source: "" });
+      return null;
+    }
+  });
+  const weights = receiptWeights(gross, tare);
+
+  const arriveAtGate = async () => {
+    const at = new Date().toISOString();
+    const path = "/safety/gate-arrival";
+    const data = { spj_id: spj.spj_id, arrived_at: at };
+    try {
+      await postQueueable(path, data);
+    } catch (err) {
+      if (!err?.network) {
+        say(err.message);
+        return;
       }
+      try {
+        await enqueueDriverOperation({ path, data, label: t("drv6_gate_arrive") });
+        say(t("drv_queued_offline"));
+      } catch (queueErr) {
+        say(
+          queueErr instanceof OutboxStorageFullError ? t("drv6_storage_full") : t("drv6_gate_failed"),
+          8000,
+        );
+        return;
+      }
+    }
+    try {
+      localStorage.setItem(gateKey, at);
+    } catch {
+      // The server (or the queue) holds the arrival; the flag is cosmetic.
+    }
+    setGateAt(at);
+  };
+
+  const markDone = () => {
+    try {
+      localStorage.setItem(`pythia_receipt_${spj.spj_id}`, "done");
+    } catch {
+      /* flag is best-effort; the server (or the queue) holds the receipt */
     }
   };
 
-  const useManual = () => {
-    photoVersion.current += 1; // ignore a response from OCR still in flight
-    operationId.current = null;
-    setTotalWeight("");
-    setWeightSource("manual");
-    setConfirmed(false);
-    setOcr({ status: "manual", source: "" });
-  };
-
-  const submit = async () => {
-    if (!receipt || !validWeight || !confirmed || busy || ocr.status === "loading") return;
+  const send = async (photo) => {
+    if (!weights.ok) return;
     setBusy(true);
-    // Kept across a failed attempt so an immediate retry is idempotent; a new
-    // photo or a weight change starts a new operation.
+    setFailed(false);
+    // Kept across a failed attempt so a retry is idempotent; a new photo or a
+    // weight change starts a new operation.
     operationId.current = operationId.current || `${spj.spj_id}-${Date.now()}`;
-    try {
-      await postQueueable(`/spj/${spj.spj_id}/receipt`, {
-        photo_name: receipt.name,
-        photo_b64: receipt.b64,
-        total_weight_kg: kg,
-        weight_source: weightSource,
-        operation_id: operationId.current,
-      });
+    const path = `/spj/${spj.spj_id}/receipt`;
+    const data = {
+      photo_name: photo.name,
+      photo_b64: photo.b64,
+      ...weights.weights,
+      operation_id: operationId.current,
+    };
+    if (data.tare_weight_kg) {
       try {
-        localStorage.setItem(`pythia_receipt_${spj.spj_id}`, "done");
+        localStorage.setItem(tareKey, String(data.tare_weight_kg));
       } catch {
-        /* flag is best-effort; receipt is already recorded server-side */
+        // Pre-fill is a convenience only.
       }
-      onDone();
+    }
+    try {
+      const body = await postQueueable(path, data);
+      markDone();
+      onDone(await recordedReceipt(spj.spj_id, body));
     } catch (err) {
       if (err?.network) {
         // #45: the receipt replays with its stable operation_id, so a
         // reconnect can never double-record the handover.
-        enqueueDriverOperation({
-          path: `/spj/${spj.spj_id}/receipt`,
-          data: {
-            photo_name: receipt.name,
-            photo_b64: receipt.b64,
-            total_weight_kg: kg,
-            weight_source: weightSource,
-            operation_id: operationId.current,
-          },
-          label: t("drv_receipt_title"),
-        });
-        window.dispatchEvent(new Event("pythia-driver-outbox-changed"));
         try {
-          localStorage.setItem(`pythia_receipt_${spj.spj_id}`, "done");
-        } catch {
-          /* best-effort */
+          await enqueueDriverOperation({ path, data, label: t("drv_receipt_title") });
+        } catch (queueErr) {
+          setFailed(true);
+          say(
+            queueErr instanceof OutboxStorageFullError ? t("drv6_storage_full") : t("drv_receipt_failed"),
+            8000,
+          );
+          return;
         }
-        onDone();
+        markDone();
+        onDone(null);
         say(t("drv_queued_offline"));
       } else {
+        setFailed(true);
         say(err.message || t("drv_receipt_failed"));
       }
     } finally {
       setBusy(false);
     }
   };
+
+  const handlePhoto = async (file) => {
+    if (!file || busy || !weights.ok) return;
+    setBusy(true);
+    let photo;
+    try {
+      photo = await readPhoto(file);
+    } catch (err) {
+      setBusy(false);
+      say(err.message);
+      return;
+    }
+    operationId.current = null; // a new photo is a new submission
+    setReceipt(photo);
+    await send(photo);
+  };
+
+  const editWeight = (setter) => (e) => {
+    setter(e.target.value);
+    operationId.current = null; // edited weights are a new submission
+  };
+
+  const cameraDisabled = busy || !weights.ok;
 
   return (
     <section className="driver-card" data-testid="delivery-card" data-spj-id={spj.spj_id}>
@@ -790,140 +1064,323 @@ function DeliveryCard({ spj, say, onDone }) {
         </h2>
       </div>
       <p className="driver-muted">{t("drv_receipt_intro").replace("{destination}", spj.destination)}</p>
-      <label className="driver-label" htmlFor="receipt-photo">
-        {t("drv_receipt_photo_label")}
-      </label>
-      <input
-        id="receipt-photo"
-        data-testid="receipt-input"
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="driver-file"
-        disabled={busy}
-        onChange={(e) => {
-          handlePhoto(e.target.files?.[0]);
-          e.target.value = ""; // permit choosing the same image again for another reading
-        }}
-      />
-      {receipt && <p className="driver-muted">{t("drv_photo_attached").replace("{name}", receipt.name)}</p>}
-      {ocr.status === "loading" && (
-        <p className="weigh-feedback" role="status">
-          {t("drv_receipt_reading")}
+      {gateAt ? (
+        <p className="driver-geotag" data-testid="gate-arrived">
+          <Flag size={16} />
+          {t("drv6_gate_arrived").replace("{time}", clockTime(gateAt) || "—")}
         </p>
+      ) : (
+        <div className="driver-actions">
+          <button
+            type="button"
+            className="driver-btn ghost"
+            data-testid="gate-arrival"
+            onClick={arriveAtGate}
+          >
+            <Flag size={18} /> {t("drv6_gate_arrive")}
+          </button>
+        </div>
       )}
-      {ocr.status === "suggested" && (
-        <p className="weigh-feedback" role="status">
-          {t("drv_receipt_suggested")
-            .replace("{source}", ocr.source)
-            .replace("{n}", ocr.suggestion)
-            .replace(
-              "{extra}",
-              weightSource === "ocr" ? t("drv_receipt_confirm_hint") : t("drv_receipt_manual_hint"),
-            )}
-        </p>
-      )}
-      {ocr.status === "unavailable" && (
-        <p className="weigh-feedback" role="status">
-          {t("drv_receipt_unavailable")}
-        </p>
-      )}
-      {ocr.status === "unreadable" && (
-        <p className="weigh-feedback" role="status">
-          {t("drv_receipt_unreadable")}
-        </p>
-      )}
-      {ocr.status === "manual" && (
-        <p className="weigh-feedback" role="status">
-          {t("drv_receipt_manual_entry")}
-        </p>
-      )}
-      {receipt && (ocr.status === "loading" || ocr.status === "suggested") && (
-        <button type="button" className="driver-btn ghost weigh-manual" onClick={useManual}>
-          {t("drv_receipt_manual_btn")}
-        </button>
-      )}
-      {receipt && ocr.status !== "loading" && (
-        <>
-          <label className="driver-label" htmlFor="receipt-weight">
-            {t("drv_receipt_weight_label")}
+      <div className="driver-row">
+        <div>
+          <label className="driver-label" htmlFor="receipt-gross">
+            {t("drv7_receipt_gross_label")}
           </label>
           <input
-            id="receipt-weight"
+            id="receipt-gross"
+            data-testid="receipt-gross"
             className="driver-input"
             type="number"
             inputMode="decimal"
             min="0"
             step="any"
-            value={totalWeight}
-            onChange={(e) => {
-              setTotalWeight(e.target.value);
-              setWeightSource("manual");
-              setConfirmed(false);
-              operationId.current = null; // edited weight is a new submission
-            }}
+            value={gross}
+            disabled={busy}
+            onChange={editWeight(setGross)}
             placeholder={t("drv_receipt_weight_placeholder")}
           />
-          <label className="weigh-confirm">
-            <input
-              type="checkbox"
-              checked={confirmed}
-              onChange={(e) => setConfirmed(e.target.checked)}
-              disabled={!validWeight}
-            />
-            <span>{t("drv_receipt_confirm")}</span>
+        </div>
+        <div>
+          <label className="driver-label" htmlFor="receipt-tare">
+            {t("drv7_receipt_tare_label")}
           </label>
-        </>
+          <input
+            id="receipt-tare"
+            data-testid="receipt-tare"
+            className="driver-input"
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="any"
+            value={tare}
+            disabled={busy}
+            onChange={editWeight(setTare)}
+            placeholder={t("drv7_receipt_tare_placeholder")}
+          />
+        </div>
+      </div>
+      <p className="driver-muted">{t("drv7_receipt_weights_hint")}</p>
+      {!weights.ok && (
+        <p className="driver-error" role="alert" data-testid="receipt-weight-error">
+          {t(`drv7_receipt_${weights.error}_invalid`)}
+        </p>
       )}
       <div className="driver-actions">
-        <button
-          type="button"
-          className="driver-btn primary"
-          onClick={submit}
-          disabled={!receipt || !validWeight || !confirmed || busy || ocr.status === "loading"}
+        <label
+          className={`driver-btn primary driver-camera${cameraDisabled ? " is-disabled" : ""}`}
+          data-testid="receipt-camera"
         >
-          <Check size={16} /> {busy ? t("drv_receipt_sending") : t("drv_receipt_send")}
-        </button>
+          <input
+            id="receipt-photo"
+            data-testid="receipt-input"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="driver-camera-input"
+            disabled={cameraDisabled}
+            onChange={(e) => {
+              handlePhoto(e.target.files?.[0]);
+              e.target.value = ""; // permit choosing the same image again
+            }}
+          />
+          <Camera size={20} /> {busy ? t("drv_receipt_sending") : t("drv7_receipt_camera")}
+        </label>
       </div>
+      {receipt && <p className="driver-muted">{t("drv_photo_attached").replace("{name}", receipt.name)}</p>}
+      <PhotoSize photo={receipt} />
+      {failed && receipt && (
+        <div className="driver-actions">
+          <button
+            type="button"
+            className="driver-btn ghost"
+            data-testid="receipt-retry"
+            onClick={() => send(receipt)}
+            disabled={cameraDisabled}
+          >
+            <Check size={18} /> {t("drv_receipt_send")}
+          </button>
+        </div>
+      )}
     </section>
   );
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
 
-export default function DriverApp() {
+// R3: the last live SPJ list per truck survives a reload and a long offline
+// shift. List items carry no route geometry (route_point_count only); the AR
+// path is read from /spj/active-path/{truck}.
+function spjCacheKey(truckCode) {
+  return `pythia_driver_spj_${truckCode}`;
+}
+
+function readSpjCache(truckCode) {
+  try {
+    const cached = JSON.parse(localStorage.getItem(spjCacheKey(truckCode)) || "null");
+    return cached && typeof cached === "object" ? cached : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSpjCache(truckCode, patch) {
+  const next = { ...(readSpjCache(truckCode) || {}), ...patch };
+  try {
+    localStorage.setItem(spjCacheKey(truckCode), JSON.stringify(next));
+  } catch {
+    // The cache is a fallback; the live list is already on screen.
+  }
+}
+
+// The last GET /api/driver/session, so a bound driver keeps their truck offline.
+const SESSION_CACHE_KEY = "pythia_driver_session";
+
+function readDriverSession() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(SESSION_CACHE_KEY) || "null");
+    return cached && typeof cached === "object" ? cached : null;
+  } catch {
+    return null;
+  }
+}
+
+function readPickedDriver() {
+  try {
+    return JSON.parse(localStorage.getItem("pythia_driver"));
+  } catch {
+    return null;
+  }
+}
+
+function localDay(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function pretripCacheKey(truckCode) {
+  return `pythia_driver_pretrip_${truckCode}`;
+}
+
+function pretripDoneLocally(truckCode) {
+  try {
+    if (localStorage.getItem(pretripCacheKey(truckCode)) === localDay()) return true;
+  } catch {
+    // Storage blocked: fall through to the queue.
+  }
+  return pretripQueuedFor(readDriverOutbox(), truckCode);
+}
+
+function rememberPretrip(truckCode) {
+  try {
+    localStorage.setItem(pretripCacheKey(truckCode), localDay());
+  } catch {
+    // Best effort.
+  }
+}
+
+function readDestinations() {
+  try {
+    const list = JSON.parse(localStorage.getItem("pythia_driver_destinations") || "[]");
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+// The installed driver app opens /driver, not the command-centre login.
+function useDriverManifest(lang) {
+  useEffect(() => {
+    const link = document.querySelector('link[rel="manifest"]');
+    if (!link) return undefined;
+    const previous = link.getAttribute("href");
+    link.setAttribute(
+      "href",
+      lang === "en" ? "/manifest.driver.webmanifest" : "/manifest.driver.id.webmanifest",
+    );
+    return () => {
+      if (previous) link.setAttribute("href", previous);
+    };
+  }, [lang]);
+}
+
+function DestinationCard({ spj, destinations }) {
   const { t } = useLanguage();
-  const [driver, setDriver] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("pythia_driver"));
-    } catch {
-      return null;
-    }
-  });
+  const facility = destinations.find(
+    (d) => d?.destination === spj.destination || d?.name === spj.destination,
+  );
+  const target = { lat: facility?.lat ?? null, lng: facility?.lng ?? null, name: spj.destination };
+  const hasCoord = Number.isFinite(Number(target.lat)) && target.lat !== null && target.lng !== null;
+  return (
+    <section className="driver-card" data-testid="destination-card">
+      <h2>
+        <Flag size={18} /> {t("drv6_dest_title").replace("{name}", spj.destination)}
+      </h2>
+      {!hasCoord && <p className="driver-muted">{t("drv6_dest_name_only")}</p>}
+      <div className="driver-actions">
+        <MapsLink target={target} name={spj.destination} testId="destination-maps" />
+      </div>
+    </section>
+  );
+}
+
+export default function DriverApp() {
+  const { t, lang } = useLanguage();
+  const [session, setSession] = useState(() => readDriverSession());
+  const [pickedDriver, setPickedDriver] = useState(() => readPickedDriver());
+  // A personal driver account is bound to its truck: no picker, no "change".
+  const boundDriver = useMemo(() => boundDriverOf(session), [session]);
+  const driver = boundDriver || pickedDriver;
   const [fleet, setFleet] = useState([]);
-  const [spjAktif, setSpjAktif] = useState(null);
-  const [history, setHistory] = useState([]);
+  const [spjAktif, setSpjAktif] = useState(() =>
+    driver ? (readSpjCache(driver.truck_code)?.aktif ?? null) : null,
+  );
+  const [history, setHistory] = useState(() =>
+    driver ? readSpjCache(driver.truck_code)?.selesai || [] : [],
+  );
   // null = today's inspection status not known yet: show neither the form nor
   // the done card, so the form never flashes up for a truck already inspected.
   const [pretripDone, setPretripDone] = useState(null);
   const [screen, setScreen] = useState("gate");
   const [toast, setToast] = useState("");
   const [online, setOnline] = useState(navigator.onLine);
+  // false, or { receipt, spjId } once the receipt is sent (receipt null when queued).
   const [doneScreen, setDoneScreen] = useState(false);
   // #45: durable outbox — queued driver mutations replay on reconnect.
-  const [queuedCount, setQueuedCount] = useState(readDriverOutbox().length);
+  const [outboxItems, setOutboxItems] = useState(() => readDriverOutbox());
+  const [rejected, setRejected] = useState(() => readRejectedOperations());
+  const [lastSync, setLastSync] = useState(() => readLastSync());
   const [flushing, setFlushing] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [destinations, setDestinations] = useState(() => readDestinations());
+  const queuedCount = outboxItems.length;
+  const safety = useDriverSafety(driver?.truck_code);
+  const blocked = safetyBlocksNewWork(safety);
+  const arEnabled = useMemo(
+    () =>
+      arCapable({
+        isSecureContext: window.isSecureContext,
+        mediaDevices: navigator.mediaDevices,
+        deviceMemory: navigator.deviceMemory,
+      }),
+    [],
+  );
+  useDriverManifest(lang);
 
-  const say = (msg, ms = 4000) => {
+  const toastTimer = useRef(null);
+  const say = useCallback((msg, ms = 4000) => {
     setToast(msg);
-    setTimeout(() => setToast(""), ms);
-  };
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(""), ms);
+  }, []);
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+  useEffect(() => {
+    let token = null;
+    try {
+      token = localStorage.getItem(FIELD_TOKEN_KEY);
+    } catch {
+      // Storage blocked: no session to ask about.
+    }
+    if (!token) return;
+    apiFetch("/driver/session", { tokenKey: FIELD_TOKEN_KEY })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((body) => {
+        const next = {
+          username: body?.username ?? null,
+          role: body?.role ?? null,
+          truck_code: body?.truck_code ?? null,
+          display_name: body?.display_name ?? null,
+          shared_account: Boolean(body?.shared_account),
+        };
+        const text = JSON.stringify(next);
+        try {
+          localStorage.setItem(SESSION_CACHE_KEY, text);
+        } catch {
+          // The cached copy only serves offline starts.
+        }
+        setSession((prev) => (JSON.stringify(prev) === text ? prev : next));
+      })
+      // Offline: the cached session (if any) stays in force.
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     apiFetch("/fleet", { tokenKey: FIELD_TOKEN_KEY })
       .then((r) => r.json())
       .then((body) => setFleet(Array.isArray(body) ? body : body.trucks || []))
       .catch(() => setOnline(false));
+    apiFetch("/spj/destinations", { tokenKey: FIELD_TOKEN_KEY })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((body) => {
+        const list = Array.isArray(body?.destinations) ? body.destinations : [];
+        setDestinations(list);
+        try {
+          localStorage.setItem("pythia_driver_destinations", JSON.stringify(list));
+        } catch {
+          // Cached copy is optional.
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const drivers = useMemo(
@@ -936,29 +1393,48 @@ export default function DriverApp() {
 
   const loadSpj = useCallback(() => {
     if (!driver) return;
-    apiFetch("/spj?status=aktif", { tokenKey: FIELD_TOKEN_KEY })
-      .then((r) => r.json())
-      .then((body) => {
-        const mine = (body.spj || []).find((s) => s.truck_code === driver.truck_code);
-        setSpjAktif(mine || null);
+    const truck = driver.truck_code;
+    const cached = () => readSpjCache(truck) || {};
+    // The server filters by truck (and always does for a bound driver); the
+    // client-side match below stays as a guard.
+    apiFetch(spjListPath("aktif", truck), { tokenKey: FIELD_TOKEN_KEY })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        const body = await r.json();
+        const mine = (body.spj || []).find((s) => s.truck_code === truck) || null;
+        setSpjAktif(mine);
+        if (r.headers.get("X-Pythia-Stale") === "1") {
+          setOnline(false);
+          return;
+        }
         setOnline(true);
+        markDriverSynced();
+        setLastSync(readLastSync());
+        writeSpjCache(truck, { aktif: mine });
       })
-      .catch(() => setOnline(false));
-    apiFetch("/spj?status=selesai", { tokenKey: FIELD_TOKEN_KEY })
-      .then((r) => r.json())
-      // The API orders completed SPJs newest first; the pending-receipt task is
-      // chosen from that order and the server-side receipt field, not from
-      // localStorage.
-      .then((body) =>
-        setHistory(
-          (body.spj || [])
-            .filter((s) => s.truck_code === driver.truck_code)
-            // Newest first: the list arrives in creation order, and the newest
-            // completed order is the one the driver is working on now.
-            .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))),
-        ),
-      )
-      .catch(() => {});
+      .catch(() => {
+        // Offline (or no service-worker copy): keep what is on screen, or the
+        // last live copy saved on this phone.
+        setOnline(false);
+        setSpjAktif((prev) => prev || cached().aktif || null);
+      });
+    apiFetch(spjListPath("selesai", truck, 5), { tokenKey: FIELD_TOKEN_KEY })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        const body = await r.json();
+        // Newest first: the newest completed order is the one the driver is
+        // working on now; receipt state comes from the server.
+        const mine = (body.spj || [])
+          .filter((s) => s.truck_code === truck)
+          .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+        setHistory(mine);
+        if (r.headers.get("X-Pythia-Stale") !== "1") {
+          writeSpjCache(truck, { selesai: mine.slice(0, 5) });
+        }
+      })
+      .catch(() => {
+        setHistory((prev) => (prev.length > 0 ? prev : cached().selesai || []));
+      });
   }, [driver]);
 
   useEffect(() => {
@@ -969,12 +1445,17 @@ export default function DriverApp() {
 
   useEffect(() => {
     if (!driver) return;
-    setPretripDone(null);
-    apiFetch(`/pretrip/today/${driver.truck_code}`, { tokenKey: FIELD_TOKEN_KEY })
-      .then((r) => r.json())
-      .then((body) => setPretripDone(Boolean(body.done)))
-      // Offline or unreachable: show the form; a submission queues in the outbox.
-      .catch(() => setPretripDone(false));
+    const truck = driver.truck_code;
+    setPretripDone(pretripDoneLocally(truck) ? true : null);
+    apiFetch(`/pretrip/today/${truck}`, { tokenKey: FIELD_TOKEN_KEY })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((body) => {
+        if (body.done) rememberPretrip(truck);
+        setPretripDone(Boolean(body.done) || pretripDoneLocally(truck));
+      })
+      // Offline or unreachable: an inspection done or queued on this phone
+      // today counts; otherwise show the form (a submission queues).
+      .catch(() => setPretripDone(pretripDoneLocally(truck)));
   }, [driver]);
 
   useEffect(() => {
@@ -988,62 +1469,153 @@ export default function DriverApp() {
     };
   }, []);
 
-  // #45: replay the durable queue whenever connectivity returns, a new
-  // operation is queued, or the periodic poll notices work to do.
+  // Item 9: the backend restarted and forgot this session.
+  useEffect(() => {
+    const onExpired = () => setSessionExpired(true);
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, []);
+
+  const signInAgain = () => {
+    try {
+      localStorage.removeItem(FIELD_TOKEN_KEY);
+      localStorage.removeItem(FIELD_ROLE_KEY);
+      localStorage.removeItem(SESSION_CACHE_KEY);
+    } catch {
+      // Storage blocked: the gate still validates the token on load.
+    }
+    window.location.reload();
+  };
+
+  // #45: replay the durable queue when connectivity returns, a new operation
+  // is queued, or the periodic retry fires. Never in a tight loop.
   const flushQueue = useCallback(async () => {
     if (readDriverOutbox().length === 0) {
-      setQueuedCount(0);
+      setOutboxItems([]);
       return;
     }
     setFlushing(true);
     try {
-      const { flushed, remaining } = await flushDriverOutbox();
-      setQueuedCount(remaining);
-      if (flushed > 0) {
-        say(t("drv_synced_n").replace("{n}", flushed));
-        loadSpj();
+      const result = await flushDriverOutbox();
+      setOutboxItems(readDriverOutbox());
+      setRejected(readRejectedOperations());
+      setLastSync(readLastSync());
+      if (result.unauthorized) announceSessionExpired();
+      if (result.rejected.length > 0) {
+        say(t("drv6_rejected_toast").replace("{n}", result.rejected.length), 8000);
+      } else if (result.flushed > 0) {
+        say(t("drv_synced_n").replace("{n}", result.flushed));
       }
+      if (result.flushed > 0 || result.rejected.length > 0) loadSpj();
     } finally {
       setFlushing(false);
     }
   }, [loadSpj, say, t]);
 
   useEffect(() => {
-    const onChanged = () => setQueuedCount(readDriverOutbox().length);
-    window.addEventListener("pythia-driver-outbox-changed", onChanged);
-    return () => window.removeEventListener("pythia-driver-outbox-changed", onChanged);
+    const onChanged = () => {
+      setOutboxItems(readDriverOutbox());
+      setRejected(readRejectedOperations());
+    };
+    window.addEventListener(OUTBOX_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(OUTBOX_CHANGED_EVENT, onChanged);
   }, []);
 
+  const flushRef = useRef(flushQueue);
   useEffect(() => {
-    if (queuedCount > 0 && !flushing) flushQueue();
-  }, [queuedCount, flushing, flushQueue]);
+    flushRef.current = flushQueue;
+  }, [flushQueue]);
+  const canFlush = queuedCount > 0 && !sessionExpired;
 
-  // #45: periodic retry — connectivity may return without an `online` event
-  // (e.g. a page reload right after the network came back).
+  // A newly queued item (or the queue found on load) is tried once at once.
   useEffect(() => {
-    if (queuedCount === 0) return undefined;
-    const id = setInterval(() => {
-      if (!flushing) flushQueue();
-    }, 5000);
-    return () => clearInterval(id);
-  }, [queuedCount, flushing, flushQueue]);
+    if (canFlush) flushRef.current();
+  }, [canFlush, queuedCount]);
+
+  useEffect(() => {
+    if (!canFlush) return undefined;
+    const onOnline = () => flushRef.current();
+    window.addEventListener("online", onOnline);
+    // Connectivity may return without an `online` event.
+    const id = setInterval(() => flushRef.current(), 10000);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      clearInterval(id);
+    };
+  }, [canFlush]);
 
   useEffect(() => {
     setScreen(driver ? "home" : "gate");
   }, [driver]);
 
+  // A new truck (picked, switched, or bound by the session on a personal
+  // account's first start) starts from that truck's saved lists.
+  const shownTruck = useRef(driver?.truck_code);
+  useEffect(() => {
+    const truck = driver?.truck_code;
+    if (shownTruck.current === truck) return;
+    shownTruck.current = truck;
+    const cached = (truck && readSpjCache(truck)) || {};
+    setSpjAktif(cached.aktif ?? null);
+    setHistory(cached.selesai || []);
+    setDoneScreen(false);
+  }, [driver]);
+
+  // A receipt queued offline: once the outbox no longer holds it, read the SPJ
+  // once and show the stored weights in place of the pending note.
+  const queuedReceiptSpj = doneScreen && !doneScreen.receipt ? doneScreen.spjId : null;
+  const receiptStillQueued = Boolean(
+    queuedReceiptSpj && outboxItems.some((item) => item.path === `/spj/${queuedReceiptSpj}/receipt`),
+  );
+  useEffect(() => {
+    if (!queuedReceiptSpj || receiptStillQueued) return undefined;
+    let cancelled = false;
+    recordedReceipt(queuedReceiptSpj, null).then((receipt) => {
+      if (cancelled || !receipt) return;
+      setDoneScreen((prev) => (prev && prev.spjId === queuedReceiptSpj ? { ...prev, receipt } : prev));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [queuedReceiptSpj, receiptStillQueued]);
+
   const pickDriver = (d) => {
-    localStorage.setItem("pythia_driver", JSON.stringify({ driver_name: d.name, truck_code: d.code }));
-    setDriver({ driver_name: d.name, truck_code: d.code });
+    const next = { driver_name: d.name, truck_code: d.code };
+    try {
+      localStorage.setItem("pythia_driver", JSON.stringify(next));
+    } catch {
+      // The choice still applies for this session.
+    }
+    setPickedDriver(next);
   };
 
   const switchDriver = () => {
-    localStorage.removeItem("pythia_driver");
-    setDriver(null);
-    setSpjAktif(null);
-    setHistory([]);
-    setDoneScreen(false);
+    try {
+      localStorage.removeItem("pythia_driver");
+    } catch {
+      // Nothing stored.
+    }
+    setPickedDriver(null);
   };
+
+  const dismissRejected = (opId) => {
+    dismissRejectedOperation(opId);
+    setRejected(readRejectedOperations());
+  };
+
+  const sessionCard = sessionExpired && (
+    <section className="driver-card driver-session" data-testid="driver-session-expired" role="alert">
+      <h2>
+        <LogIn size={18} /> {t("drv6_session_expired")}
+      </h2>
+      <p className="driver-muted">{t("drv6_session_expired_desc")}</p>
+      <div className="driver-actions">
+        <button type="button" className="driver-btn primary" onClick={signInAgain}>
+          <LogIn size={18} /> {t("drv6_sign_in_again")}
+        </button>
+      </div>
+    </section>
+  );
 
   // ── Gate ──
   if (screen === "gate" || !driver) {
@@ -1065,10 +1637,18 @@ export default function DriverApp() {
             </span>
           )}
         </header>
+        {sessionCard}
         <section className="driver-card">
-          <h2>
-            <User size={18} /> {t("drv_gate_title")}
-          </h2>
+          <div className="driver-card-head">
+            <h2>
+              <User size={18} /> {t("drv_gate_title")}
+            </h2>
+            {/* H3: the roster is the simulated fleet, not real personnel. */}
+            <span className="driver-badge driver-provenance" data-testid="driver-roster-sim">
+              {t("drv6_sim_badge")}
+            </span>
+          </div>
+          <p className="driver-muted">{t("drv6_sim_roster")}</p>
           <ul className="driver-pick-list">
             {drivers.map((d) => (
               <li key={d.code} data-testid={`pick-${d.code}`}>
@@ -1089,9 +1669,10 @@ export default function DriverApp() {
     );
   }
 
-  const stops = spjAktif?.stops || [];
+  const spjView = withQueuedStops(spjAktif, queuedStopKeys(outboxItems));
+  const stops = spjView?.stops || [];
   const pendingIndex = stops.findIndex((s) => s.status !== "completed");
-  const allStopsDone = spjAktif && pendingIndex === -1 && stops.length > 0;
+  const allStopsDone = spjView && pendingIndex === -1 && stops.length > 0;
   // Newest completed SPJ still missing its receipt: `history` arrives newest
   // first, and receipt state comes from the server, so two browsers agree.
   const pendingReceipt = spjAktif ? null : history.find((s) => !s.receipt) || null;
@@ -1119,26 +1700,50 @@ export default function DriverApp() {
               <WifiOff size={14} /> {t("drv_offline")}
             </span>
           )}
-          <button type="button" className="driver-link" onClick={switchDriver}>
-            {t("drv_switch")}
-          </button>
+          {!driver.bound && (
+            <button type="button" className="driver-link" onClick={switchDriver}>
+              {t("drv_switch")}
+            </button>
+          )}
         </span>
       </header>
 
+      <SyncStatus lastSync={lastSync} pending={queuedCount} flushing={flushing} online={online} />
+      {sessionCard}
+      <SafetyBanner safety={safety} />
+
       <section className="driver-card driver-identity">
         <p className="driver-kicker">{t("drv_kicker")}</p>
-        <h1>{driver.driver_name}</h1>
+        <h1>
+          {driver.driver_name}{" "}
+          {/* H3: a picked name is from the simulated roster; a bound account names itself. */}
+          {!driver.bound && (
+            <span className="driver-badge driver-provenance" data-testid="driver-identity-sim">
+              {t("drv6_sim_badge")}
+            </span>
+          )}
+        </h1>
         <p className="driver-muted">
           {driver.truck_code}
           {spjAktif ? ` — ${spjAktif.spj_number} → ${spjAktif.destination}` : t("drv_no_spj")}
         </p>
       </section>
 
+      <NeedsActionList items={rejected} onDismiss={dismissRejected} />
+      <InstructionCard truckCode={driver.truck_code} blocked={blocked} outboxItems={outboxItems} say={say} />
+
       {doneScreen ? (
         <section className="driver-card driver-done" data-testid="done-screen">
           <ShieldCheck size={40} />
           <h1>{t("drv_done_title")}</h1>
           <p className="driver-muted">{t("drv_done_desc")}</p>
+          {doneScreen.receipt ? (
+            <ReceiptWeights receipt={doneScreen.receipt} />
+          ) : (
+            <p className="driver-muted" data-testid="receipt-weights-pending">
+              {t("drv7_receipt_weights_pending")}
+            </p>
+          )}
           <button type="button" className="driver-btn ghost" onClick={() => setDoneScreen(false)}>
             <ArrowLeft size={16} /> {t("drv_done_back")}
           </button>
@@ -1149,21 +1754,24 @@ export default function DriverApp() {
             driver={driver}
             done={pretripDone}
             onDone={() => {
+              rememberPretrip(driver.truck_code);
               setPretripDone(true);
               say(t("drv_pretrip_saved"));
             }}
             say={say}
           />
 
-          {spjAktif &&
+          {spjView &&
             stops.map((stop, i) => (
               <StopCard
-                key={i}
-                spj={spjAktif}
+                key={`${spjView.spj_id}-${i}`}
+                spj={spjView}
                 stop={stop}
                 index={i}
                 current={i === pendingIndex}
                 locked={pendingIndex !== -1 && i > pendingIndex}
+                blocked={blocked}
+                arEnabled={arEnabled}
                 onCompleted={() => {
                   loadSpj();
                   say(t("drv_stop_done_toast"));
@@ -1172,12 +1780,14 @@ export default function DriverApp() {
               />
             ))}
 
+          {spjView && <DestinationCard spj={spjView} destinations={destinations} />}
+
           {allStopsDone && (
             <DeliveryCard
-              spj={spjAktif}
+              spj={spjView}
               say={say}
-              onDone={() => {
-                setDoneScreen(true);
+              onDone={(receipt) => {
+                setDoneScreen({ receipt, spjId: spjView.spj_id });
                 loadSpj();
               }}
             />
@@ -1187,8 +1797,8 @@ export default function DriverApp() {
             <DeliveryCard
               spj={pendingReceipt}
               say={say}
-              onDone={() => {
-                setDoneScreen(true);
+              onDone={(receipt) => {
+                setDoneScreen({ receipt, spjId: pendingReceipt.spj_id });
                 loadSpj();
               }}
             />

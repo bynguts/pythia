@@ -10,8 +10,22 @@
 // fetch event via event.waitUntil(), so the worker cannot terminate before
 // cache.put finishes. A failed cache write is caught and logged — it must
 // never fail the live response.
-const CACHE_NAME = "pythia-__BUILD_ID__";
-const APP_SHELL = ["/", "/field", "/manifest.webmanifest", "/pythia-icon.svg"];
+// "v2" bumps the name by hand as well, because the pre-cached shell below changed.
+const CACHE_NAME = "pythia-v2-__BUILD_ID__";
+// The driver PWA installs from /driver with its own manifests (EN/ID); their
+// PNG icons are pre-cached so an offline launch keeps its home-screen icon.
+const APP_SHELL = [
+  "/",
+  "/field",
+  "/driver",
+  "/manifest.webmanifest",
+  "/manifest.driver.webmanifest",
+  "/manifest.driver.id.webmanifest",
+  "/pythia-icon.svg",
+  "/pythia-icon-192.png",
+  "/pythia-icon-512.png",
+  "/pythia-icon-maskable-512.png",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));

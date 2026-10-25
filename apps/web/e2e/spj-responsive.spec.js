@@ -9,8 +9,10 @@ const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 async function signIn(page, lang = "id", role = "dispatcher") {
   await page.goto("/");
   const response = await page.request.post(`${API}/auth/login`, {
-    data: { username: role, password: role === "admin" ? "admin-demo-pass" : "dispatcher-demo-pass" },
+    data: { username: role, password: `${role}-demo-pass` },
   });
+  // SPJ lists need a token: a failed login must fail here, not as an empty table.
+  expect(response.ok()).toBeTruthy();
   const principal = await response.json();
   await page.evaluate(
     ({ token, role, lang }) => {
@@ -45,13 +47,27 @@ let page_token = Promise.resolve("");
 test("SPJ expansion is a named keyboard-operable button and the panel stays contained at 390px", async ({
   page,
 }) => {
-  page_token = signIn(page, "id", "admin").then(() =>
+  page_token = signIn(page, "id", "administrator").then(() =>
     page.evaluate(() => localStorage.getItem("pythia_token")),
   );
+  const token = await page_token;
+  // Seed one draft so the list is never empty, whatever ran before.
+  const created = await page.request.post(`${API}/spj`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: {
+      driver_name: "Pengemudi Sim",
+      truck_code: "T-255",
+      destination: "TPST Bantargebang",
+      priority: "normal",
+      note: "e2e spj responsive",
+    },
+  });
+  expect(created.status()).toBe(201);
+  createdIds = [(await created.json()).spj_id];
   await page.setViewportSize({ width: 390, height: 844 });
   await openFleet(page);
 
-  // Wait for the SPJ list to load at least one row (admin seeds demo SPJs).
+  // Wait for the SPJ list to load at least one row.
   const row = page.locator(".spj-table tbody tr.spj-row").first();
   await expect(row).toBeVisible({ timeout: 20000 });
 
@@ -108,7 +124,8 @@ test("SPJ create form works at 390px without overflow", async ({ page }) => {
   // The new order appears in the list (draft state).
   await expect(page.locator(".spj-table tbody tr.spj-row").first()).toBeVisible({ timeout: 20000 });
   createdIds = await page.evaluate(async (api) => {
-    const res = await fetch(`${api}/spj`);
+    const token = localStorage.getItem("pythia_token");
+    const res = await fetch(`${api}/spj`, { headers: { Authorization: `Bearer ${token}` } });
     const body = await res.json();
     return (body.spj || []).filter((s) => ["draft", "aktif"].includes(s.status)).map((s) => s.spj_id);
   }, API);

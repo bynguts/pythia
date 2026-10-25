@@ -85,7 +85,7 @@ test("dispatcher app transitions never animate layout properties", async ({ page
 test("driver app progress bar animates without layout properties", async ({ page, context }) => {
   // Driver surfaces the pretrip progress bar only with an active dispatch.
   const headers = await signIn(page);
-  const resp = await page.request.get(`${API}/spj?status=aktif`);
+  const resp = await page.request.get(`${API}/spj?status=aktif`, { headers });
   for (const s of (await resp.json()).spj || []) {
     if (s.truck_code === TEST_TRUCK) {
       await page.request.post(`${API}/spj/${s.spj_id}/cancel`, { headers });

@@ -74,19 +74,19 @@ export function LoginPage({ onLogin, initialUsername = "", notice = "", fieldSes
             </h1>
             <p>{t("login_story_copy")}</p>
           </div>
-          <div className="login-proof-list">
+          <div className="login-proof-list" data-testid="login-proof-list">
             <div>
               <CheckCircle2 size={17} />
               <span>
-                <strong>{t("login_proof1_title")}</strong>
-                <small>{t("login_proof1_sub")}</small>
+                <strong>{t("hon_login_proof1_title")}</strong>
+                <small>{t("hon_login_proof1_sub")}</small>
               </span>
             </div>
             <div>
               <CheckCircle2 size={17} />
               <span>
-                <strong>{t("login_proof2_title")}</strong>
-                <small>{t("login_proof2_sub")}</small>
+                <strong>{t("hon_login_proof2_title")}</strong>
+                <small>{t("hon_login_proof2_sub")}</small>
               </span>
             </div>
             <div>
@@ -98,7 +98,7 @@ export function LoginPage({ onLogin, initialUsername = "", notice = "", fieldSes
             </div>
           </div>
           <div className="login-story-footer">
-            <Building2 size={16} /> {t("login_story_footer")}
+            <Building2 size={16} /> {t("hon_login_footer")}
           </div>
         </aside>
 

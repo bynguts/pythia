@@ -44,6 +44,7 @@ import {
   haversineMeters,
   headingFromOrientation,
   initialBearing,
+  legFollowsRoad,
   legToStop,
   pushHeadingSample,
   rainNoGo,
@@ -98,6 +99,7 @@ const ROUTE_REASON_KEYS = {
   none: "drv_ar_route_why_none",
   off: "drv_ar_route_why_off",
   loading: "drv_ar_route_why_loading",
+  demo: "ar3_route_why_demo",
 };
 
 function turnText(t, angle) {
@@ -192,8 +194,15 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
   const truckCode = spj?.truck_code || "";
   // Only a road-resolved plan is worth following; a legacy or straight-line
   // fallback SPJ keeps the straight bearing, and the first stop has no
-  // planned leg because the route starts there.
-  const routeEligible = hasTarget && index > 0 && spj?.route_source === "LIVE_EXTERNAL" && Boolean(truckCode);
+  // planned leg because the route starts there. A DEMO SPJ is stored
+  // FALLBACK_DEGRADED with road geometry on every leg that did resolve
+  // (stop 1 → a DEMO stop near it), so its legs are checked one by one.
+  const liveRoute = spj?.route_source === "LIVE_EXTERNAL";
+  const demoRoute =
+    spj?.route_source === "FALLBACK_DEGRADED" &&
+    Array.isArray(spj?.stops) &&
+    spj.stops.some((s) => s?.location_type === "DEMO");
+  const routeEligible = hasTarget && index > 0 && (liveRoute || demoRoute) && Boolean(truckCode);
 
   useEffect(() => {
     if (!routeEligible) return undefined;
@@ -403,17 +412,19 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
   }, []);
 
   const stops = spj?.stops;
-  const leg = useMemo(
-    () => (activePath && activePath.length >= 2 ? legToStop(activePath, stops, index) : null),
-    [activePath, stops, index],
-  );
+  const leg = useMemo(() => {
+    const found = activePath && activePath.length >= 2 ? legToStop(activePath, stops, index) : null;
+    // A DEMO SPJ leg that is only the bare stop-to-stop segment stays a straight line.
+    return found && (liveRoute || legFollowsRoad(found)) ? found : null;
+  }, [activePath, stops, index, liveRoute]);
   // Straight-line distance decides arrival and goes on the evidence stamp.
   const distance = fix && target ? haversineMeters(fix, target) : null;
   const route = leg && fix && target ? routeTarget(leg, fix, target) : null;
   let routeReason = null;
   if (!route) {
     if (index === 0) routeReason = "first";
-    else if (spj?.route_source !== "LIVE_EXTERNAL") routeReason = "geometry";
+    else if (!liveRoute && !demoRoute) routeReason = "geometry";
+    else if (demoRoute && truckCode && activePath !== null && !leg) routeReason = "demo";
     else if (!truckCode || (activePath !== null && !leg)) routeReason = "none";
     else if (activePath === null) routeReason = "loading";
     else routeReason = "off";
@@ -847,7 +858,7 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
                 onClick={startWorld}
                 disabled={worldFast}
               >
-                <Navigation size={16} aria-hidden="true" /> {t("ar_world_open")}
+                <Navigation size={16} aria-hidden="true" /> {t("ar3_open")}
               </button>
             )}
             {spotter ? (
@@ -943,6 +954,9 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
                 heading={compassLive ? heading : null}
                 leg={leg}
                 target={target}
+                stopName={stop.name}
+                distance={shownDistance}
+                arrived={arrived}
                 routeMode={route ? "route" : "straight"}
                 routeReason={route ? "" : t(ROUTE_REASON_KEYS[routeReason]).replace("{n}", OFF_ROUTE_M)}
                 onExit={endWorld}

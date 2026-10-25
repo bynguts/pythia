@@ -4,7 +4,7 @@ const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 const TEST_TRUCK = "T-047";
 
 async function cancelLeftover(headers) {
-  const res = await fetch(`${API}/spj?status=aktif`, headers);
+  const res = await fetch(`${API}/spj?status=aktif`, { headers });
   const resp = await res.json();
   for (const s of resp.spj || []) {
     if (s.truck_code === TEST_TRUCK) {
@@ -49,7 +49,7 @@ test("driver pretrip, stop and receipt surfaces localize end to end", async ({ p
   const headers = { Authorization: `Bearer ${principal.token}` };
   await cancelLeftover(headers);
 
-  const fleet = await (await fetch(`${API}/fleet`, headers)).json();
+  const fleet = await (await fetch(`${API}/fleet`, { headers })).json();
   const trucks = Array.isArray(fleet) ? fleet : fleet.trucks;
   const truck = trucks.find((t) => t.truck_code === TEST_TRUCK);
   const create = await fetch(`${API}/spj`, {
