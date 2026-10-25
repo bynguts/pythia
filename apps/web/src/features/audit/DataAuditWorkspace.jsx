@@ -10,7 +10,7 @@ const COPY = {
     error: "Data audit tidak dapat dimuat. Periksa koneksi lalu coba lagi.",
     retry: "Coba lagi",
     kicker: "Transparansi keputusan",
-    title: "Audit data & model",
+    title: "Sumber data & model",
     description:
       "Periksa asal, tahun data, keterbatasan, dan kelayakan data yang digunakan dalam keputusan Pythia.",
     datasets: "Dataset terdaftar",
@@ -118,7 +118,7 @@ const COPY = {
     error: "Audit data could not be loaded. Check your connection and try again.",
     retry: "Try again",
     kicker: "Decision transparency",
-    title: "Data & model audit",
+    title: "Data sources & model",
     description:
       "Review the origin, data year, limitations, and suitability of data used in Pythia decisions.",
     datasets: "Registered datasets",
@@ -260,6 +260,8 @@ function sourceNote(note, lang, copy) {
   return LIMITATIONS_ID[note] || `${copy.originalNote}: ${note}`;
 }
 
+// wave9 settings: rendered as the "Sumber data & model" section of Settings (?tab=data),
+// condensed: the summary strip stays open, the model card and the registry are collapsed.
 export function DataAuditWorkspace() {
   const { lang, t } = useLanguage();
   const copy = COPY[lang] || COPY.id;
@@ -352,7 +354,7 @@ export function DataAuditWorkspace() {
           <span className="workspace-kicker">
             <ShieldCheck size={14} /> {copy.kicker}
           </span>
-          <h1>{copy.title}</h1>
+          <h2>{copy.title}</h2>
           <p>{copy.description}</p>
         </div>
       </header>
@@ -391,164 +393,170 @@ export function DataAuditWorkspace() {
         </div>
       </div>
 
-      <ModelCard suitability={suitability} resolutionLabel={resolutionLabel} />
+      <details className="settings-disclosure" data-testid="model-card-disclosure">
+        <summary>{t("set_data_model_card")}</summary>
+        <ModelCard suitability={suitability} resolutionLabel={resolutionLabel} />
+      </details>
 
-      <div className="audit-layout">
-        <section className="audit-registry-surface">
-          <div className="section-intro compact">
-            <div>
-              <span className="surface-kicker">{copy.sourceRegistry}</span>
-              <h2>{copy.provenance}</h2>
-            </div>
-            <p>{copy.datasetCount(records.length)}</p>
-          </div>
-          <div className="table-wrap">
-            <table className="audit-table" aria-label={copy.sourceRegistry}>
-              <thead>
-                <tr>
-                  <th>{copy.dataset}</th>
-                  <th>{copy.status}</th>
-                  <th>{copy.rows}</th>
-                  <th>{copy.granularity}</th>
-                  <th>{copy.classification}</th>
-                  <th>{copy.source}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {records.length === 0 && (
-                  <tr>
-                    <td colSpan={6}>{copy.emptyRegistry}</td>
-                  </tr>
-                )}
-                {records.map((record) => (
-                  <tr key={record.name}>
-                    <td>
-                      <strong>{record.name}</strong>
-                      <small>{sourceNote(record.limitations, lang, copy)}</small>
-                    </td>
-                    <td>
-                      <span
-                        className={`freshness-badge ${Object.hasOwn(copy.freshness, record.freshness) ? record.freshness : "unknown"}`}
-                      >
-                        {copy.freshness[record.freshness] || copy.freshness.unknown}
-                      </span>
-                    </td>
-                    <td>{number(record.row_count)}</td>
-                    <td>
-                      <code>{copy.granularities[record.granularity] || copy.unmapped}</code>
-                    </td>
-                    <td>
-                      <span
-                        className={`classification-badge ${Object.hasOwn(copy.classes, record.classification) ? record.classification : "unknown"}`}
-                      >
-                        {copy.classes[record.classification] || copy.freshness.unknown}
-                      </span>
-                    </td>
-                    <td>
-                      {String(record.source_url || "").startsWith("https://") ? (
-                        <a
-                          href={record.source_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          aria-label={copy.openSource(record.name)}
-                        >
-                          <ExternalLink size={15} />
-                        </a>
-                      ) : (
-                        <span>{copy.internal}</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <aside className="audit-evidence-rail">
-          <section data-testid="scentinel-evidence-panel">
-            <span className="surface-kicker">{copy.scentinel.kicker}</span>
-            <h2>{copy.scentinel.title}</h2>
-            {scentinel.length === 0 && <p>{copy.scentinel.empty}</p>}
-            {scentinel.map((ev) => (
-              <div key={ev.run_id} className="scentinel-run">
-                <div className="scentinel-run-head">
-                  <strong>{ev.run_id}</strong>
-                  <span
-                    className="classification-badge calibrated_synthetic"
-                    data-testid="scentinel-evidence-class"
-                  >
-                    {copy.scentinel.evidenceClass}
-                  </span>
-                </div>
-                <small>
-                  {ev.truck_code ? `${ev.truck_code} · ` : ""}
-                  {ev.scenario} · {ev.gas_set.join(", ")}
-                </small>
-                <ul className="scentinel-gates" data-testid={`scentinel-gates-${ev.run_id}`}>
-                  {Object.entries(ev.quality_gates || {}).map(([gate, ok]) => (
-                    <li key={gate} className={ok ? "good" : "limited"}>
-                      {copy.scentinel.gates[gate] || gate}
-                      {ok ? " ✓" : " ✗"}
-                    </li>
-                  ))}
-                </ul>
-                <small className="audit-source">
-                  {copy.scentinel.provenance}: {ev.source_repository}@{ev.source_version} ·{" "}
-                  {copy.scentinel.digest}: <code>{ev.input_digest}</code> · {copy.scentinel.rows}:{" "}
-                  {number(ev.sensor_csv_rows)}
-                </small>
+      <details className="settings-disclosure" data-testid="source-registry-disclosure">
+        <summary>{t("set_data_registry")}</summary>
+        <div className="audit-layout">
+          <section className="audit-registry-surface">
+            <div className="section-intro compact">
+              <div>
+                <span className="surface-kicker">{copy.sourceRegistry}</span>
+                <h2>{copy.provenance}</h2>
               </div>
-            ))}
-            <p className="model-honesty-note">
-              <strong>{copy.scentinel.boundaryTitle}</strong>
-              {copy.scentinel.boundary}
-            </p>
+              <p>{copy.datasetCount(records.length)}</p>
+            </div>
+            <div className="table-wrap">
+              <table className="audit-table" aria-label={copy.sourceRegistry}>
+                <thead>
+                  <tr>
+                    <th>{copy.dataset}</th>
+                    <th>{copy.status}</th>
+                    <th>{copy.rows}</th>
+                    <th>{copy.granularity}</th>
+                    <th>{copy.classification}</th>
+                    <th>{copy.source}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {records.length === 0 && (
+                    <tr>
+                      <td colSpan={6}>{copy.emptyRegistry}</td>
+                    </tr>
+                  )}
+                  {records.map((record) => (
+                    <tr key={record.name}>
+                      <td>
+                        <strong>{record.name}</strong>
+                        <small>{sourceNote(record.limitations, lang, copy)}</small>
+                      </td>
+                      <td>
+                        <span
+                          className={`freshness-badge ${Object.hasOwn(copy.freshness, record.freshness) ? record.freshness : "unknown"}`}
+                        >
+                          {copy.freshness[record.freshness] || copy.freshness.unknown}
+                        </span>
+                      </td>
+                      <td>{number(record.row_count)}</td>
+                      <td>
+                        <code>{copy.granularities[record.granularity] || copy.unmapped}</code>
+                      </td>
+                      <td>
+                        <span
+                          className={`classification-badge ${Object.hasOwn(copy.classes, record.classification) ? record.classification : "unknown"}`}
+                        >
+                          {copy.classes[record.classification] || copy.freshness.unknown}
+                        </span>
+                      </td>
+                      <td>
+                        {String(record.source_url || "").startsWith("https://") ? (
+                          <a
+                            href={record.source_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={copy.openSource(record.name)}
+                          >
+                            <ExternalLink size={15} />
+                          </a>
+                        ) : (
+                          <span>{copy.internal}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </section>
 
-          <section>
-            <span className="surface-kicker">{copy.modelSuitability}</span>
-            <h2>{copy.supportedResolution}</h2>
-            <div className="suitability-list">
-              {Object.keys(resolutions).length === 0 && <p>{copy.emptyResolutions}</p>}
-              {Object.entries(resolutions).map(([resolution, status]) => (
-                <div key={resolution}>
-                  <code>{resolutionLabel(resolution)}</code>
-                  <span className={status === "backtested_real" ? "good" : "limited"}>
-                    {copy.suitability[status] || t(`audit_suit_${status}`)}
-                  </span>
+          <aside className="audit-evidence-rail">
+            <section data-testid="scentinel-evidence-panel">
+              <span className="surface-kicker">{copy.scentinel.kicker}</span>
+              <h2>{copy.scentinel.title}</h2>
+              {scentinel.length === 0 && <p>{copy.scentinel.empty}</p>}
+              {scentinel.map((ev) => (
+                <div key={ev.run_id} className="scentinel-run">
+                  <div className="scentinel-run-head">
+                    <strong>{ev.run_id}</strong>
+                    <span
+                      className="classification-badge calibrated_synthetic"
+                      data-testid="scentinel-evidence-class"
+                    >
+                      {copy.scentinel.evidenceClass}
+                    </span>
+                  </div>
+                  <small>
+                    {ev.truck_code ? `${ev.truck_code} · ` : ""}
+                    {ev.scenario} · {ev.gas_set.join(", ")}
+                  </small>
+                  <ul className="scentinel-gates" data-testid={`scentinel-gates-${ev.run_id}`}>
+                    {Object.entries(ev.quality_gates || {}).map(([gate, ok]) => (
+                      <li key={gate} className={ok ? "good" : "limited"}>
+                        {copy.scentinel.gates[gate] || gate}
+                        {ok ? " ✓" : " ✗"}
+                      </li>
+                    ))}
+                  </ul>
+                  <small className="audit-source">
+                    {copy.scentinel.provenance}: {ev.source_repository}@{ev.source_version} ·{" "}
+                    {copy.scentinel.digest}: <code>{ev.input_digest}</code> · {copy.scentinel.rows}:{" "}
+                    {number(ev.sensor_csv_rows)}
+                  </small>
                 </div>
               ))}
-            </div>
-            <p className="model-honesty-note">
-              <strong>{copy.modelNote}</strong>
-              {sourceNote(suitability.note, lang, copy)}
-            </p>
-          </section>
+              <p className="model-honesty-note">
+                <strong>{copy.scentinel.boundaryTitle}</strong>
+                {copy.scentinel.boundary}
+              </p>
+            </section>
 
-          <section>
-            <span className="surface-kicker">{copy.fleetComposition}</span>
-            <h2>{fleet.source === BACKEND_FLEET_SOURCE ? copy.vehicleCensus : copy.fleetComposition}</h2>
-            <div className="fleet-composition-list">
-              {Object.keys(fleetTypes).length === 0 && <p>{copy.emptyFleet}</p>}
-              {Object.entries(fleetTypes).map(([type, count]) => (
-                <div key={type}>
-                  <span>{copy.vehicleTypes[type] || type}</span>
-                  <strong>{number(count)}</strong>
-                </div>
-              ))}
-            </div>
-            <small className="audit-source">
-              {copy.sourcePrefix}:{" "}
-              {fleet.source === BACKEND_FLEET_SOURCE
-                ? copy.fleetSource
-                : fleet.source
-                  ? `${copy.originalNote}: ${fleet.source}`
-                  : "—"}
-            </small>
-          </section>
-        </aside>
-      </div>
+            <section>
+              <span className="surface-kicker">{copy.modelSuitability}</span>
+              <h2>{copy.supportedResolution}</h2>
+              <div className="suitability-list">
+                {Object.keys(resolutions).length === 0 && <p>{copy.emptyResolutions}</p>}
+                {Object.entries(resolutions).map(([resolution, status]) => (
+                  <div key={resolution}>
+                    <code>{resolutionLabel(resolution)}</code>
+                    <span className={status === "backtested_real" ? "good" : "limited"}>
+                      {copy.suitability[status] || t(`audit_suit_${status}`)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="model-honesty-note">
+                <strong>{copy.modelNote}</strong>
+                {sourceNote(suitability.note, lang, copy)}
+              </p>
+            </section>
+
+            <section>
+              <span className="surface-kicker">{copy.fleetComposition}</span>
+              <h2>{fleet.source === BACKEND_FLEET_SOURCE ? copy.vehicleCensus : copy.fleetComposition}</h2>
+              <div className="fleet-composition-list">
+                {Object.keys(fleetTypes).length === 0 && <p>{copy.emptyFleet}</p>}
+                {Object.entries(fleetTypes).map(([type, count]) => (
+                  <div key={type}>
+                    <span>{copy.vehicleTypes[type] || type}</span>
+                    <strong>{number(count)}</strong>
+                  </div>
+                ))}
+              </div>
+              <small className="audit-source">
+                {copy.sourcePrefix}:{" "}
+                {fleet.source === BACKEND_FLEET_SOURCE
+                  ? copy.fleetSource
+                  : fleet.source
+                    ? `${copy.originalNote}: ${fleet.source}`
+                    : "—"}
+              </small>
+            </section>
+          </aside>
+        </div>
+      </details>
     </section>
   );
 }

@@ -7,13 +7,16 @@ import logging
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
-from app.api.deps import require_any_permission, require_permission
+from app.api.deps import require_any_permission, require_any_principal, require_permission
 from app.api.schemas import WhatsAppAlertRequest
 from app.api.state import history_store
+from app.core.env import getenv
 from app.core.paths import DRIVER_CONTACTS_EXAMPLE_FILE, DRIVER_CONTACTS_FILE
 from app.field.privacy import mask_phones_in_text
 from app.integrations.whatsapp import (
+    PLACEHOLDER_GROUP_ID,
     OpenWAClient,
     build_alert_message,
     default_chat_id,
@@ -165,15 +168,58 @@ def post_whatsapp_contacts(payload: dict, _role: str = Depends(require_permissio
     return {"status": "success"}
 
 
+def alert_group() -> tuple[str, str]:
+    """The group that receives operational alerts, and where that choice comes from.
+
+    Same precedence as ``whatsapp_alert``: the local contacts file, then
+    PYTHIA_WA_DEFAULT_GROUP_ID, then the repo placeholder.
+    """
+    if CONTACTS_FILE.exists():
+        jid = load_contacts().get("group_jid")
+        if jid and jid != PLACEHOLDER_GROUP_ID:
+            return jid, "contacts_file"
+    if getenv("WA_DEFAULT_GROUP_ID"):
+        return default_group_id(), "env"
+    return PLACEHOLDER_GROUP_ID, "placeholder"
+
+
+def link_state(configured: bool, health: dict) -> str:
+    """One word for the settings screen: connected, pairing, starting, offline or unconfigured.
+
+    A reachable gateway always reports its socket ``state``; only the client's
+    exception branch (gateway not running) leaves it out.
+    """
+    if not configured:
+        return "unconfigured"
+    if health.get("connected"):
+        return "connected"
+    state = health.get("state")
+    if state is None:
+        return "offline"
+    return "pairing" if state == "qr" else "starting"
+
+
+def masked_account(me: str | None) -> str | None:
+    """The paired WhatsApp account ('62812...:7@s.whatsapp.net'), masked, without the device suffix."""
+    if not me:
+        return None
+    return mask_phones_in_text(re.sub(r":\d+(?=@)", "", str(me)))
+
+
 @router.get("/api/whatsapp/status")
 def whatsapp_status(
     _role: str = Depends(require_any_permission("dashboard:read", "dispatch:create")),
 ) -> dict:
     client = OpenWAClient.from_env()
     health = client.health()
+    configured = client.is_configured()
+    group_jid, group_source = alert_group()
     return {
-        "configured": client.is_configured(),
+        "configured": configured,
         "connected": health.get("connected", False),
+        "link_state": link_state(configured, health),
+        "linked_account": masked_account(health.get("me")),
+        "alert_group": {"jid": mask_phones_in_text(group_jid), "source": group_source},
         "message": health.get("message", ""),
         "provider": health.get("provider", "baileys"),
         "state": health.get("state"),
@@ -192,7 +238,56 @@ def whatsapp_qr(_role: str = Depends(require_permission("admin:manage"))) -> dic
 
 @router.get("/api/whatsapp/groups")
 def whatsapp_groups(_role: str = Depends(require_permission("admin:manage"))) -> dict:
-    return OpenWAClient.from_env().groups()
+    payload = OpenWAClient.from_env().groups()
+    current, _source = alert_group()
+    payload["groups"] = [
+        {**group, "selected": group.get("jid") == current} for group in payload.get("groups") or []
+    ]
+    return payload
+
+
+class AlertGroupRequest(BaseModel):
+    group_jid: str = Field(pattern=r"^[0-9-]{5,64}@g\.us$")
+
+
+@router.post("/api/whatsapp/alert-group")
+def set_whatsapp_alert_group(
+    payload: AlertGroupRequest, principal: dict = Depends(require_any_principal("admin:manage"))
+) -> dict:
+    """Persist the alert group in the local contacts file (git-ignored), keeping its drivers."""
+    data = load_contacts() if CONTACTS_FILE.exists() else {"send_to_group": True, "send_to_driver": True}
+    data["group_jid"] = payload.group_jid
+    try:
+        save_contacts(data)
+    except OSError as error:
+        raise HTTPException(status_code=503, detail="The contacts file could not be written.") from error
+    masked = mask_phones_in_text(payload.group_jid)
+    history_store.record_event(
+        "whatsapp_alert_group", {"recipient": f"Group: {masked}", "actor": principal["username"]}
+    )
+    return {"alert_group": {"jid": masked, "source": "contacts_file"}}
+
+
+TEST_MESSAGE = (
+    "Pythia: pesan uji koneksi WhatsApp. Grup ini menerima peringatan operasional Pythia. "
+    "Tidak perlu dibalas."
+)
+
+
+@router.post("/api/whatsapp/test")
+def whatsapp_test_message(principal: dict = Depends(require_any_principal("admin:manage"))) -> dict:
+    """Send one fixed test text to the alert group only (never to drivers)."""
+    jid, source = alert_group()
+    if source == "placeholder":
+        raise HTTPException(status_code=409, detail="Choose an alert group before sending a test message.")
+    result = OpenWAClient.from_env().send_text(jid, TEST_MESSAGE)
+    masked = mask_phones_in_text(jid)
+    sent = bool(result.get("sent"))
+    history_store.record_event(
+        "whatsapp_test",
+        {"recipient": f"Group: {masked}", "sent": sent, "actor": principal["username"]},
+    )
+    return {"sent": sent, "recipient": masked}
 
 
 @router.post("/api/whatsapp/logout")

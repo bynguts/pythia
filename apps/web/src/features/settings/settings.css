@@ -1,0 +1,380 @@
+/* wave9 settings: the Settings workspace (features/settings/SettingsWorkspace.jsx). Flat
+   sections divided by hairlines; the only filled boxes are status callouts. */
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+.settings-nav {
+  display: grid;
+  gap: var(--space-4);
+}
+.settings-nav-group {
+  display: grid;
+  gap: var(--space-1);
+}
+.settings-nav-label {
+  padding: 0 var(--space-3);
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+.settings-nav button {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 0 var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 0;
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-ink-soft);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.settings-nav button:hover {
+  color: var(--ui-ink);
+  background: var(--ui-surface-muted);
+}
+.settings-nav button.active {
+  color: var(--ui-ink);
+  background: var(--ui-accent-soft);
+  box-shadow: inset 3px 0 0 var(--ui-accent);
+}
+.settings-content {
+  min-width: 0;
+}
+
+.settings-panel {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+.settings-panel-head h2 {
+  margin: 0 0 var(--space-1);
+  color: var(--ui-ink);
+  font-size: 20px;
+  font-weight: 600;
+}
+.settings-panel-head p,
+.settings-note,
+.settings-provenance {
+  max-width: 680px;
+  margin: 0;
+  color: var(--ui-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.settings-provenance {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--ui-border);
+  font-size: var(--fs-caption);
+}
+
+.settings-facts {
+  margin: 0;
+  border-top: 1px solid var(--ui-border);
+}
+.settings-facts > div {
+  padding: var(--space-3) 0;
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) minmax(0, 1fr);
+  gap: var(--space-1) var(--space-4);
+  border-bottom: 1px solid var(--ui-border);
+}
+.settings-facts dt {
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+.settings-facts dd {
+  min-width: 0;
+  margin: 0;
+  display: grid;
+  gap: 2px;
+  color: var(--ui-ink);
+  overflow-wrap: anywhere;
+}
+.settings-facts dd small {
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+
+/* Status: an icon and words, never colour alone. */
+.settings-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+.settings-status.is-good {
+  color: var(--ui-success);
+}
+.settings-status.is-wait {
+  color: var(--ui-warning);
+}
+.settings-status.is-bad {
+  color: var(--ui-danger);
+}
+
+.settings-callout {
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+  border: 1px solid var(--ui-danger-line);
+  border-radius: var(--ui-radius);
+  background: var(--ui-danger-soft);
+  color: var(--ui-ink);
+}
+.settings-callout p,
+.settings-callout small {
+  margin: 0;
+  color: var(--ui-ink-soft);
+}
+.settings-callout p {
+  font-size: 14px;
+}
+.settings-callout strong {
+  color: var(--ui-danger);
+}
+.settings-callout .ghost-button {
+  justify-self: start;
+}
+.settings-command {
+  padding: var(--space-2) var(--space-3);
+  display: block;
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.settings-pairing {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: center;
+}
+.settings-pairing h3 {
+  margin: 0 0 var(--space-2);
+  font-size: 16px;
+  font-weight: 600;
+}
+.settings-pairing p {
+  margin: 0 0 var(--space-2);
+  color: var(--ui-ink-soft);
+  font-size: 14px;
+}
+.settings-pairing small {
+  color: var(--ui-muted);
+}
+/* QR codes need a white quiet zone whatever the theme. */
+.settings-qr {
+  width: 256px;
+  height: 256px;
+  padding: var(--space-2);
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: #ffffff;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  text-align: center;
+}
+.settings-qr img {
+  width: 100%;
+  height: auto;
+  max-width: 240px;
+  image-rendering: pixelated;
+}
+
+.settings-manage {
+  display: grid;
+  gap: var(--space-2);
+}
+.settings-manage label {
+  color: var(--ui-ink);
+  font-weight: 600;
+}
+.settings-manage > small {
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.settings-row select {
+  flex: 1 1 220px;
+  min-width: 0;
+  min-height: var(--tap-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+  font: inherit;
+}
+.settings-row .primary-button {
+  width: auto;
+}
+.settings-row + .settings-row {
+  margin-top: var(--space-2);
+}
+.settings-danger {
+  color: var(--ui-danger);
+}
+.settings-danger-solid,
+.settings-danger-solid:hover {
+  border-color: var(--ui-danger);
+  background: var(--ui-danger);
+  color: #ffffff;
+}
+.settings-confirm {
+  padding: var(--space-3) 0 0;
+  border-top: 1px solid var(--ui-border);
+}
+.settings-confirm p {
+  margin: 0 0 var(--space-2);
+  color: var(--ui-ink);
+}
+.settings-notice {
+  margin: 0;
+  font-weight: 600;
+}
+.settings-notice.is-good {
+  color: var(--ui-success);
+}
+.settings-notice.is-bad {
+  color: var(--ui-danger);
+}
+
+.settings-roles {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--ui-border);
+}
+.settings-roles li {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+.settings-role-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.settings-role-head strong {
+  color: var(--ui-ink);
+}
+.settings-you {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-caption);
+}
+.settings-roles p {
+  margin: var(--space-1) 0 0;
+  color: var(--ui-ink-soft);
+  font-size: 14px;
+}
+
+/* Sumber data & model: the former audit page, condensed. */
+.settings-content .audit-workspace .workspace-heading {
+  min-height: 0;
+  margin: 0;
+}
+.settings-content .audit-workspace .workspace-heading h2 {
+  margin: var(--space-1) 0;
+  color: var(--ui-ink);
+  font-size: 20px;
+  font-weight: 600;
+}
+.settings-disclosure {
+  min-width: 0;
+  border-top: 1px solid var(--ui-border);
+}
+.settings-disclosure:last-child {
+  border-bottom: 1px solid var(--ui-border);
+}
+.settings-disclosure > summary {
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--ui-ink);
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+.settings-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.settings-disclosure > summary::after {
+  content: "+";
+  margin-left: auto;
+  color: var(--ui-muted);
+  font-size: 20px;
+  font-weight: 400;
+}
+.settings-disclosure[open] > summary::after {
+  content: "−";
+}
+.settings-disclosure[open] > summary {
+  margin-bottom: var(--space-3);
+}
+
+@media (max-width: 920px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+  .settings-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-1);
+  }
+  .settings-nav-label {
+    display: none;
+  }
+  .settings-nav button {
+    padding: var(--space-1) var(--space-2);
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    font-size: var(--fs-caption);
+    text-align: center;
+  }
+  .settings-nav button.active {
+    box-shadow: inset 0 -3px 0 var(--ui-accent);
+  }
+  .settings-facts > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-pairing {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+  }
+}
+
+@media (max-width: 400px) {
+  .settings-qr {
+    width: 100%;
+    max-width: 256px;
+    height: auto;
+    aspect-ratio: 1;
+  }
+}

@@ -20,6 +20,11 @@ function normalizeChatId(chatId) {
   return trimmed;
 }
 
+// Logs never carry a full phone number: keep the first 5 and last 4 digits of each run.
+function maskJid(jid) {
+  return String(jid || '').replace(/\d{9,20}/g, (d) => `${d.slice(0, 5)}****${d.slice(-4)}`);
+}
+
 async function startWA() {
   console.log("Starting WhatsApp socket...");
   const { state, saveCreds } = await useMultiFileAuthState('baileys_auth_info');
@@ -65,6 +70,9 @@ app.get('/api/health', (req, res) => {
     provider: 'baileys',
     connected: Boolean(sock && connectionState === 'open'),
     state: connectionState,
+    // The paired account ("62812...:7@s.whatsapp.net"). Loopback-only; the Pythia API
+    // masks it before any client sees it, and it is never logged here.
+    me: connectionState === 'open' ? sock?.user?.id || null : null,
     message: connectionState === 'open'
       ? 'WhatsApp gateway is connected.'
       : `WhatsApp gateway is ${connectionState}. Scan QR or wait for reconnect.`,
@@ -118,7 +126,7 @@ app.post('/api/logout', (req, res) => {
 app.post('/api/sessions/:sessionId/messages/send-text', async (req, res) => {
   const { chatId, text } = req.body;
   const targetChatId = normalizeChatId(chatId);
-  console.log(`Received request to send to ${chatId} normalized as ${targetChatId}: ${text}`);
+  console.log(`Received request to send to ${maskJid(targetChatId)}`);
   if (!targetChatId) {
     return res.status(400).json({ sent: false, provider: "baileys", error: "Missing chatId" });
   }
@@ -134,7 +142,7 @@ app.post('/api/sessions/:sessionId/messages/send-text', async (req, res) => {
   }
   try {
     await sock.sendMessage(targetChatId, { text: text });
-    console.log(`Message successfully sent to ${targetChatId}`);
+    console.log(`Message successfully sent to ${maskJid(targetChatId)}`);
     res.json({ sent: true, provider: "baileys", message: "WhatsApp message sent.", chatId: targetChatId });
   } catch (err) {
     console.error("Error sending message:", err);

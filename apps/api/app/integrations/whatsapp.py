@@ -70,6 +70,8 @@ class OpenWAClient:
                 "connected": bool(payload.get("connected")),
                 "message": payload.get("message", "WhatsApp gateway is reachable."),
                 "state": payload.get("state"),
+                # Raw paired account id; the API router masks it before responding.
+                "me": payload.get("me"),
             }
         except Exception as error:
             return {
