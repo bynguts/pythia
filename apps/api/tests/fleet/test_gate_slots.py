@@ -17,7 +17,14 @@ from app.fleet.queue_simulation import (
     STAGGER_SLOT_MINUTES,
     WEIGH_CYCLE_MINUTES,
     WEIGHBRIDGE_LANES,
+    bantargebang_daily_arrivals,
+    queue_minutes_per_truck,
+    stagger_slot_count,
 )
+
+# The fluid slot model has no random travel or weigh times, so against the seeded
+# simulation of the headline metric it may differ by this much (minutes per truck).
+COHERENCE_TOLERANCE_MIN = 2.0
 
 DAY = date(2031, 3, 4)
 PAGI = ("pagi", "06:00-14:00")
@@ -57,6 +64,7 @@ def test_first_gate_arrival_is_shift_start_plus_one_collection_round(background)
     assert slot["classification"] == "MODEL_OUTPUT"
     assert slot["capacity_model"]["capacity_per_slot"] == CAPACITY_PER_SLOT
     assert slot["capacity_model"]["over_capacity"] is False
+    assert slot["capacity_model"]["saturated"] is False
 
 
 def test_night_shift_slot_is_dated_the_next_day(background):
@@ -78,7 +86,8 @@ def test_night_shift_capacity_is_checked_against_the_next_days_slots(background)
 
 
 def test_full_slot_moves_the_truck_to_the_next_slot_with_room(background):
-    background[9] = (CAPACITY_PER_SLOT - 1) * 4  # one free place per 09:xx slot
+    # 116 arrivals in the 09 hour, 2 of them this plan's: 28.5 background trucks per slot.
+    background[9] = (CAPACITY_PER_SLOT - 1) * 4
     slots = assign_gate_slots([_dispatch("T-002"), _dispatch("T-001")], DAY)
     assert slots["T-001"]["start"] == "09:00"  # truck-code order decides who goes first
     assert slots["T-002"]["start"] == "09:15"
@@ -86,12 +95,79 @@ def test_full_slot_moves_the_truck_to_the_next_slot_with_room(background):
 
 
 def test_queue_carried_from_a_busy_slot_counts_against_the_next(background):
-    background[8] = (CAPACITY_PER_SLOT + 5) * 4  # 5 trucks/slot left in the queue each 08:xx slot
+    background[8] = (CAPACITY_PER_SLOT + 5) * 4  # 140 arrivals in the 08 hour
     assert background_loads()[35] == CAPACITY_PER_SLOT + 5
-    # 20 trucks queued at 09:00 leave 10 places; the eleventh truck moves on.
-    slots = assign_gate_slots([_dispatch(f"T-{i:03d}") for i in range(11)], DAY)
-    assert [slots[f"T-{i:03d}"]["start"] for i in range(10)] == ["09:00"] * 10
-    assert slots["T-010"]["start"] == "09:15"
+    # One plan trip leaves 139 background arrivals: 34.75 a slot, so 19 trucks still queue at 09:00.
+    slot = assign_gate_slots([_dispatch("T-001")], DAY)["T-001"]
+    assert slot["start"] == "09:00"
+    assert slot["capacity_model"]["background_load"] == 19.0
+
+
+def test_plan_trips_are_not_counted_twice_in_the_background(background):
+    # The day's 120 arrivals are exactly this plan's trucks: no background is left, so they
+    # fill 09:00-09:45 at capacity instead of queueing behind a copy of themselves.
+    background[9] = CAPACITY_PER_SLOT * 4
+    assert background_loads(planned_arrivals=120) == [0.0] * len(background_loads())
+    assert background_loads(planned_arrivals=500) == [0.0] * len(background_loads())
+    slots = assign_gate_slots([_dispatch(f"T-{i:03d}") for i in range(120)], DAY)
+    assert {s["start"] for s in slots.values()} == {"09:00", "09:15", "09:30", "09:45"}
+    assert not any(
+        s["capacity_model"]["over_capacity"] or s["capacity_model"]["saturated"] for s in slots.values()
+    )
+
+    board = slot_board(DAY, [{"truck_code": t, "gate_slot": s} for t, s in slots.items()])
+    assert board["coverage"]["planned_gate_arrivals"] == 120
+    assert board["coverage"]["daily_arrivals"] == 120
+    assert board["coverage"]["share"] == 1.0
+    assert board["modelled_wait"]["mean_per_truck_min"] == 0.0
+    assert board["recommendations"] == []
+
+
+def test_a_saturated_gate_gets_no_long_hold(background):
+    for hour in (8, 9, 10):
+        background[hour] = 400.0  # 100 background trucks a slot against 30 cleared
+    slot = assign_gate_slots([_dispatch("T-001")], DAY)["T-001"]
+    assert slot["capacity_model"]["saturated"] is True
+    assert slot["capacity_model"]["over_capacity"] is True
+    assert slot["start"] == "09:00" and slot["hold_minutes"] == 0
+
+    board = slot_board(DAY, [{"truck_code": "T-001", "gate_slot": slot}])
+    assert board["recommendations"] == []
+    assert board["saturated"] is True
+    assert board["saturated_slots"] == ["09:00"]
+    assert board["modelled_wait"]["mean_per_planned_truck_min"] > 60
+
+
+def test_a_plan_spreads_its_own_trucks_over_the_stagger_window(background):
+    window = stagger_slot_count()
+    trucks = int(CAPACITY_PER_SLOT) * window + 1
+    slots = assign_gate_slots([_dispatch(f"T-{i:04d}") for i in range(trucks)], DAY)
+    holds = sorted(s["hold_minutes"] for s in slots.values())
+    assert holds[-1] == (window - 1) * STAGGER_SLOT_MINUTES
+    # One truck more than the window holds: it keeps the roomiest (first) slot, flagged.
+    over = [s for s in slots.values() if s["capacity_model"]["over_capacity"]]
+    assert len(over) == 1 and over[0]["start"] == "09:00" and over[0]["capacity_model"]["saturated"] is False
+
+
+def _whole_day_plan(trips):
+    """`trips` one-trip trucks split over the two day shifts, as the headline metric does."""
+    return [_dispatch(f"T-{i:04d}", shift=PAGI if i % 2 == 0 else SIANG) for i in range(trips)]
+
+
+def test_without_a_plan_the_board_matches_the_baseline_metric():
+    board = slot_board(DAY, [])
+    baseline = queue_minutes_per_truck()["baseline_mean"]
+    assert abs(board["modelled_wait"]["mean_per_truck_min"] - baseline) <= COHERENCE_TOLERANCE_MIN
+
+
+def test_a_plan_carrying_all_observed_trips_matches_the_staggered_metric():
+    trips = bantargebang_daily_arrivals()[0]
+    slots = assign_gate_slots(_whole_day_plan(trips), DAY)
+    planned = [{"truck_code": t, "gate_slot": s} for t, s in slots.items() if s["date"] == DAY.isoformat()]
+    board = slot_board(DAY, planned)
+    assert board["coverage"]["share"] == 1.0
+    staggered = queue_minutes_per_truck()["staggered_mean"]
+    assert abs(board["modelled_wait"]["mean_per_truck_min"] - staggered) <= COHERENCE_TOLERANCE_MIN
 
 
 def test_rdf_trucks_get_a_slot_without_using_weighbridge_capacity(background):
@@ -138,14 +214,6 @@ def test_assignment_is_deterministic_whatever_the_input_order(background):
     background[9] = (CAPACITY_PER_SLOT - 3) * 4
     dispatches = [_dispatch(f"T-{i:03d}", shift=PAGI if i % 2 else SIANG) for i in range(12)]
     assert assign_gate_slots(dispatches, DAY) == assign_gate_slots(list(reversed(dispatches)), DAY)
-
-
-def test_no_room_in_the_shift_keeps_the_roomiest_slot_and_says_so(background):
-    for hour in range(9, 14):
-        background[hour] = CAPACITY_PER_SLOT * 4
-    slot = assign_gate_slots([_dispatch("T-001")], DAY)["T-001"]
-    assert slot["capacity_model"]["over_capacity"] is True
-    assert slot["start"] == "09:00"
 
 
 def test_a_shift_without_a_clock_window_gets_no_slot(background):
@@ -202,8 +270,9 @@ def test_underloaded_day_produces_no_recommendation(background):
 
 
 def test_board_reports_background_load_and_the_derived_capacity(background):
-    background[9] = 40.0
+    background[9] = 40.0  # 2 of the 40 are the plan's: 38 background arrivals, 9.5 a slot
     board = slot_board(DAY, _planned(2))
+    assert board["coverage"]["share"] == 0.05
     assert board["capacity_per_slot"] == CAPACITY_PER_SLOT
     assert board["slot_minutes"] == STAGGER_SLOT_MINUTES
     first = board["slots"][0]
@@ -212,7 +281,7 @@ def test_board_reports_background_load_and_the_derived_capacity(background):
         "date": DAY.isoformat(),
         "start": "09:00",
         "end": "09:15",
-        "background_load": 10.0,
+        "background_load": 9.5,
         "queue_carried_in": 0.0,
         "planned_trucks": ["T-000", "T-001"],
         "expected_wait_min": 0.0,

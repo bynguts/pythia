@@ -192,3 +192,17 @@ def test_concurrent_accepts_create_one_dispatch(api_client, auth_headers, backgr
     assert {r.status_code for r in results} == {200}
     assert len({r.json()["dispatch_id"] for r in results}) == 1
     assert len(history_store.pending_dispatches(rec["truck_code"])) == 2  # the plan's own + one hold
+
+
+def test_saturated_gate_says_so_instead_of_proposing_a_long_hold(api_client, auth_headers, background, day):
+    for hour in (8, 9, 10):
+        background[hour] = 400.0  # the unplanned remainder alone far exceeds the weighbridges
+    _approve_plan(
+        day,
+        [_dispatch(f"GS-S{i}{uuid.uuid4().hex[:4]}", day, gate_slot=_slot_at_nine(day)) for i in range(2)],
+    )
+    board = _board(api_client, auth_headers, day)
+    assert board["recommendations"] == []
+    assert board["saturated"] is True and board["reason"] == "saturated"
+    assert board["coverage"]["planned_gate_arrivals"] == 2
+    assert board["modelled_wait"]["classification"] == "SIMULATED"

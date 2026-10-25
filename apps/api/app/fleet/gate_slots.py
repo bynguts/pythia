@@ -1,18 +1,34 @@
 """Gate-slot assignment for approved plan dispatches (wave 12 lane C).
 
 A planned truck's first TPST Bantargebang gate arrival is its shift start plus one
-mean collection round, snapped to the 15-minute stagger slot. Each slot holds what
-the weighbridges clear in it (lanes x slot / weigh cycle) minus the simulated
-background load of the metric's baseline day (its arrivals in the slot plus the
-queue they carry into it) and the trucks of plans already approved for that date;
-a truck with no room moves to the next slot that has some.
-Every constant comes from `queue_simulation`: these are modelled slots, not a
-facility booking system. RDF trucks get a slot but use no weighbridge capacity.
+mean collection round, snapped to the 15-minute stagger slot. A slot holds what the
+weighbridges clear in it (lanes x slot / weigh cycle). The rest of the gate's traffic
+is the background: the observed daily arrivals (median ritasi, spread over the hours
+of the metric's simulated current-practice day) minus the plan trips slotted for that
+date, never below zero, so a plan's trucks are never counted twice. The background
+arrives unstaggered, and the queue it builds carries into later slots (fluid backlog).
+
+Placement, per truck in truck-code order:
+- If the background alone fills every slot of the first hour from the natural slot,
+  the gate is saturated: the truck keeps the roomiest of those slots (no long hold)
+  and `capacity_model.saturated` says so.
+- Otherwise it takes the first slot with room within the metric's stagger window
+  (`stagger_slot_count()` slots, the same spread the staggered headline assumes), so
+  a plan that carries most of the day's trips spreads the way the headline does.
+
+Coherence with `queue_minutes_per_truck`: with no plan, the fluid model's mean wait
+over the background day is ~57.7 min against the simulation's 57.1 baseline; with a
+plan carrying all observed trips it is ~4.7 min against the 5.6 staggered figure.
+The fluid model has no random travel or weigh times, so it reads slightly low when
+slots run near capacity; the tests hold it within 2 minutes.
 
 `occupied` only holds plans approved before this plan was proposed, so two plans
 proposed for the same date before either is approved can share slots. The board
 (`slot_board`, served by GET /api/gate/slots) is recomputed from the approved
 plans, and its hold recommendations are what resolve such a clash.
+
+Every constant comes from `queue_simulation`: these are modelled slots, not a
+facility booking system. RDF trucks get a slot but use no weighbridge capacity.
 """
 
 from __future__ import annotations
@@ -31,6 +47,7 @@ from app.fleet.queue_simulation import (
     WEIGHBRIDGE_ASSUMPTION,
     WEIGHBRIDGE_LANES,
     hourly_queue_profile,
+    stagger_slot_count,
 )
 
 SLOTS_PER_DAY = 24 * 60 // STAGGER_SLOT_MINUTES
@@ -40,7 +57,8 @@ CAPACITY_PER_SLOT = WEIGHBRIDGE_LANES * STAGGER_SLOT_MINUTES / WEIGH_CYCLE_MINUT
 # Trucks the weighbridges clear per minute: drains the modelled backlog.
 SERVICE_PER_MINUTE = WEIGHBRIDGE_LANES / WEIGH_CYCLE_MINUTES
 # assumption: a hold longer than an hour stops being a departure nudge and becomes
-# a different shift plan, so recommendations look at most this many slots ahead.
+# a different shift plan, so recommendations (and placements pushed by the background
+# queue) look at most this many slots ahead.
 MAX_HOLD_SLOTS = 4
 WAIT_METHOD = (
     "fluid backlog per 15-min slot: arrivals above the weighbridge capacity carry over "
@@ -56,7 +74,10 @@ def is_bantargebang(facility: str | None) -> bool:
 
 
 def _background_by_hour() -> list[float]:
-    """Simulated background gate arrivals per clock hour (the metric's baseline day)."""
+    """Gate arrivals per clock hour of the metric's simulated current-practice day.
+
+    Its total is the observed median daily ritasi at Bantargebang.
+    """
     profile = hourly_queue_profile()
     if not profile:
         return [0.0] * 24
@@ -66,13 +87,36 @@ def _background_by_hour() -> list[float]:
     return by_hour
 
 
-def background_loads() -> list[float]:
-    """Simulated background arrivals per slot of a day, spread evenly over each hour.
+def background_loads(planned_arrivals: int = 0) -> list[float]:
+    """Background arrivals per slot of a day: the day's arrivals minus `planned_arrivals`.
 
-    The model has no weekday or seasonal shape, so every date reads the same profile.
+    The remainder keeps the unstaggered hourly shape, spread evenly within each
+    hour. The model has no weekday or seasonal shape, so every date reads the same.
     """
     by_hour = _background_by_hour()
-    return [by_hour[i // SLOTS_PER_HOUR] / SLOTS_PER_HOUR for i in range(SLOTS_PER_DAY)]
+    total = sum(by_hour)
+    share = max(0.0, total - planned_arrivals) / total if total > 0 else 0.0
+    return [by_hour[i // SLOTS_PER_HOUR] * share / SLOTS_PER_HOUR for i in range(SLOTS_PER_DAY)]
+
+
+def coverage(planned_arrivals: int) -> dict[str, Any]:
+    """How much of the day's gate traffic the approved plans carry (and so can stagger)."""
+    total = sum(_background_by_hour())
+    return {
+        "planned_gate_arrivals": planned_arrivals,
+        "daily_arrivals": round(total),
+        "share": round(min(1.0, planned_arrivals / total), 3) if total > 0 else None,
+        "daily_arrivals_basis": (
+            "observed median daily ritasi at TPST Bantargebang (weighing data), spread over "
+            "the hours of the simulated current-practice day"
+        ),
+    }
+
+
+def _background_demand(planned_arrivals: int) -> list[float]:
+    """Background trucks at the weighbridge per slot: its arrivals plus the queue it carries in."""
+    arrivals = background_loads(planned_arrivals)
+    return [a + q for a, q in zip(arrivals, queue_carried_in(arrivals), strict=True)]
 
 
 def queue_carried_in(loads: list[float]) -> list[float]:
@@ -129,64 +173,84 @@ def _occupied_counts(occupied) -> dict[tuple[str, int], int]:
     return counts
 
 
+def _natural_slot(plan_date: date, start_index: int) -> tuple[datetime, datetime]:
+    """(shift start, first gate arrival snapped to its slot); the night shift lands the next day."""
+    shift_start = datetime.combine(plan_date, datetime.min.time()) + timedelta(
+        minutes=start_index * STAGGER_SLOT_MINUTES
+    )
+    arrival = shift_start + timedelta(hours=COLLECTION_ROUND_MEAN_H)
+    natural = arrival.replace(
+        minute=arrival.minute - arrival.minute % STAGGER_SLOT_MINUTES, second=0, microsecond=0
+    )
+    return shift_start, natural
+
+
 def assign_gate_slots(dispatches: list[dict], plan_date: date, occupied: list[dict] = ()) -> dict[str, dict]:
-    """Map truck_code -> gate slot for a plan's dispatches.
+    """Map truck_code -> gate slot for a plan's dispatches; see the module docstring.
 
     `dispatches` are plan dispatches (`fields.stops` with `shift`, `window` and
     `facility`; the first trip sets the slot). `occupied` are the `gate_slot`s
     of plans already approved for the same date. Deterministic: trucks are
     placed in truck-code order. A truck whose shift has no clock window gets no
-    slot. When no slot in the shift has room, the truck keeps the one with the
-    most room left (it may be over capacity) and `capacity_model.over_capacity`
-    says so.
+    slot. When no slot in the search has room, the truck keeps the one with the
+    most room left and `capacity_model.over_capacity` says so.
     """
     taken = _occupied_counts(occupied)
-    background: list[float] | None = None
-    shift_slots = int(SHIFT_HOURS * SLOTS_PER_HOUR)
-    out: dict[str, dict] = {}
+    trucks = []
     for dispatch in sorted(dispatches, key=lambda d: str(d.get("truck_code", ""))):
-        truck_code = dispatch.get("truck_code")
         stop = _first_stop(dispatch)
         start_index = slot_index_of((stop or {}).get("window", ""))
-        if not truck_code or stop is None or start_index is None:
-            continue
-        facility = stop.get("facility")
-        shift_start = datetime.combine(plan_date, datetime.min.time()) + timedelta(
-            minutes=start_index * STAGGER_SLOT_MINUTES
-        )
-        arrival = shift_start + timedelta(hours=COLLECTION_ROUND_MEAN_H)
-        # Snapped down to the slot the arrival falls in; the night shift lands the next day.
-        natural = arrival.replace(
-            minute=arrival.minute - arrival.minute % STAGGER_SLOT_MINUTES, second=0, microsecond=0
-        )
+        if dispatch.get("truck_code") and stop is not None and start_index is not None:
+            trucks.append(
+                (dispatch["truck_code"], stop.get("facility"), *_natural_slot(plan_date, start_index))
+            )
+
+    # Plan trips per slot date, this plan's and the approved ones': the background is the rest.
+    planned_per_day: dict[str, int] = defaultdict(int)
+    for (day, _slot), count in taken.items():
+        planned_per_day[day] += count
+    for _truck, facility, _start, natural in trucks:
+        if is_bantargebang(facility):
+            planned_per_day[natural.date().isoformat()] += 1
+    demand: dict[str, list[float]] = {}
+
+    def background_at(moment: datetime) -> float:
+        day = moment.date().isoformat()
+        if day not in demand:
+            demand[day] = _background_demand(planned_per_day[day])
+        return demand[day][_index(moment)]
+
+    stagger_slots = stagger_slot_count()
+    out: dict[str, dict] = {}
+    for truck_code, facility, shift_start, natural in trucks:
         chosen = natural
         capacity_model = None
         if is_bantargebang(facility):
-            if background is None:
-                arrivals = background_loads()
-                background = [a + q for a, q in zip(arrivals, queue_carried_in(arrivals), strict=True)]
             shift_end = shift_start + timedelta(hours=SHIFT_HOURS)
+            steps = [
+                moment
+                for step in range(max(stagger_slots, MAX_HOLD_SLOTS))
+                if (moment := natural + timedelta(minutes=step * STAGGER_SLOT_MINUTES)) < shift_end
+            ] or [natural]
+            first_hour = steps[:MAX_HOLD_SLOTS]
+            saturated = all(CAPACITY_PER_SLOT - background_at(m) < 1 for m in first_hour)
             best: tuple[float, datetime] | None = None
-            for step in range(shift_slots):
-                candidate = natural + timedelta(minutes=step * STAGGER_SLOT_MINUTES)
-                if candidate >= shift_end:
-                    break
-                key = (candidate.date().isoformat(), _index(candidate))
-                room = CAPACITY_PER_SLOT - background[key[1]] - taken[key]
+            for candidate in first_hour if saturated else steps[:stagger_slots]:
+                room = CAPACITY_PER_SLOT - background_at(candidate) - taken[_key(candidate)]
                 if best is None or room > best[0]:
                     best = (room, candidate)
                 if room >= 1:
                     break
             room, chosen = best
-            key = (chosen.date().isoformat(), _index(chosen))
             capacity_model = {
                 "capacity_per_slot": CAPACITY_PER_SLOT,
-                "background_load": round(background[key[1]], 2),
-                "occupied": taken[key],
+                "background_load": round(background_at(chosen), 2),
+                "occupied": taken[_key(chosen)],
                 "over_capacity": room < 1,
+                "saturated": saturated,
                 "basis": WEIGHBRIDGE_ASSUMPTION,
             }
-            taken[key] += 1
+            taken[_key(chosen)] += 1
         index = _index(chosen)
         start, end = slot_clock(index)
         out[truck_code] = {
@@ -202,6 +266,10 @@ def assign_gate_slots(dispatches: list[dict], plan_date: date, occupied: list[di
     return out
 
 
+def _key(moment: datetime) -> tuple[str, int]:
+    return moment.date().isoformat(), _index(moment)
+
+
 def _index(moment: datetime) -> int:
     return (moment.hour * 60 + moment.minute) // STAGGER_SLOT_MINUTES
 
@@ -211,12 +279,14 @@ def slot_board(slot_date: date, planned: list[dict[str, Any]]) -> dict[str, Any]
 
     `planned` items are `{truck_code, gate_slot}` from approved plans, already
     filtered to slots dated `slot_date`. A truck in a slot whose arrivals plus the
-    queue carried into it exceed the weighbridge capacity is held into the nearest later slot (at most
-    MAX_HOLD_SLOTS ahead) that has room and a lower modelled wait; holds are
-    decided greedily in slot then truck-code order, each seeing the earlier ones.
+    queue carried into it exceed the weighbridge capacity is held into the nearest
+    later slot (at most MAX_HOLD_SLOTS ahead) that has room and a lower modelled
+    wait; holds are decided greedily in slot then truck-code order, each seeing the
+    earlier ones. When no slot within that hour qualifies, nothing is recommended
+    for the truck and its slot is listed in `saturated_slots`: a longer hold would
+    be a different shift plan, not a nudge.
     """
     day = slot_date.isoformat()
-    background = background_loads()
     by_slot: dict[int, list[str]] = defaultdict(list)
     others = []
     for item in planned:
@@ -229,6 +299,7 @@ def slot_board(slot_date: date, planned: list[dict[str, Any]]) -> dict[str, Any]
         trucks.sort()
 
     planned_counts = [len(by_slot.get(i, ())) for i in range(SLOTS_PER_DAY)]
+    background = background_loads(sum(planned_counts))
     loads = [background[i] + planned_counts[i] for i in range(SLOTS_PER_DAY)]
     waits = expected_waits(loads)
     base_waits, base_queue = list(waits), queue_carried_in(loads)
@@ -237,6 +308,7 @@ def slot_board(slot_date: date, planned: list[dict[str, Any]]) -> dict[str, Any]
         return [a + q for a, q in zip(slot_loads, queue_carried_in(slot_loads), strict=True)]
 
     recommendations = []
+    saturated_slots: list[str] = []
     for index in sorted(by_slot):
         need = demand(loads)
         if need[index] <= CAPACITY_PER_SLOT:
@@ -279,6 +351,9 @@ def slot_board(slot_date: date, planned: list[dict[str, Any]]) -> dict[str, Any]
                 )
                 loads, waits = trial, trial_waits
                 break
+            else:
+                if slot_clock(index)[0] not in saturated_slots:
+                    saturated_slots.append(slot_clock(index)[0])
 
     planned_indexes = sorted(by_slot)
     slots = []
@@ -298,13 +373,33 @@ def slot_board(slot_date: date, planned: list[dict[str, Any]]) -> dict[str, Any]
                     "expected_wait_min": base_waits[index],
                 }
             )
+    base_loads = [background[i] + planned_counts[i] for i in range(SLOTS_PER_DAY)]
+    arrivals = sum(base_loads)
+    planned_total = sum(planned_counts)
     return {
         "date": day,
         "slot_minutes": STAGGER_SLOT_MINUTES,
         "capacity_per_slot": CAPACITY_PER_SLOT,
+        "coverage": coverage(planned_total),
+        # As planned, before any recommended hold.
+        "modelled_wait": {
+            "mean_per_truck_min": (
+                round(sum(w * n for w, n in zip(base_waits, base_loads, strict=True)) / arrivals, 1)
+                if arrivals > 0
+                else None
+            ),
+            "mean_per_planned_truck_min": (
+                round(sum(w * n for w, n in zip(base_waits, planned_counts, strict=True)) / planned_total, 1)
+                if planned_total
+                else None
+            ),
+            "classification": "SIMULATED",
+        },
         "slots": slots,
         "other_facilities": others,
         "recommendations": recommendations,
+        "saturated": bool(saturated_slots),
+        "saturated_slots": saturated_slots,
         "wait_method": WAIT_METHOD,
         "capacity_basis": WEIGHBRIDGE_ASSUMPTION,
         "classification": "SIMULATED",

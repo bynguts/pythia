@@ -62,7 +62,12 @@ def _planned_slots(slot_date: date) -> list[dict[str, Any]]:
 def gate_slots_payload(slot_date: date) -> dict[str, Any]:
     planned = _planned_slots(slot_date)
     board = slot_board(slot_date, planned)
-    board["reason"] = None if planned else "no_approved_plan"
+    if not planned:
+        board["reason"] = "no_approved_plan"
+    elif board["saturated"] and not board["recommendations"]:
+        board["reason"] = "saturated"
+    else:
+        board["reason"] = None
     accepted = {a["rec_id"]: a for a in ACCEPTS.all()}
     for rec in board["recommendations"]:
         if rec["id"] in accepted:
