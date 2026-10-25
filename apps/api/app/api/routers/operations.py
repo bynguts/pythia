@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 import threading
 import time
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -119,11 +121,13 @@ def _dispatch_instructions(
             }
         )
     # The modelled weighbridge slot of each truck's first gate arrival; trucks of
-    # plans already approved for the same day hold their slots.
+    # plans already approved for the same day (and the night before, whose night
+    # shift reaches the gate on this date) hold their slots.
+    days = {plan_date.isoformat(), (plan_date - timedelta(days=1)).isoformat()}
     occupied = [
         d["fields"]["gate_slot"]
         for plan in _OPERATIONS_PLAN_STORE.list_plans(status="approved", limit=100)
-        if plan.get("plan_date") == plan_date.isoformat()
+        if plan.get("plan_date") in days
         for d in plan.get("dispatches") or []
         if (d.get("fields") or {}).get("gate_slot")
     ]
@@ -506,11 +510,17 @@ def reassign_operations_truck(
 ) -> dict[str, Any]:
     """Move one truck's share of an approved plan to another truck.
 
-    The old dispatch becomes REASSIGNED (a late READY from it gets 409), a new
-    dispatch with the same fields goes to `to_truck`, the instruction and
-    draft-SPJ link rows move in one plan-DB transaction, and the draft SPJ moves
-    through the audit-logged `reassign_draft`. An active SPJ never moves: the
-    dispatcher cancels it and creates a new one.
+    The move spans three databases (SPJ, dispatches, plan), so it is ordered
+    and resumable rather than atomic, and idempotent per (plan, from_truck):
+    1. the draft SPJ moves (audit-logged `reassign_draft`), the only step that
+       can refuse (409), so a refusal changes nothing; an active SPJ never
+       moves: the dispatcher cancels it and creates a new one;
+    2. a reassign row records the decision and the new dispatch id;
+    3. the new dispatch is saved for `to_truck` under that id (idempotent);
+    4. one plan-DB transaction moves the instruction, link row and payload;
+    5. the old dispatch becomes REASSIGNED last (a later READY on it gets 409).
+    A retry after a failure resumes from the row and never creates a second
+    dispatch; a retry after success returns the same result.
     """
     from_truck, to_truck = payload.from_truck, payload.to_truck
     trucks = {t["truck_code"]: t for t in TRUCKS}
@@ -522,87 +532,110 @@ def reassign_operations_truck(
         plan = _OPERATIONS_PLAN_STORE.get(plan_id)
         if plan["status"] != "approved":
             raise HTTPException(status_code=409, detail="Rencana belum disetujui.")
-        dispatches = plan.get("dispatches") or []
-        index = next((i for i, d in enumerate(dispatches) if d.get("truck_code") == from_truck), None)
-        if index is None or "fields" not in dispatches[index]:
-            raise HTTPException(status_code=404, detail=f"Truck {from_truck} is not in plan {plan_id}.")
-        if any(d.get("truck_code") == to_truck for d in dispatches):
-            raise HTTPException(status_code=409, detail=f"Truk {to_truck} sudah ada di rencana ini.")
-        if trucks[to_truck].get("is_damaged"):
-            raise HTTPException(status_code=409, detail=f"Truk {to_truck} sedang rusak.")
-        duty = safety.duty_check(to_truck)
-        if duty["blocked"]:
-            raise HTTPException(status_code=409, detail=duty["reason"])
-        link = next(
-            (r for r in _OPERATIONS_PLAN_STORE.spj_links(plan_id) if r["truck_code"] == from_truck), None
-        )
-        spj = SPJ_STORE.get(link["spj_id"]) if link and link["spj_id"] else None
-        if spj is not None and spj.status != "draft":
-            raise HTTPException(status_code=409, detail="SPJ sudah aktif; batalkan dan buat ulang")
-
-        old = dispatches[index]
-        old_dispatch_id = (plan.get("dispatch_ids") or [])[index]
-        header, _, rest = old["text"].partition("\n")
-        text = (
-            header.replace(f"Truk {from_truck}", f"Truk {to_truck}") + f"\nDialihkan dari Truk {from_truck}."
-        )
-        if rest:
-            text += "\n" + rest
-        item = {
-            **old,
-            "truck_code": to_truck,
-            "text": text,
-            "fields": {**old["fields"], "truck_code": to_truck},
-        }
-        to_driver = trucks[to_truck].get("driver_name") or ""
-        if spj is not None:
-            try:
-                SPJ_STORE.reassign_draft(spj.spj_id, to_truck, to_driver, actor=_role, reason=payload.reason)
-            except ValueError:
-                raise HTTPException(
-                    status_code=409, detail="SPJ sudah aktif; batalkan dan buat ulang"
-                ) from None
-        try:
-            new_dispatch = history_store.reassign_dispatch(
-                old_dispatch_id,
-                to_truck,
-                text,
-                manager_id="operations_optimizer",
-                note=f"Dialihkan ke Truk {to_truck}: {payload.reason}",
+        record = _OPERATIONS_PLAN_STORE.reassign_row(plan_id, from_truck)
+        if record is not None and record["to_truck"] != to_truck:
+            raise HTTPException(
+                status_code=409, detail=f"Truk {from_truck} sudah dialihkan ke Truk {record['to_truck']}."
             )
-        except (KeyError, ValueError) as error:
-            if spj is not None:  # undo the SPJ move: nothing else changed
-                SPJ_STORE.reassign_draft(
-                    spj.spj_id, from_truck, spj.driver_name, actor=_role, reason="rollback"
+        if record is None:
+            record = _start_reassign(plan, from_truck, to_truck, trucks, payload.reason, _role)
+        try:
+            new_dispatch = history_store.save_dispatch(
+                to_truck,
+                record["item"]["text"],
+                manager_id="operations_optimizer",
+                dispatch_id=record["new_dispatch_id"],
+            )
+            _OPERATIONS_PLAN_STORE.reassign_truck(plan_id, from_truck)
+            history_store.mark_dispatch_reassigned(
+                record["old_dispatch_id"], note=f"Dialihkan ke Truk {to_truck}: {record['reason']}"
+            )
+            if record["status"] != "done":
+                dispatch_center._dispatches[:] = [
+                    d
+                    for d in dispatch_center._dispatches
+                    if d.get("id") not in (record["old_dispatch_id"], record["new_dispatch_id"])
+                ] + [new_dispatch]
+                history_store.record_event(
+                    "operations_plan_reassigned",
+                    {
+                        "plan_id": plan_id,
+                        "from_truck": from_truck,
+                        "to_truck": to_truck,
+                        "reason": record["reason"],
+                        "cancelled_dispatch_id": record["old_dispatch_id"],
+                        "dispatch_id": record["new_dispatch_id"],
+                        "spj_id": record["spj_id"],
+                        "by": record["actor"],
+                    },
                 )
-            raise HTTPException(status_code=409, detail=str(error)) from error
-        _OPERATIONS_PLAN_STORE.reassign_truck(
-            plan_id, from_truck, to_truck, old_dispatch_id, new_dispatch["id"], item
-        )
-        dispatch_center._dispatches[:] = [
-            new_dispatch if d.get("id") == old_dispatch_id else d for d in dispatch_center._dispatches
-        ]
-        history_store.record_event(
-            "operations_plan_reassigned",
-            {
-                "plan_id": plan_id,
-                "from_truck": from_truck,
-                "to_truck": to_truck,
-                "reason": payload.reason,
-                "cancelled_dispatch_id": old_dispatch_id,
-                "dispatch_id": new_dispatch["id"],
-                "spj_id": spj.spj_id if spj else None,
-                "by": _role,
-            },
-        )
+                _OPERATIONS_PLAN_STORE.set_reassign_status(plan_id, from_truck, "done")
+        except sqlite3.Error as error:
+            logger.exception("reassign %s %s -> %s interrupted", plan_id, from_truck, to_truck)
+            raise HTTPException(
+                status_code=503, detail="Pengalihan belum selesai; kirim ulang permintaan yang sama."
+            ) from error
     return {
         "plan_id": plan_id,
         "from_truck": from_truck,
         "to_truck": to_truck,
-        "cancelled_dispatch_id": old_dispatch_id,
-        "dispatch_id": new_dispatch["id"],
-        "spj_id": spj.spj_id if spj else None,
+        "cancelled_dispatch_id": record["old_dispatch_id"],
+        "dispatch_id": record["new_dispatch_id"],
+        "spj_id": record["spj_id"],
     }
+
+
+def _start_reassign(
+    plan: dict[str, Any],
+    from_truck: str,
+    to_truck: str,
+    trucks: dict[str, dict[str, Any]],
+    reason: str,
+    actor: str,
+) -> dict[str, Any]:
+    """Check a new reassign, move its draft SPJ (step 1) and record it (step 2)."""
+    plan_id = plan["plan_id"]
+    dispatches = plan.get("dispatches") or []
+    index = next((i for i, d in enumerate(dispatches) if d.get("truck_code") == from_truck), None)
+    if index is None or "fields" not in dispatches[index]:
+        raise HTTPException(status_code=404, detail=f"Truck {from_truck} is not in plan {plan_id}.")
+    if any(d.get("truck_code") == to_truck for d in dispatches):
+        raise HTTPException(status_code=409, detail=f"Truk {to_truck} sudah ada di rencana ini.")
+    if trucks[to_truck].get("is_damaged"):
+        raise HTTPException(status_code=409, detail=f"Truk {to_truck} sedang rusak.")
+    duty = safety.duty_check(to_truck)
+    if duty["blocked"]:
+        raise HTTPException(status_code=409, detail=duty["reason"])
+    link = next((r for r in _OPERATIONS_PLAN_STORE.spj_links(plan_id) if r["truck_code"] == from_truck), None)
+    spj = SPJ_STORE.get(link["spj_id"]) if link and link["spj_id"] else None
+    if spj is not None and spj.status != "draft":
+        raise HTTPException(status_code=409, detail="SPJ sudah aktif; batalkan dan buat ulang")
+
+    old = dispatches[index]
+    header, _, rest = old["text"].partition("\n")
+    text = header.replace(f"Truk {from_truck}", f"Truk {to_truck}") + f"\nDialihkan dari Truk {from_truck}."
+    if rest:
+        text += "\n" + rest
+    item = {**old, "truck_code": to_truck, "text": text, "fields": {**old["fields"], "truck_code": to_truck}}
+    # An earlier attempt may have moved the SPJ and then failed before recording.
+    if spj is not None and spj.truck_code != to_truck:
+        try:
+            SPJ_STORE.reassign_draft(
+                spj.spj_id, to_truck, trucks[to_truck].get("driver_name") or "", actor=actor, reason=reason
+            )
+        except ValueError:
+            raise HTTPException(status_code=409, detail="SPJ sudah aktif; batalkan dan buat ulang") from None
+    return _OPERATIONS_PLAN_STORE.claim_reassign(
+        plan_id,
+        from_truck,
+        to_truck=to_truck,
+        old_dispatch_id=(plan.get("dispatch_ids") or [])[index],
+        new_dispatch_id=str(uuid4()),
+        spj_id=spj.spj_id if spj else None,
+        item=item,
+        reason=reason,
+        actor=actor,
+    )
 
 
 @router.post("/api/simulator/stagger")

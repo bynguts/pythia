@@ -7,6 +7,7 @@ damaged, duty-blocked or already-planned target is refused.
 
 from __future__ import annotations
 
+import sqlite3
 from uuid import uuid4
 
 import pytest
@@ -229,3 +230,65 @@ def test_reason_is_required_and_bounded(api_client, auth_headers):
     headers = auth_headers("dispatcher")
     assert _reassign(api_client, headers, plan["plan_id"], a, target, reason="").status_code == 422
     assert _reassign(api_client, headers, plan["plan_id"], a, target, reason="x" * 201).status_code == 422
+
+
+def _plan_dispatches_for(truck: str, plan_id: str) -> list[dict]:
+    return [
+        d for d in history_store.list_dispatches() if d["truck_code"] == truck and plan_id in d["instruction"]
+    ]
+
+
+def _reassigned_events(plan_id: str) -> list[dict]:
+    return [
+        e
+        for e in history_store.list_events(200)
+        if e["event_type"] == "operations_plan_reassigned" and e["payload"]["plan_id"] == plan_id
+    ]
+
+
+@pytest.mark.parametrize("step", ["plan_move", "mark_old"])
+def test_an_interrupted_reassign_resumes_with_exactly_one_new_dispatch(
+    api_client, auth_headers, monkeypatch, step
+):
+    """Fail after the new dispatch is saved and before the old one is marked: the retry completes."""
+    a, target = _free_trucks(2)
+    plan = _approved_plan(api_client, auth_headers, [a])
+    old_dispatch_id = plan["dispatch_ids"][0]
+    headers = auth_headers("dispatcher")
+
+    def boom(*args, **kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    if step == "plan_move":
+        monkeypatch.setattr(_OPERATIONS_PLAN_STORE, "reassign_truck", boom)
+    else:
+        monkeypatch.setattr(history_store, "mark_dispatch_reassigned", boom)
+    failed = _reassign(api_client, headers, plan["plan_id"], a, target)
+    assert failed.status_code == 503
+    assert len(_plan_dispatches_for(target, plan["plan_id"])) == 1  # step 3 ran
+    assert history_store.get_dispatch(old_dispatch_id)["field_status"] == "PENDING"
+    monkeypatch.undo()
+
+    retried = _reassign(api_client, headers, plan["plan_id"], a, target)
+    assert retried.status_code == 200, retried.text
+    new_rows = _plan_dispatches_for(target, plan["plan_id"])
+    assert [r["id"] for r in new_rows] == [retried.json()["dispatch_id"]]
+    assert history_store.get_dispatch(old_dispatch_id)["field_status"] == "REASSIGNED"
+    moved = api_client.get(f"/api/operations/instructions/{target}", headers=headers).json()
+    assert [i["dispatch_id"] for i in moved if i["plan_id"] == plan["plan_id"]] == [new_rows[0]["id"]]
+    assert SPJ_STORE.get(retried.json()["spj_id"]).truck_code == target
+    assert len(_reassigned_events(plan["plan_id"])) == 1
+
+
+def test_a_repeated_reassign_is_idempotent_and_a_conflicting_one_409(api_client, auth_headers):
+    a, target, other = _free_trucks(3)
+    plan = _approved_plan(api_client, auth_headers, [a])
+    headers = auth_headers("dispatcher")
+    first = _reassign(api_client, headers, plan["plan_id"], a, target)
+    again = _reassign(api_client, headers, plan["plan_id"], a, target)
+    assert first.status_code == again.status_code == 200
+    assert again.json() == first.json()
+    assert len(_plan_dispatches_for(target, plan["plan_id"])) == 1
+    assert len(_reassigned_events(plan["plan_id"])) == 1
+    assert len([e for e in SPJ_STORE.audit_log(first.json()["spj_id"]) if e["action"] == "reassign"]) == 1
+    assert _reassign(api_client, headers, plan["plan_id"], a, other).status_code == 409

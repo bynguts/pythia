@@ -95,6 +95,27 @@ class OperationsPlanStore:
                     )
                     """
                 )
+                # A truck reassign spans three databases (plan, dispatches, SPJ), so it
+                # is ordered and resumable rather than atomic: this row records the
+                # decision and the new dispatch id before the dispatch is written.
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS operations_plan_reassign (
+                        plan_id TEXT NOT NULL,
+                        from_truck TEXT NOT NULL,
+                        to_truck TEXT NOT NULL,
+                        old_dispatch_id TEXT NOT NULL,
+                        new_dispatch_id TEXT NOT NULL,
+                        spj_id TEXT,
+                        item TEXT NOT NULL,
+                        reason TEXT NOT NULL,
+                        actor TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        PRIMARY KEY (plan_id, from_truck)
+                    )
+                    """
+                )
 
     # -- plan lifecycle -----------------------------------------------------
 
@@ -276,19 +297,59 @@ class OperationsPlanStore:
                         logger.exception("could not record the draft SPJ failure")
         return self.spj_links(plan_id)
 
-    def reassign_truck(
-        self,
-        plan_id: str,
-        from_truck: str,
-        to_truck: str,
-        old_dispatch_id: str,
-        new_dispatch_id: str,
-        item: dict[str, Any],
-    ) -> None:
-        """Move one truck's share of an approved plan to another truck, in ONE transaction.
+    def reassign_row(self, plan_id: str, from_truck: str) -> dict[str, Any] | None:
+        """The reassign record of one truck of a plan, or None (status claimed | moved | done)."""
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT * FROM operations_plan_reassign WHERE plan_id=? AND from_truck=?",
+                (plan_id, from_truck),
+            ).fetchone()
+        if row is None:
+            return None
+        return {**dict(row), "item": json.loads(row["item"])}
+
+    def claim_reassign(self, plan_id: str, from_truck: str, **record: Any) -> dict[str, Any]:
+        """Record a reassign before its first write elsewhere; the first claim wins.
+
+        ``record`` holds to_truck, old_dispatch_id, new_dispatch_id (chosen up
+        front, so the dispatch save is idempotent), spj_id, item, reason, actor.
+        """
+        with self._lock, closing(self._connect()) as connection:
+            with connection:
+                connection.execute(
+                    "INSERT OR IGNORE INTO operations_plan_reassign "
+                    "(plan_id, from_truck, to_truck, old_dispatch_id, new_dispatch_id, spj_id, item, "
+                    "reason, actor, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,'claimed',?)",
+                    (
+                        plan_id,
+                        from_truck,
+                        record["to_truck"],
+                        record["old_dispatch_id"],
+                        record["new_dispatch_id"],
+                        record["spj_id"],
+                        json.dumps(record["item"]),
+                        record["reason"],
+                        record["actor"],
+                        datetime.now(UTC).isoformat(),
+                    ),
+                )
+        return self.reassign_row(plan_id, from_truck)
+
+    def set_reassign_status(self, plan_id: str, from_truck: str, status: str) -> None:
+        with closing(self._connect()) as connection:
+            with connection:
+                connection.execute(
+                    "UPDATE operations_plan_reassign SET status=? WHERE plan_id=? AND from_truck=?",
+                    (status, plan_id, from_truck),
+                )
+
+    def reassign_truck(self, plan_id: str, from_truck: str) -> None:
+        """Move one truck's share of an approved plan as its reassign record says, in ONE transaction.
 
         The plan payload (dispatch, assignments, dispatch id list), the
-        structured instruction row and the draft-SPJ link row all move together.
+        structured instruction row and the draft-SPJ link row all move together,
+        and the record turns ``moved``. A record already past ``claimed`` is a
+        no-op, so a resumed reassign never moves twice.
         """
         with self._lock:
             connection = self._connect()
@@ -296,11 +357,21 @@ class OperationsPlanStore:
             with closing(connection):
                 connection.execute("BEGIN IMMEDIATE")
                 try:
+                    record = connection.execute(
+                        "SELECT * FROM operations_plan_reassign WHERE plan_id=? AND from_truck=?",
+                        (plan_id, from_truck),
+                    ).fetchone()
+                    if record is None:
+                        raise KeyError(f"No reassign recorded for {from_truck} in plan {plan_id}")
+                    if record["status"] != "claimed":
+                        connection.execute("COMMIT")
+                        return
+                    to_truck = record["to_truck"]
+                    old_dispatch_id, new_dispatch_id = record["old_dispatch_id"], record["new_dispatch_id"]
+                    item = json.loads(record["item"])
                     row = connection.execute(
                         "SELECT * FROM operations_plans WHERE plan_id=?", (plan_id,)
                     ).fetchone()
-                    if row is None:
-                        raise KeyError(f"Plan {plan_id} not found")
                     payload = json.loads(row["payload"])
                     payload["dispatches"] = [
                         item if d.get("truck_code") == from_truck else d
@@ -330,6 +401,10 @@ class OperationsPlanStore:
                         "UPDATE operations_plan_spj SET truck_code=?, dispatch_id=?, updated_at=? "
                         "WHERE plan_id=? AND truck_code=?",
                         (to_truck, new_dispatch_id, now, plan_id, from_truck),
+                    )
+                    connection.execute(
+                        "UPDATE operations_plan_reassign SET status='moved' WHERE plan_id=? AND from_truck=?",
+                        (plan_id, from_truck),
                     )
                     connection.execute("COMMIT")
                 except Exception:
