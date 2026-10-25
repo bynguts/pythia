@@ -1,0 +1,268 @@
+/* wave11 drivers: Sopir (features/drivers/DriverAnalytics.jsx). Heading, the joined metric
+   strip, one provenance line, then the assignment table beside a flat attention rail. */
+
+.driver-workspace {
+  padding-bottom: var(--space-7);
+}
+.drv-heading {
+  margin: 0 0 var(--space-5);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+}
+.drv-heading h1 {
+  margin: 0;
+  color: var(--ui-ink);
+  font-family: var(--font-head);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+.drv-heading p {
+  max-width: 64ch;
+  margin: var(--space-2) 0 0;
+  color: var(--ui-muted);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+.drv-freshness {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.drv-freshness time {
+  color: var(--ui-ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.driver-workspace .metric-strip {
+  margin-bottom: var(--space-3);
+}
+.drv-source {
+  margin: 0 0 var(--space-5);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+}
+.drv-source > span:last-child {
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+.drv-state {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4) 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  color: var(--ui-ink-soft);
+  background: var(--ui-surface);
+  font-size: 14px;
+}
+.drv-state p {
+  margin: 0;
+}
+.drv-state.is-bad {
+  border-color: var(--ui-danger-line);
+  color: var(--ui-danger);
+  background: var(--ui-danger-soft);
+}
+
+.drv-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: var(--space-5);
+  align-items: start;
+}
+.drv-table-surface,
+.drv-rail {
+  min-width: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-surface);
+  overflow: hidden;
+}
+.drv-rail {
+  position: sticky;
+  top: calc(var(--ui-topbar-height) + var(--space-5));
+}
+.drv-surface-head {
+  min-height: 60px;
+  padding: var(--space-3) 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--ui-border);
+}
+.drv-surface-head h2 {
+  margin: 0;
+  color: var(--ui-ink);
+  font-family: var(--font-head);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.drv-count {
+  min-width: 28px;
+  height: 24px;
+  padding: 0 var(--space-2);
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-ink-soft);
+  background: var(--ui-surface-muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.drv-table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+.drv-table th,
+.drv-table td {
+  padding: 10px 20px;
+}
+.drv-table td {
+  white-space: nowrap;
+}
+.drv-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.drv-person i {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--ui-ink-soft);
+  background: var(--ui-surface-muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+}
+.drv-person strong {
+  font-weight: 500;
+}
+.drv-mono {
+  font-family: var(--mono);
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+/* Status as a dot and words: quiet when normal, ink-weight when it needs someone. */
+.drv-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.drv-dot::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ui-border-strong);
+}
+.drv-dot.is-good::before {
+  background: var(--ui-forest-500);
+}
+.drv-dot.is-warning {
+  color: var(--ui-warning);
+  font-weight: 600;
+}
+.drv-dot.is-warning::before {
+  background: var(--ui-warning);
+}
+.drv-dot.is-danger {
+  color: var(--ui-danger);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.drv-dot.is-danger::before {
+  background: var(--ui-danger);
+}
+
+.drv-rail .ui-list {
+  max-height: calc(100dvh - var(--ui-topbar-height) - 150px);
+  margin: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.drv-rail .ui-row:last-child {
+  border-bottom: 0;
+}
+.drv-rail-next {
+  margin: 2px 0 0;
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+}
+.drv-rail-empty {
+  margin: 0;
+  padding: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  color: var(--ui-ink-soft);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.drv-rail-empty svg {
+  flex: none;
+  color: var(--ui-forest-700);
+}
+
+@media (max-width: 1100px) {
+  .drv-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* The units that need someone come first on a narrow screen. */
+  .drv-rail {
+    position: static;
+    order: -1;
+  }
+  .drv-rail .ui-list {
+    max-height: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .drv-heading h1 {
+    font-size: 24px;
+  }
+  .drv-surface-head {
+    padding-inline: var(--space-4);
+  }
+  .drv-table th,
+  .drv-table td {
+    padding-inline: var(--space-4);
+  }
+  /* Phones keep the rail short so the table is reachable: title, unit, action. */
+  .drv-rail-next {
+    display: none;
+  }
+}

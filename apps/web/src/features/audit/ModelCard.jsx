@@ -35,16 +35,11 @@ export function ModelCard({ suitability, resolutionLabel }) {
     .map(([key]) => key);
 
   return (
-    <section
-      className="audit-registry-surface audit-model-card"
-      data-testid="model-card"
-      aria-labelledby="audit-model-card-title"
-    >
-      <div className="section-intro compact">
-        <div>
-          <span className="surface-kicker">{t("audit_mc_kicker")}</span>
-          <h2 id="audit-model-card-title">{t("audit_mc_title")}</h2>
-        </div>
+    <section className="audit-model-card" data-testid="model-card" aria-labelledby="audit-model-card-title">
+      <div className="model-card-intro">
+        <h3 id="audit-model-card-title" className="settings-subhead">
+          {t("audit_mc_title")}
+        </h3>
         <p>{t("audit_mc_intro")}</p>
       </div>
 
@@ -58,7 +53,7 @@ export function ModelCard({ suitability, resolutionLabel }) {
             <li key={key} className="model-card-row" data-testid={`model-card-${key}`}>
               <div className="model-card-head">
                 <strong>{t(`audit_mc_res_${key}`)}</strong>
-                <span className="classification-badge real">{t("audit_mc_real_target")}</span>
+                <span className="prov prov-real">{t("audit_mc_real_target")}</span>
                 <span
                   className={`model-card-verdict ${good ? "good" : "bad"}`}
                   data-testid={`model-card-verdict-${key}`}
@@ -115,14 +110,12 @@ export function ModelCard({ suitability, resolutionLabel }) {
 
       {synthetic.length > 0 && (
         <>
-          <h3 className="model-card-subhead">{t("audit_mc_synthetic_title")}</h3>
+          <h4 className="model-card-subhead">{t("audit_mc_synthetic_title")}</h4>
           <ul className="model-card-synthetic" data-testid="model-card-synthetic">
             {synthetic.map((key) => (
               <li key={key} data-testid={`model-card-synthetic-${key}`}>
                 <span>{resolutionLabel(key)}</span>
-                <span className="classification-badge calibrated_synthetic">
-                  {t("audit_mc_synthetic_badge")}
-                </span>
+                <span className="prov prov-sim">{t("audit_mc_synthetic_badge")}</span>
                 <small>
                   {key === "hotspot_rank" ? t("audit_mc_hotspot_note") : t("audit_mc_synthetic_note")}
                 </small>

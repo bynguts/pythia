@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Database, MessageCircle, Settings, Users } from "lucide-react";
+import { Database, MessageCircle, Users } from "lucide-react";
 import { apiGet } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import { DataAuditWorkspace } from "../audit/DataAuditWorkspace.jsx";
@@ -11,6 +11,8 @@ import "./settings.css";
 
 // wave9 settings: where an operator configures Pythia. The section lives in ?tab=
 // (whatsapp is the default), so /audit can redirect to ?tab=data.
+// wave11 settings: a settings page in the SaaS sense: a section list on the left (a segmented
+// control on phones) and one plain column of setting groups on the right.
 const SECTIONS = [
   { id: "whatsapp", groupKey: "set_group_integrations", key: "set_tab_whatsapp", icon: MessageCircle },
   { id: "team", groupKey: "set_group_organisation", key: "set_tab_team", icon: Users },
@@ -54,14 +56,9 @@ export function SettingsWorkspace() {
 
   return (
     <section className="settings-workspace workspace-page" data-testid="settings-workspace">
-      <header className="workspace-heading">
-        <div>
-          <span className="workspace-kicker">
-            <Settings size={14} /> {t("set_kicker")}
-          </span>
-          <h1>{t("set_title")}</h1>
-          <p>{t("set_intro")}</p>
-        </div>
+      <header className="settings-heading">
+        <h1>{t("set_title")}</h1>
+        <p>{t("set_intro")}</p>
       </header>
 
       <div className="settings-layout">
@@ -76,8 +73,11 @@ export function SettingsWorkspace() {
                 data-testid={`settings-tab-${id}`}
                 onClick={() => select(id)}
               >
-                <Icon size={18} aria-hidden="true" />
-                <span>{t(key)}</span>
+                <Icon size={16} aria-hidden="true" />
+                <span className="settings-nav-full">{t(key)}</span>
+                <span className="settings-nav-short" aria-hidden="true">
+                  {t(`${key}_short`)}
+                </span>
               </button>
             </div>
           ))}

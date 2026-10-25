@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Database, ExternalLink, ShieldCheck, Truck } from "lucide-react";
+import { Check, ChevronDown, Database, ExternalLink, ShieldCheck, X } from "lucide-react";
 import { apiFetch } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { MetricStrip } from "../../shared/ui/MetricStrip.jsx";
 import { ModelCard } from "./ModelCard.jsx";
 
 const COPY = {
@@ -9,7 +10,6 @@ const COPY = {
     loading: "Memuat registri data…",
     error: "Data audit tidak dapat dimuat. Periksa koneksi lalu coba lagi.",
     retry: "Coba lagi",
-    kicker: "Transparansi keputusan",
     title: "Sumber data & model",
     description:
       "Periksa asal, tahun data, keterbatasan, dan kelayakan data yang digunakan dalam keputusan Pythia.",
@@ -20,7 +20,7 @@ const COPY = {
     fresh: "Terkini atau baru",
     freshHint: "berdasarkan tahun data",
     fleetUnits: "Unit armada",
-    census: "sensus kendaraan 2023",
+    census: "sensus truk 2025",
     sourceRegistry: "Registri sumber",
     provenance: "Asal dan keterbatasan data",
     dataset: "Dataset",
@@ -35,7 +35,6 @@ const COPY = {
     internal: "Tautan tidak tersedia",
     emptyRegistry: "Belum ada dataset yang tercatat.",
     scentinel: {
-      kicker: "Evidence eksternal",
       title: "Scentinel — penempatan sensor",
       empty: "Belum ada evidence Scentinel yang diimpor.",
       evidenceClass: "Simulasi eksternal",
@@ -53,14 +52,13 @@ const COPY = {
         experimental_validation: "Validasi eksperimental",
       },
     },
-    modelSuitability: "Kelayakan model",
     supportedResolution: "Resolusi yang didukung",
     emptyResolutions: "Belum ada penilaian resolusi.",
     modelNote: "Catatan model",
     unavailable: "Belum tersedia.",
     originalNote: "Catatan sumber (teks asli)",
     fleetComposition: "Komposisi armada",
-    vehicleCensus: "Sensus kendaraan 2023",
+    vehicleCensus: "Sensus truk 2025",
     emptyFleet: "Data komposisi armada belum tersedia.",
     sourcePrefix: "Sumber",
     freshness: { current: "Terkini", recent: "Baru", stale: "Lama", unknown: "Tidak diketahui" },
@@ -95,6 +93,7 @@ const COPY = {
       "Arm Roll Kecil": "Arm roll kecil",
       "Compactor Besar": "Pemadat besar",
       "Compactor Kecil": "Pemadat kecil",
+      "Compactor Listrik Kecil": "Pemadat listrik kecil",
       "Dump Truck Besar": "Truk bak besar",
       "Dump Truck Kecil": "Truk bak kecil",
       "Gerobak Motor": "Gerobak motor",
@@ -109,7 +108,7 @@ const COPY = {
       "Truk Dump Truk Kecil": "Truk bak kecil",
       "Truk Tronton": "Truk tronton",
     },
-    fleetSource: "Sensus truk DKI 2023 (data.go.id)",
+    fleetSource: "Sensus truk DKI 2025 (data.go.id)",
     modelSourceNote:
       "Resolusi harian per kecamatan menggunakan data sintetis terkalibrasi dan tidak boleh disajikan sebagai akurasi teramati.",
   },
@@ -117,7 +116,6 @@ const COPY = {
     loading: "Loading data registry…",
     error: "Audit data could not be loaded. Check your connection and try again.",
     retry: "Try again",
-    kicker: "Decision transparency",
     title: "Data sources & model",
     description:
       "Review the origin, data year, limitations, and suitability of data used in Pythia decisions.",
@@ -128,7 +126,7 @@ const COPY = {
     fresh: "Current or recent",
     freshHint: "based on data year",
     fleetUnits: "Fleet units",
-    census: "2023 vehicle census",
+    census: "2025 truck census",
     sourceRegistry: "Source registry",
     provenance: "Data origins and limitations",
     dataset: "Dataset",
@@ -143,7 +141,6 @@ const COPY = {
     internal: "Link unavailable",
     emptyRegistry: "No datasets recorded yet.",
     scentinel: {
-      kicker: "External evidence",
       title: "Scentinel — sensor placement",
       empty: "No Scentinel evidence has been imported yet.",
       evidenceClass: "External simulation",
@@ -161,14 +158,13 @@ const COPY = {
         experimental_validation: "Experimental validation",
       },
     },
-    modelSuitability: "Model suitability",
     supportedResolution: "Supported resolutions",
     emptyResolutions: "No resolution assessments available yet.",
     modelNote: "Model note",
     unavailable: "Not available yet.",
     originalNote: "Source note (original wording)",
     fleetComposition: "Fleet composition",
-    vehicleCensus: "2023 vehicle census",
+    vehicleCensus: "2025 truck census",
     emptyFleet: "Fleet composition data is not available yet.",
     sourcePrefix: "Source",
     freshness: { current: "Current", recent: "Recent", stale: "Stale", unknown: "Unknown" },
@@ -203,6 +199,7 @@ const COPY = {
       "Arm Roll Kecil": "Small arm roll",
       "Compactor Besar": "Large compactor",
       "Compactor Kecil": "Small compactor",
+      "Compactor Listrik Kecil": "Small electric compactor",
       "Dump Truck Besar": "Large dump truck",
       "Dump Truck Kecil": "Small dump truck",
       "Gerobak Motor": "Motorized cart",
@@ -217,7 +214,7 @@ const COPY = {
       "Truk Dump Truk Kecil": "Small dump truck",
       "Truk Tronton": "Heavy truck",
     },
-    fleetSource: "DKI truck census 2023 (data.go.id)",
+    fleetSource: "DKI truck census 2025 (data.go.id)",
     modelSourceNote:
       "Daily per-district resolution is calibrated-synthetic and must not be presented as observed accuracy.",
   },
@@ -251,7 +248,17 @@ const LIMITATIONS_ID = {
 };
 
 const BACKEND_MODEL_NOTE = COPY.en.modelSourceNote;
-const BACKEND_FLEET_SOURCE = COPY.en.fleetSource;
+// The backend names the latest census year ("DKI truck census 2025 (data.go.id)"),
+// so match the shape, not one year: a 2026 row must still read as the real census.
+const isFleetCensus = (source) => /^DKI truck census \d{4} \(data\.go\.id\)$/.test(source || "");
+// Source classification -> provenance label tone (design-system.png).
+const CLASS_KIND = {
+  real: "real",
+  proxy: "proxy",
+  derived: "model",
+  calibrated_synthetic: "sim",
+  unknown: "proxy",
+};
 
 function sourceNote(note, lang, copy) {
   if (!note) return copy.unavailable;
@@ -262,6 +269,8 @@ function sourceNote(note, lang, copy) {
 
 // wave9 settings: rendered as the "Sumber data & model" section of Settings (?tab=data),
 // condensed: the summary strip stays open, the model card and the registry are collapsed.
+// wave11 settings: a calm registry: one joined strip, then two disclosure rows in one box;
+// the registry opens onto a table with the evidence columns below it, never a side rail.
 export function DataAuditWorkspace() {
   const { lang, t } = useLanguage();
   const copy = COPY[lang] || COPY.id;
@@ -311,28 +320,42 @@ export function DataAuditWorkspace() {
     return () => controller.abort();
   }, [retry]);
 
+  const heading = (
+    <header className="settings-panel-head">
+      <h2>{copy.title}</h2>
+      <p>{copy.description}</p>
+    </header>
+  );
+
   if (!audit && !error)
     return (
-      <div className="workspace-loading" role="status">
-        <span />
-        {copy.loading}
-      </div>
+      <section className="audit-workspace settings-panel" data-testid="audit-workspace" aria-busy="true">
+        {heading}
+        <div className="settings-box">
+          <p className="settings-row settings-row-text" role="status">
+            {copy.loading}
+          </p>
+        </div>
+      </section>
     );
   if (error)
     return (
-      <section className="audit-workspace workspace-page" data-testid="audit-workspace">
-        <div className="workspace-loading" role="alert">
-          {copy.error}{" "}
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => {
-              setAudit(null);
-              setRetry((count) => count + 1);
-            }}
-          >
-            {copy.retry}
-          </button>
+      <section className="audit-workspace settings-panel" data-testid="audit-workspace">
+        {heading}
+        <div className="settings-box">
+          <div className="settings-row is-bad" role="alert">
+            <p className="settings-row-text">{copy.error}</p>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => {
+                setAudit(null);
+                setRetry((count) => count + 1);
+              }}
+            >
+              {copy.retry}
+            </button>
+          </div>
         </div>
       </section>
     );
@@ -346,79 +369,72 @@ export function DataAuditWorkspace() {
   ).length;
   const realRecords = records.filter((record) => record.classification === "real").length;
   const number = (value) => (value == null ? "—" : Number(value).toLocaleString(locale));
+  const summary = [
+    { label: copy.datasets, value: number(records.length), source: copy.documented, sourceKind: "proxy" },
+    { label: copy.real, value: number(realRecords), source: copy.realHint, sourceKind: "real" },
+    { label: copy.fresh, value: number(currentRecords), source: copy.freshHint, sourceKind: "proxy" },
+    {
+      label: copy.fleetUnits,
+      value: number(fleet.total_units),
+      source: isFleetCensus(fleet.source)
+        ? copy.census
+        : fleet.source
+          ? `${copy.sourcePrefix}: ${fleet.source}`
+          : copy.unavailable,
+      sourceKind: isFleetCensus(fleet.source) ? "real" : "proxy",
+    },
+  ];
 
   return (
-    <section className="audit-workspace workspace-page" data-testid="audit-workspace">
-      <header className="workspace-heading">
-        <div>
-          <span className="workspace-kicker">
-            <ShieldCheck size={14} /> {copy.kicker}
-          </span>
-          <h2>{copy.title}</h2>
-          <p>{copy.description}</p>
-        </div>
-      </header>
+    <section className="audit-workspace settings-panel" data-testid="audit-workspace">
+      {heading}
 
-      <div className="audit-summary-strip">
-        <div>
-          <span>{copy.datasets}</span>
-          <strong>{number(records.length)}</strong>
-          <small>
-            <Database size={14} /> {copy.documented}
-          </small>
-        </div>
-        <div>
-          <span>{copy.real}</span>
-          <strong>{number(realRecords)}</strong>
-          <small>
-            <CheckCircle2 size={14} /> {copy.realHint}
-          </small>
-        </div>
-        <div>
-          <span>{copy.fresh}</span>
-          <strong>{number(currentRecords)}</strong>
-          <small>{copy.freshHint}</small>
-        </div>
-        <div>
-          <span>{copy.fleetUnits}</span>
-          <strong>{number(fleet.total_units)}</strong>
-          <small>
-            <Truck size={14} />{" "}
-            {fleet.source === BACKEND_FLEET_SOURCE
-              ? copy.census
-              : fleet.source
-                ? `${copy.sourcePrefix}: ${fleet.source}`
-                : copy.unavailable}
-          </small>
-        </div>
-      </div>
+      <MetricStrip metrics={summary} label={copy.title} />
 
-      <details className="settings-disclosure" data-testid="model-card-disclosure">
-        <summary>{t("set_data_model_card")}</summary>
-        <ModelCard suitability={suitability} resolutionLabel={resolutionLabel} />
-      </details>
+      <div className="settings-box">
+        <details className="settings-disclosure" data-testid="model-card-disclosure">
+          <summary>
+            <span className="settings-glyph" aria-hidden="true">
+              <ShieldCheck size={18} />
+            </span>
+            <span className="settings-row-text">
+              <strong>{t("set_data_model_card")}</strong>
+              <small>{t("set11_data_model_meta")}</small>
+            </span>
+            <ChevronDown className="settings-chevron" size={18} aria-hidden="true" />
+          </summary>
+          <div className="settings-disclosure-body">
+            <ModelCard suitability={suitability} resolutionLabel={resolutionLabel} />
+          </div>
+        </details>
 
-      <details className="settings-disclosure" data-testid="source-registry-disclosure">
-        <summary>{t("set_data_registry")}</summary>
-        <div className="audit-layout">
-          <section className="audit-registry-surface">
-            <div className="section-intro compact">
-              <div>
-                <span className="surface-kicker">{copy.sourceRegistry}</span>
-                <h2>{copy.provenance}</h2>
-              </div>
-              <p>{copy.datasetCount(records.length)}</p>
-            </div>
-            <div className="table-wrap">
+        <details className="settings-disclosure" data-testid="source-registry-disclosure">
+          <summary>
+            <span className="settings-glyph" aria-hidden="true">
+              <Database size={18} />
+            </span>
+            <span className="settings-row-text">
+              <strong>{t("set_data_registry")}</strong>
+              <small>{copy.datasetCount(records.length)}</small>
+            </span>
+            <ChevronDown className="settings-chevron" size={18} aria-hidden="true" />
+          </summary>
+          <div className="settings-disclosure-body">
+            <h3 className="settings-subhead">{copy.provenance}</h3>
+            <div className="settings-table-wrap">
               <table className="audit-table" aria-label={copy.sourceRegistry}>
                 <thead>
                   <tr>
-                    <th>{copy.dataset}</th>
-                    <th>{copy.status}</th>
-                    <th>{copy.rows}</th>
-                    <th>{copy.granularity}</th>
-                    <th>{copy.classification}</th>
-                    <th>{copy.source}</th>
+                    <th scope="col">{copy.dataset}</th>
+                    <th scope="col">{copy.granularity}</th>
+                    <th scope="col" className="settings-num">
+                      {copy.rows}
+                    </th>
+                    <th scope="col">{copy.classification}</th>
+                    <th scope="col">{copy.status}</th>
+                    <th scope="col">
+                      <span className="sr-only">{copy.source}</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -427,136 +443,157 @@ export function DataAuditWorkspace() {
                       <td colSpan={6}>{copy.emptyRegistry}</td>
                     </tr>
                   )}
-                  {records.map((record) => (
-                    <tr key={record.name}>
-                      <td>
-                        <strong>{record.name}</strong>
-                        <small>{sourceNote(record.limitations, lang, copy)}</small>
-                      </td>
-                      <td>
-                        <span
-                          className={`freshness-badge ${Object.hasOwn(copy.freshness, record.freshness) ? record.freshness : "unknown"}`}
-                        >
-                          {copy.freshness[record.freshness] || copy.freshness.unknown}
-                        </span>
-                      </td>
-                      <td>{number(record.row_count)}</td>
-                      <td>
-                        <code>{copy.granularities[record.granularity] || copy.unmapped}</code>
-                      </td>
-                      <td>
-                        <span
-                          className={`classification-badge ${Object.hasOwn(copy.classes, record.classification) ? record.classification : "unknown"}`}
-                        >
-                          {copy.classes[record.classification] || copy.freshness.unknown}
-                        </span>
-                      </td>
-                      <td>
-                        {String(record.source_url || "").startsWith("https://") ? (
-                          <a
-                            href={record.source_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            aria-label={copy.openSource(record.name)}
-                          >
-                            <ExternalLink size={15} />
-                          </a>
-                        ) : (
-                          <span>{copy.internal}</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {records.map((record) => {
+                    const fresh = Object.hasOwn(copy.freshness, record.freshness)
+                      ? record.freshness
+                      : "unknown";
+                    const cls = Object.hasOwn(copy.classes, record.classification)
+                      ? record.classification
+                      : "unknown";
+                    return (
+                      <tr key={record.name}>
+                        <td>
+                          <strong>{record.name}</strong>
+                          <small>{sourceNote(record.limitations, lang, copy)}</small>
+                        </td>
+                        <td>{copy.granularities[record.granularity] || copy.unmapped}</td>
+                        <td className="settings-num">{number(record.row_count)}</td>
+                        <td>
+                          <span className={`prov prov-${CLASS_KIND[cls]}`}>
+                            {copy.classes[record.classification] || copy.freshness.unknown}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`freshness-badge ${fresh}`}>
+                            {copy.freshness[record.freshness] || copy.freshness.unknown}
+                          </span>
+                        </td>
+                        <td>
+                          {String(record.source_url || "").startsWith("https://") ? (
+                            <a
+                              className="settings-icon-link"
+                              href={record.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label={copy.openSource(record.name)}
+                            >
+                              <ExternalLink size={16} aria-hidden="true" />
+                            </a>
+                          ) : (
+                            <small>{copy.internal}</small>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-          </section>
 
-          <aside className="audit-evidence-rail">
-            <section data-testid="scentinel-evidence-panel">
-              <span className="surface-kicker">{copy.scentinel.kicker}</span>
-              <h2>{copy.scentinel.title}</h2>
-              {scentinel.length === 0 && <p>{copy.scentinel.empty}</p>}
-              {scentinel.map((ev) => (
-                <div key={ev.run_id} className="scentinel-run">
-                  <div className="scentinel-run-head">
-                    <strong>{ev.run_id}</strong>
-                    <span
-                      className="classification-badge calibrated_synthetic"
-                      data-testid="scentinel-evidence-class"
-                    >
-                      {copy.scentinel.evidenceClass}
-                    </span>
-                  </div>
-                  <small>
-                    {ev.truck_code ? `${ev.truck_code} · ` : ""}
-                    {ev.scenario} · {ev.gas_set.join(", ")}
-                  </small>
-                  <ul className="scentinel-gates" data-testid={`scentinel-gates-${ev.run_id}`}>
-                    {Object.entries(ev.quality_gates || {}).map(([gate, ok]) => (
-                      <li key={gate} className={ok ? "good" : "limited"}>
-                        {copy.scentinel.gates[gate] || gate}
-                        {ok ? " ✓" : " ✗"}
-                      </li>
-                    ))}
-                  </ul>
-                  <small className="audit-source">
-                    {copy.scentinel.provenance}: {ev.source_repository}@{ev.source_version} ·{" "}
-                    {copy.scentinel.digest}: <code>{ev.input_digest}</code> · {copy.scentinel.rows}:{" "}
-                    {number(ev.sensor_csv_rows)}
-                  </small>
-                </div>
-              ))}
-              <p className="model-honesty-note">
-                <strong>{copy.scentinel.boundaryTitle}</strong>
-                {copy.scentinel.boundary}
-              </p>
-            </section>
-
-            <section>
-              <span className="surface-kicker">{copy.modelSuitability}</span>
-              <h2>{copy.supportedResolution}</h2>
-              <div className="suitability-list">
-                {Object.keys(resolutions).length === 0 && <p>{copy.emptyResolutions}</p>}
-                {Object.entries(resolutions).map(([resolution, status]) => (
-                  <div key={resolution}>
-                    <code>{resolutionLabel(resolution)}</code>
-                    <span className={status === "backtested_real" ? "good" : "limited"}>
-                      {copy.suitability[status] || t(`audit_suit_${status}`)}
-                    </span>
+            <div className="settings-evidence">
+              <section data-testid="scentinel-evidence-panel" aria-labelledby="settings-scentinel-title">
+                <h3 id="settings-scentinel-title" className="settings-subhead">
+                  {copy.scentinel.title}
+                </h3>
+                {scentinel.length === 0 && <p className="settings-muted">{copy.scentinel.empty}</p>}
+                {scentinel.map((ev) => (
+                  <div key={ev.run_id} className="scentinel-run">
+                    <div className="scentinel-run-head">
+                      <strong>{ev.run_id}</strong>
+                      <span className="prov prov-sim" data-testid="scentinel-evidence-class">
+                        {copy.scentinel.evidenceClass}
+                      </span>
+                    </div>
+                    <small className="settings-muted">
+                      {ev.truck_code ? `${ev.truck_code} · ` : ""}
+                      {ev.scenario} · {ev.gas_set.join(", ")}
+                    </small>
+                    <ul className="scentinel-gates" data-testid={`scentinel-gates-${ev.run_id}`}>
+                      {Object.entries(ev.quality_gates || {}).map(([gate, ok]) => (
+                        <li key={gate} className={ok ? "good" : "limited"}>
+                          {ok ? <Check size={14} aria-hidden="true" /> : <X size={14} aria-hidden="true" />}
+                          {copy.scentinel.gates[gate] || gate}
+                          <span className="sr-only"> ({t(ok ? "set11_gate_pass" : "set11_gate_fail")})</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <dl className="scentinel-facts audit-source">
+                      <div>
+                        <dt>{copy.scentinel.provenance}</dt>
+                        <dd>
+                          {ev.source_repository}@{ev.source_version}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>{copy.scentinel.digest}</dt>
+                        <dd>
+                          <code>{ev.input_digest}</code>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>{copy.scentinel.rows}</dt>
+                        <dd>{number(ev.sensor_csv_rows)}</dd>
+                      </div>
+                    </dl>
                   </div>
                 ))}
-              </div>
-              <p className="model-honesty-note">
-                <strong>{copy.modelNote}</strong>
-                {sourceNote(suitability.note, lang, copy)}
-              </p>
-            </section>
+                <p className="model-honesty-note">
+                  <strong>{copy.scentinel.boundaryTitle}</strong>
+                  {copy.scentinel.boundary}
+                </p>
+              </section>
 
-            <section>
-              <span className="surface-kicker">{copy.fleetComposition}</span>
-              <h2>{fleet.source === BACKEND_FLEET_SOURCE ? copy.vehicleCensus : copy.fleetComposition}</h2>
-              <div className="fleet-composition-list">
-                {Object.keys(fleetTypes).length === 0 && <p>{copy.emptyFleet}</p>}
-                {Object.entries(fleetTypes).map(([type, count]) => (
-                  <div key={type}>
-                    <span>{copy.vehicleTypes[type] || type}</span>
-                    <strong>{number(count)}</strong>
-                  </div>
-                ))}
-              </div>
-              <small className="audit-source">
-                {copy.sourcePrefix}:{" "}
-                {fleet.source === BACKEND_FLEET_SOURCE
-                  ? copy.fleetSource
-                  : fleet.source
-                    ? `${copy.originalNote}: ${fleet.source}`
-                    : "—"}
-              </small>
-            </section>
-          </aside>
-        </div>
-      </details>
+              <section aria-labelledby="settings-suitability-title">
+                <h3 id="settings-suitability-title" className="settings-subhead">
+                  {copy.supportedResolution}
+                </h3>
+                <ul className="settings-list">
+                  {Object.keys(resolutions).length === 0 && (
+                    <li className="settings-muted">{copy.emptyResolutions}</li>
+                  )}
+                  {Object.entries(resolutions).map(([resolution, status]) => (
+                    <li key={resolution}>
+                      <span>{resolutionLabel(resolution)}</span>
+                      <span className={`prov ${status === "backtested_real" ? "prov-real" : "prov-sim"}`}>
+                        {copy.suitability[status] || t(`audit_suit_${status}`)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="model-honesty-note">
+                  <strong>{copy.modelNote}</strong>
+                  {sourceNote(suitability.note, lang, copy)}
+                </p>
+              </section>
+
+              <section aria-labelledby="settings-fleet-title">
+                <h3 id="settings-fleet-title" className="settings-subhead">
+                  {isFleetCensus(fleet.source) ? copy.vehicleCensus : copy.fleetComposition}
+                </h3>
+                <ul className="settings-list">
+                  {Object.keys(fleetTypes).length === 0 && (
+                    <li className="settings-muted">{copy.emptyFleet}</li>
+                  )}
+                  {Object.entries(fleetTypes).map(([type, count]) => (
+                    <li key={type}>
+                      <span>{copy.vehicleTypes[type] || type}</span>
+                      <strong className="settings-num">{number(count)}</strong>
+                    </li>
+                  ))}
+                </ul>
+                <p className="settings-muted audit-source">
+                  {copy.sourcePrefix}:{" "}
+                  {isFleetCensus(fleet.source)
+                    ? copy.fleetSource
+                    : fleet.source
+                      ? `${copy.originalNote}: ${fleet.source}`
+                      : "—"}
+                </p>
+              </section>
+            </div>
+          </div>
+        </details>
+      </div>
     </section>
   );
 }
