@@ -107,13 +107,25 @@ def test_rdf_trucks_get_a_slot_without_using_weighbridge_capacity(background):
     assert [o["truck_code"] for o in board["other_facilities"]] == ["T-001"]
 
 
-def test_a_second_plan_avoids_the_first_plans_slots(background):
+def test_a_plan_proposed_after_another_was_approved_avoids_its_slots(background):
     background[9] = (CAPACITY_PER_SLOT - 2) * 4  # two free places per 09:xx slot
     first = assign_gate_slots([_dispatch("T-001"), _dispatch("T-002")], DAY)
+    # The first plan is approved before the second is proposed, so its slots are `occupied`.
     second = assign_gate_slots([_dispatch("T-003")], DAY, list(first.values()))
     assert {s["start"] for s in first.values()} == {"09:00"}
     assert second["T-003"]["start"] == "09:15"
     assert second["T-003"]["capacity_model"]["occupied"] == 0
+
+
+def test_plans_proposed_before_either_is_approved_share_a_slot_and_the_board_holds_one(background):
+    background[9] = (CAPACITY_PER_SLOT - 1) * 4  # one free place per 09:xx slot
+    first = assign_gate_slots([_dispatch("T-001")], DAY)
+    second = assign_gate_slots([_dispatch("T-002")], DAY)  # nothing approved yet: no `occupied`
+    assert first["T-001"]["start"] == second["T-002"]["start"] == "09:00"
+
+    planned = [{"truck_code": t, "gate_slot": s} for t, s in {**first, **second}.items()]
+    recs = slot_board(DAY, planned)["recommendations"]
+    assert [(r["truck_code"], r["from_slot"], r["to_slot"]) for r in recs] == [("T-001", "09:00", "09:15")]
 
 
 def test_rdf_slots_in_occupied_do_not_take_bantargebang_places(background):

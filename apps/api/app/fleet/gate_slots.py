@@ -8,6 +8,11 @@ queue they carry into it) and the trucks of plans already approved for that date
 a truck with no room moves to the next slot that has some.
 Every constant comes from `queue_simulation`: these are modelled slots, not a
 facility booking system. RDF trucks get a slot but use no weighbridge capacity.
+
+`occupied` only holds plans approved before this plan was proposed, so two plans
+proposed for the same date before either is approved can share slots. The board
+(`slot_board`, served by GET /api/gate/slots) is recomputed from the approved
+plans, and its hold recommendations are what resolve such a clash.
 """
 
 from __future__ import annotations
