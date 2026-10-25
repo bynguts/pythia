@@ -12,8 +12,8 @@ def _ctx():
 
 
 class ToolRegistryTests(unittest.TestCase):
-    def test_14_schemas_declared(self):
-        self.assertEqual(len(TOOL_SCHEMAS), 14)
+    def test_15_schemas_declared(self):
+        self.assertEqual(len(TOOL_SCHEMAS), 15)
         names = {s["function"]["name"] for s in TOOL_SCHEMAS}
         expected = {
             "get_command_center_snapshot",
@@ -30,6 +30,7 @@ class ToolRegistryTests(unittest.TestCase):
             "get_events",
             "get_whatsapp_status",
             "get_data_provenance",
+            "get_daily_recap",
         }
         self.assertEqual(names, expected)
 
@@ -60,6 +61,15 @@ class ToolRegistryTests(unittest.TestCase):
         result = execute_tool("get_events", {}, _ctx())
         self.assertIsInstance(result, list)
         self.assertGreaterEqual(len(result), 1)
+
+    def test_daily_recap_tool_returns_endpoint_payload_and_is_read_only(self):
+        from app.field.recap import daily_recap
+
+        before = daily_recap("2099-01-01")
+        result = execute_tool("get_daily_recap", {"date": "2099-01-01"}, _ctx())
+        self.assertEqual(result, before)
+        self.assertEqual(result["actual"]["classification"], "OBSERVED_IN_APP")
+        self.assertIsNone(result["delta"]["tons"])
 
     def test_execute_unknown_tool_raises_keyerror(self):
         with self.assertRaises(KeyError):

@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.assistant.scenario import run_scenario
+from app.core.env import local_today
+from app.field.recap import daily_recap
 from app.fleet.astar_routing import (
     is_traffic_jam_active,
     reroute_payload,
@@ -244,6 +246,22 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_daily_recap",
+            "description": (
+                "Rekap penutupan hari: rencana (MODEL) vs realisasi tercatat di aplikasi (SPJ, tanda terima, "
+                "tonase), antre gerbang, insiden, dan celah bukti. Hanya baca. Nilai null berarti belum ada data."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {"type": "string", "description": "YYYY-MM-DD, default hari ini (WIB)"}
+                },
+            },
+        },
+    },
 ]
 
 
@@ -343,6 +361,7 @@ _TOOLS_IMPL: dict[str, Any] = {
         "note": "STATUS ONLY - Ana must not claim a send.",
     },
     "run_scenario": lambda args, ctx: run_scenario(args),
+    "get_daily_recap": lambda args, ctx: daily_recap(args.get("date") or local_today()),
     "get_data_provenance": lambda args, ctx: {
         "provenance": data_provenance(),
         "records": build_provenance_records(),
