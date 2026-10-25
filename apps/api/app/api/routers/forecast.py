@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.schemas import HybridPredictRequest
 from app.api.state import _kecamatan_cache
+from app.core.env import today
 from app.core.paths import RAW_DIR
 from app.core.units import UNIT_GLOSSARY
 from app.fleet.data import build_predictions
@@ -36,6 +37,7 @@ from app.forecast.real_data import (
     load_real_tps_coordinates,
     load_real_wr_coordinates,
 )
+from app.forecast.twin import EVENT_REACH_BASIS, event_attendance_by_district
 from app.forecast.weather import fetch_jakarta_weather_forecast
 
 router = APIRouter()
@@ -55,9 +57,10 @@ def predictions_kecamatan(
     """Case 2 temporal-spatial map: per-kecamatan hybrid ML prediction over the
     real 42-kecamatan SILIKA baseline, with facility-readiness recommendation.
 
-    Each kecamatan gets a live Prophet+XGBoost prediction plus operational needs
+    Each kecamatan gets a Prophet+XGBoost model prediction (MODEL OUTPUT; the daily
+    series it learned are calibrated-synthetic) plus operational needs
     (crews, man-hours, extra trucks) and a TPS capacity signal. When
-    `horizon_days` is given, each kecamatan also carries a real per-day model
+    `horizon_days` is given, each kecamatan also carries a per-day model
     series (weekday/holiday drivers vary per day) plus horizon aggregates.
     """
     from fastapi.params import Query as FastAPIQuery
@@ -80,33 +83,18 @@ def predictions_kecamatan(
 
     kecs = load_kecamatan_map()
 
-    target_slugs = set()
+    # The twin's event geography (forecast/twin.py): the kecamatan whose real
+    # boundary holds the venue or lies within the reach radius share the crowd.
+    attendance_by_slug: dict[str, int] = {}
     if event_attendance > 0:
-        from fastapi.params import Query as FastAPIQuery
-
         elat = -6.2183 if (isinstance(event_lat, FastAPIQuery) or event_lat is None) else event_lat
         elng = 106.8022 if (isinstance(event_lng, FastAPIQuery) or event_lng is None) else event_lng
-
-        from app.forecast.engine import _haversine_meters
-
-        closest_kec = None
-        min_dist = float("inf")
-        for k in kecs:
-            klat = k.get("lat")
-            klng = k.get("lng")
-            if klat is not None and klng is not None:
-                dist = _haversine_meters((elat, elng), (klat, klng))
-                if dist <= 3500.0:
-                    target_slugs.add(k["slug"])
-                if dist < min_dist:
-                    min_dist = dist
-                    closest_kec = k
-        if not target_slugs and closest_kec:
-            target_slugs.add(closest_kec["slug"])
+        attendance_by_slug = event_attendance_by_district(event_attendance, elat, elng)
+    target_slugs = set(attendance_by_slug)
 
     features = []
     for k in kecs:
-        current_attendance = event_attendance if k["slug"] in target_slugs else 0
+        current_attendance = attendance_by_slug.get(k["slug"], 0)
         pred = predict_waste_hybrid(
             kelurahan=k["slug"],
             rainfall_mm=rainfall_mm,
@@ -164,7 +152,7 @@ def predictions_kecamatan(
     _kecamatan_cache["key"] = cache_key
     _kecamatan_cache["ts"] = time.time()
     _kecamatan_cache["payload"] = {
-        "generated_for": (target_date.isoformat() if target_date else date.today().isoformat()),
+        "generated_for": (target_date.isoformat() if target_date else today().isoformat()),
         "horizon_days": horizon_days or 1,
         "scenario": {
             "rainfall_mm": rainfall_mm,
@@ -177,13 +165,20 @@ def predictions_kecamatan(
             # no attendance was supplied, so a bare location cannot look like
             # demand.
             "targeted_kecamatan": sorted(target_slugs),
+            "attendance_by_kecamatan": attendance_by_slug,
+            "event_reach_basis": EVENT_REACH_BASIS if attendance_by_slug else None,
         },
         "kecamatan_count": len(features),
         "total_predicted_tons": round(total, 1),
         "top_hotspots": features[:5],
         "kecamatan": features,
         "units": UNIT_GLOSSARY,
-        "source": "SILIKA DLH 2023 baseline + Prophet/XGBoost hybrid (real 5yr pipeline)",
+        # The baseline is real (SILIKA 2023); the daily series the hybrid learned are
+        # calibrated-synthetic, so this source line must never read as observed data.
+        "source": (
+            "SILIKA DLH 2023 baseline + Prophet/XGBoost hybrid trained on calibrated-synthetic "
+            "daily series anchored to SILIKA 2023 (MODEL OUTPUT, no daily accuracy claim)"
+        ),
     }
     return _kecamatan_cache["payload"]
 
@@ -310,9 +305,23 @@ def ml_suitability() -> dict[str, Any]:
 
 
 @router.get("/api/ml/monthly-intake")
-def ml_monthly_intake(months: int = Query(3, ge=1, le=12)) -> dict[str, Any]:
-    """Monthly Bantargebang intake forecast (t/day), the forecast backtested on real data."""
-    return forecast_monthly_intake(months)
+def ml_monthly_intake(
+    months: int = Query(3, ge=1, le=12),
+    start_month: str | None = Query(None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
+) -> dict[str, Any]:
+    """Monthly Bantargebang intake forecast (t/day), the forecast backtested on real data.
+
+    `start_month` (YYYY-MM) lets the UI ask for the months the operator is in; each
+    month still carries `horizon_months` and `within_backtested_horizon`, so a month
+    beyond the backtested 1-3 month horizon is flagged, never presented as validated.
+    """
+    result = forecast_monthly_intake(months, start_month=start_month)
+    if any(m["horizon_months"] < 1 for m in result["months"]):
+        raise HTTPException(
+            status_code=422,
+            detail=f"start_month must be after the last observed month ({result['fitted_through']}).",
+        )
+    return result
 
 
 @router.get("/api/impact")

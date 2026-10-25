@@ -23,8 +23,10 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from app.core.env import today
 from app.core.paths import MODELS_DIR, MONTHLY_CALENDAR_MODEL, REAL_DIR
-from app.core.units import resource_requirements
+from app.core.units import EVENT_WASTE_KG_PER_PERSON, resource_requirements
+from app.fleet.queue_simulation import STAGGER_SLOT_MINUTES
 
 # 42 Jakarta kecamatan (matches ml/scripts/train_models.py; models named by slug).
 _KELURAHAN_SLUGS = [
@@ -295,7 +297,9 @@ def estimate_tpa_queue_wait(waiting_trucks: int, throughput_per_hour: int = 30) 
     if status == "green":
         recommendation = "Green corridor clear. Normal dispatch speed approved."
     elif status == "yellow":
-        recommendation = "Stagger dispatch cycles by 20 minutes to flatten landfill load spike."
+        recommendation = (
+            f"Stagger dispatch cycles by {STAGGER_SLOT_MINUTES} minutes to flatten landfill load spike."
+        )
 
     return {
         "trucks_waiting": waiting_trucks,
@@ -441,6 +445,120 @@ def scenario_rain_3d(rainfall_mm: float) -> float:
     return round(float(rainfall_mm) * RAIN_3D_WINDOW_DAYS, 2)
 
 
+def rolling_rain_3d(rain_by_day: tuple[float, ...]) -> list[float]:
+    """rain_3d for per-day rain: the training's rolling 3-day sum ending on the day
+    (min_periods=1, so the first days sum what the horizon holds)."""
+    return [
+        round(sum(rain_by_day[max(0, i - RAIN_3D_WINDOW_DAYS + 1) : i + 1]), 2)
+        for i in range(len(rain_by_day))
+    ]
+
+
+# ── The rain response (gsc teardown v3 #7) ────────────────────────────────
+# The daily training target is calibrated-synthetic: SILIKA level x a hand-set
+# planning rule (+8% from 10 mm, +16% from 30 mm of same-day rain, nothing below
+# 10 mm, no multi-day effect) x 5% noise (ml/scripts/train_models.py build_dataset).
+# Read raw, the trees reproduce that rule with their noise: 3-8 mm LOWERED the
+# city by about 3%, 80 mm gave fewer districts at risk than 50 mm, and nothing
+# moves above the wettest training day. So the served rain effect is the model's
+# own response read on a whole-mm grid, held non-decreasing (running maximum) and
+# never below the dry normal day; above the training range it is held at the
+# training maximum. Every payload that carries a rain effect states this.
+RAIN_RULE_STEPS_MM = (10.0, 30.0)
+RAIN_RULE_STEPS_PERCENT = (8, 16)
+# Wettest day / 3-day sum in the training weather (ml/data/raw/open_meteo_jakarta_history_5y.json,
+# as written to training_dataset_kecamatan.csv; parity-tested when the CSV is present).
+TRAINING_RAIN_MAX_MM = 96.7
+TRAINING_RAIN_3D_MAX_MM = 123.7
+RAIN_GRID_STEP_MM = 1.0
+
+
+def rain_grid(rain_mm: float) -> list[float]:
+    """The rain values the response reads for `rain_mm`: every whole mm up to it, capped
+    at the training maximum (which joins the grid once reached). The grid only grows
+    with `rain_mm`, so a running maximum over it can never fall as rain rises."""
+    top = min(max(float(rain_mm), 0.0), TRAINING_RAIN_MAX_MM)
+    grid = [float(g) for g in range(int(top) + 1)]
+    if rain_mm >= TRAINING_RAIN_MAX_MM:
+        grid.append(TRAINING_RAIN_MAX_MM)
+    return grid
+
+
+def rain_response_block(max_rain_mm: float) -> dict[str, Any]:
+    """How the served rain effect is formed, for a request whose wettest day is `max_rain_mm`."""
+    beyond = float(max_rain_mm) > TRAINING_RAIN_MAX_MM
+    steps = " and ".join(
+        f"+{p}% from {mm:g} mm" for mm, p in zip(RAIN_RULE_STEPS_MM, RAIN_RULE_STEPS_PERCENT, strict=True)
+    )
+    return {
+        "method": "model_monotone",
+        "label": (
+            f"Rain effect: the trained model's response read on a {RAIN_GRID_STEP_MM:g} mm grid, held "
+            "non-decreasing and never below the dry normal day. The training target was built from a "
+            f"planning rule ({steps}), so rain above {RAIN_RULE_STEPS_MM[-1]:g} mm adds no learned "
+            "effect (assumption, not learned)."
+        ),
+        "rule_steps_mm": list(RAIN_RULE_STEPS_MM),
+        "rule_steps_percent": list(RAIN_RULE_STEPS_PERCENT),
+        "grid_step_mm": RAIN_GRID_STEP_MM,
+        "training_max_rain_mm": TRAINING_RAIN_MAX_MM,
+        "max_rain_mm": float(max_rain_mm),
+        "beyond_training_range": beyond,
+        "held_at_mm": TRAINING_RAIN_MAX_MM if beyond else None,
+    }
+
+
+def _monotone_rain_residuals(
+    xgboost_model: Any, rows: list[dict[str, Any]], carried: list[float], rain_3d_per_mm: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """(residual, rain effect) per feature row, with the rain response made monotone.
+
+    Each row is read at its dry point (no rain, rain_3d 0: the normal day's residual)
+    and along its own rain line: precipitation g, rain_3d = carried + rain_3d_per_mm x g,
+    for g on `rain_grid`. The rain effect is the running maximum of (line - dry),
+    floored at 0. One predict call for every row and grid point.
+    """
+    batch: list[dict[str, Any]] = []
+    spans: list[tuple[int, int]] = []
+    for row, carry in zip(rows, carried, strict=True):
+        start = len(batch)
+        batch.append({**row, "precipitation_mm": 0.0, "rain_3d": 0.0})
+        for g in rain_grid(row["precipitation_mm"]):
+            batch.append({**row, "precipitation_mm": g, "rain_3d": round(carry + rain_3d_per_mm * g, 2)})
+        spans.append((start, len(batch)))
+    predicted = xgboost_model.predict(pd.DataFrame(batch, columns=list(rows[0])))
+    dry = np.array([predicted[a] for a, _b in spans], dtype=float)
+    effect = np.array([max(0.0, float(np.max(predicted[a + 1 : b] - predicted[a]))) for a, b in spans])
+    return dry + effect, effect
+
+
+# ── The one risk definition (gsc teardown #5) ────────────────────────────
+# A day's spike is its forecast against the same district's normal day: the
+# same model, the same date, no rain and no event. Fleet and Twin both classify
+# with spike_risk, so "spike" and "at risk" mean the same thing on every screen.
+# (The TPS capacity column is a proxy that 40 of 42 kecamatan already exceed,
+# so it cannot drive a daily alarm.)
+RISK_CRITICAL_RATIO = 1.25
+RISK_HIGH_RATIO = 1.10
+RISK_ELEVATED_RATIO = 1.03
+AT_RISK_LEVELS = frozenset({"high", "critical"})
+NORMAL_DAY_BASIS = "same model, same date, no rain and no event"
+
+
+def spike_risk(tons: float, normal_tons: float | None) -> tuple[float, str]:
+    """(spike percent vs the normal day, risk level) for one forecast day."""
+    ratio = tons / normal_tons if normal_tons else 1.0
+    if ratio >= RISK_CRITICAL_RATIO:
+        level = "critical"
+    elif ratio >= RISK_HIGH_RATIO:
+        level = "high"
+    elif ratio >= RISK_ELEVATED_RATIO:
+        level = "elevated"
+    else:
+        level = "normal"
+    return round((ratio - 1.0) * 100, 1), level
+
+
 @lru_cache(maxsize=1024)
 def predict_waste_hybrid(
     kelurahan: str,
@@ -457,6 +575,7 @@ def predict_waste_hybrid(
 
     if models is None:
         # Fallback when a model file is missing: coarse heuristic, clearly labeled.
+        day = pd.Timestamp(target_date or today())
         fallback_baseline = 150.0
         prophet_pred = fallback_baseline * (1.05 if is_weekend else 1.0)
         residual_pred = (rainfall_mm * 1.2) + (event_attendance * 0.0012)
@@ -487,11 +606,9 @@ def predict_waste_hybrid(
                 "is_weekend": int(is_weekend),
                 "is_holiday": int(is_holiday),
                 "event_attendance": event_attendance,
-                "day_of_week": pd.Timestamp(target_date).weekday()
-                if target_date
-                else pd.Timestamp.now().weekday(),
-                "month_of_year": pd.Timestamp(target_date).month if target_date else pd.Timestamp.now().month,
-                "day_of_month": pd.Timestamp(target_date).day if target_date else pd.Timestamp.now().day,
+                "day_of_week": day.weekday(),
+                "month_of_year": day.month,
+                "day_of_month": day.day,
                 "is_payday": 0,
                 "rain_3d": scenario_rain_3d(rainfall_mm),
             },
@@ -503,7 +620,7 @@ def predict_waste_hybrid(
 
     _, xgboost_model = models
     # Daily model: forecast the calendar day (midnight), same as the series path.
-    from_date = (pd.Timestamp(target_date) if target_date else pd.Timestamp.now()).normalize()
+    from_date = pd.Timestamp(target_date or today()).normalize()
 
     # Prophet baseline prediction
     prophet_pred = _prophet_yhat(slug, (from_date.strftime("%Y-%m-%d"),))[0]
@@ -523,21 +640,26 @@ def predict_waste_hybrid(
         "rain_3d": scenario_rain_3d(rainfall_mm),
     }
     X_features = pd.DataFrame([feature_row])
-    residual_pred = xgboost_model.predict(X_features)[0]
+    raw_residual = float(xgboost_model.predict(X_features)[0])
+    # A constant-rain scenario: rain_3d = 3 x rain, so the rain line is (g, 3g).
+    adjusted, rain_effect = _monotone_rain_residuals(
+        xgboost_model, [feature_row], [0.0], float(RAIN_3D_WINDOW_DAYS)
+    )
+    residual_pred = float(adjusted[0])
 
     # Per-driver attribution: marginal tons lost when each dynamic driver is
     # zeroed (leave-one-out on the residual model). This is the visible proof
-    # that weather/event/calendar data actually drives the forecast.
-    attribution: dict[str, float] = {}
+    # that weather/event/calendar data actually drives the forecast. Rain is
+    # the monotone rain effect itself (see _monotone_rain_residuals).
+    attribution: dict[str, float] = {"rainfall_tons": round(float(rain_effect[0]), 1)}
     for key, label in (
-        ("precipitation_mm", "rainfall_tons"),
         ("event_attendance", "event_tons"),
         ("is_weekend", "weekend_tons"),
         ("is_holiday", "holiday_tons"),
     ):
         zeroed = dict(feature_row)
         zeroed[key] = 0
-        marginal = float(residual_pred - xgboost_model.predict(pd.DataFrame([zeroed]))[0])
+        marginal = raw_residual - float(xgboost_model.predict(pd.DataFrame([zeroed]))[0])
         attribution[label] = round(marginal, 1)
     attribution["prophet_baseline_tons"] = round(float(prophet_pred), 1)
 
@@ -546,8 +668,7 @@ def predict_waste_hybrid(
     # To make the hybrid respond to permitted events as the PRD specifies — and
     # to stay consistent with the permit-intake endpoint — apply the documented
     # per-capita event overlay (1.2 kg/person) on top of the model output.
-    _EVENT_KG_PER_PERSON = 1.2
-    event_overlay = event_attendance * _EVENT_KG_PER_PERSON / 1000.0
+    event_overlay = event_attendance * EVENT_WASTE_KG_PER_PERSON / 1000.0
     attribution["event_tons"] = round(event_overlay, 1)
 
     predicted_tons = max(0.0, round(float(prophet_pred) + float(residual_pred) + event_overlay, 1))
@@ -586,6 +707,7 @@ def predict_waste_hybrid(
         "daily_district_suitability": "not_supported_calibrated_synthetic",
         "factor_attribution": attribution,
         "features_used": dict(X_features.iloc[0]),
+        "rain_response": rain_response_block(rainfall_mm),
         "factors": factors or ["Prophet baseline trend stable; no exceptional drivers."],
         **resources,
         "fuel_consumption_liters": round(predicted_tons * 1.8, 1),
@@ -616,71 +738,108 @@ def _holiday_dates() -> frozenset[str]:
 def predict_waste_hybrid_series(
     kelurahan: str,
     days: int = 7,
-    rainfall_mm: float = 0.0,
-    temp_max_c: float = 31.0,
-    wind_max_kmh: float = 10.0,
-    event_attendance: int = 0,
+    rainfall_mm: float | tuple[float, ...] = 0.0,
+    temp_max_c: float | tuple[float, ...] = 31.0,
+    wind_max_kmh: float | tuple[float, ...] = 10.0,
+    event_attendance: int | tuple[int, ...] = 0,
     start_date: str | None = None,
+    rain_3d: tuple[float, ...] | None = None,
 ) -> dict[str, Any]:
     """Multi-day forecast series for one kecamatan (Case 2 temporal mapping).
 
     Prophet is evaluated once over the whole date range (vectorized), XGBoost
     corrects each day with per-day drivers: real weekday/weekend cycle and the
-    real 2026 holiday calendar vary per day; the weather/event scenario is held
-    constant across the horizon and labeled as such.
+    real 2026 holiday calendar vary per day. Weather and event inputs are either
+    one value held constant across the horizon (a scenario) or a tuple with one
+    value per day, so a forecast week or a one-day what-if moves only its own
+    days. Per-day rain feeds `rain_3d` as the training's rolling 3-day sum, so a
+    rainy day also carries into the next two days' rain_3d, as the model learned;
+    an explicit per-day `rain_3d` overrides that sum (the twin passes one so a
+    what-if's rain counts on its own day only). The rain effect is the monotone
+    response of `_monotone_rain_residuals`. Event attendance adds the documented
+    per-capita overlay, as in `predict_waste_hybrid`.
     """
     days = max(1, min(int(days), 30))
     slug = kelurahan.lower().replace(" ", "_")
-    start = pd.Timestamp(start_date) if start_date else pd.Timestamp.now().normalize()
+    start = pd.Timestamp(start_date or today()).normalize()
     dates = [start + pd.Timedelta(days=i) for i in range(days)]
     holidays = _holiday_dates()
     weekend_flags = [bool(d.weekday() >= 5) for d in dates]
     holiday_flags = [d.strftime("%Y-%m-%d") in holidays for d in dates]
+    per_day = any(isinstance(v, tuple) for v in (rainfall_mm, temp_max_c, wind_max_kmh, event_attendance))
+
+    def daily(value: Any) -> list[Any]:
+        if isinstance(value, tuple):
+            if len(value) < days:
+                raise ValueError(f"per-day input has {len(value)} values for {days} days")
+            return list(value[:days])
+        return [value] * days
+
+    rain, temp, wind, attendance = (
+        daily(v) for v in (rainfall_mm, temp_max_c, wind_max_kmh, event_attendance)
+    )
+    if rain_3d is not None:
+        rain_3d_by_day = [float(v) for v in daily(tuple(rain_3d))]
+        rain_3d_per_mm = 1.0
+    elif isinstance(rainfall_mm, tuple):
+        rain_3d_by_day = rolling_rain_3d(tuple(rain))
+        rain_3d_per_mm = 1.0
+    else:
+        rain_3d_by_day = [scenario_rain_3d(r) for r in rain]
+        rain_3d_per_mm = float(RAIN_3D_WINDOW_DAYS)
+    # Rain of the earlier days inside each day's rain_3d (0 for a constant scenario).
+    carried = [
+        max(0.0, round(r3 - rain_3d_per_mm * r, 2)) for r3, r in zip(rain_3d_by_day, rain, strict=True)
+    ]
 
     models = _load_hybrid(slug)
     if models is not None:
         _, xgboost_model = models
         yhat = np.array(_prophet_yhat(slug, tuple(d.strftime("%Y-%m-%d") for d in dates)))
-        X = pd.DataFrame(
-            [
-                {
-                    "precipitation_mm": rainfall_mm,
-                    "temp_max_c": temp_max_c,
-                    "wind_max_kmh": wind_max_kmh,
-                    "is_weekend": int(w),
-                    "is_holiday": int(h),
-                    "event_attendance": event_attendance,
-                    "day_of_week": d.weekday(),
-                    "month_of_year": d.month,
-                    "day_of_month": d.day,
-                    "is_payday": int(d.day in (1, 2, 25, 26, 27, 28)),
-                    "rain_3d": scenario_rain_3d(rainfall_mm),
-                }
-                for d, w, h in zip(dates, weekend_flags, holiday_flags, strict=True)
-            ]
-        )
-        residuals = xgboost_model.predict(X)
+        # Feature order must match ml/scripts/train_models.py.
+        rows = [
+            {
+                "precipitation_mm": rain[i],
+                "temp_max_c": temp[i],
+                "wind_max_kmh": wind[i],
+                "is_weekend": int(weekend_flags[i]),
+                "is_holiday": int(holiday_flags[i]),
+                "event_attendance": attendance[i],
+                "day_of_week": d.weekday(),
+                "month_of_year": d.month,
+                "day_of_month": d.day,
+                "is_payday": int(d.day in (1, 2, 25, 26, 27, 28)),
+                "rain_3d": rain_3d_by_day[i],
+            }
+            for i, d in enumerate(dates)
+        ]
+        residuals, _effect = _monotone_rain_residuals(xgboost_model, rows, carried, rain_3d_per_mm)
+        overlay = [a * EVENT_WASTE_KG_PER_PERSON / 1000.0 for a in attendance]
         model_available = True
     else:
         base = 150.0
         yhat = np.array([base] * days, dtype=float)
         residuals = np.array(
             [
-                (rainfall_mm * 1.2) + (event_attendance * 0.003) + (base * 0.05 if w else 0.0)
-                for w in weekend_flags
+                (r * 1.2) + (a * 0.003) + (base * 0.05 if w else 0.0)
+                for r, a, w in zip(rain, attendance, weekend_flags, strict=True)
             ]
         )
+        overlay = [0.0] * days
         model_available = False
 
     series = []
-    for d, w, h, yb, res in zip(dates, weekend_flags, holiday_flags, yhat, residuals, strict=True):
-        tons = max(0.0, round(float(yb) + float(res), 1))
+    for i, d in enumerate(dates):
+        tons = max(0.0, round(float(yhat[i]) + float(residuals[i]) + overlay[i], 1))
         series.append(
             {
                 "date": d.strftime("%Y-%m-%d"),
                 "predicted_tons": tons,
-                "is_weekend": w,
-                "is_holiday": h,
+                "is_weekend": weekend_flags[i],
+                "is_holiday": holiday_flags[i],
+                "rainfall_mm": float(rain[i]),
+                "rain_3d_mm": float(rain_3d_by_day[i]),
+                "event_attendance": int(attendance[i]),
             }
         )
     peak = max(series, key=lambda r: r["predicted_tons"])
@@ -694,10 +853,15 @@ def predict_waste_hybrid_series(
         "avg_daily_tons": round(total / days, 1),
         "peak_date": peak["date"],
         "peak_tons": peak["predicted_tons"],
+        "inputs_per_day": per_day,
         "scenario_note": (
             "Weekday/weekend and the real 2026 holiday calendar vary per day; "
-            "rainfall and event-attendance scenario inputs are held constant "
-            "across the horizon (scenario, not observed weather)."
+            + (
+                "rainfall and event attendance are given per day (each row states its own inputs)."
+                if per_day
+                else "rainfall and event-attendance scenario inputs are held constant "
+                "across the horizon (scenario, not observed weather)."
+            )
         ),
     }
 

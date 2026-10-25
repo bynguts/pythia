@@ -9,16 +9,16 @@ a 95% confidence interval across replications.
 
 from __future__ import annotations
 
-import bisect
 import calendar
 import csv
 import heapq
 import random
-import re
 import statistics
 from collections import defaultdict
 from functools import lru_cache
 from typing import Any
+
+import numpy as np
 
 from app.core.paths import REAL_DIR
 from app.core.units import SHIFT_HOURS, TRUCK_CAPACITY_TONS, trucks_for_tons
@@ -173,8 +173,8 @@ WEIGHING_CSV = REAL_DIR / "bantargebang_hasil_penimbangan.csv"
 def bantargebang_daily_arrivals(months: int = 12) -> tuple[int, str] | None:
     """Median truck arrivals (ritasi) per day at Bantargebang over the latest months.
 
-    The median is robust to the few malformed months in the open-data file
-    (some carry a 10x digit error). Falls back to Jakarta's SIPSN daily tonnage
+    Later releases of the open-data file write ritasi as decimals ("6216.0"), so
+    values are parsed as numbers, not by stripping non-digits. Falls back to Jakarta's SIPSN daily tonnage
     divided by the canonical truck capacity when the weighing file is absent.
     """
     if WEIGHING_CSV.exists():
@@ -182,10 +182,13 @@ def bantargebang_daily_arrivals(months: int = 12) -> tuple[int, str] | None:
         with WEIGHING_CSV.open(encoding="utf-8-sig") as handle:
             for row in csv.DictReader(handle):
                 period = (row.get("periode_data") or "").strip()
-                trips = re.sub(r"\D", "", row.get("ritasi") or "")
+                try:
+                    trips = round(float((row.get("ritasi") or "").strip()))
+                except ValueError:
+                    continue
                 # A malformed month (00, 13, ...) would make monthrange raise: skip it.
-                if len(period) == 6 and period.isdigit() and 1 <= int(period[4:]) <= 12 and trips:
-                    per_month[period] += int(trips)
+                if len(period) == 6 and period.isdigit() and 1 <= int(period[4:]) <= 12:
+                    per_month[period] += trips
         latest = sorted(per_month)[-months:]
         daily = [per_month[p] / calendar.monthrange(int(p[:4]), int(p[4:]))[1] for p in latest]
         if daily:
@@ -227,29 +230,52 @@ def _departure_z(trips: int, seed: int, replication: int) -> list[float]:
     return draws
 
 
-def _arrival_hours(trips: int, rng: random.Random, departure_offsets_h: list[float] | None) -> list[float]:
-    """Gate arrival times (hours after the first shift start) for one day.
+def _round_draws(trips: int, rng: random.Random) -> list[float]:
+    """Each trip's collection-round leg (hours), in trip order: the day's first `trips` draws."""
+    return [max(0.5, rng.gauss(COLLECTION_ROUND_MEAN_H, COLLECTION_ROUND_SD_H)) for _ in range(trips)]
+
+
+@lru_cache(maxsize=32)
+def _trip_shift_starts(trips: int) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Per trip, in trip order: (its shift's start hour, its rank within the shift)."""
+    starts: list[int] = []
+    ranks: list[int] = []
+    for shift in range(SHIFTS_PER_DAY):
+        count = trips // SHIFTS_PER_DAY + (1 if shift < trips % SHIFTS_PER_DAY else 0)
+        starts.extend([shift * SHIFT_HOURS] * count)
+        ranks.extend(range(count))
+    return tuple(starts), tuple(ranks)
+
+
+@lru_cache(maxsize=32)
+def _stagger_departures(trips: int) -> tuple[float, ...]:
+    """Per trip: its staggered depot departure (hours after the first shift start)."""
+    slots = stagger_slot_count()
+    starts, ranks = _trip_shift_starts(trips)
+    return tuple(
+        start + (i % slots) * STAGGER_SLOT_MINUTES / 60.0 for start, i in zip(starts, ranks, strict=True)
+    )
+
+
+def _gate_arrivals(trips: int, rounds: list[float], departure_offsets_h: list[float] | None) -> list[float]:
+    """Sorted gate arrival times (hours after the first shift start) from drawn round legs.
 
     `departure_offsets_h` (one per trip, hours from its shift start) is the
     current-practice baseline; None is the recommended 15-minute stagger.
     """
-    slots = stagger_slot_count()
-    arrivals: list[float] = []
-    trip = 0
-    for shift in range(SHIFTS_PER_DAY):
-        start = shift * SHIFT_HOURS
-        count = trips // SHIFTS_PER_DAY + (1 if shift < trips % SHIFTS_PER_DAY else 0)
-        for i in range(count):
-            if departure_offsets_h is None:
-                offset = (i % slots) * STAGGER_SLOT_MINUTES / 60.0
-            else:
-                offset = departure_offsets_h[trip]
-            trip += 1
-            arrivals.append(
-                start + offset + max(0.5, rng.gauss(COLLECTION_ROUND_MEAN_H, COLLECTION_ROUND_SD_H))
-            )
+    if departure_offsets_h is None:
+        departures: tuple[float, ...] | list[float] = _stagger_departures(trips)
+    else:
+        starts, _ranks = _trip_shift_starts(trips)
+        departures = [start + offset for start, offset in zip(starts, departure_offsets_h, strict=True)]
+    arrivals = [leave + leg for leave, leg in zip(departures, rounds, strict=True)]
     arrivals.sort()
     return arrivals
+
+
+def _arrival_hours(trips: int, rng: random.Random, departure_offsets_h: list[float] | None) -> list[float]:
+    """Gate arrival times (hours after the first shift start) for one day; see `_gate_arrivals`."""
+    return _gate_arrivals(trips, _round_draws(trips, rng), departure_offsets_h)
 
 
 def _baseline_offsets(z: list[float], sd_minutes: float) -> list[float]:
@@ -264,23 +290,35 @@ def baseline_departure_sd_minutes(
     return statistics.pstdev(offsets) * 60.0
 
 
-def _day_trace(arrivals: list[float], lanes: int, rng: random.Random) -> tuple[list[float], list[int]]:
+def _service_draws(trips: int, rng: random.Random) -> list[float]:
+    """Weigh-in durations (hours), one per gate arrival in arrival order."""
+    return [rng.expovariate(WEIGHBRIDGE_TRUCKS_PER_HOUR) for _ in range(trips)]
+
+
+def _trace(arrivals: list[float], lanes: int, services: list[float]) -> tuple[list[float], list[int]]:
     """FIFO multi-lane weighbridge. Per truck: (wait minutes, trucks queued ahead on arrival)."""
     # Lanes are free before the first arrival, which may precede 06:00 when a
     # baseline truck leaves the depot before shift start.
     free_at = [float("-inf")] * lanes
     starts: list[float] = []
-    waits: list[float] = []
-    queued: list[int] = []
-    for arr in arrivals:
-        # FIFO start times never decrease, so the trucks still waiting when this
-        # one arrives are exactly the earlier ones whose start lies after `arr`.
-        queued.append(len(starts) - bisect.bisect_right(starts, arr))
-        start = max(arr, heapq.heappop(free_at))
-        heapq.heappush(free_at, start + rng.expovariate(WEIGHBRIDGE_TRUCKS_PER_HOUR))
-        starts.append(start)
-        waits.append((start - arr) * 60.0)
+    append, heapreplace = starts.append, heapq.heapreplace
+    for arr, service in zip(arrivals, services, strict=True):
+        start = max(arr, free_at[0])
+        heapreplace(free_at, start + service)  # the earliest-free lane takes this truck
+        append(start)
+    # FIFO start times never decrease, so the trucks still waiting when truck j
+    # arrives are exactly the earlier ones whose start lies after its arrival:
+    # j minus those among the first j that started by then (a sorted prefix).
+    started_by = np.searchsorted(np.asarray(starts), np.asarray(arrivals), side="right")
+    index = np.arange(len(starts))
+    queued = (index - np.minimum(index, started_by)).tolist()
+    waits = [(start - arr) * 60.0 for start, arr in zip(starts, arrivals, strict=True)]
     return waits, queued
+
+
+def _day_trace(arrivals: list[float], lanes: int, rng: random.Random) -> tuple[list[float], list[int]]:
+    """FIFO multi-lane weighbridge, drawing the weigh-ins from `rng`; see `_trace`."""
+    return _trace(arrivals, lanes, _service_draws(len(arrivals), rng))
 
 
 def _p95(values: list[float]) -> float:
@@ -336,6 +374,127 @@ def _reduction_percent(baseline: float, staggered: float) -> float:
     return round((baseline - staggered) / baseline * 100, 1) if baseline > 0 else 0.0
 
 
+class _HourlyTally:
+    """The baseline day by gate-arrival clock hour (WIB), across replications."""
+
+    def __init__(self) -> None:
+        self.waits: list[list[float]] = [[] for _ in range(24)]
+        self.rep_means: list[list[float]] = [[] for _ in range(24)]
+        self.rep_max_queue: list[list[int]] = [[] for _ in range(24)]
+        self.queued_ahead: list[list[int]] = [[] for _ in range(24)]
+
+    def add_day(self, arrivals: list[float], day_waits: list[float], queued: list[int]) -> None:
+        hour_waits: dict[int, list[float]] = defaultdict(list)
+        hour_queue: dict[int, int] = defaultdict(int)
+        for arr, wait, ahead in zip(arrivals, day_waits, queued, strict=True):
+            hour = int(FIRST_SHIFT_START_HOUR + arr) % 24
+            hour_waits[hour].append(wait)
+            hour_queue[hour] = max(hour_queue[hour], ahead)
+            self.queued_ahead[hour].append(ahead)
+        for hour, values in hour_waits.items():
+            self.waits[hour].extend(values)
+            self.rep_means[hour].append(statistics.fmean(values))
+            self.rep_max_queue[hour].append(hour_queue[hour])
+
+    def rows(self, replications: int) -> tuple[dict[str, Any], ...]:
+        capacity = WEIGHBRIDGE_LANES * WEIGHBRIDGE_TRUCKS_PER_HOUR
+        waits, rep_means, rep_max_queue, queued_ahead = (
+            self.waits,
+            self.rep_means,
+            self.rep_max_queue,
+            self.queued_ahead,
+        )
+        rows = []
+        for hour in range(24):
+            arrivals_per_rep = len(waits[hour]) / replications
+            rows.append(
+                {
+                    "hour": hour,
+                    "arrivals": round(arrivals_per_rep),
+                    # Trucks already waiting when a truck of this hour reaches the gate.
+                    "queue_trucks_mean": (
+                        round(statistics.fmean(queued_ahead[hour]), 1) if queued_ahead[hour] else 0.0
+                    ),
+                    "mean_wait_minutes": round(statistics.fmean(waits[hour]), 1) if waits[hour] else 0.0,
+                    "p95_wait_minutes": round(_p95(waits[hour]), 1) if waits[hour] else 0.0,
+                    "max_queue": round(statistics.fmean(rep_max_queue[hour])) if rep_max_queue[hour] else 0,
+                    "wait_ci95": _ci95(rep_means[hour]) if rep_means[hour] else [0.0, 0.0],
+                    "utilization": round(arrivals_per_rep / capacity, 3),
+                    "throughput_per_hour": capacity,
+                }
+            )
+        return tuple(rows)
+
+
+class _StaggeredTally:
+    """The staggered day by gate-arrival clock hour (WIB), across replications."""
+
+    def __init__(self) -> None:
+        self.waits: list[list[float]] = [[] for _ in range(24)]
+        self.queued_ahead: list[list[int]] = [[] for _ in range(24)]
+        self.max_queue: list[list[int]] = [[] for _ in range(24)]
+
+    def add_day(self, arrivals: list[float], day_waits: list[float], queued: list[int]) -> None:
+        day_max = [0] * 24  # queued-ahead counts are never negative
+        for arr, wait, ahead in zip(arrivals, day_waits, queued, strict=True):
+            hour = int(FIRST_SHIFT_START_HOUR + arr) % 24
+            self.waits[hour].append(wait)
+            self.queued_ahead[hour].append(ahead)
+            day_max[hour] = max(day_max[hour], ahead)
+        for hour in range(24):
+            self.max_queue[hour].append(day_max[hour])
+
+    def hours(self, replications: int) -> tuple[tuple[int, float, float, int], ...]:
+        """Per clock hour: (arrivals, mean wait, mean queued ahead, mean max queue)."""
+        return tuple(
+            (
+                round(len(waits) / replications),
+                round(statistics.fmean(waits), 1) if waits else 0.0,
+                round(statistics.fmean(queued), 1) if queued else 0.0,
+                round(statistics.fmean(max_queue)) if max_queue else 0,
+            )
+            for waits, queued, max_queue in zip(self.waits, self.queued_ahead, self.max_queue, strict=True)
+        )
+
+
+@lru_cache(maxsize=16)
+def _seeded_day(
+    trucks_per_day: int, seed: int, replications: int
+) -> tuple[dict[str, Any], tuple[dict[str, Any], ...], tuple[tuple[int, float, float, int], ...]]:
+    """One pass over the seeded day: (daily metric, baseline hourly profile, staggered hours).
+
+    Every arm of a replication uses the same random draws (common random numbers):
+    the collection-round legs and the weigh-ins are drawn once per replication and
+    shared, which is exactly what reseeding the generator per arm produced. The
+    hourly profile is the headline-spread baseline arm and the staggered hours the
+    stagger arm of this same pass, so `hourly_queue_profile` and
+    `staggered_peak_hour` never re-simulate a day the metric already ran.
+    """
+    sds = tuple(sorted(set(DEPARTURE_SD_BAND_MINUTES) | {BASELINE_DEPARTURE_SD_MINUTES}))
+    arms: tuple[float | None, ...] = (None, *sds)  # None = staggered
+    runs: dict[float | None, list[tuple[float, float, int]]] = {arm: [] for arm in arms}
+    hourly, staggered = _HourlyTally(), _StaggeredTally()
+    for i in range(replications):
+        z = _departure_z(trucks_per_day, seed, i)
+        rng = random.Random(seed * 100000 + i)  # same draws for every arm
+        rounds = _round_draws(trucks_per_day, rng)
+        services = _service_draws(trucks_per_day, rng)
+        for arm in arms:
+            offsets = None if arm is None else _baseline_offsets(z, arm)
+            arrivals = _gate_arrivals(trucks_per_day, rounds, offsets)
+            waits, queued = _trace(arrivals, WEIGHBRIDGE_LANES, services)
+            runs[arm].append((statistics.fmean(waits), _p95(waits), max(queued, default=0)))
+            if arm is None:
+                staggered.add_day(arrivals, waits, queued)
+            elif arm == BASELINE_DEPARTURE_SD_MINUTES:
+                hourly.add_day(arrivals, waits, queued)
+    return (
+        _day_summary(runs, trucks_per_day, seed, replications),
+        hourly.rows(replications),
+        staggered.hours(replications),
+    )
+
+
 @lru_cache(maxsize=64)
 def _simulate_day(trucks_per_day: int, seed: int, replications: int) -> dict[str, Any]:
     """The cached simulation behind `queue_minutes_per_truck` (no source text).
@@ -343,16 +502,16 @@ def _simulate_day(trucks_per_day: int, seed: int, replications: int) -> dict[str
     Arms: the recommended stagger, and the current-practice baseline at every
     departure spread of the sensitivity band (the headline spread among them).
     """
-    sds = tuple(sorted(set(DEPARTURE_SD_BAND_MINUTES) | {BASELINE_DEPARTURE_SD_MINUTES}))
-    arms: tuple[float | None, ...] = (None, *sds)  # None = staggered
-    runs: dict[float | None, list[tuple[float, float, int]]] = {arm: [] for arm in arms}
-    for i in range(replications):
-        z = _departure_z(trucks_per_day, seed, i)
-        for arm in arms:
-            rng = random.Random(seed * 100000 + i)  # same draws for every arm
-            offsets = None if arm is None else _baseline_offsets(z, arm)
-            arrivals = _arrival_hours(trucks_per_day, rng, offsets)
-            runs[arm].append(_day_queue(arrivals, WEIGHBRIDGE_LANES, rng))
+    return _seeded_day(trucks_per_day, seed, replications)[0]
+
+
+def _day_summary(
+    runs: dict[float | None, list[tuple[float, float, int]]],
+    trucks_per_day: int,
+    seed: int,
+    replications: int,
+) -> dict[str, Any]:
+    """The daily metric from each arm's per-replication (mean wait, p95 wait, max queue)."""
 
     def summarise(arm: float | None) -> tuple[float, float, list[float], int]:
         rows = runs[arm]
@@ -502,47 +661,7 @@ def hourly_queue_profile(
         if derived is None:
             return None
         trucks_per_day = derived[0]
-    waits: list[list[float]] = [[] for _ in range(24)]
-    rep_means: list[list[float]] = [[] for _ in range(24)]
-    rep_max_queue: list[list[int]] = [[] for _ in range(24)]
-    queued_ahead: list[list[int]] = [[] for _ in range(24)]
-    for i in range(replications):
-        rng = random.Random(seed * 100000 + i)
-        offsets = _baseline_offsets(_departure_z(trucks_per_day, seed, i), BASELINE_DEPARTURE_SD_MINUTES)
-        arrivals = _arrival_hours(trucks_per_day, rng, offsets)
-        day_waits, queued = _day_trace(arrivals, WEIGHBRIDGE_LANES, rng)
-        hour_waits: dict[int, list[float]] = defaultdict(list)
-        hour_queue: dict[int, int] = defaultdict(int)
-        for arr, wait, ahead in zip(arrivals, day_waits, queued, strict=True):
-            hour = int(FIRST_SHIFT_START_HOUR + arr) % 24
-            hour_waits[hour].append(wait)
-            hour_queue[hour] = max(hour_queue[hour], ahead)
-            queued_ahead[hour].append(ahead)
-        for hour, values in hour_waits.items():
-            waits[hour].extend(values)
-            rep_means[hour].append(statistics.fmean(values))
-            rep_max_queue[hour].append(hour_queue[hour])
-    capacity = WEIGHBRIDGE_LANES * WEIGHBRIDGE_TRUCKS_PER_HOUR
-    rows = []
-    for hour in range(24):
-        arrivals_per_rep = len(waits[hour]) / replications
-        rows.append(
-            {
-                "hour": hour,
-                "arrivals": round(arrivals_per_rep),
-                # Trucks already waiting when a truck of this hour reaches the gate.
-                "queue_trucks_mean": (
-                    round(statistics.fmean(queued_ahead[hour]), 1) if queued_ahead[hour] else 0.0
-                ),
-                "mean_wait_minutes": round(statistics.fmean(waits[hour]), 1) if waits[hour] else 0.0,
-                "p95_wait_minutes": round(_p95(waits[hour]), 1) if waits[hour] else 0.0,
-                "max_queue": round(statistics.fmean(rep_max_queue[hour])) if rep_max_queue[hour] else 0,
-                "wait_ci95": _ci95(rep_means[hour]) if rep_means[hour] else [0.0, 0.0],
-                "utilization": round(arrivals_per_rep / capacity, 3),
-                "throughput_per_hour": capacity,
-            }
-        )
-    return tuple(rows)
+    return _seeded_day(int(trucks_per_day), seed, replications)[1]
 
 
 def modelled_peak_hour(trucks_per_day: int | None = None) -> dict[str, Any] | None:
@@ -595,3 +714,31 @@ def peak_hour_weigh_ins(trucks_per_day: int, hour: int, count: int = 3) -> tuple
         if len(rows) == count:
             break
     return tuple(rows)
+
+
+@lru_cache(maxsize=16)
+def staggered_peak_hour(trucks_per_day: int, hour: int) -> dict[str, Any]:
+    """The recommended stagger's queue at the unstaggered day's modelled peak clock hour.
+
+    The same seeded day as `hourly_queue_profile` (same seed per replication,
+    lanes and weigh cycle), with departures spread over the stagger slots
+    instead of the current-practice spread. SIMULATED.
+    """
+    hours = _seeded_day(trucks_per_day, QUEUE_METRIC_SEED, QUEUE_METRIC_REPLICATIONS)[2]
+    # A clock hour outside 0-23 matches no arrival.
+    arrivals, mean_wait, queue_mean, queue_max = hours[hour] if 0 <= hour < 24 else (0, 0.0, 0.0, 0)
+    return {
+        "hour": hour,
+        "hour_label": f"modelled peak hour {hour:02d}:00",
+        "arrivals": arrivals,
+        "mean_wait_minutes": mean_wait,
+        "queue_trucks_mean": queue_mean,
+        "queue_trucks_max": queue_max,
+        "stagger_minutes": STAGGER_SLOT_MINUTES,
+        "trucks_per_day": trucks_per_day,
+        "classification": "SIMULATED",
+        "basis": (
+            "same seeded day and clock hour as the unstaggered beacon, departures spread over "
+            f"{STAGGER_SLOT_MINUTES}-minute slots"
+        ),
+    }

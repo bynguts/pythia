@@ -197,6 +197,7 @@ def test_run_scenario_payload_is_compact_labelled_and_reuses_the_twin_forecast(f
         "requested": {"rainfall_mm": 80.0, "event_attendance": 50_000},
         "snapped_to_twin_presets": False,
         "attendance_assumed": False,
+        "rain_category": None,
     }
     summary = result["summary"]
     assert summary["extra_tons"] == pytest.approx(45.0)
@@ -419,6 +420,7 @@ def test_run_scenario_returns_a_tool_trace_with_sources_and_provenance(fake_scen
         "venue": "jis",
         "day": 1,
         "snapped": False,
+        "rain_category": None,
     }
     assert trace[1]["class"] == "MODEL_OUTPUT" and "Prophet + XGBoost" in trace[1]["source"]
     assert trace[2]["class"] == "PLANNING_RULE"

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import math
+import re
 import time
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any
 
+from app.core.env import today as forecast_today
 from app.core.units import event_tons_for_attendance, resource_requirements
 from app.fleet.facilities import FACILITIES
 from app.fleet.osrm import fetch_osrm_route
@@ -489,94 +491,88 @@ def build_predictions() -> list[dict[str, Any]]:
     return result
 
 
+def _official_event_coordinates(name: str, location: str) -> tuple[float, float]:
+    """Where an official event without coordinates is placed: Monas, Bundaran HI or GBK.
+
+    "HI" must be a whole word (Bundaran HI); a substring would send "Chill Fest" or
+    "Hindu Festival" to Bundaran HI.
+    """
+    name, location = (name or "").lower(), (location or "").lower()
+    if "monas" in name or "monas" in location:
+        return -6.1754, 106.8272
+    if re.search(r"\bhi\b", name) or re.search(r"\bhi\b", location) or "sudirman" in location:
+        return -6.1950, 106.8230
+    return -6.2183, 106.8022
+
+
 def _build_predictions_uncached() -> list[dict[str, Any]]:
-    from app.forecast.engine import _haversine_meters, predict_waste_hybrid
-    from app.forecast.real_data import load_kecamatan_map, load_official_events
-    from app.forecast.weather import fetch_jakarta_weather_forecast
+    """Seven days (tomorrow onward) of city-level spikes, on the one risk definition.
 
-    today = date.today()
-    weather_data = fetch_jakarta_weather_forecast()
-    forecasts = weather_data.get("forecast", [])
+    Per kecamatan, the same per-day model series the twin uses (engine.spike_risk
+    against the normal day: same model, same date, no rain and no event). Only a
+    real Open-Meteo forecast feeds rain, temperature and wind; the weather panel's
+    demo fallback is invented, so without a forecast every day is assumed dry.
+    """
+    from app.forecast.engine import AT_RISK_LEVELS, NORMAL_DAY_BASIS, spike_risk
+    from app.forecast.real_data import load_official_events
+    from app.forecast.twin import event_attendance_by_district, jakarta_week
+    from app.forecast.weather import fetch_jakarta_weather_forecast, real_forecast_by_date
 
-    weather_map = {}
-    for f in forecasts:
-        weather_map[f["date"]] = {
-            "rainfall_mm": f.get("rainfall_mm", 0.0),
-            "temp_max_c": f.get("temperature_max_c", 31.0),
-            "wind_max_kmh": f.get("wind_speed_kmh", 10.0),
-        }
+    today = forecast_today()
+    weather_map = real_forecast_by_date(fetch_jakarta_weather_forecast())
+    # Today plus the seven days shown: today's rain seeds tomorrow's 3-day rain sum.
+    horizon = 8
+    dates = [today + timedelta(days=offset) for offset in range(horizon)]
+    no_forecast = {"rainfall_mm": 0.0, "temp_max_c": 31.0, "wind_max_kmh": 10.0}
+    day_inputs = [weather_map.get(d.isoformat(), no_forecast) for d in dates]
+    rain = tuple(w["rainfall_mm"] for w in day_inputs)
+    temp = tuple(w["temp_max_c"] for w in day_inputs)
+    wind = tuple(w["wind_max_kmh"] for w in day_inputs)
 
-    kecs = load_kecamatan_map()
     events = load_official_events()
 
-    predictions = []
-    for day in range(1, 8):
-        target_date = today + timedelta(days=day)
-        target_date_str = target_date.isoformat()
-
-        w_day = weather_map.get(
-            target_date_str, {"rainfall_mm": 0.0, "temp_max_c": 31.0, "wind_max_kmh": 10.0}
-        )
-        rainfall_mm = w_day["rainfall_mm"]
-        temp_max_c = w_day["temp_max_c"]
-        wind_max_kmh = w_day["wind_max_kmh"]
-
-        is_weekend = target_date.weekday() >= 5
-        is_holiday = False
-
+    event_days: dict[str, list[int]] = {}
+    for day in range(1, horizon):
+        target_date_str = dates[day].isoformat()
         day_events = [ev for ev in events if ev.get("date_raw") == target_date_str]
-
-        target_slugs = {}
         for ev in day_events:
             att = ev.get("expected_attendance") or 0.0
             if att > 0:
-                evt_name = ev.get("name", "").lower()
-                evt_loc = ev.get("location", "").lower()
-                elat, elng = -6.2183, 106.8022
-                if "monas" in evt_name or "monas" in evt_loc:
-                    elat, elng = -6.1754, 106.8272
-                elif "hi" in evt_name or "sudirman" in evt_loc:
-                    elat, elng = -6.1950, 106.8230
+                elat, elng = _official_event_coordinates(ev.get("name", ""), ev.get("location", ""))
+                # The twin's geography: the host kecamatan and its neighbours share the crowd.
+                for slug, share in event_attendance_by_district(int(att), elat, elng).items():
+                    event_days.setdefault(slug, [0] * horizon)[day] += share
 
-                closest_kec = None
-                min_dist = float("inf")
-                for k in kecs:
-                    klat = k.get("lat")
-                    klng = k.get("lng")
-                    if klat is not None and klng is not None:
-                        dist = _haversine_meters((elat, elng), (klat, klng))
-                        if dist <= 3500.0:
-                            target_slugs[k["slug"]] = max(target_slugs.get(k["slug"], 0), int(att))
-                        if dist < min_dist:
-                            min_dist = dist
-                            closest_kec = k
-                if not target_slugs and closest_kec:
-                    target_slugs[closest_kec["slug"]] = max(
-                        target_slugs.get(closest_kec["slug"], 0), int(att)
-                    )
+    start = today.isoformat()
+    events_by_slug = {slug: tuple(days) for slug, days in event_days.items()}
+    week = jakarta_week(horizon, rain=rain, temp=temp, wind=wind, events=events_by_slug, start=start)
+    normal = {
+        d["id"]: d["series"]
+        for d in jakarta_week(horizon, rain=(0.0,) * horizon, temp=temp, wind=wind, start=start)
+    }
+
+    predictions = []
+    for day in range(1, horizon):
+        target_date_str = dates[day].isoformat()
+        rainfall_mm = rain[day]
+        is_weekend = dates[day].weekday() >= 5
 
         kec_preds = []
-        for k in kecs:
-            k_att = target_slugs.get(k["slug"], 0)
-            pred = predict_waste_hybrid(
-                kelurahan=k["slug"],
-                rainfall_mm=rainfall_mm,
-                temp_max_c=temp_max_c,
-                wind_max_kmh=wind_max_kmh,
-                is_weekend=is_weekend,
-                is_holiday=is_holiday,
-                event_attendance=k_att,
-                target_date=target_date_str,
-            )
+        for district in week:
+            tons = district["series"][day]["predicted_tons"]
+            normal_tons = normal[district["id"]][day]["predicted_tons"]
+            resources = resource_requirements(tons)
             kec_preds.append(
                 {
-                    "city": k["city"],
-                    "baseline_tons": pred["prophet_baseline_tons"],
-                    "predicted_tons": pred["predicted_tons"],
-                    "crews_required": pred["crews_required"],
-                    "workers_required": pred["workers_required"],
-                    "man_hours_required": pred["man_hours_required"],
-                    "bins_required": pred["bins_required"],
+                    "slug": district["id"],
+                    "city": district["admin_area"],
+                    "baseline_tons": normal_tons,
+                    "predicted_tons": tons,
+                    "risk": spike_risk(tons, normal_tons)[1],
+                    "crews_required": resources["crews_required"],
+                    "workers_required": resources["workers_required"],
+                    "man_hours_required": resources["man_hours_required"],
+                    "bins_required": resources["bins_required"],
                 }
             )
 
@@ -587,26 +583,18 @@ def _build_predictions_uncached() -> list[dict[str, Any]]:
                 continue
             base_tons = sum(p["baseline_tons"] for p in city_kecs)
             pred_tons = sum(p["predicted_tons"] for p in city_kecs)
-
-            spike_pct = round((pred_tons - base_tons) / base_tons * 100) if base_tons > 0 else 0
+            spike, risk_level = spike_risk(pred_tons, base_tons)
+            spike_pct = round(spike)
 
             factors = []
             if rainfall_mm >= 30:
                 factors.append("Heavy rainfall adds flood-related waste and slows collection.")
             elif rainfall_mm >= 10:
                 factors.append("Rainfall may slow collection and increase wet waste.")
-            if any(target_slugs.get(k["slug"], 0) > 0 for k in kecs if k["city"] == city):
+            if any(event_days.get(p["slug"], [0] * horizon)[day] > 0 for p in city_kecs):
                 factors.append("Permitted event increases waste around crowded areas.")
             if is_weekend:
                 factors.append("Weekend activity raises commercial and public-space waste.")
-
-            risk_level = "normal"
-            if spike_pct >= 30:
-                risk_level = "critical"
-            elif spike_pct >= 20:
-                risk_level = "high"
-            elif spike_pct >= 10:
-                risk_level = "watch"
 
             resources = resource_requirements(pred_tons, baseline_tons=base_tons)
             predictions.append(
@@ -614,9 +602,14 @@ def _build_predictions_uncached() -> list[dict[str, Any]]:
                     "district": city,
                     "date": target_date_str,
                     "baseline_tons": round(base_tons, 1),
+                    "baseline_basis": f"normal day: {NORMAL_DAY_BASIS}",
                     "predicted_tons": round(pred_tons, 1),
                     "spike_percent": spike_pct,
                     "risk_level": risk_level,
+                    # Kecamatan of this city at high/critical risk: the twin's count for the date.
+                    "districts_at_risk": sum(1 for p in city_kecs if p["risk"] in AT_RISK_LEVELS),
+                    "rainfall_mm": rainfall_mm,
+                    "rain_input": "open-meteo forecast" if target_date_str in weather_map else "assumed dry",
                     "factors": factors or ["No unusual driver detected."],
                     "crews_required": sum(p["crews_required"] for p in city_kecs),
                     "workers_required": sum(p["workers_required"] for p in city_kecs),
@@ -746,7 +739,7 @@ def command_center_snapshot(
         ]
 
     return {
-        "generated_at": date.today().isoformat(),
+        "generated_at": forecast_today().isoformat(),
         "kpis": {
             "active_trucks": sum(1 for truck in TRUCKS if truck["status"] in {"active", "deviation"}),
             "trucks_with_issues": sum(
@@ -767,6 +760,20 @@ def command_center_snapshot(
             "modelled_hour": queue_hour,
             "throughput_trucks_per_hour": round(WEIGHBRIDGE_LANES * WEIGHBRIDGE_TRUCKS_PER_HOUR),
             "recommendation": tpa_rec,
+            # The same keys as the twin beacon's landfill_queue.day_basis: this KPI is the
+            # normal day, the twin scales the count for its selected day's rain or what-if.
+            "day_basis": {
+                "id": "normal_day",
+                "label": (
+                    "normal day: median daily truck arrivals from real ritasi, not scaled for "
+                    "forecast rain or events (the twin scales it for its selected day)"
+                ),
+                "normal_day": "same model and date without rain or event",
+                "date": forecast_today().isoformat(),
+                "trucks_per_day": live_queue.get("trucks_per_day"),
+                "normal_trucks_per_day": live_queue.get("trucks_per_day"),
+                "tonnage_ratio": 1.0,
+            },
         },
         "trucks": list(TRUCKS),
         "alerts": active_alerts,

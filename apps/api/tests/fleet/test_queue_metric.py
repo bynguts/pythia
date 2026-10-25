@@ -132,7 +132,10 @@ def test_queue_metric_endpoint_is_public_and_matches_contract(api_client):
 
 
 def test_twin_scene_carries_metric_for_jakarta_only(api_client):
-    jakarta = api_client.get("/api/twin/scene", params={"city": "jakarta", "days": 2}).json()
+    # A dry base week (no forecast rain): day 0 is the normal day the endpoint describes.
+    jakarta = api_client.get(
+        "/api/twin/scene", params={"city": "jakarta", "days": 2, "weather": "none"}
+    ).json()
     metric = jakarta["landfill_queue"]["minutes_per_truck"]
     assert CONTRACT_KEYS <= set(metric)
     assert metric == api_client.get("/api/tpa/queue-metric").json()
@@ -404,9 +407,14 @@ def test_twin_beacon_and_headline_describe_the_same_day(api_client):
     # two views of one simulated day, so the peak can only read higher.
     assert queue["avg_wait_minutes"] > metric["baseline_mean"]
 
-    normal = api_client.get("/api/twin/scene", params={"days": 2}).json()["landfill_queue"]
+    assert queue["day_basis"]["id"] == "scenario"
+
+    # The default scene runs on the forecast week, so a rainy forecast day may scale
+    # the queue (day_basis says so); the dry base week is the normal day itself.
+    normal = api_client.get("/api/twin/scene", params={"days": 2, "weather": "none"}).json()["landfill_queue"]
     status = api_client.get("/api/tpa/queue-status").json()
     assert normal["minutes_per_truck"]["scenario_scaled"] is False
+    assert normal["day_basis"]["id"] == "normal_day"
     for key in ("modelled_hour", "avg_wait_minutes", "trucks_in_queue", "trucks_per_day"):
         assert normal[key] == status[key]
 
@@ -426,3 +434,47 @@ def test_weighbridge_log_is_the_seeded_peak_hour_and_labelled_simulated():
     # Deterministic: a fresh simulation gives the same log.
     peak_hour_weigh_ins.cache_clear()
     assert tpa_queue_status_payload()["scale_logs"] == logs
+
+
+# ── gsc teardown v2 #14: decimal ritasi ("6216.0") is a number, not 62160 trips ──
+
+
+def test_decimal_ritasi_values_are_parsed_as_numbers(tmp_path, monkeypatch):
+    csv_path = tmp_path / "weighing.csv"
+    csv_path.write_text(
+        'periode_data,ritasi\n202401,"31000"\n202402,"29000.0"\n202403,not-a-number\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(queue_simulation, "WEIGHING_CSV", csv_path)
+    bantargebang_daily_arrivals.cache_clear()
+    try:
+        trucks, _source = bantargebang_daily_arrivals()
+    finally:
+        monkeypatch.undo()
+        bantargebang_daily_arrivals.cache_clear()
+    assert trucks == 1000  # 29000.0 / 29 days, not 290000 / 29
+
+
+# ── the staggered peak hour lives with the queue model; the twin only reads it ──
+
+
+def test_staggered_peak_hour_is_the_queue_models_own_helper():
+    from app.api.routers import twin as twin_router
+
+    assert twin_router.staggered_peak_hour is queue_simulation.staggered_peak_hour
+    peak = modelled_peak_hour()
+    trucks = bantargebang_daily_arrivals()[0]
+    staggered = queue_simulation.staggered_peak_hour(trucks, peak["hour"])
+    assert staggered["hour"] == peak["hour"]
+    assert staggered["classification"] == "SIMULATED"
+    assert staggered["stagger_minutes"] == queue_simulation.STAGGER_SLOT_MINUTES
+    assert staggered["mean_wait_minutes"] < peak["mean_wait_minutes"]
+
+
+def test_tpa_wait_recommendation_names_the_stagger_slot():
+    from app.forecast.engine import estimate_tpa_queue_wait
+
+    yellow = estimate_tpa_queue_wait(25)  # 50 min: the "stagger" band
+    assert yellow["status"] == "yellow"
+    assert f"by {queue_simulation.STAGGER_SLOT_MINUTES} minutes" in yellow["recommendation"]
+    assert "20 minutes" not in yellow["recommendation"]

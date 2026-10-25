@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from datetime import date
 from itertools import pairwise
 from typing import Any
 
@@ -20,12 +19,15 @@ from app.api.state import (
     _map_truth_lock,
     dispatch_center,
 )
+from app.assistant.scenario import RAIN_CATEGORIES
+from app.core.env import today
 from app.fleet.astar_routing import is_traffic_jam_active, reroute_payload, set_traffic_jam_active
 from app.fleet.cv_surveillance import surveillance_status
 from app.fleet.data import (
     TRUCKS,
     command_center_snapshot,
     fleet_history_payload,
+    get_dynamic_trucks,
     tpa_queue_status_payload,
     unlicensed_collectors_payload,
 )
@@ -367,7 +369,7 @@ def get_fleet_executive_report() -> JSONResponse:
     """
     Export operational executive summary formatted in Markdown for DLH managers.
     """
-    today_str = date.today().strftime("%d %B %Y")
+    today_str = today().strftime("%d %B %Y")
 
     # Case 2 numbers computed live from the 42-kecamatan hybrid model under a
     # heavy-rain weekend scenario, so the report matches the actual model output.
@@ -392,8 +394,31 @@ def get_fleet_executive_report() -> JSONResponse:
     extra_manhours = sum(k["man_hours_required"] for k in scenario_kecs["top_hotspots"])
     extra_trucks = sum(k["trucks_required"] for k in scenario_kecs["top_hotspots"])
     extra_bins = sum(k["bins_required"] for k in scenario_kecs["top_hotspots"])
+    standby = " dan ".join(f"Kecamatan {k['kecamatan']}" for k in scenario_kecs["top_hotspots"][:2])
+    # 42 mm/day sits in BMKG's "sedang" (moderate, 20-50 mm) band, not "ekstrem" (>150 mm).
+    rain_class = RAIN_CATEGORIES["moderate"]
 
     stagger = simulate_staggered_dispatch(32)
+
+    # Route compliance from the live (simulated) fleet, not a canned truck/distance (gsc v3 N9).
+    deviated = sorted(
+        (t for t in get_dynamic_trucks() if t["deviation"]["violated"]),
+        key=lambda t: t["deviation"]["distance_meters"],
+        reverse=True,
+    )
+    if deviated:
+        worst = deviated[0]
+        corridor_line = (
+            f"{len(deviated)} truk saat ini di luar koridor; terjauh {worst['truck_code']} "
+            f"({worst['deviation']['distance_meters']:,.0f} m). SIMULATED: posisi dari armada simulasi."
+        )
+        alert_step = (
+            f"Kirim notifikasi penyesuaian rute ke sopir truk {worst['plate_number']} "
+            f"({worst['truck_code']}) via integrasi WhatsApp Gateway."
+        )
+    else:
+        corridor_line = "tidak ada truk di luar koridor saat laporan dibuat. SIMULATED: armada simulasi."
+        alert_step = "Tidak ada notifikasi deviasi rute yang perlu dikirim saat ini."
 
     report = f"""# LAPORAN EKSEKUTIF Pythia
 Tanggal Cetak: {today_str}
@@ -403,18 +428,18 @@ Sistem: Pythia
 Sistem optimalisasi logistik Pythia meningkatkan efisiensi armada (angka dari simulasi discrete-event, bukan estimasi tetap):
 - **Reduksi Waktu Antri TPA (simulasi):** waktu tunggu puncak turun **{stagger["queue_reduction_percent"]}%** (dari {stagger["baseline_wait_minutes"]} menjadi {stagger["optimized_wait_minutes"]} menit) via Staggered Dispatch. Sumber: simulasi antrian ter-seed, bukan pengukuran lapangan.
 - **Faktor Emisi (referensi):** estimasi bahan bakar 1.8 L/ton adalah faktor rujukan teknik, bukan penghematan terukur. Penghematan nyata butuh pilot lapangan.
-- **Kepatuhan Koridor Rute:** deteksi deviasi berbasis point-to-polyline (T-047 terdeteksi menyimpang 2.373 m).
+- **Kepatuhan Koridor Rute:** deteksi deviasi berbasis point-to-polyline; {corridor_line}
 
 ## 2. PREDIKSI VOLUME & KEBUTUHAN SUMBER DAYA (CASE 2)
-Hasil prediksi spasial-temporal model Hybrid Prophet + XGBoost untuk {scenario_kecs["kecamatan_count"]} kecamatan Jakarta (skenario hujan ekstrim 42mm + akhir pekan):
-- **Puncak Prediksi Volume:** Kecamatan {top["kecamatan"]} ({top["city"]}) diproyeksikan mengalami volume sampah tertinggi sebesar **{top["predicted_tons"]:.1f} ton/hari** (**+{spike_pct}%** vs kondisi normal).
+MODEL OUTPUT: prediksi spasial-temporal model Hybrid Prophet + XGBoost untuk {scenario_kecs["kecamatan_count"]} kecamatan Jakarta (skenario hujan 42 mm/hari, kategori BMKG "{rain_class["id"]}" {rain_class["range"]} mm, + akhir pekan):
+- **Puncak Prediksi Volume:** Kecamatan {top["kecamatan"]} ({top["city"]}) diproyeksikan mengalami volume sampah tertinggi sebesar **{top["predicted_tons"]:.1f} ton/hari** (**{spike_pct:+.1f}%** vs hari kerja kering).
 - **Total Volume Kota:** Estimasi total {scenario_kecs["kecamatan_count"]} kecamatan mencapai **{scenario_kecs["total_predicted_tons"]:.1f} ton/hari** pada skenario ini.
 - **Kebutuhan Manpower (5 hotspot teratas):** Dibutuhkan **{extra_crews} tim kru** (**{extra_workers} orang**) dengan alokasi total **{extra_manhours} person-hours**.
 - **Kesiapan Armada & Fasilitas (5 hotspot teratas):** Merekomendasikan pengerahan **{extra_trucks} unit armada** dan penempatan **{extra_bins} unit tempat penampungan sampah besar**.
 
 ## 3. REKOMENDASI MANAJEMEN SEGERA
 1. Aktifkan penundaan staggered keberangkatan truk non-darurat sebesar 15 menit.
-2. Kirim notifikasi alert penyesuaian rute otomatis ke sopir truk B 5678 EF (T-047) via integrasi WhatsApp Gateway.
-3. Siagakan tim sapu bersih cadangan di Kelurahan Kebon Jeruk dan Tebet.
+2. {alert_step}
+3. Siagakan tim sapu bersih cadangan di {standby} (hotspot teratas skenario di atas).
 """
     return JSONResponse({"report": report})

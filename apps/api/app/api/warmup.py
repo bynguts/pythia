@@ -14,8 +14,9 @@ from app.fleet.map_truth import _snapped_for, build_map_truth
 
 
 def warm_twin_scene() -> dict[str, Any]:
-    """Build the scene a bare `/twin` load requests: default city, no rain, no
-    event, today. Raises on failure; the startup caller logs it.
+    """Build the scene a bare `/twin` load requests: default city, the 7-day
+    week on the real Open-Meteo rain forecast (dry when unreachable), no
+    what-if, today. Raises on failure; the startup caller logs it.
 
     Called as a plain function, an omitted argument would stay a FastAPI
     `Query(...)` marker instead of its value (the previous call left `venue`
@@ -96,9 +97,10 @@ def _warm_route_cache() -> None:
         print("TPA cache warmed.")
     except Exception as e:
         print("TPA warmup failed:", e)
-    # Necessary: the twin's default 7-day scene runs 2×42 Prophet series on a
-    # cold start (~90 s); warming the shared Prophet cache here (main thread,
-    # same xgboost constraint as above) keeps scenario changes at ~1 s.
+    # Necessary: the twin's default 7-day scene (forecast week + its dry normal
+    # day) runs 2×42 model series on a cold start (~50 s); warming the shared
+    # Prophet cache here (main thread, same xgboost constraint as above) keeps
+    # scenario changes and a refreshed weather forecast at a few seconds.
     try:
         warm_twin_scene()
         print("Twin scene warmed.")

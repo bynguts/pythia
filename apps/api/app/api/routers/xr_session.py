@@ -13,6 +13,14 @@ scenario or its `updated_at`, and only the count is ever returned.
 
 Writes and heartbeats are rate-limited per client address (token buckets, single
 worker): a steady stream of updates per device and a small budget of new codes.
+
+Ask Pythia on the table (`POST /api/xr/ask`): /xr has no login, so a device without
+a command-center session asks here. It runs the assistant's deterministic local
+parser and the same read-only `run_scenario` tool (the /api/twin/scene forecast) —
+never an LLM, and the question is neither stored nor logged. Results are cached by
+their parsed parameters for a few minutes, so only a fresh forecast run spends from
+the rate limit: per shared-table code when one is given, else per address, plus a
+global cap.
 """
 
 from __future__ import annotations
@@ -26,6 +34,14 @@ from fastapi import APIRouter, HTTPException, Path, Request
 from pydantic import BaseModel, Field
 
 from app.api.state import _xr_sessions, _xr_sessions_lock
+from app.assistant.scenario import (
+    parse_scenario_question,
+    question_language,
+    run_scenario,
+    scenario_answer,
+    with_parse_step,
+)
+from app.core.env import today
 
 router = APIRouter()
 
@@ -40,9 +56,20 @@ MAX_PARTICIPANTS = 32
 # Per-client token buckets: (capacity, refill per second).
 PUT_BUCKET = (60.0, 10.0)  # a dragged slider, coalesced client-side, stays well below
 NEW_SESSION_BUCKET = (30.0, 1 / 20)  # 30 fresh codes, then one every 20 s
+ASK_BUCKET = (10.0, 1 / 6)  # each uncached ask runs a forecast: 10 at once, then one every 6 s
+# All uncached asks together, whatever their session or address: the cap a rotation of
+# session codes or addresses cannot get past.
+ASK_GLOBAL_BUCKET = (40.0, 1 / 2)
 MAX_CLIENTS = 2000
 # (kind, client) -> (tokens, last refill); insertion order = least recently seen first.
 _buckets: dict[tuple[str, str], tuple[float, float]] = {}
+# Scenario results by their parsed parameters and the forecast date (gsc v3 N10): a
+# repeated or identically-parsed ask is answered from here and spends no token. The
+# TTL bounds how stale the base week's forecast weather can be; the LRU bounds memory.
+ASK_CACHE_SIZE = 64
+ASK_CACHE_TTL_S = 300.0
+# key -> (stored at, run_scenario result); insertion order = least recently used first.
+_ask_cache: dict[tuple[Any, ...], tuple[float, dict[str, Any]]] = {}
 
 
 def _clock() -> float:
@@ -58,6 +85,18 @@ class XrSessionState(BaseModel):
     agreed: bool = False
     # The district the last device pointed at (a scene district id), or none.
     selected_id: str | None = Field(None, pattern="^[A-Za-z0-9_.-]{1,64}$")
+    # The event venue (a twin venue id such as "jis"); none keeps the device's own venue.
+    venue_id: str | None = Field(None, pattern="^[a-z0-9_-]{1,32}$")
+    # The horizon day the what-if (rain / event) applies to; other days keep the base week.
+    scenario_day: int = Field(0, ge=0, le=6)
+
+
+class XrAsk(BaseModel):
+    question: str = Field(..., min_length=1, max_length=500)
+    language: Literal["id", "en"] = "id"
+    # The shared table's code, when the device has joined one: the rate limit is then
+    # per session instead of per address (judges on one venue NAT share an address).
+    session: str | None = Field(None, pattern=CODE_PATTERN)
 
 
 class XrPresence(BaseModel):
@@ -185,3 +224,52 @@ def post_xr_presence(
             del seen[min(seen, key=seen.get)]
         seen[body.participant_id] = now
         return _public(code, record, now)
+
+
+@router.post("/api/xr/ask")
+def post_xr_ask(body: XrAsk, request: Request) -> dict[str, Any]:
+    """A what-if asked at the table: the local parser, then the read-only scenario tool.
+
+    Returns the assistant's shape (`provider`, `answer`, `scenario` with its trace),
+    or `scenario: null` when the question is not a what-if the parser understands.
+
+    Only a forecast run spends rate-limit tokens: a question the parser does not read
+    as a what-if, or one whose parameters were run in the last few minutes, is free.
+    A run spends from the session's bucket when `session` names a live table (else the
+    client address's) and from one global bucket."""
+    language = question_language(body.question, body.language)
+    parsed = parse_scenario_question(body.question)
+    if not parsed:
+        return {"provider": "local", "mode": "local", "tools_used": [], "answer": "", "scenario": None}
+    # The parser's output is run_scenario's whole input (city, rain and its BMKG word,
+    # crowd, venue, day = the what-if's scenario_day); the date fixes the forecast week.
+    key = (today().isoformat(), *sorted((k, repr(v)) for k, v in parsed.items()))
+    now = _clock()
+    with _xr_sessions_lock:
+        hit = _ask_cache.pop(key, None)
+        if hit and now - hit[0] < ASK_CACHE_TTL_S:
+            _ask_cache[key] = hit
+            result = hit[1]
+        else:
+            result = None
+            _purge(now)
+            live_session = body.session and body.session in _xr_sessions
+            _take("ask", f"session:{body.session}" if live_session else _client(request), ASK_BUCKET, now)
+            _take("ask-all", "*", ASK_GLOBAL_BUCKET, now)
+    if result is None:
+        try:
+            result = with_parse_step(run_scenario(parsed), "local_parser")
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        with _xr_sessions_lock:
+            _ask_cache.pop(key, None)
+            while len(_ask_cache) >= ASK_CACHE_SIZE:
+                del _ask_cache[next(iter(_ask_cache))]
+            _ask_cache[key] = (now, result)
+    return {
+        "provider": "local",
+        "mode": "local",
+        "tools_used": ["run_scenario"],
+        "answer": scenario_answer(result, language),
+        "scenario": result,
+    }

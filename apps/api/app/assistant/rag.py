@@ -41,7 +41,7 @@ CURATED_KNOWLEDGE = [
         "source": "curated:fleet_routing",
         "title": "Fleet routing and map operations",
         "text": (
-            "Fleet Operations shows a MapLibre live supervision map. Vehicles are classified by corridor compliance and condition. "
+            "Fleet Operations shows a MapLibre supervision map of the simulated pilot fleet. Vehicles are classified by corridor compliance and condition. "
             "T-047 is the critical route deviation demo truck. Pythia compares assigned and actual movement, highlights violation "
             "segments, and recommends recovery routes such as Route B - Daan Mogot Recovery. OSRM supplies road geometry, ETA, "
             "and route evidence. A* dynamic rerouting simulates corridor congestion and diverts trucks through recovery paths."

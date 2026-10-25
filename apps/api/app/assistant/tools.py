@@ -221,6 +221,15 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "city": {"type": "string", "enum": ["jakarta", "hcmc"], "description": "Default jakarta"},
                     "rainfall_mm": {"type": "number", "description": "Curah hujan skenario, 0-300 mm"},
+                    "rain_category": {
+                        "type": "string",
+                        "enum": ["light", "moderate", "heavy", "very_heavy", "extreme"],
+                        "description": (
+                            "Kategori hujan harian BMKG bila pengguna menyebut kata, bukan mm (gerimis/ringan, "
+                            "sedang, lebat/deras, sangat lebat, ekstrem); tool memakai nilai representatif "
+                            "10/35/75/125/150 mm dan menandainya sebagai asumsi"
+                        ),
+                    },
                     "event_attendance": {
                         "type": "integer",
                         "description": "Jumlah pengunjung event, 0 = tanpa event",

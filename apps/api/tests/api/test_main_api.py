@@ -142,9 +142,13 @@ class MainApiTests(unittest.TestCase):
         )
         self.assertIn("answer", body)
 
-    def test_assistant_returns_502_when_gateway_error(self):
-        fake_error = {"provider": "error", "error": "unreachable", "answer": ""}
-        with patch("app.api.routers.assistant.answer_with_openai_if_configured", return_value=fake_error):
+    def test_assistant_returns_502_when_the_assistant_raises(self):
+        # Provider failures fall back to the labelled local parser (no "error" provider
+        # exists); only an exception escaping the assistant is a gateway error.
+        with patch(
+            "app.api.routers.assistant.answer_with_openai_if_configured",
+            side_effect=RuntimeError("unreachable"),
+        ):
             response = self.client.post(
                 "/api/assistant/query",
                 json={"question": "berapa truk bermasalah?"},

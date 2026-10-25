@@ -16,10 +16,12 @@ def clock(monkeypatch):
     with state._xr_sessions_lock:
         state._xr_sessions.clear()
         xr_session._buckets.clear()
+        xr_session._ask_cache.clear()
     yield now
     with state._xr_sessions_lock:
         state._xr_sessions.clear()
         xr_session._buckets.clear()
+        xr_session._ask_cache.clear()
 
 
 def test_put_creates_a_session_that_get_returns_without_auth(api_client, clock):
@@ -202,3 +204,192 @@ def test_heartbeats_spend_the_same_rate_limit_as_writes(api_client, clock, monke
     limited = _beat(api_client, "HERE5", "deviceAAAA")
     assert limited.status_code == 429
     assert api_client.put("/api/xr/session/HERE5", json=BODY).status_code == 429
+
+
+def test_session_carries_an_event_venue_and_validates_it(api_client, clock):
+    res = api_client.put("/api/xr/session/VENUE1", json={**BODY, "venue_id": "jis"})
+    assert res.status_code == 200
+    assert api_client.get("/api/xr/session/VENUE1").json()["venue_id"] == "jis"
+    # Older clients that send no venue keep their own.
+    assert api_client.put("/api/xr/session/VENUE2", json=BODY).json()["venue_id"] is None
+    assert api_client.put("/api/xr/session/VENUE3", json={**BODY, "venue_id": "J I S"}).status_code == 422
+
+
+def test_session_carries_the_what_if_day(api_client, clock):
+    assert (
+        api_client.put("/api/xr/session/WDAY1", json={**BODY, "scenario_day": 3}).json()["scenario_day"] == 3
+    )
+    assert api_client.put("/api/xr/session/WDAY2", json=BODY).json()["scenario_day"] == 0
+    assert api_client.put("/api/xr/session/WDAY3", json={**BODY, "scenario_day": 7}).status_code == 422
+
+
+# gsc-2026 #7: Ask Pythia on the table. /xr has no login, so the ask runs the local
+# parser and the read-only run_scenario tool behind the twin's Ask rail.
+def test_ask_runs_the_twin_scenario_tool_without_login(api_client, clock, monkeypatch):
+    recorded = []
+    monkeypatch.setattr(state.history_store, "record_event", lambda *a, **k: recorded.append(a))
+    res = api_client.post(
+        "/api/xr/ask",
+        json={"question": "what if 80 mm rain during the JIS concert tomorrow", "language": "en"},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["provider"] == "local"
+    scenario = body["scenario"]
+    assert scenario["tool"] == "run_scenario"
+    assert scenario["scenario"]["rainfall_mm"] == 80.0
+    assert scenario["scenario"]["event_attendance"] == 50_000
+    assert scenario["scenario"]["attendance_assumed"] is True
+    assert scenario["scenario"]["venue_id"] == "jis"
+    assert scenario["scenario"]["day"] == 1
+    assert scenario["classification"] == "MODEL_OUTPUT"
+    # The trace names the local parser first: never an LLM on this public route.
+    assert scenario["trace"][0]["class"] == "LOCAL_PARSER"
+    assert [step["step"] for step in scenario["trace"]][:2] == ["parse_scenario", "run_scenario"]
+    assert "MODEL OUTPUT" in body["answer"]
+    # The question is not stored.
+    assert recorded == []
+
+
+def test_ask_without_a_what_if_returns_no_scenario(api_client, clock):
+    res = api_client.post("/api/xr/ask", json={"question": "hello", "language": "id"})
+    assert res.status_code == 200
+    assert res.json()["scenario"] is None
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [{"question": ""}, {"question": "x" * 501}, {"question": "what if 80 mm", "language": "fr"}],
+)
+def test_ask_body_is_validated(api_client, clock, payload):
+    assert api_client.post("/api/xr/ask", json=payload).status_code == 422
+
+
+def _stub_run_scenario(monkeypatch) -> list[dict]:
+    """Count forecast runs without running one; the result carries what the answer reads."""
+    runs: list[dict] = []
+
+    def fake(parsed):
+        runs.append(parsed)
+        return _fake_result(parsed)
+
+    monkeypatch.setattr(xr_session, "run_scenario", fake)
+    monkeypatch.setattr(xr_session, "scenario_answer", lambda result, language: "MODEL OUTPUT")
+    return runs
+
+
+def _fake_result(parsed):
+    return {
+        "tool": "run_scenario",
+        "classification": "MODEL_OUTPUT",
+        "city": parsed["city"],
+        "scenario": {"requested": {"rainfall_mm": parsed["rainfall_mm"]}, "day": parsed["day"]},
+        "trace": [],
+    }
+
+
+# gsc v3 N10: judges on one venue NAT share an address. Only a fresh forecast run
+# spends tokens; repeated asks come from the cache; a table code gets its own bucket.
+def test_ask_is_rate_limited_per_client_on_forecast_runs(api_client, clock, monkeypatch):
+    runs = _stub_run_scenario(monkeypatch)
+    monkeypatch.setattr(xr_session, "ASK_BUCKET", (2.0, 0.1))
+    asks = [{"question": f"what if {mm} mm rain tomorrow", "language": "en"} for mm in (10, 20, 30, 40)]
+    assert api_client.post("/api/xr/ask", json=asks[0]).status_code == 200
+    assert api_client.post("/api/xr/ask", json=asks[1]).status_code == 200
+    limited = api_client.post("/api/xr/ask", json=asks[2])
+    assert limited.status_code == 429
+    assert int(limited.headers["Retry-After"]) >= 1
+    clock["t"] += 10
+    assert api_client.post("/api/xr/ask", json=asks[3]).status_code == 200
+    assert len(runs) == 3
+
+
+def test_non_scenario_questions_never_spend_tokens(api_client, clock, monkeypatch):
+    monkeypatch.setattr(xr_session, "ASK_BUCKET", (1.0, 0.0001))
+    for _ in range(5):
+        assert api_client.post("/api/xr/ask", json={"question": "hello", "language": "en"}).status_code == 200
+
+
+def test_repeated_asks_come_from_the_cache_without_spending(api_client, clock, monkeypatch):
+    runs = _stub_run_scenario(monkeypatch)
+    monkeypatch.setattr(xr_session, "ASK_BUCKET", (1.0, 0.0001))
+    first = api_client.post("/api/xr/ask", json={"question": "what if 40 mm rain tomorrow", "language": "en"})
+    assert first.status_code == 200
+    # Same question, other wording that parses to the same parameters, other language.
+    for question, language in (
+        ("what if 40 mm rain tomorrow", "en"),
+        ("What if 40mm rain tomorrow?", "en"),
+        ("what if 40 mm rain tomorrow", "id"),
+    ):
+        res = api_client.post("/api/xr/ask", json={"question": question, "language": language})
+        assert res.status_code == 200, (question, res.text)
+        assert res.json()["scenario"] == first.json()["scenario"]
+    assert len(runs) == 1
+    # Different parameters are a new run, and the bucket is empty.
+    assert api_client.post("/api/xr/ask", json={"question": "what if 45 mm rain tomorrow"}).status_code == 429
+
+
+def test_ask_cache_expires_and_is_bounded(api_client, clock, monkeypatch):
+    runs = _stub_run_scenario(monkeypatch)
+    monkeypatch.setattr(xr_session, "ASK_CACHE_SIZE", 2)
+    ask = {"question": "what if 40 mm rain tomorrow", "language": "en"}
+    api_client.post("/api/xr/ask", json=ask)
+    clock["t"] += xr_session.ASK_CACHE_TTL_S + 1
+    api_client.post("/api/xr/ask", json=ask)
+    assert len(runs) == 2
+    for mm in (10, 20, 30):
+        api_client.post("/api/xr/ask", json={"question": f"what if {mm} mm rain tomorrow"})
+    assert len(xr_session._ask_cache) == 2
+
+
+def test_ask_cache_key_includes_the_forecast_date(api_client, clock, monkeypatch):
+    from datetime import date
+
+    runs = _stub_run_scenario(monkeypatch)
+    ask = {"question": "what if 40 mm rain tomorrow", "language": "en"}
+    monkeypatch.setattr(xr_session, "today", lambda: date(2026, 10, 24))
+    api_client.post("/api/xr/ask", json=ask)
+    monkeypatch.setattr(xr_session, "today", lambda: date(2026, 10, 25))
+    api_client.post("/api/xr/ask", json=ask)
+    assert len(runs) == 2
+
+
+def test_ask_limit_is_per_live_session_code(api_client, clock, monkeypatch):
+    _stub_run_scenario(monkeypatch)
+    monkeypatch.setattr(xr_session, "ASK_BUCKET", (1.0, 0.0001))
+    assert api_client.put("/api/xr/session/TABLE1", json=BODY).status_code == 200
+    assert api_client.put("/api/xr/session/TABLE2", json=BODY).status_code == 200
+
+    def ask(mm: int, session: str | None = None) -> int:
+        body = {"question": f"what if {mm} mm rain tomorrow", "language": "en"}
+        if session:
+            body["session"] = session
+        return api_client.post("/api/xr/ask", json=body).status_code
+
+    # Same address (the test client), separate buckets per table.
+    assert ask(10, "TABLE1") == 200
+    assert ask(15, "TABLE1") == 429
+    assert ask(20, "TABLE2") == 200
+    assert ask(25) == 200  # the address's own bucket is still full
+    assert ask(30) == 429
+    # An unknown code cannot mint a bucket: it falls back to the address (now empty).
+    assert ask(35, "NOSUCH") == 429
+
+
+def test_ask_global_cap_holds_across_sessions(api_client, clock, monkeypatch):
+    _stub_run_scenario(monkeypatch)
+    monkeypatch.setattr(xr_session, "ASK_GLOBAL_BUCKET", (2.0, 0.0001))
+    for code in ("ROOMA", "ROOMB", "ROOMC"):
+        assert api_client.put(f"/api/xr/session/{code}", json=BODY).status_code == 200
+    statuses = [
+        api_client.post(
+            "/api/xr/ask", json={"question": f"what if {mm} mm rain tomorrow", "session": code}
+        ).status_code
+        for mm, code in ((10, "ROOMA"), (20, "ROOMB"), (30, "ROOMC"))
+    ]
+    assert statuses == [200, 200, 429]
+
+
+def test_ask_session_code_is_validated(api_client, clock):
+    res = api_client.post("/api/xr/ask", json={"question": "hello", "session": "lower-case!"})
+    assert res.status_code == 422

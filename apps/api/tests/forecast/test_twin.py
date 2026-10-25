@@ -71,8 +71,9 @@ def test_jakarta_scene_has_all_districts_and_honest_provenance(api_client):
 
 
 def test_rain_scenario_raises_jakarta_volumes_and_risk(api_client):
-    dry = api_client.get("/api/twin/scene", params={"days": 2}).json()
-    wet = api_client.get("/api/twin/scene", params={"days": 2, "rainfall_mm": 80}).json()
+    # weather=none: a dry base week, so the test never depends on Open-Meteo.
+    dry = api_client.get("/api/twin/scene", params={"days": 2, "weather": "none"}).json()
+    wet = api_client.get("/api/twin/scene", params={"days": 2, "rainfall_mm": 80, "weather": "none"}).json()
     assert wet["summary"]["total_tons_today"] > dry["summary"]["total_tons_today"]
     # A dry, event-free day is the normal day itself: nothing is flagged.
     assert dry["summary"]["districts_at_risk"] == 0

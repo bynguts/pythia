@@ -14,15 +14,45 @@ from functools import lru_cache
 from typing import Any
 
 from app.core.paths import DISTRICT_OUTLINES
-from app.core.units import CREW_SIZE_WORKERS, TRUCK_CAPACITY_TONS, resource_requirements
+from app.core.units import (
+    CREW_SIZE_WORKERS,
+    EVENT_WASTE_KG_PER_PERSON,
+    TRUCK_CAPACITY_TONS,
+    resource_requirements,
+)
 from app.forecast.cities import VENUES, City
+from app.forecast.engine import (
+    AT_RISK_LEVELS,
+    NORMAL_DAY_BASIS,
+    RISK_CRITICAL_RATIO,
+    RISK_ELEVATED_RATIO,
+    RISK_HIGH_RATIO,
+    distance_point_to_polyline_m,
+    predict_waste_hybrid_series,
+    spike_risk,
+)
+from app.forecast.real_data import load_kecamatan_map
 
-# Risk = spike against the district's own normal day: the same model, same date,
-# no rain and no event. (The TPS capacity column is a proxy that 40 of 42
-# kecamatan already exceed, so it cannot drive a daily alarm.)
-CRITICAL_RATIO = 1.25
-HIGH_RATIO = 1.10
-ELEVATED_RATIO = 1.03
+# Risk = spike against the district's own normal day (engine.spike_risk, the one
+# definition Fleet uses too). Kept here under their old names for callers.
+CRITICAL_RATIO = RISK_CRITICAL_RATIO
+HIGH_RATIO = RISK_HIGH_RATIO
+ELEVATED_RATIO = RISK_ELEVATED_RATIO
+
+# An event's crowd waste lands in the kecamatan whose outline holds the venue and
+# in every kecamatan whose boundary lies within this distance of it (REAL
+# boundaries), shared equally. A planning assumption, stated in the payload.
+EVENT_REACH_RADIUS_M = 1000.0
+EVENT_REACH_BASIS = (
+    f"assumption: {EVENT_WASTE_KG_PER_PERSON:g} kg per attendee, shared equally by the kecamatan whose "
+    f"real boundary holds the venue or lies within {EVENT_REACH_RADIUS_M / 1000:g} km of it"
+)
+# What the district tonnes are, so they are never read as landfill intake.
+GENERATED_WASTE_QUANTITY = {
+    "id": "waste_generated",
+    "label": "Waste generated (timbulan) per kecamatan per day, model output over the SILIKA DLH 2023 baseline",
+    "not": "landfill intake: the tonnage weighed in at TPST Bantargebang is a different quantity",
+}
 
 PROVENANCE = {
     "jakarta": {
@@ -59,14 +89,7 @@ PROVENANCE = {
 
 
 def classify_risk(tons: float, normal_tons: float | None) -> str:
-    ratio = tons / normal_tons if normal_tons else 1.0
-    if ratio >= CRITICAL_RATIO:
-        return "critical"
-    if ratio >= HIGH_RATIO:
-        return "high"
-    if ratio >= ELEVATED_RATIO:
-        return "elevated"
-    return "normal"
+    return spike_risk(tons, normal_tons)[1]
 
 
 @lru_cache(maxsize=1)
@@ -111,16 +134,152 @@ def jakarta_districts(kecamatan_payload: dict[str, Any]) -> list[dict[str, Any]]
     return out
 
 
+def _ring_contains(ring: list[list[float]], lat: float, lng: float) -> bool:
+    """Even-odd test of a point against a closed [lng, lat] ring."""
+    inside = False
+    for (x1, y1), (x2, y2) in zip(ring, ring[1:] + ring[:1], strict=True):
+        if (y1 > lat) != (y2 > lat) and lng < (x2 - x1) * (lat - y1) / (y2 - y1) + x1:
+            inside = not inside
+    return inside
+
+
+def event_reach(lat: float, lng: float) -> list[str]:
+    """Kecamatan slugs an event at (lat, lng) reaches, host district first.
+
+    Geography, not a list: the kecamatan whose real outline holds the venue, then
+    every kecamatan whose boundary lies within EVENT_REACH_RADIUS_M of it, nearest
+    first. A kecamatan without an outline is measured by its centroid; when
+    nothing is reached (a venue outside the city), the nearest centroid takes it.
+    """
+    outlines = kecamatan_outlines()
+    reached: list[tuple[float, str]] = []
+    nearest: tuple[float, str] | None = None
+    for k in load_kecamatan_map():
+        if k.get("lat") is None or k.get("lng") is None:
+            continue
+        centroid = distance_point_to_polyline_m((lat, lng), [(k["lat"], k["lng"])])
+        ring = outlines.get(k["slug"])
+        if ring and _ring_contains(ring, lat, lng):
+            distance = 0.0
+        elif ring:
+            distance = distance_point_to_polyline_m((lat, lng), [(p[1], p[0]) for p in ring])
+        else:
+            distance = centroid
+        if nearest is None or centroid < nearest[0]:
+            nearest = (centroid, k["slug"])
+        if distance <= EVENT_REACH_RADIUS_M:
+            reached.append((distance, k["slug"]))
+    if not reached and nearest:
+        reached.append(nearest)
+    return [slug for _distance, slug in sorted(reached)]
+
+
+def event_attendance_by_district(attendance: int, lat: float, lng: float) -> dict[str, int]:
+    """The crowd shared equally by the reached kecamatan (the host takes the remainder)."""
+    slugs = event_reach(lat, lng) if attendance > 0 else []
+    if not slugs:
+        return {}
+    share, remainder = divmod(int(attendance), len(slugs))
+    return {slug: share + (remainder if i == 0 else 0) for i, slug in enumerate(slugs)}
+
+
+def event_block(
+    attendance: int, lat: float | None, lng: float | None, day: int, date: str | None
+) -> dict[str, Any] | None:
+    """Where a scenario's event sits and what it reaches; None without an event."""
+    if attendance <= 0 or lat is None or lng is None:
+        return None
+    by_district = event_attendance_by_district(attendance, lat, lng)
+    return {
+        "lat": lat,
+        "lng": lng,
+        "radius_m": EVENT_REACH_RADIUS_M,
+        "day": day,
+        "date": date,
+        "attendance": attendance,
+        "districts": list(by_district),
+        "attendance_by_district": by_district,
+        "tons_total": round(attendance * EVENT_WASTE_KG_PER_PERSON / 1000.0, 1),
+        "basis": EVENT_REACH_BASIS,
+    }
+
+
+def jakarta_week(
+    days: int,
+    *,
+    rain: tuple[float, ...],
+    temp: float | tuple[float, ...] = 31.0,
+    wind: float | tuple[float, ...] = 10.0,
+    events: dict[str, tuple[int, ...]] | None = None,
+    start: str | None = None,
+    rain_3d: tuple[float, ...] | None = None,
+) -> list[dict[str, Any]]:
+    """Twin districts for Jakarta from per-day inputs (one value per horizon day).
+
+    `events` maps a kecamatan slug to its per-day attendance. The normal day is
+    this same call with dry rain and no events. Rows carry the inputs they used.
+    `rain_3d` (per day) overrides the rolling 3-day rain sum (see the engine).
+    """
+    events = events or {}
+    no_event = (0,) * days
+    outlines = kecamatan_outlines()
+    out = []
+    for k in load_kecamatan_map():
+        if k.get("lat") is None or k.get("lng") is None:
+            continue
+        attendance = events.get(k["slug"], no_event)
+        result = predict_waste_hybrid_series(
+            k["slug"],
+            days=days,
+            rainfall_mm=rain,
+            temp_max_c=temp,
+            wind_max_kmh=wind,
+            event_attendance=attendance,
+            start_date=start,
+            rain_3d=rain_3d,
+        )
+        today = result["series"][0]["predicted_tons"]
+        spread = (0.75, 1.25) if result["model_available"] else (0.6, 1.4)
+        out.append(
+            {
+                "id": k["slug"],
+                "name": k["kecamatan"].title(),
+                "admin_area": k.get("city"),
+                "lat": k["lat"],
+                "lng": k["lng"],
+                "baseline_tons": k.get("baseline_tons_per_day"),
+                "series": [
+                    {
+                        "date": row["date"],
+                        "predicted_tons": row["predicted_tons"],
+                        "rainfall_mm": row["rainfall_mm"],
+                        "event_attendance": row["event_attendance"],
+                    }
+                    for row in result["series"]
+                ],
+                "interval_p10_p90": [round(today * spread[0], 1), round(today * spread[1], 1)],
+                "capacity_tons": k.get("tps_capacity_ton_per_day"),
+                "facility_readiness": k.get("facility_readiness"),
+                "model_available": result["model_available"],
+                "event_localized": any(attendance),
+                "outline": outlines.get(k["slug"]),
+            }
+        )
+    return out
+
+
 def _with_risk(district: dict[str, Any], normal_series: list[float] | None) -> dict[str, Any]:
     series = []
     for i, row in enumerate(district["series"]):
         normal = normal_series[i] if normal_series else row["predicted_tons"]
         resources = resource_requirements(row["predicted_tons"])
+        spike_percent, risk = spike_risk(row["predicted_tons"], normal)
         series.append(
             {
                 **row,
                 "normal_tons": normal,
-                "risk": classify_risk(row["predicted_tons"], normal),
+                "spike_percent": spike_percent,
+                "risk": risk,
                 "trucks_required": resources["trucks_required"],
                 "crews_required": resources["crews_required"],
             }
@@ -157,19 +316,31 @@ def truck_layer(trucks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-def flow_layer(districts: list[dict[str, Any]], destination: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Today's haul from each district to the landfill (arc width ∝ tonnes)."""
+def flow_layer(
+    districts: list[dict[str, Any]], destination: dict[str, Any] | None, day: int = 0
+) -> list[dict[str, Any]]:
+    """The selected day's haul from each district to the landfill (arc width ∝ tonnes).
+
+    `tons` is day `day` of the horizon; `tons_by_day` holds every day, so a
+    client stepping through the horizon can redraw without a refetch.
+    """
     if destination is None:
         return []
-    return [
-        {
-            "from": [d["lng"], d["lat"]],
-            "to": [destination["lng"], destination["lat"]],
-            "district": d["id"],
-            "tons": d["today_tons"],
-        }
-        for d in districts
-    ]
+    flows = []
+    for d in districts:
+        by_day = [row["predicted_tons"] for row in d["series"]]
+        index = min(day, len(by_day) - 1) if by_day else 0
+        flows.append(
+            {
+                "from": [d["lng"], d["lat"]],
+                "to": [destination["lng"], destination["lat"]],
+                "district": d["id"],
+                "tons": by_day[index] if by_day else d["today_tons"],
+                "day": index,
+                "tons_by_day": by_day,
+            }
+        )
+    return flows
 
 
 def build_scene(
@@ -182,8 +353,15 @@ def build_scene(
     trucks: list[dict[str, Any]] | None = None,
     tps: list[dict[str, Any]] | None = None,
     landfill_queue: dict[str, Any] | None = None,
+    weather: dict[str, Any] | None = None,
+    landfill_intake: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """`normal_days` is the same district list forecast without rain or event."""
+    """`normal_days` is the same district list forecast without rain or event.
+
+    `weather` says which rain each day used (forecast, scenario or assumed dry);
+    `landfill_intake` is the validated monthly intake level, a different quantity
+    from the generated tonnes the districts carry.
+    """
     normal = {d["id"]: [row["predicted_tons"] for row in d["series"]] for d in normal_days or []}
     districts = [_with_risk(d, normal.get(d["id"])) for d in districts]
     dates = [row["date"] for row in districts[0]["series"]] if districts else []
@@ -192,6 +370,9 @@ def build_scene(
     ]
     daily_trucks = [sum(d["series"][i]["trucks_required"] for d in districts) for i in range(len(dates))]
     daily_crews = [sum(d["series"][i]["crews_required"] for d in districts) for i in range(len(dates))]
+    daily_at_risk = [
+        sum(1 for d in districts if d["series"][i]["risk"] in AT_RISK_LEVELS) for i in range(len(dates))
+    ]
     peak_index = max(range(len(dates)), key=daily_totals.__getitem__) if dates else 0
     landfill = next((f for f in facilities if f.get("kind") == "landfill"), None)
     return {
@@ -203,24 +384,33 @@ def build_scene(
             "daily_total_tons": daily_totals,
             "daily_trucks_required": daily_trucks,
             "daily_crews_required": daily_crews,
+            "daily_districts_at_risk": daily_at_risk,
         },
         "scenario": scenario,
         "summary": {
             "total_tons_today": daily_totals[0] if daily_totals else 0.0,
             "peak_date": dates[peak_index] if dates else None,
             "peak_total_tons": daily_totals[peak_index] if daily_totals else 0.0,
-            "districts_at_risk": sum(1 for d in districts if d["risk"] in ("high", "critical")),
+            "districts_at_risk": daily_at_risk[0] if daily_at_risk else 0,
             "trucks_required_today": daily_trucks[0] if daily_trucks else 0,
             "crews_required_today": daily_crews[0] if daily_crews else 0,
             # Crews equal trucks by design (one crew team per truck per shift);
             # the size lets the UI say so with the canonical unit, not a hardcoded 4.
             "crew_size_workers": CREW_SIZE_WORKERS,
+            # What the tonnes above measure (generated waste, not landfill intake).
+            "tons_quantity": GENERATED_WASTE_QUANTITY["id"],
+            "risk_basis": f"forecast vs the normal day ({NORMAL_DAY_BASIS})",
         },
+        "quantities": {
+            "district_tons": GENERATED_WASTE_QUANTITY,
+            "landfill_intake_reference": landfill_intake,
+        },
+        "weather": weather,
         "districts": districts,
         "facilities": facilities,
         "tps": tps or [],
         "trucks": truck_layer(trucks or []),
-        "flows": flow_layer(districts, landfill),
+        "flows": flow_layer(districts, landfill, int(scenario.get("day") or 0)),
         "landfill_queue": landfill_queue,
         "venues": [asdict(venue) for venue in VENUES.get(city.id, ())],
         "provenance": PROVENANCE[city.id],

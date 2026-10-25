@@ -52,6 +52,47 @@ _EVENT_WORDS = re.compile(
 ASSUMED_ATTENDANCE = 50_000
 _HCMC = re.compile(r"\b(hcmc|ho chi minh|hồ chí minh|saigon|sai gon|tp\.? ?hcm)\b")
 _RAIN = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:mm|milimeter|millimet(?:er|re)s?)\b")
+# Rain words with no millimetre figure read as a BMKG daily rainfall category
+# (ringan 5-20, sedang 20-50, lebat 50-100, sangat lebat 100-150, ekstrem >150 mm/day)
+# and run at a stated representative value on the twin's 5 mm grid. "Extreme" runs at
+# 150 mm, the twin's maximum, so it is a lower bound. Checked strongest first.
+RAIN_CATEGORIES: dict[str, dict[str, Any]] = {
+    "extreme": {"mm": 150.0, "range": ">150", "id": "ekstrem", "en": "extreme"},
+    "very_heavy": {"mm": 125.0, "range": "100–150", "id": "sangat lebat", "en": "very heavy"},
+    "heavy": {"mm": 75.0, "range": "50–100", "id": "lebat", "en": "heavy"},
+    "moderate": {"mm": 35.0, "range": "20–50", "id": "sedang", "en": "moderate"},
+    "light": {"mm": 10.0, "range": "5–20", "id": "ringan", "en": "light"},
+}
+_RAINS = r"rain(?:s|ing|fall)?"
+_RAIN_WORDS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "extreme",
+        re.compile(
+            rf"\b(hujan\s+(?:sangat\s+)?ekstr[ei]m|extreme(?:ly)?\s+(?:heavy\s+)?{_RAINS}|{_RAINS}\s+extremely)\b"
+        ),
+    ),
+    (
+        "very_heavy",
+        re.compile(
+            rf"\b(hujan\s+sangat\s+(?:lebat|deras)|hujan\s+(?:lebat|deras)\s+sekali|very\s+heavy\s+{_RAINS}|"
+            rf"{_RAINS}\s+very\s+(?:heavily|hard)|torrential(?:\s+{_RAINS}|\s+downpour)?)\b"
+        ),
+    ),
+    (
+        "heavy",
+        re.compile(
+            rf"\b(hujan\s+(?:lebat|deras|besar)|heavy\s+{_RAINS}|{_RAINS}\s+(?:heavily|hard)|"
+            rf"heavily\s+{_RAINS}|downpour)\b"
+        ),
+    ),
+    ("moderate", re.compile(rf"\b(hujan\s+sedang|moderate\s+{_RAINS}|{_RAINS}\s+moderately)\b")),
+    (
+        "light",
+        re.compile(rf"\b(gerimis|hujan\s+ringan|light\s+{_RAINS}|{_RAINS}\s+lightly|drizzl(?:e|es|ing))\b"),
+    ),
+)
+# Rain named with no amount and no intensity ("what if it rains tomorrow?").
+_BARE_RAIN = re.compile(r"\b(hujan|rain|rains|raining|rainfall)\b")
 _DAYS: tuple[tuple[re.Pattern[str], int | None], ...] = (
     (re.compile(r"\b(?:day|hari|d|h)\s*\+\s*(\d+)\b"), None),
     (re.compile(r"\b(?:in|dalam)\s+(\d+)\s+(?:days?|hari)\b"), None),
@@ -102,10 +143,19 @@ def parse_scenario_question(question: str) -> dict[str, Any] | None:
     city = "hcmc" if _HCMC.search(q) else "jakarta"
 
     rain = None
+    rain_category = None
     rain_match = _RAIN.search(q)
     if rain_match:
         rain = min(MAX_RAIN_MM, _number(rain_match.group(1)))
         q = q[: rain_match.start()] + " " + q[rain_match.end() :]
+    else:
+        for key, pattern in _RAIN_WORDS:
+            word_match = pattern.search(q)
+            if word_match:
+                rain = RAIN_CATEGORIES[key]["mm"]
+                rain_category = {"key": key, "phrase": word_match.group(0)}
+                q = q[: word_match.start()] + " " + q[word_match.end() :]
+                break
 
     day = 0
     for pattern, fixed in _DAYS:
@@ -140,9 +190,62 @@ def parse_scenario_question(question: str) -> dict[str, Any] | None:
         "venue": venue.name,
         "day": day,
     }
+    if rain_category:
+        parsed["rain_category"] = rain_category
     if not attendance and named and _EVENT_WORDS.search(q):
         parsed.update(event_attendance=ASSUMED_ATTENDANCE, attendance_assumed=True)
     return parsed
+
+
+def rain_category_info(category: Any, phrase: str | None = None) -> dict[str, Any] | None:
+    """The BMKG category a rain word was read as, with its stated value (None if unknown)."""
+    key = category.get("key") if isinstance(category, dict) else category
+    if key not in RAIN_CATEGORIES:
+        return None
+    if phrase is None and isinstance(category, dict):
+        phrase = category.get("phrase")
+    info = RAIN_CATEGORIES[key]
+    return {
+        "key": key,
+        "phrase": phrase or info["en"],
+        "rainfall_mm": info["mm"],
+        "bmkg_label": info["id"],
+        "label_en": info["en"],
+        "range_mm_per_day": info["range"],
+        # Extreme rain runs at the twin's 150 mm maximum: a lower bound for ">150".
+        "lower_bound": key == "extreme",
+        "source": "BMKG daily rainfall categories (mm/day); representative value assumed",
+    }
+
+
+def rain_without_amount(question: str) -> bool:
+    """A what-if that names rain but neither an amount nor an intensity word."""
+    q = question.lower()
+    return bool(
+        _WHAT_IF.search(q)
+        and _BARE_RAIN.search(q)
+        and not _RAIN.search(q)
+        and not any(p.search(q) for _, p in _RAIN_WORDS)
+    )
+
+
+def rain_words_hint(language: str) -> str:
+    """How to name rain so the parser can run it: mm, or a BMKG category word."""
+    english = language == "en"
+    parts = "; ".join(
+        f"{info['en'] if english else info['id']} {info['range']} mm → {info['mm']:g} mm"
+        + ((" (twin maximum)" if english else " (maksimum twin)") if key == "extreme" else "")
+        for key, info in reversed(RAIN_CATEGORIES.items())
+    )
+    if english:
+        return (
+            "The question names rain but no amount. Give millimetres, or an intensity word read as a "
+            f'BMKG daily category ({parts}). Example: "what if heavy rain hits tomorrow?"'
+        )
+    return (
+        "Pertanyaan menyebut hujan tanpa jumlah. Sebutkan milimeter, atau kata intensitas yang dibaca "
+        f'sebagai kategori harian BMKG (gerimis = ringan; {parts}). Contoh: "kalau hujan deras besok?"'
+    )
 
 
 def _venue(city: str, key: str | None) -> Venue:
@@ -216,8 +319,16 @@ def run_scenario(args: dict[str, Any]) -> dict[str, Any]:
     city = args.get("city") or "jakarta"
     if city not in VENUES:
         raise ValueError(f"unknown city {city!r}")
+    # A rain word ("heavy rain") runs at its BMKG category's stated value; an explicit
+    # millimetre figure that differs from that value wins and drops the category.
+    category = rain_category_info(args.get("rain_category"))
+    raw_rain = args.get("rainfall_mm")
+    if category and (not raw_rain or float(raw_rain) == category["rainfall_mm"]):
+        raw_rain = category["rainfall_mm"]
+    else:
+        category = None
     requested = {
-        "rainfall_mm": max(0.0, min(MAX_RAIN_MM, float(args.get("rainfall_mm") or 0))),
+        "rainfall_mm": max(0.0, min(MAX_RAIN_MM, float(raw_rain or 0))),
         "event_attendance": max(0, min(MAX_ATTENDANCE, int(args.get("event_attendance") or 0))),
     }
     # Run exactly what the Twin/XR links will show, not a value they cannot display.
@@ -278,6 +389,7 @@ def run_scenario(args: dict[str, Any]) -> dict[str, Any]:
                 "venue": venue.id if attendance else None,
                 "day": day,
                 "snapped": snapped,
+                "rain_category": category["key"] if category else None,
             },
         },
         {
@@ -323,6 +435,7 @@ def run_scenario(args: dict[str, Any]) -> dict[str, Any]:
             "requested": requested,
             "snapped_to_twin_presets": snapped,
             "attendance_assumed": bool(args.get("attendance_assumed")) and attendance > 0,
+            "rain_category": category,
         },
         "summary": {
             "total_tons": round(total, 1),
@@ -366,6 +479,7 @@ def with_parse_step(result: dict[str, Any], parser: str, model: str | None = Non
             "event_attendance": requested.get("event_attendance"),
             "venue": result["scenario"].get("venue_id"),
             "day": result["scenario"].get("day"),
+            "rain_category": (result["scenario"].get("rain_category") or {}).get("key"),
         },
     }
     return {**result, "trace": [step, *result.get("trace", [])]}
@@ -394,6 +508,7 @@ def scenario_answer(result: dict[str, Any], language: str) -> str:
         return " + ".join(parts) or ("no rain, no event" if english else "tanpa hujan dan event")
 
     what = describe(sc["rainfall_mm"], sc["event_attendance"], sc["venue"])
+    category = sc.get("rain_category")
     requested = sc.get("requested") or {}
     asked = describe(requested.get("rainfall_mm", 0), requested.get("event_attendance", 0), None)
     delta = f"{'+' if s['extra_tons'] >= 0 else ''}{_fmt(s['extra_tons'])}"
@@ -414,6 +529,13 @@ def scenario_answer(result: dict[str, Any], language: str) -> str:
                 1,
                 f"- Snapped to the twin's presets (rain in 5 mm steps up to 150 mm, crowd none/50k/100k) "
                 f"so the Twin and XR show these same numbers: you asked {asked}.",
+            )
+        if category:
+            lines.insert(
+                1,
+                f"- \"{category['phrase']}\" → {category['rainfall_mm']:g} mm (BMKG '{category['bmkg_label']}' "
+                f"{category['range_mm_per_day']} mm/day): assumed from the BMKG category, not a measured amount"
+                + ("; the twin's maximum, so a lower bound." if category.get("lower_bound") else "."),
             )
         if top:
             lines.append(
@@ -455,6 +577,13 @@ def scenario_answer(result: dict[str, Any], language: str) -> str:
                 1,
                 f"- Disesuaikan ke preset twin (hujan per 5 mm hingga 150 mm, keramaian none/50k/100k) "
                 f"agar Twin dan XR menampilkan angka yang sama: Anda meminta {asked}.",
+            )
+        if category:
+            lines.insert(
+                1,
+                f"- \"{category['phrase']}\" → {category['rainfall_mm']:g} mm (BMKG '{category['bmkg_label']}' "
+                f"{category['range_mm_per_day']} mm/hari): diasumsikan dari kategori BMKG, bukan jumlah terukur"
+                + ("; maksimum twin, jadi batas bawah." if category.get("lower_bound") else "."),
             )
         if top:
             lines.append(

@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+import logging
+import sys
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 from urllib.request import urlopen
+
+from app.core.env import getenv, today
+from app.core.paths import API_DIR, WEATHER_SNAPSHOT_DEFAULT
 
 JAKARTA_LAT = -6.2088
 JAKARTA_LNG = 106.8456
@@ -88,7 +94,7 @@ def parse_open_meteo_daily(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def fallback_weather_forecast() -> list[dict[str, Any]]:
-    today = date.today()
+    start = today()
     scenarios = [
         (42.0, 91, 17.1),
         (18.5, 68, 14.2),
@@ -103,7 +109,7 @@ def fallback_weather_forecast() -> list[dict[str, Any]]:
         risk = build_weather_risk(rainfall, probability, wind)
         forecast.append(
             {
-                "date": (today + timedelta(days=offset)).isoformat(),
+                "date": (start + timedelta(days=offset)).isoformat(),
                 "temperature_max_c": 31.5 - min(offset, 3) * 0.3,
                 "temperature_min_c": 24.8,
                 "rainfall_mm": rainfall,
@@ -119,14 +125,7 @@ _WEATHER_CACHE: dict[str, Any] | None = None
 _WEATHER_CACHE_TIME: float = 0.0
 
 
-def fetch_jakarta_weather_forecast(timeout_seconds: float = 5.0) -> dict[str, Any]:
-    global _WEATHER_CACHE, _WEATHER_CACHE_TIME
-    import time
-
-    now = time.time()
-    if _WEATHER_CACHE is not None and (now - _WEATHER_CACHE_TIME) < 300:
-        return _WEATHER_CACHE
-
+def _open_meteo_url() -> str:
     params = {
         "latitude": JAKARTA_LAT,
         "longitude": JAKARTA_LNG,
@@ -142,29 +141,119 @@ def fetch_jakarta_weather_forecast(timeout_seconds: float = 5.0) -> dict[str, An
         "timezone": "Asia/Jakarta",
         "forecast_days": 7,
     }
-    url = f"{OPEN_METEO_URL}?{urlencode(params)}"
+    return f"{OPEN_METEO_URL}?{urlencode(params)}"
+
+
+def _open_meteo_result(payload: dict[str, Any], fetched_at: str, snapshot: bool) -> dict[str, Any]:
+    return {
+        "source": "open-meteo",
+        # A forecast, never an observation: these are predicted daily totals.
+        "kind": "forecast",
+        "fetched_at": fetched_at,
+        # True when PYTHIA_WEATHER_SNAPSHOT served a saved response (fetched_at is its fetch time).
+        "snapshot": snapshot,
+        "location": "Jakarta, Indonesia",
+        "latitude": JAKARTA_LAT,
+        "longitude": JAKARTA_LNG,
+        "forecast": parse_open_meteo_daily(payload),
+    }
+
+
+def _fallback_result() -> dict[str, Any]:
+    return {
+        "source": "fallback-demo",
+        # Invented demo values for the weather panel: never a model input.
+        "kind": "demo",
+        "fetched_at": None,
+        "snapshot": False,
+        "location": "Jakarta, Indonesia",
+        "latitude": JAKARTA_LAT,
+        "longitude": JAKARTA_LNG,
+        "forecast": fallback_weather_forecast(),
+    }
+
+
+def save_weather_snapshot(path: Path | str = WEATHER_SNAPSHOT_DEFAULT, timeout_seconds: float = 10.0) -> Path:
+    """Fetch the current Open-Meteo Jakarta forecast and save it for PYTHIA_WEATHER_SNAPSHOT.
+
+    The file holds public forecast numbers only: the raw response, its URL and fetch time.
+    """
+    url = _open_meteo_url()
+    with urlopen(url, timeout=timeout_seconds) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    saved = {
+        "source": "open-meteo",
+        "url": url,
+        "fetched_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "response": payload,
+    }
+    target.write_text(json.dumps(saved, indent=2) + "\n", encoding="utf-8")
+    return target
+
+
+def _snapshot_forecast(path: str) -> dict[str, Any]:
+    """The saved response at `path` (relative to apps/api); the labelled demo fallback when it
+    cannot be read."""
     try:
-        with urlopen(url, timeout=timeout_seconds) as response:
+        saved = json.loads((API_DIR / path).read_text(encoding="utf-8"))
+        return _open_meteo_result(saved["response"], str(saved["fetched_at"]), snapshot=True)
+    except (OSError, ValueError, KeyError, TypeError):
+        logging.getLogger(__name__).exception("PYTHIA_WEATHER_SNAPSHOT %s is unreadable", path)
+        return _fallback_result()
+
+
+def fetch_jakarta_weather_forecast(timeout_seconds: float = 5.0) -> dict[str, Any]:
+    """The Open-Meteo daily forecast for Jakarta (5-minute cache).
+
+    With PYTHIA_WEATHER_SNAPSHOT set, the saved response at that path is served
+    instead (no network), so a recording sees the same weather on every take.
+    """
+    global _WEATHER_CACHE, _WEATHER_CACHE_TIME
+    import time
+
+    snapshot = getenv("WEATHER_SNAPSHOT")
+    if snapshot:
+        return _snapshot_forecast(snapshot)
+
+    now = time.time()
+    if _WEATHER_CACHE is not None and (now - _WEATHER_CACHE_TIME) < 300:
+        return _WEATHER_CACHE
+
+    try:
+        with urlopen(_open_meteo_url(), timeout=timeout_seconds) as response:
             payload = json.loads(response.read().decode("utf-8"))
-        res = {
-            "source": "open-meteo",
-            "location": "Jakarta, Indonesia",
-            "latitude": JAKARTA_LAT,
-            "longitude": JAKARTA_LNG,
-            "forecast": parse_open_meteo_daily(payload),
-        }
-        _WEATHER_CACHE = res
-        _WEATHER_CACHE_TIME = now
-        return res
+        res = _open_meteo_result(payload, datetime.now(UTC).isoformat(timespec="seconds"), snapshot=False)
     except Exception:
-        res = {
-            "source": "fallback-demo",
-            "location": "Jakarta, Indonesia",
-            "latitude": JAKARTA_LAT,
-            "longitude": JAKARTA_LNG,
-            "forecast": fallback_weather_forecast(),
+        res = _fallback_result()
+    # Cache the fallback too so we don't spam if offline/rate-limited
+    _WEATHER_CACHE = res
+    _WEATHER_CACHE_TIME = now
+    return res
+
+
+def real_forecast_by_date(weather: dict[str, Any]) -> dict[str, dict[str, float]]:
+    """{date: rain/temp/wind} from an Open-Meteo forecast; empty for any other source.
+
+    The demo fallback's numbers are invented for the weather panel, so they must
+    never reach a model as if they were a forecast.
+    """
+    if weather.get("source") != "open-meteo":
+        return {}
+    return {
+        day["date"]: {
+            "rainfall_mm": float(day.get("rainfall_mm") or 0.0),
+            "temp_max_c": float(day.get("temperature_max_c") or 31.0),
+            "wind_max_kmh": float(day.get("wind_speed_kmh") or 10.0),
         }
-        # Cache fallback too so we don't spam if offline/rate-limited
-        _WEATHER_CACHE = res
-        _WEATHER_CACHE_TIME = now
-        return res
+        for day in weather.get("forecast", [])
+        if day.get("date")
+    }
+
+
+if __name__ == "__main__":
+    # python -m app.forecast.weather save [path]   (from apps/api)
+    if len(sys.argv) < 2 or sys.argv[1] != "save":
+        sys.exit("usage: python -m app.forecast.weather save [path]")
+    print(f"saved {save_weather_snapshot(*sys.argv[2:3])}")

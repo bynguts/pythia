@@ -47,9 +47,6 @@ def assistant_query(
         logger.exception("assistant query failed")
         raise HTTPException(status_code=502, detail=f"AI gateway error: {e}") from e
 
-    if result.get("provider") == "error":
-        raise HTTPException(status_code=502, detail=f"AI gateway error: {result.get('error', 'unknown')}")
-
     history_store.record_event(
         "assistant_query", {"question": payload.question, "provider": result["provider"]}
     )
@@ -73,7 +70,7 @@ def executive_summary() -> dict:
         extra_crews = int(top.get("recommended_extra_crews") or 0)
         spike_clause = (
             f"Proyeksi peningkatan volume sampah puncak sebesar {top_spike}% terjadi di {top['district']}, "
-            f"didorong curah hujan/event, "
+            f"(hasil model; pemicu: hujan, event atau akhir pekan), "
             + (f"yang membutuhkan {extra_trucks} armada truk tambahan. " if extra_trucks else "")
         )
         crew_clause = (
@@ -83,9 +80,10 @@ def executive_summary() -> dict:
         spike_clause = "Tidak ada lonjakan volume signifikan pada horizon 7 hari. "
         crew_clause = ""
     summary_id = (
-        f"Pythia mendeteksi {snapshot['kpis']['trucks_with_issues']} kendala operasional di lapangan. "
+        f"Pythia mendeteksi {snapshot['kpis']['trucks_with_issues']} kendala operasional pada armada simulasi. "
         + spike_clause
-        + f"Antrian di Bantargebang saat ini mencapai {tpa_wait} menit. Direkomendasikan implementasi staggered dispatch "
+        + f"Antrean di Bantargebang pada jam puncak model (simulasi) mencapai {tpa_wait} menit. "
+        + "Direkomendasikan implementasi staggered dispatch "
         + f"untuk mereduksi beban TPA{crew_clause}."
     )
 

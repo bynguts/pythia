@@ -36,6 +36,9 @@ YOLO_WEIGHTS = ASSETS_DIR / "yolov8n.pt"
 # Simplified Jakarta kecamatan boundaries for the twin (ml/scripts/build_district_outlines.py).
 DISTRICT_OUTLINES = ASSETS_DIR / "jakarta_kecamatan_outlines.json"
 DEMO_MEDIA_DIR = API_DIR / "data" / "media"
+# Where `python -m app.forecast.weather save` writes a saved Open-Meteo response;
+# PYTHIA_WEATHER_SNAPSHOT=<path> serves one instead of fetching (recording determinism).
+WEATHER_SNAPSHOT_DEFAULT = API_DIR / "data" / "weather_snapshot.json"
 # Real driver WhatsApp numbers stay local (git-ignored); the example file holds
 # placeholders and is what the API serves when no local file exists.
 DRIVER_CONTACTS_FILE = API_DIR / "driver_contacts.json"
@@ -46,3 +49,7 @@ REAL_DIR = DATA_DIR / "real"
 RAW_DIR = DATA_DIR / "raw"
 PROCESSED_DIR = DATA_DIR / "processed"
 SOURCES_DIR = DATA_DIR / "sources"
+# Planner rules as data (R7/R8): kecamatan rit quotas, gate caps and dated facility
+# acceptance rules, each with its source and classification. Read per plan, so
+# editing the file changes the next plan without a deploy.
+OPERATIONS_RULES_FILE = DATA_DIR / "config" / "operations_rules.json"

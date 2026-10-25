@@ -21,7 +21,7 @@ class AssistantTests(unittest.TestCase):
         self.assertEqual(result["mode"], "local")
         self.assertIn("Mode lokal", result["answer"])
 
-    def test_answer_with_openai_reports_gateway_failure(self):
+    def test_gateway_failure_falls_back_to_the_labelled_local_parser(self):
         snapshot = {
             "kpis": {"active_trucks": 5, "trucks_with_issues": 2, "tpa_wait_minutes": 116},
             "predictions": [
@@ -63,8 +63,12 @@ class AssistantTests(unittest.TestCase):
                 )
 
         self.assertIn("/chat/completions", called["url"])
-        self.assertEqual(result["provider"], "error")
-        self.assertEqual(result["answer"], "")
+        # Never a dead end, never an answer that claims the LLM ran.
+        self.assertEqual(result["provider"], "local")
+        self.assertEqual(result["mode"], "fallback")
+        self.assertEqual(result["fallback_reason"], "provider unreachable")
+        self.assertIn("parser lokal, bukan LLM", result["answer"])
+        self.assertNotIn("offline test", result["answer"])
 
     def test_answer_with_openai_accepts_history(self):
         snapshot = {
@@ -112,7 +116,7 @@ class AssistantTests(unittest.TestCase):
         self.assertTrue(all(m["role"] in {"user", "assistant"} for m in clean))
         self.assertLessEqual(len(clean[0]["content"]), 2000)
 
-    def test_tool_calls_are_bounded_to_one_round_and_two_execution_slots(self):
+    def test_tool_calls_per_turn_are_capped_and_duplicates_skipped(self):
         snapshot = {}
         calls = []
         executed = []
@@ -146,7 +150,8 @@ class AssistantTests(unittest.TestCase):
                     ],
                 }
             else:
-                self.assertNotIn("tools", payload)
+                # Not the last step, so the model may still call tools after seeing the results.
+                self.assertIn("tools", payload)
                 self.assertEqual(len([m for m in payload["messages"] if m["role"] == "tool"]), 3)
                 self.assertIn("limit", payload["messages"][-1]["content"])
                 content = {"choices": [{"message": {"role": "assistant", "content": "Antrean TPA padat."}}]}
@@ -266,7 +271,7 @@ class AssistantTests(unittest.TestCase):
         self.assertNotIn("prediksi", sent["payload"]["messages"][-1]["content"][0]["text"].lower())
         self.assertGreater(sent["timeout"], 18)
 
-    def test_gateway_timeout_returns_error_without_fabricated_answer(self):
+    def test_gateway_timeout_falls_back_without_fabricated_answer(self):
         observed = {}
 
         def timeout(request, timeout=0):
@@ -279,8 +284,9 @@ class AssistantTests(unittest.TestCase):
         ):
             result = answer_with_openai_if_configured("berapa antrean TPA?", {}, tool_ctx=None)
         self.assertEqual(observed["seconds"], 18)
-        self.assertEqual(result["provider"], "error")
-        self.assertEqual(result["answer"], "")
+        self.assertEqual(result["provider"], "local")
+        self.assertEqual(result["fallback_reason"], "timeout")
+        self.assertIn("Layanan LLM gagal (timeout)", result["answer"])
 
     def test_local_photo_does_not_claim_to_interpret_image(self):
         with patch.dict("os.environ", {}, clear=True):
@@ -366,6 +372,16 @@ class AssistantTests(unittest.TestCase):
         self.assertLessEqual(len(summary.split()), 150)
         self.assertIn("29", summary)
         self.assertIn("T-047", summary)
+        # The queue is the modelled peak hour of a simulation, and the fleet is simulated.
+        self.assertIn("modelled peak hour (simulated) is 116 minutes", summary)
+        self.assertIn("simulated fleet", summary)
+        self.assertNotIn("TPA delay", summary)
+
+    def test_curated_knowledge_never_calls_the_simulated_fleet_live(self):
+        from app.assistant.rag import CURATED_KNOWLEDGE
+
+        for doc in CURATED_KNOWLEDGE:
+            self.assertNotIn("live supervision", doc["text"])
 
 
 if __name__ == "__main__":

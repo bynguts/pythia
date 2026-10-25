@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
 
+from app.core.env import today
 from app.core.units import EVENT_WASTE_KG_PER_PERSON
 
 
@@ -149,7 +150,7 @@ def hcmc_district_forecasts(
            × (1 + capped rain uplift), plus 1.2 kg per event attendee in the
     district nearest the event. Every factor is an explicit assumption.
     """
-    start = start or date.today()
+    start = start or today()
     rain_factor = 1.0 + min(RAIN_UPLIFT_CAP, max(0.0, rainfall_mm) * RAIN_UPLIFT_PER_MM)
     event_district = None
     if event_attendance > 0:
