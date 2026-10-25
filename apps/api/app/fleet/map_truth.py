@@ -62,6 +62,7 @@ def map_astar_to_osrm_format(astar_res: dict) -> dict:
         "distance_km": float(astar_res.get("distance_km") or 0.0),
         "duration_min": float(astar_res.get("eta_minutes") or 0.0),
         "source": "LIVE_EXTERNAL",
+        **{k: astar_res[k] for k in ("eta_source", "eta_label", "eta_floor_min") if k in astar_res},
     }
 
 

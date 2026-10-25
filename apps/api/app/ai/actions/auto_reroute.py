@@ -87,6 +87,8 @@ class AutoRerouter:
                             "reroute_success": bool(route.get("success")),
                             "new_distance_km": route.get("distance_km"),
                             "new_eta_minutes": route.get("eta_minutes"),
+                            "new_eta_source": route.get("eta_source"),
+                            "new_eta_label": route.get("eta_label"),
                             "reason": "avg speed below 15 km/h for 3 consecutive ticks",
                         },
                         confidence=0.85,

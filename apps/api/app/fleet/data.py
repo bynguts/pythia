@@ -9,7 +9,7 @@ from typing import Any
 from app.core.env import today as forecast_today
 from app.core.units import event_tons_for_attendance, resource_requirements
 from app.fleet.facilities import FACILITIES
-from app.fleet.osrm import fetch_osrm_route
+from app.fleet.osrm import eta_fields, fetch_osrm_route
 from app.forecast.engine import detect_route_deviation, recommend_routes
 
 ASSIGNED_PATHS = {
@@ -440,6 +440,7 @@ ROUTE_OPTIONS = [
         "code": "A",
         "name": "Route A - Original Corridor",
         "eta_minutes": 62,
+        **eta_fields("simulated"),
         "traffic_level": 0.7,
         "flood_risk": 0.2,
         "permit_compliant": True,
@@ -453,6 +454,7 @@ ROUTE_OPTIONS = [
         "code": "B",
         "name": "Route B - Daan Mogot Recovery",
         "eta_minutes": 48,
+        **eta_fields("simulated"),
         "traffic_level": 0.35,
         "flood_risk": 0.05,
         "permit_compliant": True,
@@ -466,6 +468,7 @@ ROUTE_OPTIONS = [
         "code": "C",
         "name": "Route C - Restricted Shortcut",
         "eta_minutes": 38,
+        **eta_fields("simulated"),
         "traffic_level": 0.1,
         "flood_risk": 0.0,
         "permit_compliant": False,
@@ -715,6 +718,10 @@ def command_center_snapshot(
             routes[0] = {
                 **routes[0],
                 "eta_minutes": osrm_route["eta_minutes"],
+                **eta_fields(
+                    osrm_route.get("eta_source")
+                    or ("osrm_duration" if osrm_route["source"] == "osrm" else "fallback_estimate")
+                ),
                 "distance_km": osrm_route["distance_km"],
                 "source": osrm_route["source"],
                 "path": osrm_route["path"],

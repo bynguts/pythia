@@ -8,6 +8,24 @@ from urllib.request import Request, urlopen
 
 OSRM_BASE_URL = "https://router.project-osrm.org"
 
+# One label per ETA producer. Never "AI": an ETA is a routing duration, a straight-line
+# estimate or a scenario figure. F localizes these by `eta_source` key.
+ETA_LABELS = {
+    "osrm_duration": "Road travel time from OSRM routing",
+    "fallback_estimate": "Straight-line estimate (routing service unavailable)",
+    "simulated": "Simulated scenario figure",
+}
+FALLBACK_ROUTE_SPEED_KMH = 22
+FALLBACK_ROUTE_MIN_MINUTES = 8
+FALLBACK_EDGE_SPEED_KMH = 45
+
+
+def eta_fields(source: str, floor_min: int | None = None) -> dict[str, Any]:
+    fields: dict[str, Any] = {"eta_source": source, "eta_label": ETA_LABELS[source]}
+    if floor_min is not None:
+        fields["eta_floor_min"] = floor_min
+    return fields
+
 
 def build_osrm_url(origin: tuple[float, float], destination: tuple[float, float]) -> str:
     origin_lat, origin_lng = origin
@@ -36,6 +54,7 @@ def parse_osrm_route(name: str, payload: dict[str, Any], index: int = 0) -> dict
         "name": name,
         "source": "osrm",
         "eta_minutes": round(route["duration"] / 60),
+        **eta_fields("osrm_duration"),
         "distance_km": round(route["distance"] / 1000, 1),
         "path": [{"lng": lng, "lat": lat} for lng, lat in coordinates],
         "reason": "computed by OSRM public routing with full route geometry",
@@ -55,7 +74,8 @@ def fallback_route(
     return {
         "name": name,
         "source": "fallback",
-        "eta_minutes": max(8, round(distance_km / 22 * 60)),
+        "eta_minutes": max(FALLBACK_ROUTE_MIN_MINUTES, round(distance_km / FALLBACK_ROUTE_SPEED_KMH * 60)),
+        **eta_fields("fallback_estimate"),
         "distance_km": round(distance_km, 1),
         "path": [
             {"lat": origin_lat, "lng": origin_lng},
@@ -111,6 +131,7 @@ def _road_route_cached(coords: tuple, timeout_seconds: float) -> dict[str, Any]:
             "distance_km": 0.0,
             "duration_min": 0.0,
             "source": "FALLBACK_DEGRADED",
+            **eta_fields("fallback_estimate"),
         }
     pts = ";".join(f"{lng},{lat}" for lat, lng in coords)
     url = f"{OSRM_BASE_URL}/route/v1/driving/{pts}?overview=full&geometries=geojson&steps=false"
@@ -126,6 +147,7 @@ def _road_route_cached(coords: tuple, timeout_seconds: float) -> dict[str, Any]:
                 "distance_km": round(route["distance"] / 1000, 1),
                 "duration_min": round(route["duration"] / 60),
                 "source": "LIVE_EXTERNAL",
+                **eta_fields("osrm_duration"),
             }
     except Exception:
         pass
@@ -133,8 +155,9 @@ def _road_route_cached(coords: tuple, timeout_seconds: float) -> dict[str, Any]:
     return {
         "geometry": tuple({"lat": c[0], "lng": c[1]} for c in coords),
         "distance_km": round(km, 1),
-        "duration_min": round(km / 45 * 60),
+        "duration_min": round(km / FALLBACK_EDGE_SPEED_KMH * 60),
         "source": "FALLBACK_DEGRADED",
+        **eta_fields("fallback_estimate"),
     }
 
 

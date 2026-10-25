@@ -13,7 +13,9 @@ from itertools import pairwise
 from math import asin, cos, radians, sin, sqrt
 from typing import Any
 
-from app.fleet.osrm import fetch_osrm_route
+from app.fleet.osrm import FALLBACK_EDGE_SPEED_KMH, eta_fields, fetch_osrm_route
+
+ETA_FLOOR_MIN = 15
 
 TRAFFIC_JAM_ACTIVE = False
 
@@ -143,7 +145,7 @@ def _osrm_edge(a_lat: float, a_lng: float, b_lat: float, b_lng: float) -> tuple:
         geom = tuple((p["lat"], p["lng"]) for p in route["path"])
         return geom, float(route["distance_km"]), float(route["eta_minutes"]), True
     d = haversine_distance((a_lat, a_lng), (b_lat, b_lng))
-    return (((a_lat, a_lng), (b_lat, b_lng)), d, (d / 45) * 60, False)
+    return (((a_lat, a_lng), (b_lat, b_lng)), d, (d / FALLBACK_EDGE_SPEED_KMH) * 60, False)
 
 
 def build_path_from_sequence(node_sequence, nodes) -> tuple[list[dict], str, float, float]:
@@ -245,7 +247,11 @@ def find_astar_route(
                 "optimization_cost": round(cost, 2),
                 "physical_distance_km": osrm_km,
                 "distance_km": osrm_km,
-                "eta_minutes": max(15, osrm_min),
+                "eta_minutes": max(ETA_FLOOR_MIN, osrm_min),
+                **eta_fields(
+                    "osrm_duration" if geom_source == "osrm" else "fallback_estimate",
+                    ETA_FLOOR_MIN if osrm_min < ETA_FLOOR_MIN else None,
+                ),
                 "is_diverted": len(congested_edges) > 0,
                 "permit_hour": permit_hour,
                 "permit_source": "SIMULATED PERMIT CONSTRAINT (not official DLH permit dataset)",

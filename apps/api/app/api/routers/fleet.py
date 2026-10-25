@@ -286,6 +286,7 @@ def route_decision(truck_code: str = "T-047") -> dict[str, Any]:
     return {
         "truck_code": truck_code,
         "eta_minutes": active["eta_minutes"],
+        **{k: active[k] for k in ("eta_source", "eta_label", "eta_floor_min") if k in active},
         "physical_distance_km": active["physical_distance_km"],
         "optimization_cost": active["optimization_cost"],
         "vehicle_status": vehicle_status,
