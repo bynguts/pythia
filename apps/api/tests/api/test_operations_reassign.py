@@ -7,6 +7,7 @@ damaged, duty-blocked or already-planned target is refused.
 
 from __future__ import annotations
 
+import concurrent.futures
 import sqlite3
 from uuid import uuid4
 
@@ -246,11 +247,15 @@ def _reassigned_events(plan_id: str) -> list[dict]:
     ]
 
 
-@pytest.mark.parametrize("step", ["plan_move", "mark_old"])
+@pytest.mark.parametrize("step", ["after_save_before_plan_move", "after_plan_move_before_mark_old"])
 def test_an_interrupted_reassign_resumes_with_exactly_one_new_dispatch(
     api_client, auth_headers, monkeypatch, step
 ):
-    """Fail after the new dispatch is saved and before the old one is marked: the retry completes."""
+    """Fail after the new dispatch is saved and before the old one is marked: the retry completes.
+
+    The reassign row (and its pre-chosen dispatch id) exists before the dispatch
+    is saved, so the retry resumes from it instead of saving a second dispatch.
+    """
     a, target = _free_trucks(2)
     plan = _approved_plan(api_client, auth_headers, [a])
     old_dispatch_id = plan["dispatch_ids"][0]
@@ -259,18 +264,24 @@ def test_an_interrupted_reassign_resumes_with_exactly_one_new_dispatch(
     def boom(*args, **kwargs):
         raise sqlite3.OperationalError("database is locked")
 
-    if step == "plan_move":
+    if step == "after_save_before_plan_move":
         monkeypatch.setattr(_OPERATIONS_PLAN_STORE, "reassign_truck", boom)
     else:
         monkeypatch.setattr(history_store, "mark_dispatch_reassigned", boom)
     failed = _reassign(api_client, headers, plan["plan_id"], a, target)
     assert failed.status_code == 503
-    assert len(_plan_dispatches_for(target, plan["plan_id"])) == 1  # step 3 ran
+    assert len(_plan_dispatches_for(target, plan["plan_id"])) == 1  # the new dispatch was saved
     assert history_store.get_dispatch(old_dispatch_id)["field_status"] == "PENDING"
+    record = _OPERATIONS_PLAN_STORE.reassign_row(plan["plan_id"], a)
+    assert record["to_truck"] == target
+    assert record["status"] == ("claimed" if step == "after_save_before_plan_move" else "moved")
     monkeypatch.undo()
+    dispatch_count = len(history_store.list_dispatches())
 
     retried = _reassign(api_client, headers, plan["plan_id"], a, target)
     assert retried.status_code == 200, retried.text
+    assert len(history_store.list_dispatches()) == dispatch_count
+    assert retried.json()["dispatch_id"] == record["new_dispatch_id"]
     new_rows = _plan_dispatches_for(target, plan["plan_id"])
     assert [r["id"] for r in new_rows] == [retried.json()["dispatch_id"]]
     assert history_store.get_dispatch(old_dispatch_id)["field_status"] == "REASSIGNED"
@@ -292,3 +303,21 @@ def test_a_repeated_reassign_is_idempotent_and_a_conflicting_one_409(api_client,
     assert len(_reassigned_events(plan["plan_id"])) == 1
     assert len([e for e in SPJ_STORE.audit_log(first.json()["spj_id"]) if e["action"] == "reassign"]) == 1
     assert _reassign(api_client, headers, plan["plan_id"], a, other).status_code == 409
+
+
+def test_two_identical_concurrent_reassigns_make_exactly_one_new_dispatch(api_client, auth_headers):
+    a, target = _free_trucks(2)
+    plan = _approved_plan(api_client, auth_headers, [a])
+    headers = auth_headers("dispatcher")
+
+    def move(_):
+        res = _reassign(api_client, headers, plan["plan_id"], a, target)
+        return res.status_code, res.json()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(move, range(2)))
+    assert [status for status, _ in results] == [200, 200]
+    assert results[0][1] == results[1][1]
+    assert [d["id"] for d in _plan_dispatches_for(target, plan["plan_id"])] == [results[0][1]["dispatch_id"]]
+    assert history_store.get_dispatch(plan["dispatch_ids"][0])["field_status"] == "REASSIGNED"
+    assert len(_reassigned_events(plan["plan_id"])) == 1
