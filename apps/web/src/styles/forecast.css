@@ -623,3 +623,217 @@
 .show-more-btn {
   min-width: 220px;
 }
+
+/* w10num (teardown v4 T1/P2/P3/P5): baseline basis line, tabs, week trend, scenario label. */
+.forecast-workspace .baseline-basis {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+
+.forecast-workspace .classification-badge.modeled,
+.planning-workspace .classification-badge.modeled {
+  border: 1px solid var(--ui-info-line);
+  color: var(--ui-info);
+  background: var(--ui-info-soft);
+}
+
+.scenario-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--ui-warning-line);
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-warning);
+  background: var(--ui-warning-soft);
+  font-size: var(--fs-caption);
+  font-weight: 650;
+}
+
+.forecast-workspace .forecast-tabs {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.forecast-workspace .forecast-tabs .workspace-tab {
+  min-height: var(--tap-min);
+  white-space: nowrap;
+}
+
+.forecast-tabpanel {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.forecast-events-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.week-trend {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface);
+}
+
+.week-trend figcaption {
+  margin-bottom: var(--space-2);
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+
+.week-trend ol {
+  height: 112px;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(36px, 1fr));
+  gap: var(--space-1);
+  list-style: none;
+}
+
+.week-trend li {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  text-align: center;
+}
+
+.week-trend-bar {
+  align-self: end;
+  display: block;
+  border-radius: 4px 4px 0 0;
+  background: var(--ui-accent-soft);
+  border: 1px solid var(--ui-success-line);
+}
+
+.week-trend li.at-risk .week-trend-bar {
+  background: var(--ui-danger-soft);
+  border-color: var(--ui-danger-line);
+}
+
+.week-trend b {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.week-trend small {
+  overflow: hidden;
+  color: var(--ui-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kec-risk {
+  font-weight: 650;
+}
+
+.kec-risk.risk-high,
+.kec-risk.risk-elevated {
+  color: var(--ui-warning);
+}
+
+.kec-risk.risk-critical {
+  color: var(--ui-danger);
+}
+
+.scenario-disclosure {
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  padding: var(--space-2) var(--space-3);
+}
+
+.scenario-disclosure > summary {
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.monthly-intake-quantity {
+  margin: var(--space-2) 0 0;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+
+/* P5: weather days wrap instead of clipping ("Jum 3( 31"), facility tiles wrap. */
+.forecast-workspace .weather-day {
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: 0;
+}
+
+.forecast-workspace .weather-day > small {
+  grid-column: 1 / -1;
+  justify-self: start;
+  text-align: left;
+  color: var(--ui-muted);
+}
+
+.forecast-workspace .facility-summary {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+}
+
+.forecast-workspace .facility-summary span,
+.forecast-workspace .facility-meta span {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .forecast-workspace .forecast-heading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .forecast-workspace .forecast-heading-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+}
+
+/* w10num (teardown v4 F5): the TPA panel's two labelled numbers, peak vs now. */
+.tpa-headline-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.tpa-headline-pair > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: var(--space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface);
+}
+
+.tpa-headline-pair strong {
+  color: var(--ui-ink);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tpa-headline-pair small {
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+
+/* The carbon panel (moved from Armada) sits behind a plain disclosure: no frame around its card. */
+.forecast-carbon.scenario-disclosure {
+  border: 0;
+  padding: 0;
+}

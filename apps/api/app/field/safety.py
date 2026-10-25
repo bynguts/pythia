@@ -185,10 +185,14 @@ def observed_activity(now: datetime, truck_code: str | None = None) -> dict[str,
 
 
 def simulated_fleet_codes() -> list[str]:
-    from app.fleet.data import ASSIGNED_PATHS
-    from app.fleet.fleet_generator import _GENERATED_COUNT
+    """The simulated fleet's own trucks, so Safety counts the same units as Fleet.
 
-    return list(ASSIGNED_PATHS) + [f"T-{200 + i}" for i in range(_GENERATED_COUNT)]
+    ASSIGNED_PATHS also holds a corridor (T-136) that no truck drives; listing it
+    made Safety say 60 trucks against Fleet's 59 (teardown v4 F4).
+    """
+    from app.fleet.data import get_dynamic_trucks
+
+    return [truck["truck_code"] for truck in get_dynamic_trucks()]
 
 
 def simulated_activity(now: datetime, codes: list[str]) -> dict[str, dict[str, Any]]:

@@ -40,15 +40,24 @@ const COPY = {
 for (const lang of ["id", "en"]) {
   test(`a scenario with no district at risk gets a neutral headline (${lang})`, async ({ page }) => {
     const copy = COPY[lang];
-    // Every scenario request answers with the normal day itself (no rain, no event), so
-    // every district's spike against its normal day is 0% and none is at risk.
-    await page.route("**/api/predictions/kecamatan?*", async (route) => {
-      const url = new URL(route.request().url());
-      url.searchParams.set("rainfall_mm", "0");
-      url.searchParams.set("event_attendance", "0");
-      url.searchParams.delete("event_lat");
-      url.searchParams.delete("event_lng");
-      await route.continue({ url: url.toString() });
+    // Teardown v4 R1: Rencana reads /api/baseline/scenario. Answer with the real outlook
+    // but every kecamatan at its normal day, so none is at risk and no truck is extra.
+    await page.route("**/api/baseline/scenario?*", async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      for (const row of body.kecamatan) {
+        row.predicted_tons = row.normal_tons;
+        row.spike_percent = 0;
+        row.risk_level = "normal";
+      }
+      body.kecamatan_at_risk = 0;
+      body.recommendation = {
+        ...body.recommendation,
+        extra_trucks_needed: 0,
+        deployable_trucks: 0,
+        shortfall_trucks: 0,
+      };
+      await route.fulfill({ response, json: body });
     });
     await signIn(page, lang);
     await page.goto("/planning");

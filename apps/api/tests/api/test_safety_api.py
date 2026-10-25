@@ -15,6 +15,7 @@ from app.core.auth import hash_password
 from app.field import safety
 from app.field import spj as spj_module
 from app.field.pretrip import PRETRIP_ITEMS, PRETRIP_STORE
+from app.fleet.data import get_dynamic_trucks
 
 # 20:00 WIB on a fixed past day, so the duty window never crosses a WIB midnight.
 FROZEN_NOW = datetime(2026, 10, 20, 13, 0, tzinfo=UTC)
@@ -248,7 +249,8 @@ def test_overview_falls_back_to_a_labelled_simulated_fleet(api_client, auth_head
     body = api_client.get("/api/safety/overview", headers=auth_headers("supervisor")).json()
     assert body["classification"] == "SIMULATED"
     assert "SIMULATED" in body["label"]
-    assert len(body["trucks"]) == 60
+    # Teardown v4 F4: the same units as the fleet roster (no orphan corridor truck).
+    assert len(body["trucks"]) == len(get_dynamic_trucks())
     assert {t["classification"] for t in body["trucks"]} == {"SIMULATED"}
     assert body["alerts"] is not None
     for key in ("gate_wait_p50", "gate_wait_p90", "shift_window"):

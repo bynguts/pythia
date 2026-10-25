@@ -114,24 +114,39 @@ test("plan date sets weekday or weekend for the forecast and the plan", async ({
   const dateInput = page.getByTestId("plan-date");
   await expect(dateInput).toBeVisible();
 
+  // Teardown v4 R2: the outlook is /api/baseline/scenario for the chosen day (the backend
+  // derives weekday or weekend from the date); the next Saturday and Monday stay inside
+  // its 30-day horizon whatever day the suite runs.
+  const { saturday: sat, monday: mon } = await page.evaluate(() => {
+    const iso = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const next = (weekday) => {
+      const d = new Date();
+      d.setDate(d.getDate() + ((weekday - d.getDay() + 7) % 7 || 7));
+      return iso(d);
+    };
+    return { saturday: next(6), monday: next(1) };
+  });
   const saturday = page.waitForRequest(
-    (req) => req.url().includes("/predictions/kecamatan") && req.url().includes("target_date=2026-10-24"),
+    (req) => req.url().includes("/baseline/scenario") && req.url().includes(`date=${sat}`),
   );
-  await dateInput.fill("2026-10-24");
-  expect((await saturday).url()).toContain("is_weekend=true");
+  await dateInput.fill(sat);
+  await saturday;
   await expect(page.getByTestId("plan-day-kind")).toHaveText("Akhir pekan");
+  await expect(page.getByTestId("plan-outlook")).toContainText(sat);
 
   const monday = page.waitForRequest(
-    (req) => req.url().includes("/predictions/kecamatan") && req.url().includes("target_date=2026-10-26"),
+    (req) => req.url().includes("/baseline/scenario") && req.url().includes(`date=${mon}`),
   );
-  await dateInput.fill("2026-10-26");
-  expect((await monday).url()).toContain("is_weekend=false");
+  await dateInput.fill(mon);
+  await monday;
   await expect(page.getByTestId("plan-day-kind")).toHaveText("Hari kerja");
+  await expect(page.getByTestId("plan-outlook")).toContainText(mon);
 
   const planRequest = page.waitForRequest((req) => req.url().includes("/operations/plan?"));
   await page.getByRole("button", { name: "Susun Alokasi Armada" }).click();
   const url = (await planRequest).url();
-  expect(url).toContain("plan_date=2026-10-26");
+  expect(url).toContain(`plan_date=${mon}`);
   expect(url).not.toContain("is_weekend");
 });
 
@@ -180,7 +195,10 @@ test("a real day plan never uses more rit than a district quota", async ({ page 
   if (!plan.feasible) await expect(page.getByTestId("plan-shortfall")).toBeVisible();
 });
 
-test("/field lists the fleet and shows an approved plan dispatch in Indonesian", async ({ page }) => {
+// wave10 driver-field-app: /field merged into /driver; the plan instruction shows in its Instruksi tab.
+test("the driver app finds a simulated truck and shows its approved plan dispatch in Indonesian", async ({
+  page,
+}) => {
   await page.goto("/");
   const dispatcher = await login(page, "dispatcher");
   const supervisor = await login(page, "supervisor");
@@ -196,15 +214,20 @@ test("/field lists the fleet and shows an approved plan dispatch in Indonesian",
   expect(approved.ok()).toBeTruthy();
   const first = plan.dispatches[0];
 
+  await page.evaluate((token) => {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("pythia_driver")) localStorage.removeItem(key);
+    }
+    localStorage.setItem("pythia_lang", "id");
+    localStorage.setItem("pythia_field_token", token);
+  }, driver.token);
   await page.goto("/field");
-  await page.evaluate((token) => localStorage.setItem("pythia_field_token", token), driver.token);
-  await page.reload({ waitUntil: "domcontentloaded" });
 
-  const select = page.getByTestId("truck-select");
-  await expect(page.getByTestId("field-fleet-note")).toContainText("armada simulasi");
-  await expect.poll(async () => select.locator("option").count(), { timeout: 15000 }).toBeGreaterThan(3);
-  await select.selectOption(first.truck_code);
-  const card = page.getByTestId("active-dispatch");
+  await expect(page.getByTestId("driver-roster-sim")).toHaveText("SIMULASI");
+  await page.getByTestId("driver-truck-search").fill(first.truck_code);
+  await page.getByTestId(`pick-${first.truck_code}`).click();
+  await expect(page.getByTestId("driver-tab-instruksi")).toHaveAttribute("aria-current", "page");
+  const card = page.getByTestId("driver-instructions");
   await expect(card).toContainText(`Rencana ${plan.plan_id}`, { timeout: 15000 });
   await expect(card).toContainText("Shift pagi");
   await expect(card).toContainText("Alasan: prakiraan timbulan");
@@ -217,13 +240,17 @@ test("/field lists the fleet and shows an approved plan dispatch in Indonesian",
   expect(items[0].fields.stops.length).toBeGreaterThan(0);
 });
 
+// wave9 fleet composition: trip history moved from a fleet tab into the truck drawer
+// (Truk → row → Riwayat), per truck instead of a fleet-wide list.
 test("trip history says it is a model reconstruction, in both languages", async ({ page }) => {
   for (const [lang, tab, badge, note] of [
-    ["id", "Riwayat Perjalanan", "REKONSTRUKSI MODEL", "bukan arsip telemetri AVL"],
-    ["en", "Trip History", "MODEL RECONSTRUCTION", "not archived AVL telemetry"],
+    ["id", "Truk", "REKONSTRUKSI MODEL", "bukan arsip telemetri AVL"],
+    ["en", "Trucks", "MODEL RECONSTRUCTION", "not archived AVL telemetry"],
   ]) {
     await signIn(page, lang);
-    await page.getByRole("tab", { name: tab }).click();
+    await page.getByRole("tab", { name: tab, exact: true }).click();
+    await page.getByTestId("truck-row").first().click();
+    await page.getByTestId("truck-drawer-history").click();
     const surface = page.getByTestId("fleet-history-surface");
     await expect(surface.getByTestId("history-record-note")).toContainText(badge);
     await expect(surface.getByTestId("history-record-note")).toContainText(note);

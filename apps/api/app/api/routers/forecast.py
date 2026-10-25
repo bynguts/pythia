@@ -17,6 +17,8 @@ from app.core.env import today
 from app.core.paths import RAW_DIR
 from app.core.units import UNIT_GLOSSARY
 from app.fleet.data import build_predictions
+from app.forecast.baseline import MAX_DAYS as MAX_BASELINE_DAYS
+from app.forecast.baseline import build_outlook
 from app.forecast.engine import (
     forecast_monthly_intake,
     forecast_waste_risk,
@@ -183,6 +185,44 @@ def predictions_kecamatan(
     return _kecamatan_cache["payload"]
 
 
+@router.get("/api/baseline/today")
+def baseline_today(days: int = Query(7, ge=2, le=MAX_BASELINE_DAYS)) -> dict[str, Any]:
+    """The one "today" every workspace shows: today's forecast weather, no event.
+
+    The same frame as /api/twin/scene's default (forecast/baseline.py), so the
+    twin, the forecast page and the planning page print identical figures.
+    """
+    return build_outlook(days=days)
+
+
+@router.get("/api/baseline/scenario")
+def baseline_scenario(
+    rainfall_mm: float = Query(0.0, ge=0, le=300),
+    event_attendance: int = Query(0, ge=0, le=2_000_000),
+    venue: str | None = Query(None, max_length=40),
+    event_lat: float | None = Query(None, ge=-90, le=90),
+    event_lng: float | None = Query(None, ge=-180, le=180),
+    target_date: date | None = Query(None, alias="date"),
+    days: int = Query(7, ge=2, le=MAX_BASELINE_DAYS),
+) -> dict[str, Any]:
+    """A what-if on one day of the baseline week, labelled `kind: "scenario"`.
+
+    Without rain or attendance this is that day's baseline (`kind: "baseline"`).
+    """
+    try:
+        return build_outlook(
+            days=days,
+            target_date=target_date.isoformat() if target_date else None,
+            rainfall_mm=rainfall_mm,
+            event_attendance=event_attendance,
+            venue=venue,
+            event_lat=event_lat,
+            event_lng=event_lng,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/api/events/official")
 def official_events() -> list[dict[str, Any]]:
     """Real, officially-scraped Jakarta events (attendance may be unknown)."""
@@ -255,23 +295,38 @@ def facility_gap_analysis(
     rainfall_mm: float = Query(0.0, ge=0),
     event_attendance: int = Query(0, ge=0),
     is_weekend: bool = False,
+    outlook: bool = Query(False, description="Use today's baseline (or its what-if) as the demand"),
 ) -> dict[str, Any]:
     """Case 2 facility readiness: predicted demand vs TPS capacity proxy per
     kecamatan, with concrete new-site counts, extra trucks, and kelurahan
-    siting candidates. Capacity is a labeled proxy, never official capacity."""
+    siting candidates. Capacity is a labeled proxy, never official capacity.
+
+    With `outlook=true` the demand is today's baseline (forecast/baseline.py),
+    or its what-if when rain or attendance is given, so the facility tab
+    prints the same kecamatan tonnes as the forecast tab.
+    """
     from app.forecast.facility_planning import build_facility_gap_analysis
 
-    preds = predictions_kecamatan(
-        rainfall_mm=rainfall_mm,
-        event_attendance=event_attendance,
-        is_weekend=is_weekend,
-    )
-    kec_predictions = {k["kecamatan"]: k["predicted_tons"] for k in preds["kecamatan"]}
+    if outlook:
+        result_outlook = build_outlook(rainfall_mm=rainfall_mm, event_attendance=event_attendance)
+        tons_by_slug = {row["slug"]: row["predicted_tons"] for row in result_outlook["kecamatan"]}
+        kec_predictions = {
+            k["kecamatan"]: tons_by_slug[k["slug"]] for k in load_kecamatan_map() if k["slug"] in tons_by_slug
+        }
+    else:
+        preds = predictions_kecamatan(
+            rainfall_mm=rainfall_mm,
+            event_attendance=event_attendance,
+            is_weekend=is_weekend,
+        )
+        kec_predictions = {k["kecamatan"]: k["predicted_tons"] for k in preds["kecamatan"]}
     result = build_facility_gap_analysis(kec_predictions)
     result["scenario"] = {
         "rainfall_mm": rainfall_mm,
         "event_attendance": event_attendance,
         "is_weekend": is_weekend,
+        "outlook": result_outlook["kind"] if outlook else None,
+        "date": result_outlook["date"] if outlook else None,
     }
     return result
 

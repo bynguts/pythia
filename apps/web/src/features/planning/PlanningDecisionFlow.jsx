@@ -1,14 +1,32 @@
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { apiFetch } from "../../shared/api/client.js";
-import { spikeRisk } from "../../shared/hooks/useSnapshot.js";
-import { useLanguage } from "../../shared/i18n/index.jsx";
+import { fetchOutlook, fleetDenominator } from "../../shared/hooks/useBaseline.js";
+import { signedPercent } from "../../shared/hooks/useSnapshot.js";
+import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { IntegratedPlanning } from "./IntegratedPlanning.jsx";
 import { ExecutiveSummary } from "./ExecutiveSummary.jsx";
 import { PlanningApproval, ScenarioPanel } from "./PlanningApproval.jsx";
 import { PlanQuotaUsage, PlanRules } from "./PlanConstraints.jsx";
 import { isWeekendDate, localIsoDate } from "./planDate.js";
+import { readPlanningScenario } from "./scenarioLink.js";
+import { WEIGHBRIDGE_LANES } from "../twin/twinLinks.js";
 import { Users, Workflow } from "lucide-react";
 
+const VENUES = ["gbk", "jis", "monas"];
+const MAX_PLAN_DAYS = 30; // /api/baseline/scenario serves up to 30 days ahead
+
+function daysFromToday(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const now = new Date();
+  return Math.round(
+    (Date.UTC(y, m - 1, d) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5,
+  );
+}
+
+// Teardown v4 R2: Rencana opens on today's forecast (the same baseline as Prediksi
+// and the twin). A manual what-if is opt-in, and once set every figure carries a
+// "Skenario" label. A twin or event hand-off arrives as ?scenario=… (scenarioLink.js).
 export function PlanningDecisionFlow({
   attendance,
   setAttendance,
@@ -20,7 +38,9 @@ export function PlanningDecisionFlow({
   queue,
 }) {
   const { t, lang } = useLanguage();
-  const [data, setData] = useState(null);
+  const locale = localeFor(lang);
+  const [searchParams] = useSearchParams();
+  const [outlook, setOutlook] = useState(null);
   const [loading, setLoading] = useState(false);
   const forecastRequest = useRef(0);
   const planRequest = useRef(0);
@@ -32,65 +52,108 @@ export function PlanningDecisionFlow({
   const [optimizerError, setOptimizerError] = useState(null);
   // The plan is for one calendar day; weekday or weekend follows from it.
   const [planDate, setPlanDate] = useState(() => localIsoDate());
+  const [venue, setVenue] = useState("gbk");
+  const [handoff, setHandoff] = useState(null);
+  const [laneQueue, setLaneQueue] = useState(null);
   const weekend = isWeekendDate(planDate);
+  // A closed weighbridge lane (?lanes=) changes only the simulated TPA queue, never tonnes.
+  const lanesOpen = handoff?.lanes ?? null;
+  const scenarioActive = rainfall > 0 || attendance > 0 || lanesOpen != null;
 
   const role = localStorage.getItem("pythia_role") || "guest";
 
-  const [outlook, setOutlook] = useState([]);
+  const [aiOutlook, setAiOutlook] = useState([]);
 
   useEffect(() => {
     const load = () =>
       apiFetch("/ai/event-forecast")
         .then((r) => r.json())
-        .then((body) => setOutlook(body.outlook || []))
+        .then((body) => setAiOutlook(body.outlook || []))
         .catch(() => {});
     load();
     const id = setInterval(load, 60000);
     return () => clearInterval(id);
   }, []);
 
+  // A hand-off (?scenario=…) from the twin or the event list sets the what-if once.
+  useEffect(() => {
+    const incoming = readPlanningScenario(searchParams);
+    if (!incoming) return;
+    setHandoff(incoming);
+    setRainfall(incoming.rainfall);
+    setAttendance(incoming.attendance);
+    if (incoming.venue && VENUES.includes(incoming.venue)) setVenue(incoming.venue);
+    if (incoming.date) setPlanDate(incoming.date);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // The lane scenario's queue before/after comes from the twin briefing (same simulation).
+  useEffect(() => {
+    setLaneQueue(null);
+    if (lanesOpen == null) return undefined;
+    const controller = new AbortController();
+    apiFetch(`/twin/briefing?scenario=${encodeURIComponent(handoff.id)}`, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => {
+        if (body?.after?.weighbridge_lanes === lanesOpen) setLaneQueue(body);
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [handoff, lanesOpen]);
+
+  // An agreement at the XR table on this scenario and day (a session note, never an approval).
+  const [agreement, setAgreement] = useState(null);
+  useEffect(() => {
+    setAgreement(null);
+    if (!handoff?.id) return undefined;
+    const controller = new AbortController();
+    const query = new URLSearchParams({ scenario: handoff.id, date: planDate });
+    const load = () =>
+      apiFetch(`/twin/agreements?${query}`, { signal: controller.signal })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((body) => setAgreement(body?.agreements?.[0] || null))
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 30000);
+    return () => {
+      controller.abort();
+      clearInterval(id);
+    };
+  }, [handoff, planDate]);
+
+  const dayIndex = daysFromToday(planDate);
+  const dateInRange = dayIndex >= 0 && dayIndex < MAX_PLAN_DAYS;
+  const place =
+    handoff?.lat != null
+      ? { lat: handoff.lat, lng: handoff.lng }
+      : { lat: eventLat ?? null, lng: eventLng ?? null };
+
   async function run() {
     const request = ++forecastRequest.current;
     ++planRequest.current;
     setPlanLoading(false);
     setLoading(true);
-    setData(null);
     setForecastError(false);
     setPlan(null);
     setApproved(false);
     setOptimizerError(null);
     try {
-      const params = new URLSearchParams({
-        rainfall_mm: String(rainfall),
-        event_attendance: String(attendance),
-        is_weekend: String(weekend),
-        target_date: planDate,
+      if (!dateInRange) throw new Error("date");
+      const result = await fetchOutlook({
+        rainfall,
+        attendance,
+        venue: place.lat == null ? venue : undefined,
+        lat: place.lat,
+        lng: place.lng,
+        date: planDate,
+        days: dayIndex < 7 ? 7 : MAX_PLAN_DAYS,
       });
-      if (eventLat !== undefined && eventLat !== null) params.append("event_lat", String(eventLat));
-      if (eventLng !== undefined && eventLng !== null) params.append("event_lng", String(eventLng));
-      // The same request without rain or event is each district's normal day, the
-      // basis of the shared risk classes (engine.spike_risk). Without it the review
-      // makes no "needs capacity" claim.
-      const normalParams = new URLSearchParams({
-        rainfall_mm: "0",
-        event_attendance: "0",
-        is_weekend: String(weekend),
-        target_date: planDate,
-      });
-      const [res, normal] = await Promise.all([
-        apiFetch(`/predictions/kecamatan?${params.toString()}`),
-        apiFetch(`/predictions/kecamatan?${normalParams.toString()}`)
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null),
-      ]);
-      if (!res.ok) throw new Error("forecast");
-      const result = await res.json();
-      const normalTons = Object.fromEntries(
-        (normal?.kecamatan || []).map((k) => [k.kecamatan, k.predicted_tons]),
-      );
-      if (request === forecastRequest.current) setData({ ...result, normalTons });
+      if (request === forecastRequest.current) setOutlook(result);
     } catch {
-      if (request === forecastRequest.current) setForecastError(true);
+      if (request === forecastRequest.current) {
+        setOutlook(null);
+        setForecastError(true);
+      }
     } finally {
       if (request === forecastRequest.current) setLoading(false);
     }
@@ -99,7 +162,13 @@ export function PlanningDecisionFlow({
   useEffect(() => {
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attendance, rainfall, eventLat, eventLng, planDate]);
+  }, [attendance, rainfall, eventLat, eventLng, planDate, venue, handoff]);
+
+  function resetScenario() {
+    setHandoff(null);
+    setRainfall(0);
+    setAttendance(0);
+  }
 
   async function generatePlan() {
     const request = ++planRequest.current;
@@ -107,14 +176,18 @@ export function PlanningDecisionFlow({
     setApproved(false);
     setOptimizerError(null);
     try {
+      // The optimizer plans the same day the outlook describes: its rain (forecast
+      // or what-if) and its event, so its demand matches the figures above it.
       const params = new URLSearchParams({
-        rainfall_mm: String(rainfall),
+        rainfall_mm: String(outlook?.weather?.rainfall_mm ?? rainfall ?? 0),
         event_attendance: String(attendance),
         plan_date: planDate,
         top_n: "5",
       });
-      if (eventLat !== undefined && eventLat !== null) params.append("event_lat", String(eventLat));
-      if (eventLng !== undefined && eventLng !== null) params.append("event_lng", String(eventLng));
+      if (outlook?.event?.lat != null) {
+        params.append("event_lat", String(outlook.event.lat));
+        params.append("event_lng", String(outlook.event.lng));
+      }
       const response = await apiFetch(`/operations/plan?${params.toString()}`, {
         method: "POST",
       });
@@ -158,35 +231,6 @@ export function PlanningDecisionFlow({
     }
   }
 
-  // #21: map the live scenario response into the review's evidence shape so
-  // stage 03 always reflects the currently simulated inputs.
-  const scenarioReview = data
-    ? {
-        ...snapshot,
-        predictions: (data.kecamatan || []).map((k) => {
-          const normalTons = data.normalTons?.[k.kecamatan];
-          return {
-            district: k.kecamatan,
-            predicted_tons: k.predicted_tons,
-            baseline_tons: k.baseline_tons_per_day,
-            // Teardown v3 N2: spike and risk vs the normal day, as on every other screen.
-            ...(normalTons > 0
-              ? { normal_tons: normalTons, ...spikeRisk(k.predicted_tons, normalTons) }
-              : { spike_percent: null, risk_level: null }),
-            recommended_extra_trucks: k.crews_required ? Math.ceil(k.crews_required / 2) : 0,
-            recommended_extra_crews: k.crews_required || 0,
-          };
-        }),
-      }
-    : null;
-  const top5 = (data?.top_hotspots || []).slice(0, 5);
-  const totalTons = data?.total_predicted_tons || 0;
-  const manHours = top5.reduce((s, k) => s + (k.man_hours_required || 0), 0);
-  const crews = top5.reduce((s, k) => s + (k.crews_required || 0), 0);
-  const trucks = top5.reduce((s, k) => s + (k.trucks_required || 0), 0);
-  const bins = top5.reduce((s, k) => s + (k.bins_required || 0), 0);
-
-  const locale = lang === "id" ? "id-ID" : "en-US";
   const number = (value) => Number(value ?? 0).toLocaleString(locale, { maximumFractionDigits: 2 });
   // Sign from the printed value, so a delta that rounds to zero reads "0", never "+0" or "-0".
   const signedNumber = (value) => {
@@ -195,141 +239,218 @@ export function PlanningDecisionFlow({
     return Number(value) > 0 ? `+${text}` : text;
   };
   const reason = (code) => {
-    if (code === "no_permit_compliant_vehicle")
-      return lang === "id"
-        ? "Tidak ada kendaraan dengan izin yang sesuai."
-        : "No permit-compliant vehicle is available.";
-    if (code === "no_available_vehicle")
-      return lang === "id" ? "Tidak ada kendaraan yang tersedia." : "No vehicle is available.";
-    if (code === "no_feasible_assignment")
-      return lang === "id"
-        ? "Tidak ditemukan alokasi yang memenuhi kendala."
-        : "No allocation satisfies the constraints.";
+    if (code === "no_permit_compliant_vehicle") return t("w10num_reason_no_permit");
+    if (code === "no_available_vehicle") return t("w10num_reason_no_vehicle");
+    if (code === "no_feasible_assignment") return t("w10num_reason_infeasible");
     const [binding, bindingArea] = code.split(":");
     const bindingLabel = t(`pln6_binding_${binding}`);
     if (bindingArea && bindingLabel !== `pln6_binding_${binding}`) {
       return `${bindingLabel}: ${bindingArea.replace(/_/g, " ")}`;
     }
     if (code.startsWith("insufficient_capacity:")) {
-      const area = code.slice("insufficient_capacity:".length).replace(/_/g, " ");
-      return lang === "id"
-        ? `Kapasitas tidak mencukupi untuk ${area}.`
-        : `Insufficient capacity for ${area}.`;
+      return t("w10num_reason_capacity").replace(
+        "{area}",
+        code.slice("insufficient_capacity:".length).replace(/_/g, " "),
+      );
     }
-    return lang === "id"
-      ? "Ada kendala alokasi yang perlu ditinjau."
-      : "An allocation constraint needs review.";
+    return t("w10num_reason_other");
   };
-  const errorMessage =
-    optimizerError &&
-    (optimizerError.status === 401
-      ? lang === "id"
-        ? "Sesi berakhir. Masuk kembali untuk melanjutkan."
-        : "Session expired. Sign in again to continue."
-      : optimizerError.status === 403
-        ? lang === "id"
-          ? "Peran Anda tidak berwenang melakukan tindakan ini."
-          : "Your role is not authorized to perform this action."
-        : optimizerError.status === 404
-          ? lang === "id"
-            ? "Rencana tidak ditemukan. Susun rencana baru."
-            : "Plan not found. Generate a new plan."
-          : optimizerError.status === 422
-            ? lang === "id"
-              ? "Parameter skenario tidak valid. Periksa input lalu coba lagi."
-              : "Invalid scenario parameters. Review the inputs and try again."
-            : optimizerError.status === 429
-              ? lang === "id"
-                ? "Terlalu banyak permintaan. Coba lagi nanti."
-                : "Too many requests. Try again shortly."
-              : optimizerError.status === 0
-                ? lang === "id"
-                  ? "Koneksi gagal. Periksa jaringan lalu coba lagi."
-                  : "Connection failed. Check your network and try again."
-                : optimizerError.action === "approve"
-                  ? lang === "id"
-                    ? "Persetujuan gagal. Coba lagi."
-                    : "Approval failed. Try again."
-                  : lang === "id"
-                    ? "Rencana gagal disusun. Coba lagi."
-                    : "Could not generate the plan. Try again.");
+  const errorKey = optimizerError
+    ? { 401: "w10num_err_401", 403: "w10num_err_403", 404: "w10num_err_404", 422: "w10num_err_422" }[
+        optimizerError.status
+      ] ||
+      (optimizerError.status === 429
+        ? "w10num_err_429"
+        : optimizerError.status === 0
+          ? "w10num_err_network"
+          : optimizerError.action === "approve"
+            ? "w10num_err_approve"
+            : "w10num_err_generate")
+    : null;
+
+  const isScenario = outlook?.kind === "scenario" || (outlook != null && lanesOpen != null);
+  // The twin's scenario names (dr_scn_*) first, then this lane's, then a generic origin.
+  const labelKey = handoff
+    ? [`dr_scn_${handoff.id}`, `w10num_scn_${handoff.id}`].find((key) => t(key) !== key)
+    : null;
+  const scenarioLabel = handoff
+    ? labelKey
+      ? t(labelKey)
+      : t("w10num_scn_from_twin")
+    : t("w10num_scn_manual");
+  // The briefing describes today; on another plan date its queue is not this day's.
+  const laneQueueShown =
+    laneQueue && outlook && laneQueue.date === outlook.date && laneQueue.before && laneQueue.after
+      ? laneQueue
+      : null;
+  const delta =
+    isScenario && outlook.baseline ? outlook.total_tonnage_t - outlook.baseline.total_tonnage_t : null;
+  const deltaPct =
+    delta != null && outlook.baseline.total_tonnage_t > 0
+      ? (delta / outlook.baseline.total_tonnage_t) * 100
+      : null;
 
   return (
     <IntegratedPlanning
-      // #21: the review derives from the ACTIVE scenario response once one
-      // exists; the preloaded snapshot is only the pre-simulation fallback.
-      summary={<ExecutiveSummary snapshot={scenarioReview || snapshot} queue={queue} />}
+      summary={<ExecutiveSummary outlook={outlook} snapshot={snapshot} queue={queue} />}
       scenario={{
         inputs: (
           <ScenarioPanel mode="inputs">
             <div className="panel-title">
               <div>
-                <h2>{t("plan_sim_title")}</h2>
-                <p>{t("plan_sim_sub")}</p>
+                <h2>{t("w10num_plan_basis_title")}</h2>
+                <p>{t("w10num_plan_basis_sub")}</p>
               </div>
               <div className="panel-header-icon-wrap">
                 <Users size={18} />
               </div>
             </div>
-            <div
-              className="plan-date-row"
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                gap: "12px",
-                marginBottom: "16px",
-              }}
-            >
-              <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--ui-muted)" }}>
-                  {t("pln6_plan_date")}
-                </span>
+            <div className="plan-date-row">
+              <label>
+                <span>{t("pln6_plan_date")}</span>
                 <input
                   type="date"
                   data-testid="plan-date"
                   value={planDate}
+                  min={localIsoDate()}
                   onChange={(event) => event.target.value && setPlanDate(event.target.value)}
-                  style={{ minHeight: "var(--tap-min)" }}
                 />
               </label>
-              <span className="req-chip" data-testid="plan-day-kind" style={{ padding: "10px 12px" }}>
+              <span className="day-kind-chip" data-testid="plan-day-kind">
                 {t(weekend ? "pln6_day_weekend" : "pln6_day_weekday")}
               </span>
             </div>
+
+            <div
+              className={`plan-outlook${isScenario ? " is-scenario" : ""}`}
+              data-testid="plan-outlook"
+              data-kind={isScenario ? "scenario" : outlook?.kind || "loading"}
+              aria-live="polite"
+            >
+              <p className="plan-outlook-basis">
+                {isScenario ? (
+                  <span className="scenario-badge" data-testid="plan-scenario-badge">
+                    {t("w10num_scenario_badge")}
+                  </span>
+                ) : (
+                  <span className="classification-badge modeled">{t("w10num_badge_model")}</span>
+                )}{" "}
+                {isScenario
+                  ? t("w10num_plan_scenario_basis")
+                      .replace("{label}", scenarioLabel)
+                      .replace("{date}", outlook.date)
+                  : outlook
+                    ? t(dayIndex === 0 ? "w10num_plan_today_basis" : "w10num_plan_day_basis").replace(
+                        "{date}",
+                        outlook.date,
+                      )
+                    : t(loading ? "w10num_calculating" : "w10num_loading")}
+              </p>
+              {isScenario && agreement && (
+                <p
+                  className="plan-xr-agreed"
+                  data-testid="plan-xr-agreed"
+                  data-participants={agreement.participants}
+                >
+                  <strong>{t("dr_plan_agreed").replace("{n}", number(agreement.participants))}</strong>
+                  {" · "}
+                  <span>{t("dr_plan_agreed_note")}</span>
+                </p>
+              )}
+              {isScenario && lanesOpen != null && (
+                <p className="plan-lanes-note" data-testid="plan-lanes-note">
+                  {t("w10num_plan_lanes_note")
+                    .replace("{closed}", WEIGHBRIDGE_LANES - lanesOpen)
+                    .replace("{total}", WEIGHBRIDGE_LANES)}
+                  {laneQueueShown && (
+                    <>
+                      {" "}
+                      <strong
+                        data-testid="plan-lanes-queue"
+                        data-before={laneQueueShown.before.queue_minutes_per_truck}
+                        data-after={laneQueueShown.after.queue_minutes_per_truck}
+                      >
+                        {t("w10num_plan_lanes_queue")
+                          .replace("{before}", number(laneQueueShown.before.queue_minutes_per_truck))
+                          .replace("{after}", number(laneQueueShown.after.queue_minutes_per_truck))}
+                      </strong>
+                    </>
+                  )}
+                </p>
+              )}
+              {outlook && (
+                <dl className="plan-outlook-grid">
+                  <div>
+                    <dt>{t("w10num_plan_total")}</dt>
+                    <dd data-testid="plan-total" data-value={outlook.total_tonnage_t}>
+                      {number(outlook.total_tonnage_t)} t
+                    </dd>
+                    {deltaPct != null && (
+                      <small data-testid="plan-delta">
+                        {t("w10num_plan_vs_baseline")
+                          .replace("{base}", number(outlook.baseline.total_tonnage_t))
+                          .replace("{pct}", signedPercent(deltaPct))}
+                      </small>
+                    )}
+                  </div>
+                  <div>
+                    <dt>{t("w10num_today_at_risk")}</dt>
+                    <dd data-testid="plan-at-risk" data-value={outlook.kecamatan_at_risk}>
+                      {t("w10num_n_of_m")
+                        .replace("{n}", outlook.kecamatan_at_risk)
+                        .replace("{m}", outlook.kecamatan_count)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>{t("w10num_today_trucks")}</dt>
+                    <dd data-testid="plan-trucks" data-value={outlook.trucks_needed}>
+                      {number(outlook.trucks_needed)}
+                    </dd>
+                    <small>
+                      {t("w10num_trucks_city_note").replace("{t}", outlook.units?.truck_capacity_tons)}
+                    </small>
+                  </div>
+                  <div>
+                    <dt>{t("w10num_fleet_pilot")}</dt>
+                    <dd data-testid="fleet-denominator">{fleetDenominator(t, outlook.fleet)}</dd>
+                    <small>{t("honesty_sim_badge")}</small>
+                  </div>
+                </dl>
+              )}
+            </div>
+
             <div className="ai-outlook">
-              <h3>{lang === "id" ? "Prediksi AI 7 hari" : "AI 7-day outlook"}</h3>
-              {outlook.length === 0 ? (
-                <div className="ai-feed-empty">
-                  {lang === "id" ? "Prediksi belum tersedia." : "Outlook is not available yet."}
-                </div>
+              <h3>{t("w10num_ai_outlook")}</h3>
+              {aiOutlook.length === 0 ? (
+                <div className="ai-feed-empty">{t("w10num_ai_outlook_empty")}</div>
               ) : (
                 <table className="ai-outlook-table">
                   <thead>
                     <tr>
-                      <th>{lang === "id" ? "Tanggal" : "Date"}</th>
-                      <th>{lang === "id" ? "Hujan" : "Rain"}</th>
-                      <th>{lang === "id" ? "Acara" : "Event"}</th>
+                      <th>{t("w10num_th_date")}</th>
+                      <th>{t("w10num_th_rain")}</th>
+                      <th>{t("w10num_th_event")}</th>
                       <th>Δ Volume</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {outlook.map((d) => (
+                    {aiOutlook.map((d) => (
                       <tr key={d.date}>
                         <td>
                           {new Date(`${d.date}T00:00:00`).toLocaleDateString(locale, {
                             day: "2-digit",
                             month: "short",
                           })}
-                          {d.is_holiday ? (lang === "id" ? " (libur)" : " (holiday)") : ""}
+                          {d.is_holiday ? ` ${t("w10num_holiday_suffix")}` : ""}
                         </td>
                         <td>{number(d.rainfall_mm)} mm</td>
                         <td>
                           {d.events?.length
                             ? d.events
-                                .map(
-                                  (e) =>
-                                    `${e.name} (${number(e.expected_attendance)} ${lang === "id" ? "orang" : "people"})`,
+                                .map((e) =>
+                                  t("w10num_event_people")
+                                    .replace("{name}", e.name)
+                                    .replace("{n}", number(e.expected_attendance)),
                                 )
                                 .join(", ")
                             : "—"}
@@ -351,120 +472,66 @@ export function PlanningDecisionFlow({
                 </table>
               )}
             </div>
-            <details open className="manual-whatif">
-              <summary>{lang === "id" ? "Penyesuaian manual" : "Manual adjustment"}</summary>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                  gap: "20px",
-                  marginBottom: "16px",
-                }}
-              >
-                <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--ui-muted)" }}>
-                    {t("plan_att")}
-                  </span>
+            <details className="manual-whatif" open={scenarioActive} data-testid="manual-whatif">
+              <summary>{t("w10num_scenario_open")}</summary>
+              <p className="kec-note">{t("w10num_scenario_explain")}</p>
+              <div className="manual-whatif-grid">
+                <label>
+                  <span>{t("plan_att")}</span>
                   <input
                     type="range"
                     min="0"
                     max="200000"
                     step="5000"
                     value={attendance}
+                    data-testid="scenario-attendance"
                     onChange={(event) => setAttendance(Number(event.target.value))}
                   />
-                  <small style={{ fontSize: "13px", fontWeight: 700, color: "var(--ui-accent)" }}>
-                    {number(attendance)} {lang === "id" ? "orang" : "people"}
-                  </small>
+                  <small>{t("w10num_people").replace("{n}", number(attendance))}</small>
                 </label>
-                <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--ui-muted)" }}>
-                    {t("plan_rain")}
-                  </span>
+                <label>
+                  <span>{t("plan_rain")}</span>
                   <input
                     type="range"
                     min="0"
                     max="100"
                     step="1"
                     value={rainfall}
+                    data-testid="scenario-rain"
                     onChange={(event) => setRainfall(Number(event.target.value))}
                   />
-                  <small style={{ fontSize: "13px", fontWeight: 700, color: "var(--ui-accent)" }}>
-                    {number(rainfall)} mm / {lang === "id" ? "hari" : "day"}
+                  <small>
+                    {rainfall > 0
+                      ? t("w10num_mm_day").replace("{n}", number(rainfall))
+                      : t("w10num_scn_rain_forecast")}
                   </small>
                 </label>
+                <label>
+                  <span>{t("w10num_scn_venue")}</span>
+                  <select value={venue} onChange={(event) => setVenue(event.target.value)}>
+                    {VENUES.map((id) => (
+                      <option key={id} value={id}>
+                        {t(`w10num_venue_${id}`)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
-                <button
-                  className="primary-button"
-                  onClick={run}
-                  disabled={loading}
-                  style={{ width: "auto", minHeight: "36px", height: "36px", padding: "0 20px" }}
-                >
-                  {loading ? (lang === "id" ? "Menghitung..." : "Calculating...") : t("btn_run_scenario")}
+              <div className="manual-whatif-actions">
+                {scenarioActive && (
+                  <button className="ghost-button" type="button" onClick={resetScenario}>
+                    {t("w10num_scn_reset")}
+                  </button>
+                )}
+                <button className="primary-button" onClick={run} disabled={loading}>
+                  {loading ? t("w10num_calculating") : t("btn_run_scenario")}
                 </button>
               </div>
             </details>
             {forecastError && (
               <p className="unmet-reasons-box optimizer-error" role="alert">
-                {lang === "id"
-                  ? "Prediksi gagal dimuat. Jalankan ulang skenario."
-                  : "Forecast could not load. Run the scenario again."}
+                {t(dateInRange ? "w10num_forecast_error" : "w10num_date_out_of_range")}
               </p>
-            )}
-            <div className="scenario-result" style={{ marginBottom: "16px" }}>
-              {data ? (
-                <>
-                  <strong>
-                    {lang === "id"
-                      ? `Total estimasi timbulan ${number(totalTons)} ton/hari`
-                      : `Total forecast ${number(totalTons)} tons/day`}
-                    {data.kecamatan_count != null
-                      ? ` (${number(data.kecamatan_count)} ${lang === "id" ? "kecamatan" : "districts"})`
-                      : ""}
-                  </strong>
-                  <span>
-                    {top5[0]
-                      ? `${lang === "id" ? "Titik puncak" : "Peak hotspot"}: ${top5[0].kecamatan} — ${number(top5[0].predicted_tons)} ${lang === "id" ? "ton" : "tons"}`
-                      : lang === "id"
-                        ? "Belum ada titik puncak pada skenario ini."
-                        : "No peak hotspot for this scenario."}
-                  </span>
-                </>
-              ) : (
-                <span>
-                  {loading
-                    ? lang === "id"
-                      ? "Menghitung kebutuhan skenario..."
-                      : "Calculating scenario demand..."
-                    : lang === "id"
-                      ? "Belum ada hasil skenario."
-                      : "No scenario result is available."}
-                </span>
-              )}
-            </div>
-            {data && (
-              <div
-                className="scenario-reqs"
-                style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}
-              >
-                <div className="req-chip" style={{ padding: "10px 12px" }}>
-                  <b>{number(manHours)}</b>
-                  <span>{lang === "id" ? "jam-orang (5 teratas)" : "person-hours (top 5)"}</span>
-                </div>
-                <div className="req-chip" style={{ padding: "10px 12px" }}>
-                  <b>{number(crews)}</b>
-                  <span>{lang === "id" ? "tim kru lapangan (5 teratas)" : "field crew teams (top 5)"}</span>
-                </div>
-                <div className="req-chip" style={{ padding: "10px 12px" }}>
-                  <b>{number(trucks)}</b>
-                  <span>{lang === "id" ? "truk armada (5 teratas)" : "trucks (top 5)"}</span>
-                </div>
-                <div className="req-chip" style={{ padding: "10px 12px" }}>
-                  <b>{number(bins)}</b>
-                  <span>{lang === "id" ? "tong besar (5 teratas)" : "large bins (top 5)"}</span>
-                </div>
-              </div>
             )}
           </ScenarioPanel>
         ),
@@ -477,22 +544,19 @@ export function PlanningDecisionFlow({
 
               {!plan && (
                 <>
-                  <div
-                    className="plan-preflight-grid"
-                    aria-label={lang === "id" ? "Tinjauan sebelum rencana" : "Plan preflight"}
-                    style={{ marginBottom: "16px" }}
-                  >
+                  <div className="plan-preflight-grid" aria-label={t("w10num_preflight")}>
                     <div>
                       <span>{t("plan_demand")}</span>
-                      <strong>
-                        {data ? `${number(totalTons)} ${lang === "id" ? "ton/hari" : "tons/day"}` : "—"}
-                      </strong>
+                      <strong>{outlook ? `${number(outlook.total_tonnage_t)} t` : "—"}</strong>
                     </div>
                     <div>
-                      <span>{t("plan_fleet_need")}</span>
-                      <strong>
-                        {data
-                          ? `${number(trucks)} ${lang === "id" ? "truk" : "trucks"} / ${number(crews)} ${lang === "id" ? "kru" : "crews"}`
+                      <span>{t("w10num_extra_need")}</span>
+                      <strong data-testid="plan-extra-need">
+                        {outlook
+                          ? t("w10num_extra_need_value")
+                              .replace("{deploy}", number(outlook.recommendation.deployable_trucks))
+                              .replace("{reserve}", number(outlook.recommendation.fleet_reserve))
+                              .replace("{short}", number(outlook.recommendation.shortfall_trucks))
                           : "—"}
                       </strong>
                     </div>
@@ -500,72 +564,50 @@ export function PlanningDecisionFlow({
                       <span>{t("plan_tpa_queue")}</span>
                       <strong>
                         {queue?.trucks_waiting != null && queue?.estimated_wait_minutes != null
-                          ? `${number(queue.trucks_waiting)} ${lang === "id" ? "truk" : "trucks"} / ${number(queue.estimated_wait_minutes)} ${lang === "id" ? "menit" : "min"}`
+                          ? t("w10num_queue_peak_value")
+                              .replace("{n}", number(queue.trucks_waiting))
+                              .replace("{m}", number(Math.round(queue.estimated_wait_minutes)))
                           : "—"}
                       </strong>
                     </div>
                   </div>
 
                   <button
-                    className="primary-button"
+                    className="primary-button plan-generate-btn"
                     onClick={generatePlan}
                     disabled={planLoading || loading}
-                    style={{
-                      width: "auto",
-                      minHeight: "38px",
-                      height: "38px",
-                      padding: "0 24px",
-                      marginBottom: "14px",
-                    }}
                   >
-                    {planLoading
-                      ? lang === "id"
-                        ? "Mengoptimalkan Alokasi..."
-                        : "Optimizing Assignments..."
-                      : t("btn_generate_plan")}
+                    {planLoading ? t("w10num_optimizing") : t("btn_generate_plan")}
                   </button>
 
-                  <div className="optimizer-empty-state" aria-live="polite" style={{ padding: "14px 16px" }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
-                      <Workflow
-                        size={18}
-                        style={{ color: "var(--ui-accent)", flexShrink: 0, marginTop: "2px" }}
-                      />
-                      <div>
-                        <strong style={{ fontSize: "13px" }}>{t("plan_awaiting_title")}</strong>
-                        <p style={{ fontSize: "12px", color: "var(--ui-muted)" }}>
-                          {t("plan_awaiting_desc")}
-                        </p>
-                      </div>
+                  <div className="optimizer-empty-state" aria-live="polite">
+                    <Workflow size={18} />
+                    <div>
+                      <strong>{t("plan_awaiting_title")}</strong>
+                      <p>{t("plan_awaiting_desc")}</p>
                     </div>
                   </div>
                 </>
               )}
 
-              {errorMessage && (
+              {errorKey && (
                 <div className="unmet-reasons-box optimizer-error" role="alert">
-                  <strong>{lang === "id" ? "Rencana:" : "Plan:"}</strong> {errorMessage}
+                  <strong>{t("w10num_plan_label")}</strong> {t(errorKey)}
                 </div>
               )}
 
               {plan && (
                 <div className="optimizer-plan-card">
                   <div className="plan-header">
-                    <strong>
-                      {lang === "id" ? "ID rencana" : "Plan ID"}: {plan.plan_id}
-                    </strong>
+                    <strong>{t("w10num_plan_id").replace("{id}", plan.plan_id)}</strong>
                     <span className={`plan-status-badge ${plan.status}`}>
-                      {plan.status === "proposed"
-                        ? lang === "id"
-                          ? "DIUSULKAN"
-                          : "PROPOSED"
-                        : plan.status === "approved"
-                          ? lang === "id"
-                            ? "DISETUJUI"
-                            : "APPROVED"
-                          : lang === "id"
-                            ? "STATUS TIDAK DIKETAHUI"
-                            : "UNKNOWN STATUS"}
+                      {t(
+                        plan.status === "proposed"
+                          ? "w10num_status_proposed"
+                          : plan.status === "approved"
+                            ? "w10num_status_approved"
+                            : "w10num_status_unknown",
+                      )}
                     </span>
                   </div>
 
@@ -579,27 +621,17 @@ export function PlanningDecisionFlow({
                   )}
                   <div className="plan-stats-grid">
                     <div className="plan-stat-item">
-                      <span>{lang === "id" ? "Total kebutuhan" : "Total demand"}</span>
-                      <strong>
-                        {number(plan.total_demand_tons)} {lang === "id" ? "ton" : "tons"}
-                      </strong>
+                      <span>{t("w10num_plan_demand_total")}</span>
+                      <strong>{number(plan.total_demand_tons)} t</strong>
                     </div>
                     <div className="plan-stat-item">
-                      <span>{lang === "id" ? "Dialokasikan" : "Assigned"}</span>
-                      <strong>
-                        {number(plan.total_assigned_tons)} {lang === "id" ? "ton" : "tons"}
-                      </strong>
+                      <span>{t("w10num_plan_assigned")}</span>
+                      <strong>{number(plan.total_assigned_tons)} t</strong>
                     </div>
                     <div className="plan-stat-item">
-                      <span>Status</span>
+                      <span>{t("w10num_plan_status")}</span>
                       <strong className={plan.unmet_reasons?.length ? "text-danger" : "text-success"}>
-                        {plan.unmet_reasons?.length
-                          ? lang === "id"
-                            ? "Kebutuhan belum terpenuhi"
-                            : "Unmet demand"
-                          : lang === "id"
-                            ? "Layak dijalankan"
-                            : "Feasible"}
+                        {t(plan.unmet_reasons?.length ? "w10num_plan_unmet" : "w10num_plan_feasible")}
                       </strong>
                     </div>
                   </div>
@@ -619,7 +651,7 @@ export function PlanningDecisionFlow({
                   <PlanRules plan={plan} />
                   {plan.unmet_reasons?.length > 0 && (
                     <div className="unmet-reasons-box">
-                      <strong>{lang === "id" ? "Peringatan kendala:" : "Constraint warnings:"}</strong>
+                      <strong>{t("w10num_constraint_warnings")}</strong>
                       <ul>
                         {plan.unmet_reasons.map((r, i) => (
                           <li key={i}>{reason(r)}</li>
@@ -628,16 +660,12 @@ export function PlanningDecisionFlow({
                     </div>
                   )}
 
-                  <div className="assign-title">
-                    {lang === "id" ? "Penugasan hasil optimasi:" : "Optimizer assignments:"}
-                  </div>
+                  <div className="assign-title">{t("w10num_assignments")}</div>
                   <div className="assignments-container">
                     {(plan.assignments || []).map((a, i) => (
                       <div key={i} className="assign-card">
                         <div className="assign-info">
-                          <strong>
-                            {lang === "id" ? "Truk" : "Truck"} {a.truck_code}
-                          </strong>
+                          <strong>{t("w10num_truck").replace("{code}", a.truck_code)}</strong>
                           <span>&rarr; {a.area.replace(/_/g, " ").toUpperCase()}</span>
                           {a.shift && (
                             <span className="kec-note">
@@ -654,23 +682,18 @@ export function PlanningDecisionFlow({
                         </div>
                         <div className="assign-evidence">
                           <span>
-                            {lang === "id" ? "Muatan" : "Assigned"}:{" "}
-                            <b>
-                              {number(a.assigned_tons)} {lang === "id" ? "ton" : "tons"}
-                            </b>
+                            {t("w10num_load")} <b>{number(a.assigned_tons)} t</b>
                           </span>
                           {a.evidence?.permit_compliant ? (
-                            <span className="ok">{lang === "id" ? "Izin sesuai" : "Permit compliant"}</span>
+                            <span className="ok">{t("w10num_permit_ok")}</span>
                           ) : (
-                            <span className="warn">{lang === "id" ? "Tanpa izin" : "No permit"}</span>
+                            <span className="warn">{t("w10num_permit_missing")}</span>
                           )}
                         </div>
                       </div>
                     ))}
                     {!plan.assignments?.length && (
-                      <p className="kec-note optimizer-empty">
-                        {lang === "id" ? "Belum ada penugasan truk." : "No truck assignments generated."}
-                      </p>
+                      <p className="kec-note optimizer-empty">{t("w10num_no_assignments")}</p>
                     )}
                   </div>
                 </div>

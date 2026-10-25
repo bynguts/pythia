@@ -152,6 +152,8 @@ def build_facility_gap_analysis(
             "truck_capacity_tons": _TRUCK_CAPACITY_TONS,
             "new_site_gap_share": _NEW_SITE_GAP_SHARE,
             "allocation": "0.8*population_share + 0.2*tps_density_share (real census + SILIKA TPS)",
+            # The UI shows this code in the reader's language; the prose stays for API readers.
+            "coverage_code": "tps_proxy_partial_coverage",
             "coverage_note": (
                 "TPS capacity proxy covers only part of modeled demand; the remainder is "
                 "direct-hauled to TPST. Recommendations are RELATIVE priorities for pilot "

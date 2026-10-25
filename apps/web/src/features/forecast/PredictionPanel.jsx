@@ -2,6 +2,8 @@ import { useLanguage } from "../../shared/i18n/index.jsx";
 import { signedPercent } from "../../shared/hooks/useSnapshot.js";
 import { CloudRain } from "lucide-react";
 
+// Teardown v4 T1: these rows are the five administrative cities (kota) over the
+// next seven days, not kecamatan; today's kecamatan figures live in the baseline.
 // `source` (teardown v3 N1): "live" is the backend's list, which may honestly be
 // empty; "sample" is the offline fallback, shown only when the backend is
 // unreachable and badged as not a forecast; "loading" shows neither.
@@ -10,19 +12,14 @@ export function PredictionPanel({ predictions: livePredictions, source = "live" 
   const sample = source === "sample";
   const loading = source === "loading";
   const predictions = loading ? [] : livePredictions || [];
-  const totalExtraTrucks = predictions.reduce((sum, item) => sum + (item.recommended_extra_trucks || 0), 0);
-  const totalExtraCrews = predictions.reduce((sum, item) => sum + (item.recommended_extra_crews || 0), 0);
-  const highestSpike = predictions.length
-    ? Math.max(...predictions.map((item) => item.spike_percent || 0))
-    : null;
   const displayRows = [...predictions].sort((a, b) => (b.predicted_tons || 0) - (a.predicted_tons || 0));
 
   return (
     <section className="panel wide prediction-panel">
       <div className="panel-title">
         <div>
-          <h2>{t("fc_pred_title")}</h2>
-          <p>{t("fc_pred_sub")}</p>
+          <h2>{t("w10num_pred_title")}</h2>
+          <p>{t("w10num_pred_sub")}</p>
         </div>
         <div className="panel-header-icon-wrap">
           <CloudRain size={18} />
@@ -35,109 +32,6 @@ export function PredictionPanel({ predictions: livePredictions, source = "live" 
         </p>
       )}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-          gap: "12px",
-          marginBottom: "16px",
-          minWidth: 0,
-        }}
-      >
-        <div
-          style={{
-            background: "var(--ui-surface-muted)",
-            padding: "12px 14px",
-            borderRadius: "10px",
-            border: "1px solid var(--ui-border)",
-          }}
-        >
-          <span
-            style={{
-              fontSize: "11px",
-              color: "var(--ui-muted)",
-              textTransform: "uppercase",
-              fontWeight: 600,
-            }}
-          >
-            {t("fc_hr_districts")}
-          </span>
-          <strong
-            style={{
-              display: "block",
-              fontSize: "18px",
-              marginTop: "2px",
-              overflowWrap: "anywhere",
-              color: "var(--ui-danger)",
-            }}
-          >
-            {loading ? "—" : t("ufx_fc_n_districts").replace("{n}", predictions.length)}
-          </strong>
-        </div>
-        <div
-          style={{
-            background: "var(--ui-surface-muted)",
-            padding: "12px 14px",
-            borderRadius: "10px",
-            border: "1px solid var(--ui-border)",
-          }}
-        >
-          <span
-            style={{
-              fontSize: "11px",
-              color: "var(--ui-muted)",
-              textTransform: "uppercase",
-              fontWeight: 600,
-            }}
-          >
-            {t("fc_peak_spike")}
-          </span>
-          <strong
-            style={{
-              display: "block",
-              fontSize: "18px",
-              marginTop: "2px",
-              overflowWrap: "anywhere",
-              color: "var(--ui-warning)",
-            }}
-          >
-            {highestSpike == null ? "—" : signedPercent(highestSpike)}
-          </strong>
-        </div>
-        <div
-          style={{
-            background: "var(--ui-surface-muted)",
-            padding: "12px 14px",
-            borderRadius: "10px",
-            border: "1px solid var(--ui-border)",
-          }}
-        >
-          <span
-            style={{
-              fontSize: "11px",
-              color: "var(--ui-muted)",
-              textTransform: "uppercase",
-              fontWeight: 600,
-            }}
-          >
-            {t("fc_extra_cap")}
-          </span>
-          <strong
-            style={{
-              display: "block",
-              fontSize: "18px",
-              marginTop: "2px",
-              overflowWrap: "anywhere",
-              color: "var(--ui-ink)",
-            }}
-          >
-            {t("ufx_fc_trucks_crews")
-              .replace("{trucks}", totalExtraTrucks)
-              .replace("{crews}", totalExtraCrews)}
-          </strong>
-        </div>
-      </div>
-
       {predictions.length === 0 ? (
         <p className="table-empty-state" role="status" data-testid="forecast-empty">
           {t(loading ? "ufx_fc_loading" : "ufx_fc_empty")}
@@ -148,7 +42,7 @@ export function PredictionPanel({ predictions: livePredictions, source = "live" 
             <thead>
               <tr>
                 <th scope="col" style={{ width: "24%" }}>
-                  {t("fc_th_district")}
+                  {t("w10num_pred_th_city")}
                 </th>
                 <th scope="col" style={{ width: "16%" }}>
                   {t("fc_th_date")}

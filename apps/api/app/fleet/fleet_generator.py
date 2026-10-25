@@ -30,23 +30,16 @@ from typing import Any
 from app.forecast.real_data import load_fleet_composition, load_kelurahan_heatmap
 
 _GENERATED_COUNT = 55  # + 5 curated trucks = 60-unit demo fleet
-_DRIVER_POOL = [
-    "Pengemudi Sim 05",
-    "Pengemudi Sim 06",
-    "Pengemudi Sim 07",
-    "Pengemudi Sim 08",
-    "Pengemudi Sim 09",
-    "Pengemudi Sim 10",
-    "Pengemudi Sim 11",
-    "Pengemudi Sim 12",
-    "Pengemudi Sim 13",
-    "Pengemudi Sim 14",
-    "Pengemudi Sim 15",
-    "Pengemudi Sim 16",
-    "Pengemudi Sim 17",
-    "Pengemudi Sim 18",
-    "Pengemudi Sim 19",
-]
+# One simulated driver per generated truck (the curated trucks hold Sim 01-04), so a
+# driver is never on two trucks at once: T-200 -> "Pengemudi Sim 05", T-254 -> "Sim 59".
+_FIRST_GENERATED_DRIVER = 5
+
+
+def driver_for(index: int) -> str:
+    """The simulated driver of the `index`-th generated truck (placeholder name, no real person)."""
+    return f"Pengemudi Sim {_FIRST_GENERATED_DRIVER + index:02d}"
+
+
 _DAMAGE_NOTES = [
     ("breakdown", "Hydraulic compactor leak — held at depot"),
     ("maintenance", "Brake service due — limited duty"),
@@ -155,7 +148,9 @@ def damage_status_for(code: str) -> dict[str, Any]:
     return {"state": "ok", "note": "No open work order", "operational": True}
 
 
-def _generated_truck(code: str, anchor: dict[str, Any], vehicle_type: str, now: float) -> dict[str, Any]:
+def _generated_truck(
+    code: str, anchor: dict[str, Any], vehicle_type: str, now: float, driver: str
+) -> dict[str, Any]:
     seed = _seed(code)
     path = _duty_path(anchor["lat"], anchor["lng"], seed)
     total_km = _path_km(path)
@@ -199,7 +194,7 @@ def _generated_truck(code: str, anchor: dict[str, Any], vehicle_type: str, now: 
     return {
         "truck_code": code,
         "plate_number": f"B {7000 + (seed % 900)} {'ABCDEFGH'[seed % 8]}{'JKLMNOPQ'[(seed // 8) % 8]}",
-        "driver_name": _DRIVER_POOL[seed % len(_DRIVER_POOL)],
+        "driver_name": driver,
         "assigned_zone": anchor["city"],
         "assigned_kelurahan": anchor["kelurahan"],
         "vehicle_type": vehicle_type,
@@ -251,7 +246,7 @@ def get_generated_fleet() -> list[dict[str, Any]]:
             else {"lat": -6.2, "lng": 106.84, "kelurahan": "", "city": "Jakarta"}
         )
         vtype = vehicle_types[i % len(vehicle_types)]
-        trucks.append(_generated_truck(code, anchor, vtype, now))
+        trucks.append(_generated_truck(code, anchor, vtype, now, driver_for(i)))
 
     _gen_cache["payload"] = trucks
     _gen_cache["ts"] = now

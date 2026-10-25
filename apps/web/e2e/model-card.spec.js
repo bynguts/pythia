@@ -2,6 +2,7 @@
 // naive baseline on REAL data, read from the API, and labels synthetic-target resolutions.
 // #w8-audit-320: the audit page holding it never overflows a 320 px phone, even when an
 // imported evidence run carries long unbroken provenance.
+// wave9 settings: that content now lives in Settings → Sumber data & model, collapsed by default.
 import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
@@ -37,7 +38,8 @@ test("model card shows real-data model vs strongest naive and labels synthetic r
   const metrics = await backtest(page);
   expect(metrics.landfill_month).toBeTruthy();
 
-  await page.goto("/audit?lang=en", { waitUntil: "domcontentloaded" });
+  await page.goto("/settings?tab=data&lang=en", { waitUntil: "domcontentloaded" });
+  await page.getByTestId("model-card-disclosure").locator("summary").click();
   const card = page.getByTestId("model-card");
   await expect(card).toBeVisible({ timeout: 15000 });
 
@@ -95,7 +97,9 @@ test("model card is localized and fits a 320 px phone", async ({ page }) => {
     },
   });
   expect(imported.status()).toBe(201);
-  await page.goto("/audit?lang=id", { waitUntil: "domcontentloaded" });
+  await page.goto("/settings?tab=data&lang=id", { waitUntil: "domcontentloaded" });
+  await page.getByTestId("model-card-disclosure").locator("summary").click();
+  await page.getByTestId("source-registry-disclosure").locator("summary").click();
   const card = page.getByTestId("model-card");
   await expect(card).toBeVisible({ timeout: 15000 });
   await expect(card.getByTestId("model-card-landfill_month")).toContainText("Data riil");

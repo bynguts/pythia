@@ -47,16 +47,30 @@ test("forecast workspace shows the backtested monthly intake with each month's h
   await expect(note).toContainText("1–3 months ahead (May 2026–Jul 2026)");
   await expect(strip.getByTestId("monthly-intake-class")).toContainText("MODEL OUTPUT");
 
+  // Teardown v4 P2: consecutive months with the same rounded level and horizon flag
+  // share one row ("data-months"), so three equal numbers never read as a broken chart.
   for (const month of api.months) {
-    const row = strip.getByTestId(`monthly-intake-${month.month}`);
+    const row = strip.locator(`li[data-months~="${month.month}"]`);
     await expect(row).toBeVisible();
+    const grouped = ((await row.getAttribute("data-months")) || "").split(" ");
     const badge = row.getByTestId("monthly-intake-horizon");
     await expect(badge).toHaveAttribute("data-within", String(month.within_backtested_horizon));
-    await expect(badge).toHaveText(
-      month.within_backtested_horizon
-        ? `Inside the backtested horizon (month ${month.horizon_months} ahead)`
-        : `Month ${month.horizon_months} ahead: outside the backtested horizon`,
-    );
+    if (grouped.length > 1) {
+      const first = api.months.find((m) => m.month === grouped[0]).horizon_months;
+      const last = api.months.find((m) => m.month === grouped.at(-1)).horizon_months;
+      await expect(badge).toHaveText(
+        month.within_backtested_horizon
+          ? `${first}–${last} months ahead: inside the backtested horizon`
+          : `${first}–${last} months ahead: outside the backtested horizon`,
+      );
+      await expect(row.locator("strong")).toContainText("≈");
+    } else {
+      await expect(badge).toHaveText(
+        month.within_backtested_horizon
+          ? `Inside the backtested horizon (month ${month.horizon_months} ahead)`
+          : `Month ${month.horizon_months} ahead: outside the backtested horizon`,
+      );
+    }
   }
 });
 

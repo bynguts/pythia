@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
-import { Calendar, Zap } from "lucide-react";
+import { Calendar, Workflow } from "lucide-react";
 
 export function CrowdEventsPanel({ onSimulateEvent }) {
-  const { lang } = useLanguage();
+  const { t } = useLanguage();
   const [events, setEvents] = useState([]);
 
   async function fetchEvents() {
@@ -24,16 +24,8 @@ export function CrowdEventsPanel({ onSimulateEvent }) {
     <section className="panel events-panel">
       <div className="panel-title">
         <div>
-          <h2>
-            {lang === "id"
-              ? "Izin Keramaian & Prediksi Sampah Event"
-              : "Crowd Permit & Waste-Volume Forecast"}
-          </h2>
-          <p>
-            {lang === "id"
-              ? "Menghubungkan data perizinan acara publik dengan alokasi armada DLH."
-              : "Connects public-event permit data with DLH logistics resource planning."}
-          </p>
+          <h2>{t("w10num_ev_title")}</h2>
+          <p>{t("w10num_ev_sub")}</p>
         </div>
         <div className="panel-header-icon-wrap">
           <Calendar size={18} />
@@ -47,39 +39,41 @@ export function CrowdEventsPanel({ onSimulateEvent }) {
               <h3>{ev.name}</h3>
               <span className="permit">{ev.permit_number}</span>
             </div>
-            <p className="location">{ev.location_name}</p>
+            <p className="location">
+              {ev.location_name}
+              {ev.data_class === "SIMULATED" && (
+                <>
+                  {" "}
+                  <span className="pill provenance-sim">{t("honesty_sim_badge")}</span>
+                </>
+              )}
+            </p>
             <div className="event-body">
               <div className="event-metric">
-                <span>{lang === "id" ? "Prediksi Sampah" : "Waste Forecast"}</span>
+                <span>{t("w10num_ev_waste")}</span>
+                <strong>{ev.predicted_waste_tons} t</strong>
+              </div>
+              <div className="event-metric">
+                <span>{t("w10num_ev_crews")}</span>
                 <strong>
-                  {ev.predicted_waste_tons} {lang === "id" ? "ton" : "tons"}
+                  {t("w10num_ev_crews_value")
+                    .replace("{crews}", ev.crews_required)
+                    .replace("{workers}", ev.workers_required)
+                    .replace("{hours}", ev.man_hours_required)}
                 </strong>
               </div>
               <div className="event-metric">
-                <span>{lang === "id" ? "Kru Lapangan" : "Field Crews"}</span>
-                <strong>
-                  {ev.crews_required} {lang === "id" ? "tim" : "teams"} · {ev.workers_required}{" "}
-                  {lang === "id" ? "orang" : "people"} ({ev.man_hours_required}{" "}
-                  {lang === "id" ? "jam-orang" : "person-hours"})
-                </strong>
+                <span>{t("w10num_ev_trucks")}</span>
+                <strong>{t("w10num_ev_trucks_value").replace("{n}", ev.trucks_required)}</strong>
               </div>
               <div className="event-metric">
-                <span>{lang === "id" ? "Armada Cadangan" : "Backup Fleet"}</span>
-                <strong>
-                  {ev.trucks_required} {lang === "id" ? "truk" : "trucks"}
-                </strong>
-              </div>
-              <div className="event-metric">
-                <span>{lang === "id" ? "Tong Sampah Besar" : "Large Bins"}</span>
-                <strong>
-                  {ev.bins_required} {lang === "id" ? "unit" : "units"}
-                </strong>
+                <span>{t("w10num_ev_bins")}</span>
+                <strong>{ev.bins_required}</strong>
               </div>
             </div>
             {onSimulateEvent && (
-              <button className="primary-button event-simulate-button" onClick={() => onSimulateEvent(ev)}>
-                <Zap size={14} />{" "}
-                {lang === "id" ? "Simulasikan Event di Optimizer" : "Simulate event in Optimizer"}
+              <button className="ghost-button event-simulate-button" onClick={() => onSimulateEvent(ev)}>
+                <Workflow size={14} /> {t("w10num_ev_plan")}
               </button>
             )}
           </div>

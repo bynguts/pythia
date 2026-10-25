@@ -3,13 +3,11 @@ import { expect, test } from "@playwright/test";
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
 // #21: the planning review (stage 03 executive summary) must derive from the
-// ACTIVE scenario response — changing simulator inputs must change the
-// review's numbers. The preloaded snapshot is only a fallback before any
-// scenario data exists.
-// NOTE: ExecutiveSummary picks its headline district by the LARGEST ABSOLUTE
-// ton delta (predicted − baseline), not by spike percent — mirror that here.
-// #N2 (teardown v3): it picks among the districts at risk (>= 10% above their
-// normal day: the same request without rain or event) when there are any.
+// ACTIVE outlook — changing the what-if inputs must change the review's numbers.
+// Teardown v4 R2: Rencana opens on today's baseline (/api/baseline/scenario without
+// rain or crowd, kind "baseline"); a manual what-if is opt-in and labelled "Skenario".
+// NOTE: ExecutiveSummary picks its headline kecamatan by the LARGEST ABSOLUTE ton
+// increase over its normal day among those at risk (high/critical) — mirror that here.
 async function signIn(page, lang = "id") {
   await page.goto("/");
   const response = await page.request.post(`${API}/auth/login`, {
@@ -26,8 +24,8 @@ async function signIn(page, lang = "id") {
     { ...principal, lang },
   );
   // Parallel suites register the PWA service worker on this origin; its fetch
-  // handler would serve stale /api/predictions caches to this suite. Unregister
-  // every worker and clear caches so this page talks to the live backend only.
+  // handler would serve stale caches to this suite. Unregister every worker and
+  // clear caches so this page talks to the live backend only.
   await page.evaluate(async () => {
     const regs = await navigator.serviceWorker.getRegistrations();
     await Promise.all(regs.map((r) => r.unregister()));
@@ -37,82 +35,57 @@ async function signIn(page, lang = "id") {
   await page.reload({ waitUntil: "domcontentloaded" });
 }
 
-const RISK_HIGH_RATIO = 1.1; // engine.RISK_HIGH_RATIO
+const AT_RISK = ["high", "critical"]; // engine.spike_risk, AT_RISK_LEVELS
 
-function topDistrictFromScenario(scenario, normal) {
-  const normalTons = Object.fromEntries((normal.kecamatan || []).map((k) => [k.kecamatan, k.predicted_tons]));
-  const all = scenario.kecamatan || [];
-  const atRisk = all.filter(
-    (k) => normalTons[k.kecamatan] > 0 && k.predicted_tons / normalTons[k.kecamatan] >= RISK_HIGH_RATIO,
+function peakKecamatan(outlook) {
+  const atRisk = (outlook.kecamatan || []).filter((k) => AT_RISK.includes(k.risk_level));
+  return atRisk.reduce(
+    (best, k) =>
+      !best || k.predicted_tons - k.normal_tons > best.predicted_tons - best.normal_tons ? k : best,
+    null,
   );
-  const districts = atRisk.length ? atRisk : all;
-  // Same criterion as ExecutiveSummary: largest absolute predicted − baseline
-  // ton delta, so the spec's expectation always matches the review headline.
-  return districts.reduce((best, k) => {
-    const delta = k.predicted_tons - k.baseline_tons_per_day;
-    const bestDelta = best ? best.predicted_tons - best.baseline_tons_per_day : -Infinity;
-    return delta > bestDelta ? k : best;
-  }, null);
 }
 
-test("planning review derives from the active scenario inputs", async ({ page }) => {
+const outlookResponse = (attendance) => (res) =>
+  res.url().includes("/baseline/scenario") &&
+  res.url().includes(`event_attendance=${attendance}&`) &&
+  res.status() === 200;
+
+test("planning review derives from the active outlook", async ({ page }) => {
   await signIn(page);
-  // R7 planning: the plan date defaults to the browser's local day and the
-  // weekday or weekend follows from it (never a fixed is_weekend=true).
-  const { planDate, weekend } = await page.evaluate(() => {
-    const now = new Date();
-    const iso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    return { planDate: iso, weekend: now.getDay() === 0 || now.getDay() === 6 };
-  });
-  const normalResponse = await page.request.get(
-    `${API}/predictions/kecamatan?rainfall_mm=0&event_attendance=0&is_weekend=${weekend}&target_date=${planDate}`,
-  );
-  const normal = await normalResponse.json();
-  // Attach the listener BEFORE opening the workspace: the scenario auto-runs
-  // on mount (useEffect on attendance/rainfall).
-  // Only PlanningDecisionFlow's own request counts — KecamatanMapPanel fetches
-  // the same endpoint with different params (0/0 defaults) in parallel workers.
-  const isDecisionFlowResponse = (res) =>
-    res.url().includes("/predictions/kecamatan") &&
-    res.url().includes("event_attendance=85000") &&
-    res.url().includes("rainfall_mm=42") &&
-    res.status() === 200;
-  const baselinePromise = page.waitForResponse(isDecisionFlowResponse, { timeout: 30000 });
+  // Attach the listener BEFORE opening the workspace: the outlook loads on mount.
+  const baselinePromise = page.waitForResponse(outlookResponse(0), { timeout: 30000 });
   await page.locator(".command-nav").getByRole("button", { name: "Rencana", exact: true }).click();
   await expect(page.getByTestId("planning-workspace")).toBeVisible();
-  const baselineResponse = await baselinePromise;
-  const baseline = await baselineResponse.json();
-  const baselinePeak = topDistrictFromScenario(baseline, normal);
-  expect(baselinePeak).toBeTruthy();
+  const baseline = await (await baselinePromise).json();
+  expect(baseline.kind).toBe("baseline");
+  await expect(page.getByTestId("plan-outlook")).toHaveAttribute("data-kind", "baseline");
 
-  // The review headline must name the ACTIVE scenario's peak district, not
-  // the preloaded snapshot (whose fixed fallback peak is CENGKARENG).
-  const summary = page.locator(".planning-review-grid .planning-summary");
-  await expect(summary).toContainText(baselinePeak.kecamatan, { timeout: 15000 });
+  const headline = page.getByTestId("exec-headline");
+  const baselinePeak = peakKecamatan(baseline);
+  if (baselinePeak) {
+    await expect(headline).toContainText(baselinePeak.kecamatan, { timeout: 15000 });
+  } else {
+    await expect(headline).toHaveText(/Tidak ada wilayah/, { timeout: 15000 });
+  }
 
-  // Change the simulator inputs drastically → scenario auto-reruns → the
-  // review must re-derive from the NEW response.
-  const scenarioPromise = page.waitForResponse(
-    (res) =>
-      res.url().includes("/predictions/kecamatan") &&
-      res.url().includes("event_attendance=200000") &&
-      res.status() === 200,
-    { timeout: 30000 },
-  );
-  await page
-    .locator('input[type="range"]')
-    .first()
-    .evaluate((el) => {
-      // Programmatic value change fires React's onChange via the native setter.
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-      setter.call(el, "200000");
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-  const scenarioResponse = await scenarioPromise;
-  const scenario = await scenarioResponse.json();
-  const scenarioPeak = topDistrictFromScenario(scenario, normal);
+  // Open the opt-in what-if and set a large crowd → the outlook reruns as a scenario
+  // and the review must re-derive from the NEW response.
+  const scenarioPromise = page.waitForResponse(outlookResponse(200000), { timeout: 30000 });
+  await page.getByTestId("manual-whatif").locator("summary").click();
+  await page.getByTestId("scenario-attendance").evaluate((el) => {
+    // Programmatic value change fires React's onChange via the native setter.
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+    setter.call(el, "200000");
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const scenario = await (await scenarioPromise).json();
+  expect(scenario.kind).toBe("scenario");
+  const scenarioPeak = peakKecamatan(scenario);
   expect(scenarioPeak).toBeTruthy();
 
-  await expect(summary).toContainText(scenarioPeak.kecamatan, { timeout: 15000 });
+  await expect(page.getByTestId("plan-scenario-badge")).toBeVisible();
+  await expect(headline).toContainText(scenarioPeak.kecamatan, { timeout: 15000 });
+  await expect(page.locator(".planning-summary .exec-scenario-note")).toContainText("Skenario");
 });

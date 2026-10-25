@@ -1,20 +1,20 @@
 import { CheckCircle2, CircleDot, Workflow } from "lucide-react";
 import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
-import { useLanguage } from "../../shared/i18n/index.jsx";
+import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 
 export function IntegratedPlanning({ summary, scenario, evidence, unmetCount, planStatus }) {
-  const { lang } = useLanguage();
+  const { t, lang } = useLanguage();
   const stages = [
     {
       number: "01",
-      title: lang === "id" ? "Tetapkan skenario" : "Set scenario",
-      description: lang === "id" ? "Uji permintaan dan cuaca" : "Test demand and weather",
+      title: t("w10num_stage1_title"),
+      description: t("w10num_stage1_sub"),
       key: "inputs",
     },
     {
       number: "02",
-      title: lang === "id" ? "Susun alokasi" : "Build allocation",
-      description: lang === "id" ? "Optimalkan armada dan kru" : "Optimize fleet and crew",
+      title: t("w10num_stage2_title"),
+      description: t("w10num_stage2_sub"),
       key: "recommendation",
     },
   ];
@@ -24,49 +24,36 @@ export function IntegratedPlanning({ summary, scenario, evidence, unmetCount, pl
       <header className="workspace-heading">
         <div>
           <span className="workspace-kicker">
-            <Workflow size={14} /> {lang === "id" ? "Ruang keputusan" : "Decision workspace"}
+            <Workflow size={14} /> {t("w10num_plan_kicker")}
           </span>
-          <h1>{lang === "id" ? "Rencana operasi terpadu" : "Integrated operations plan"}</h1>
-          <p>
-            {lang === "id"
-              ? "Ubah prediksi menjadi alokasi armada yang dapat ditinjau, disetujui, dan dijalankan."
-              : "Turn forecasts into fleet allocations that can be reviewed, approved, and dispatched."}
-          </p>
+          <h1>{t("w10num_plan_title")}</h1>
+          <p>{t("w10num_plan_sub")}</p>
         </div>
         <div className="planning-status">
           {unmetCount > 0 ? (
             <StatusBadge tone="danger">
-              {lang === "id"
-                ? `${unmetCount.toLocaleString("id-ID")} kendala belum terpenuhi`
-                : `${unmetCount.toLocaleString("en-US")} unresolved constraints`}
+              {t("w10num_unmet_count").replace("{n}", unmetCount.toLocaleString(localeFor(lang)))}
             </StatusBadge>
           ) : (
             <StatusBadge tone="success">
-              {planStatus === "approved"
-                ? lang === "id"
-                  ? "Disetujui"
-                  : "Approved"
-                : planStatus === "proposed"
-                  ? lang === "id"
-                    ? "Siap ditinjau"
-                    : "Ready for review"
-                  : lang === "id"
-                    ? "Siap disusun"
-                    : "Ready to plan"}
+              {t(
+                planStatus === "approved"
+                  ? "w10num_status_badge_approved"
+                  : planStatus === "proposed"
+                    ? "w10num_status_badge_review"
+                    : "w10num_status_badge_ready",
+              )}
             </StatusBadge>
           )}
         </div>
       </header>
 
-      <ol
-        className="planning-progress"
-        aria-label={lang === "id" ? "Tahapan perencanaan" : "Planning stages"}
-      >
+      <ol className="planning-progress" aria-label={t("w10num_stages_label")}>
         <li className="active">
           <CircleDot size={17} />
           <span>
             <b>01</b>
-            {lang === "id" ? "Skenario" : "Scenario"}
+            {t("w10num_step_forecast")}
           </span>
         </li>
         <li>
@@ -74,7 +61,7 @@ export function IntegratedPlanning({ summary, scenario, evidence, unmetCount, pl
           <CircleDot size={17} />
           <span>
             <b>02</b>
-            {lang === "id" ? "Alokasi" : "Allocation"}
+            {t("w10num_step_allocation")}
           </span>
         </li>
         <li>
@@ -82,7 +69,7 @@ export function IntegratedPlanning({ summary, scenario, evidence, unmetCount, pl
           <CheckCircle2 size={17} />
           <span>
             <b>03</b>
-            {lang === "id" ? "Persetujuan" : "Approval"}
+            {t("w10num_step_approval")}
           </span>
         </li>
       </ol>
@@ -109,15 +96,12 @@ export function IntegratedPlanning({ summary, scenario, evidence, unmetCount, pl
           <header className="planning-stage-heading">
             <span>03</span>
             <div>
-              <h2 id="planning-stage-03">{lang === "id" ? "Tinjau & setujui" : "Review & approve"}</h2>
-              <p>
-                {lang === "id"
-                  ? "Pastikan kapasitas, antrean TPA, dan kewenangan keputusan."
-                  : "Check capacity, TPA queues, and decision authority."}
-              </p>
+              <h2 id="planning-stage-03">{t("w10num_stage3_title")}</h2>
+              <p>{t("w10num_stage3_sub")}</p>
             </div>
           </header>
-          <div className="planning-review-grid">
+          {/* Teardown v4 R3: two columns only once a plan gives the approval column content. */}
+          <div className={`planning-review-grid${planStatus ? "" : " is-single"}`}>
             <div className="planning-summary">{summary}</div>
             <div className="planning-approval">{evidence}</div>
           </div>

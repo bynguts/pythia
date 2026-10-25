@@ -70,7 +70,7 @@ export function PermitSubmissionPanel({ onPermitSubmitted }) {
           <h2>{lang === "id" ? "Pengajuan Izin Acara Keramaian" : "Event Permit Intake"}</h2>
           <p>
             {lang === "id"
-              ? "Ajukan izin acara publik — sistem langsung mengestimasi volume sampah, kebutuhan armada, dan distrik terdampak."
+              ? "Ajukan izin acara publik — sistem langsung mengestimasi volume sampah, kebutuhan armada, dan kecamatan terdampak."
               : "Submit an event permit — the system estimates waste generation, resources, and affected districts instantly."}
           </p>
         </div>

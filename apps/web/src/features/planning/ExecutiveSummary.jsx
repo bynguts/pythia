@@ -4,7 +4,11 @@ import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { AT_RISK_LEVELS, signedPercent } from "../../shared/hooks/useSnapshot.js";
 import { ShieldCheck } from "lucide-react";
 
-export function ExecutiveSummary({ snapshot, queue }) {
+// Teardown v4 R1: the summary reads the same outlook as the rest of Rencana
+// (/api/baseline/today or its what-if). Its extra-truck figure is the tonnage above
+// the normal day in the at-risk kecamatan, and the backend clamps it to the pilot
+// fleet's reserve: what cannot be fielded is stated as a shortfall, never "+300 trucks".
+export function ExecutiveSummary({ outlook, snapshot, queue }) {
   const { lang, t } = useLanguage();
   const locale = localeFor(lang);
   const number = (value) => Number(value ?? 0).toLocaleString(locale, { maximumFractionDigits: 1 });
@@ -27,23 +31,16 @@ export function ExecutiveSummary({ snapshot, queue }) {
     };
   }, []);
 
-  // Summary prose supplied by the snapshot is English-only. Compose both languages
-  // from its typed evidence so a locale change never reparses or mistranslates prose.
-  // The offline sample (useSnapshot `is_sample`) is never summarised as a forecast.
-  const predictions = (!snapshot?.is_sample && snapshot?.predictions) || [];
-  // Teardown v3 N2: the headline district is the largest increase among the days
-  // really at risk (high or critical vs the normal day, engine.spike_risk), if any.
-  const atRisk = predictions.filter((item) => AT_RISK_LEVELS.includes(item.risk_level));
-  const peak = (atRisk.length ? atRisk : predictions).reduce(
-    (best, item) =>
-      !best || item.predicted_tons - item.baseline_tons > best.predicted_tons - best.baseline_tons
-        ? item
-        : best,
+  const rows = outlook?.kecamatan || [];
+  // Teardown v3 N2: the headline kecamatan is the largest increase among those really
+  // at risk (high or critical vs the normal day, engine.spike_risk), if any.
+  const atRisk = rows.filter((row) => AT_RISK_LEVELS.includes(row.risk_level));
+  const peak = atRisk.reduce(
+    (best, row) =>
+      !best || row.predicted_tons - row.normal_tons > best.predicted_tons - best.normal_tons ? row : best,
     null,
   );
-  const sameDay = peak ? predictions.filter((item) => item.date === peak.date) : [];
-  const extraTrucks = sameDay.reduce((sum, item) => sum + (item.recommended_extra_trucks || 0), 0);
-  const extraCrews = sameDay.reduce((sum, item) => sum + (item.recommended_extra_crews || 0), 0);
+  const rec = outlook?.recommendation;
   const deviation = snapshot?.alerts?.find(
     (alert) => alert.type === "route_deviation" && alert.status === "active",
   );
@@ -58,19 +55,33 @@ export function ExecutiveSummary({ snapshot, queue }) {
   const queueDelayed = hasQueue && Number(wait) >= 45;
   // The "before" arm is the assumed current practice (departure SD), as in the PDF.
   const baselineSd = Number(impact?.minutes_per_truck?.baseline_departure_sd_minutes);
-  const headline = atRisk.length
-    ? fill("exec_headline_peak", { district: peak.district })
-    : t(peak ? "ufx_exec_headline_not_elevated" : "exec_headline_none");
+  const headline = !outlook
+    ? t("exec_headline_none")
+    : peak
+      ? fill("exec_headline_peak", { district: peak.kecamatan })
+      : t("ufx_exec_headline_not_elevated");
   const points = [];
-  if (peak) {
+  if (peak && rec) {
     points.push(
-      fill("exec_point_peak", {
+      fill("w10num_exec_point_peak", {
         pct: signedPercent(peak.spike_percent),
-        district: peak.district,
-        trucks: number(extraTrucks),
-        crews: number(extraCrews),
+        district: peak.kecamatan,
+        n: atRisk.length,
       }),
     );
+    points.push(
+      rec.shortfall_trucks > 0
+        ? fill("w10num_exec_point_shortfall", {
+            reserve: number(rec.fleet_reserve),
+            short: number(rec.shortfall_trucks),
+          })
+        : fill("w10num_exec_point_covered", {
+            deploy: number(rec.deployable_trucks),
+            reserve: number(rec.fleet_reserve),
+          }),
+    );
+  } else if (outlook) {
+    points.push(t("w10num_exec_point_normal"));
   }
   if (deviation) {
     points.push(
@@ -95,6 +106,12 @@ export function ExecutiveSummary({ snapshot, queue }) {
         </div>
       </div>
       <h3 data-testid="exec-headline">{headline}</h3>
+      {outlook?.kind === "scenario" && (
+        <p className="exec-scenario-note">
+          <span className="scenario-badge">{t("w10num_scenario_badge")}</span>{" "}
+          {t("w10num_exec_scenario_note")}
+        </p>
+      )}
       {points.length > 0 && (
         <ul>
           {points.map((point) => (
