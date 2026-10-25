@@ -8,9 +8,10 @@ import time
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from app.api.deps import require_permission
 from app.api.schemas import HybridPredictRequest
 from app.api.state import _kecamatan_cache
 from app.core.env import today
@@ -18,7 +19,7 @@ from app.core.paths import RAW_DIR
 from app.core.units import UNIT_GLOSSARY
 from app.fleet.data import build_predictions
 from app.forecast.baseline import MAX_DAYS as MAX_BASELINE_DAYS
-from app.forecast.baseline import build_outlook
+from app.forecast.baseline import build_outlook, tomorrow_forecast
 from app.forecast.engine import (
     forecast_monthly_intake,
     forecast_waste_risk,
@@ -193,6 +194,21 @@ def baseline_today(days: int = Query(7, ge=2, le=MAX_BASELINE_DAYS)) -> dict[str
     twin, the forecast page and the planning page print identical figures.
     """
     return build_outlook(days=days)
+
+
+@router.get("/api/forecast/tomorrow")
+def forecast_tomorrow(
+    target_date: date | None = Query(None, alias="date"),
+    _role: str = Depends(require_permission("dashboard:read")),
+) -> dict[str, Any]:
+    """Tomorrow's forecast with its drivers (weather, events, holiday) filled and explained automatically.
+
+    `date` must fall inside the forecast week; the response includes submitted permits.
+    """
+    try:
+        return tomorrow_forecast(target_date.isoformat() if target_date else None)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/api/baseline/scenario")

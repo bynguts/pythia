@@ -11,11 +11,15 @@ same function and comes back labelled `kind: "scenario"`.
 
 from __future__ import annotations
 
+import json
+import re
 import time
 from datetime import date, timedelta
+from functools import lru_cache
 from typing import Any
 
 from app.core.env import today
+from app.core.paths import REAL_DIR
 from app.core.units import (
     CREW_SIZE_WORKERS,
     TRUCK_CAPACITY_TONS,
@@ -24,9 +28,10 @@ from app.core.units import (
     resource_requirements,
     workers_for_crews,
 )
+from app.field.permits import PERMIT_STORE
 from app.forecast.cities import VENUES, get_venue
 from app.forecast.engine import AT_RISK_LEVELS, NORMAL_DAY_BASIS, rolling_rain_3d
-from app.forecast.real_data import load_city_timbulan
+from app.forecast.real_data import load_city_timbulan, load_official_events
 from app.forecast.twin import _with_risk, event_attendance_by_district, jakarta_week
 from app.forecast.weather import fetch_jakarta_weather_forecast, real_forecast_by_date
 
@@ -313,3 +318,148 @@ def build_outlook(
         _cache.clear()
     _cache[key] = (time.time(), payload)
     return payload
+
+
+_ID_MONTHS = {
+    name: number
+    for number, name in enumerate(
+        "januari februari maret april mei juni juli agustus september oktober november desember".split(), 1
+    )
+}
+
+
+def _parse_event_date(raw: str) -> str | None:
+    """ISO date of a scraped event's `tanggal` ("Minggu, 12 Juli 2026" or "2026-6-11"), else None."""
+    text = raw.strip().lower()
+    named = re.search(r"(\d{1,2})\s+([a-z]+)\s+(\d{4})", text)
+    numeric = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", text)
+    if named and named.group(2) in _ID_MONTHS:
+        year, month, day = int(named.group(3)), _ID_MONTHS[named.group(2)], int(named.group(1))
+    elif numeric:
+        year, month, day = (int(g) for g in numeric.groups())
+    else:
+        return None
+    try:
+        return date(year, month, day).isoformat()
+    except ValueError:
+        return None
+
+
+@lru_cache(maxsize=1)
+def _holiday_names() -> dict[str, str]:
+    """ISO date -> name of the 2026 national holidays (api-hari-libur), the engine's own holiday set."""
+    path = REAL_DIR / "hari_libur_indonesia_2026.json"
+    try:
+        rows = json.loads(path.read_text(encoding="utf-8")).get("data", [])
+    except (OSError, ValueError):
+        return {}
+    return {str(r["date"]): str(r.get("description") or "") for r in rows if r.get("date")}
+
+
+def tomorrow_forecast(target_date: str | None = None) -> dict[str, Any]:
+    """One forecast day (default tomorrow) with the inputs the operator never types, explained.
+
+    Weather, official events, submitted permits and holidays are filled in
+    automatically and listed as `drivers`. `total_tonnage_t` stays the no-event
+    baseline; known event deltas are added only in `with_events_total_t`.
+    """
+    iso = target_date or (today() + timedelta(days=1)).isoformat()
+    base = build_outlook(target_date=iso)
+    weather = base["weather"]
+    drivers: list[dict[str, Any]] = [
+        {
+            "kind": "weather",
+            "detail": {"rainfall_mm": weather["rainfall_mm"]},
+            "effect_tons": round(base["total_tonnage_t"] - base["normal_day_tonnage_t"], 1),
+            "effect_classification": "MODEL_OUTPUT",
+            "source": weather["source"],
+            "input_classification": weather["class"],
+        }
+    ]
+
+    events = [
+        {
+            "name": e["name"],
+            "attendance": e["expected_attendance"],
+            "lat": None,
+            "lng": None,
+            "location": e["location"],
+            "data_class": "official",
+            "source": "official calendar",
+        }
+        for e in load_official_events()
+        if _parse_event_date(e["date_raw"]) == iso
+    ] + [
+        {
+            "name": p.get("name"),
+            "attendance": p.get("expected_attendance"),
+            "lat": p.get("lat"),
+            "lng": p.get("lng"),
+            "location": p.get("location_name"),
+            "data_class": "USER_SUBMITTED",
+            "source": "permit intake",
+        }
+        for p in PERMIT_STORE.list()
+        if p.get("event_date") == iso
+    ]
+    events_total = 0.0
+    for event in events:
+        attendance = int(event["attendance"] or 0)
+        effect: float | None = None
+        kecamatan: list[str] = []
+        if attendance > 0:
+            lat, lng = event["lat"], event["lng"]
+            if lat is None or lng is None:
+                lat, lng = VENUES["jakarta"][0].lat, VENUES["jakarta"][0].lng
+            with_event = build_outlook(
+                days=len(base["horizon"]["dates"]),
+                target_date=iso,
+                event_attendance=attendance,
+                event_lat=lat,
+                event_lng=lng,
+            )
+            effect = round(with_event["total_tonnage_t"] - base["total_tonnage_t"], 1)
+            events_total += effect
+            kecamatan = (with_event["event"] or {}).get("kecamatan", [])
+        drivers.append(
+            {
+                "kind": "event",
+                "detail": {
+                    "name": event["name"],
+                    "attendance": attendance or None,
+                    "kecamatan": kecamatan,
+                    "location": event["location"],
+                    "data_class": event["data_class"],
+                },
+                "effect_tons": effect,
+                "effect_classification": "MODEL_OUTPUT",
+                "source": event["source"],
+            }
+        )
+
+    holiday = _holiday_names().get(iso)
+    if holiday:
+        drivers.append(
+            {
+                "kind": "holiday",
+                "detail": {"name": holiday},
+                "effect_tons": None,
+                "effect_classification": "MODEL_OUTPUT",
+                "source": "api-hari-libur 2026",
+            }
+        )
+    drivers.append(
+        {
+            "kind": "weekday",
+            "detail": {"weekend": date.fromisoformat(iso).weekday() >= 5},
+            "effect_tons": None,
+            "effect_classification": "MODEL_OUTPUT",
+        }
+    )
+    return {
+        **base,
+        "drivers": drivers,
+        "with_events_total_t": round(base["total_tonnage_t"] + events_total, 1),
+        "inputs_auto": True,
+        "forecast_classification": "MODEL_OUTPUT",
+    }
