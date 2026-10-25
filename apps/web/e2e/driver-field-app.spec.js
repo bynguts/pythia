@@ -218,12 +218,18 @@ test("the TPA guide walks gate, weighbridge and zone with labelled modelled valu
   );
   await openDriver(page, token);
 
+  // wave11 driver: every stop is done, so the app opens on its TPA tab; the route
+  // overview now lives on the Rute tab, one task per screen.
+  await expect(page.getByTestId("driver-tab-tpa")).toHaveAttribute("aria-current", "page");
+  await page.getByTestId("driver-tab-rute").click();
+
   // L4: today's route in order before the per-stop cards.
   await expect(page.getByTestId("driver-route-overview")).toBeVisible();
   await expect(page.getByTestId("driver-route-progress")).toHaveText("2 dari 2 titik");
   await expect(page.getByTestId("driver-route-sketch")).toBeVisible();
   await expect(page.getByTestId("driver-route-overview")).toContainText("bukan peta jalan");
 
+  await page.getByTestId("driver-tab-tpa").click();
   const guide = page.getByTestId("tpa-guide");
   await expect(guide).toBeVisible({ timeout: 15000 });
   await expect(guide.getByTestId("tpa-guide-sim")).toHaveText("SIMULASI");
@@ -257,7 +263,7 @@ for (const width of [320, 390]) {
     await expectTargets(page, ".driver-pick", 44);
     await page.getByTestId(`pick-${TRUCK}`).click();
 
-    for (const tab of ["rute", "instruksi", "lapor"]) {
+    for (const tab of ["rute", "instruksi", "tpa", "lapor"]) {
       await page.getByTestId(`driver-tab-${tab}`).click();
       await expect(page.getByTestId(`driver-tab-${tab}`)).toHaveAttribute("aria-current", "page");
       await expectNoOverflow(page);

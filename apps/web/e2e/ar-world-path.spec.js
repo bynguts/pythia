@@ -427,6 +427,10 @@ async function stubBackend(
     route.fulfill({ json: { spj: [], count: 0 } }),
   );
   await page.route(/\/api\/pretrip\/today\//, (route) => route.fulfill({ json: { done: true } }));
+  // The duty banner is not under test here. Unstubbed, an empty server answers with the
+  // seeded SIMULATED scenario, which puts T-247 past the 12 h cap on some days and
+  // holds the stop start (driver-safety-banner covers that).
+  await page.route(/\/api\/safety\/driver\//, (route) => route.fulfill({ status: 404, json: {} }));
   await page.route(/\/api\/spj\/active-path\//, (route) =>
     route.fulfill({
       json: {

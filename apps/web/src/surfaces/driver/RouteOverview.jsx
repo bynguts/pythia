@@ -1,4 +1,4 @@
-import { CheckCircle2, Flag, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 
 const W = 320;
@@ -37,9 +37,10 @@ export function sketchPoints(points) {
   );
 }
 
-// L4: today's route at a glance, in order, before the per-stop cards. The
-// turn-by-turn stays in the maps app; this answers "where next, how many left".
-export function RouteOverview({ spj, destination }) {
+// L4: today's route at a glance: progress, the order sketch, then `children`
+// (the stop rows and the destination row). The turn-by-turn stays in the maps
+// app; this answers "where next, how many left".
+export function RouteOverview({ spj, destination, children }) {
   const { t } = useLanguage();
   const stops = spj?.stops || [];
   if (stops.length === 0) return null;
@@ -51,9 +52,9 @@ export function RouteOverview({ spj, destination }) {
     <section className="driver-card driver-route" data-testid="driver-route-overview">
       <div className="driver-card-head">
         <h2>
-          <MapPin size={18} /> {t("drv10_route_title")}
+          <MapPin size={20} aria-hidden="true" /> {t("drv10_route_title")}
         </h2>
-        <span className="driver-badge" data-testid="driver-route-progress">
+        <span className="driver-badge driver-count" data-testid="driver-route-progress">
           {t("drv10_route_progress").replace("{done}", done).replace("{total}", stops.length)}
         </span>
       </div>
@@ -97,31 +98,7 @@ export function RouteOverview({ spj, destination }) {
           <figcaption className="driver-muted">{t("drv10_route_sketch_label")}</figcaption>
         </figure>
       )}
-      <ol className="driver-route-list">
-        {stops.map((stop, i) => {
-          const state = stop.status === "completed" ? "done" : i === nextIndex ? "next" : "todo";
-          return (
-            <li key={`${stop.name}-${i}`} className={state} data-testid={`driver-route-stop-${i}`}>
-              <span className="driver-route-num" aria-hidden="true">
-                {state === "done" ? <CheckCircle2 size={16} /> : i + 1}
-              </span>
-              <span>
-                <strong>{stop.name}</strong>
-                {state === "next" && <small>{t("drv10_route_next")}</small>}
-              </span>
-            </li>
-          );
-        })}
-        <li className="dest">
-          <span className="driver-route-num" aria-hidden="true">
-            <Flag size={16} />
-          </span>
-          <span>
-            <strong>{spj.destination}</strong>
-            <small>{t("drv10_route_dest")}</small>
-          </span>
-        </li>
-      </ol>
+      {children}
     </section>
   );
 }

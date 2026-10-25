@@ -1,17 +1,45 @@
 import { useState } from "react";
-import {
-  ArrowRight,
-  CheckCircle2,
-  Eye,
-  EyeOff,
-  LockKeyhole,
-  Radio,
-  Route,
-  Truck,
-  UserRound,
-} from "lucide-react";
+import { ArrowRight, CheckCircle2, Eye, EyeOff, LockKeyhole, Radio, Truck, UserRound } from "lucide-react";
 import { apiFetch, FIELD_ROLE_KEY, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import "./login.css";
+
+// The Pythia mark (same drawing as the command-centre top bar).
+function BrandMark({ size = 18 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" aria-hidden="true">
+      <path d="M20 12a8 8 0 1 1-3.1-6.33" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      <circle cx="12" cy="12" r="3.2" fill="currentColor" />
+    </svg>
+  );
+}
+
+// A drawn route network behind the story: a street grid, two quiet routes and
+// one planned route that draws itself in. Decoration only; no data.
+function RouteArt() {
+  return (
+    <svg className="login-story-art" viewBox="0 0 600 600" aria-hidden="true" focusable="false">
+      <path
+        className="grid"
+        d="M0 100H600M0 220H600M0 340H600M0 460H600M100 0V600M220 0V600M340 0V600M460 0V600"
+      />
+      <path className="street" d="M0 280H160Q180 280 180 260V80Q180 60 200 60H420" />
+      <path className="street" d="M120 600V480Q120 460 140 460H400Q420 460 420 440V260Q420 240 440 240H600" />
+      <path
+        className="planned"
+        pathLength="1"
+        d="M40 560V400Q40 380 60 380H260Q280 380 280 360V180Q280 160 300 160H540"
+      />
+      <circle className="depot-ring" cx="540" cy="160" r="24" />
+      <circle className="depot" cx="540" cy="160" r="9" />
+      <circle className="stop done" cx="40" cy="400" r="7" />
+      <circle className="stop done" cx="280" cy="380" r="7" />
+      <circle className="stop" cx="280" cy="220" r="7" />
+      <circle className="stop" cx="420" cy="460" r="6" />
+      <circle className="stop" cx="180" cy="120" r="6" />
+    </svg>
+  );
+}
 
 // `initialUsername` / `notice` let a surface gate (RoleGate) pre-fill the role
 // it needs and say why sign-in is required. `fieldSession` stores the token
@@ -74,11 +102,12 @@ export function LoginPage({
       <section className={`login-surface${driver ? " is-driver" : ""}`} aria-labelledby="login-title">
         {!driver && (
           <aside className="login-story">
+            <RouteArt />
             <div className="login-story-brand">
-              <span>P</span>
-              <div>
-                <strong>Pythia</strong>
-              </div>
+              <span>
+                <BrandMark />
+              </span>
+              <strong>Pythia</strong>
             </div>
             <div className="login-story-copy">
               <span className="login-story-kicker">
@@ -127,11 +156,10 @@ export function LoginPage({
             </button>
           </div>
           <div className="login-mobile-brand">
-            <span>{driver ? <Truck size={20} /> : <Route size={20} />}</span>
+            <span>{driver ? <Truck size={20} /> : <BrandMark size={20} />}</span>
             <strong>Pythia</strong>
           </div>
           <header>
-            <span className="login-eyebrow">{t(driver ? "drv10_login_eyebrow" : "login_eyebrow")}</span>
             <h2 id="login-title">{t(driver ? "drv10_login_title" : "login_card_title")}</h2>
             <p>{t(driver ? "drv10_login_sub" : "login_card_sub")}</p>
             {notice && (
@@ -186,9 +214,9 @@ export function LoginPage({
                 {error}
               </p>
             )}
-            <button className="primary-button login-submit" type="submit" disabled={submitting}>
+            <button className="login-submit" type="submit" disabled={submitting}>
               {submitting ? t("login_submitting") : t("login_submit")}
-              <ArrowRight size={18} />
+              <ArrowRight size={18} aria-hidden="true" />
             </button>
           </form>
           <p className="login-help">{t("login_help")}</p>

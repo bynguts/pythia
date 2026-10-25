@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Truck,
   User,
+  Warehouse,
   WifiOff,
   ExternalLink,
   Flag,
@@ -169,20 +170,23 @@ function GeotagLabel({ fix }) {
   );
 }
 
-function MapsLink({ target, name, testId }) {
+// `compact`: an icon-only round button for the route list rows; the accessible
+// name is the same full sentence.
+function MapsLink({ target, name, testId, compact = false }) {
   const { t } = useLanguage();
   const href = mapsDirectionsUrl(target);
   if (!href) return null;
   return (
     <a
-      className="driver-btn ghost driver-maps-link"
+      className={`driver-btn ghost driver-maps-link${compact ? " is-icon" : ""}`}
       data-testid={testId}
       href={href}
       target="_blank"
       rel="noopener noreferrer"
       aria-label={t("drv6_maps_open_aria").replace("{name}", name)}
     >
-      <ExternalLink size={18} /> {t("drv6_maps_open")}
+      <ExternalLink size={compact ? 20 : 18} aria-hidden="true" />
+      {!compact && t("drv6_maps_open")}
     </a>
   );
 }
@@ -341,16 +345,15 @@ function PreTripForm({ driver, done, onDone, say }) {
     );
   }
 
+  // Done: one quiet row, so the current stop is the task on screen.
   if (done) {
     return (
-      <section className="driver-card" data-testid="pretrip-done">
-        <div className="driver-card-head">
-          <h2>
-            <ClipboardCheck size={18} /> {t("drv_pretrip_title")}
-          </h2>
-          <span className="driver-badge done">{t("drv_pretrip_done_badge")}</span>
-        </div>
-        <p className="driver-muted">{t("drv_pretrip_done_desc")}</p>
+      <section className="driver-card driver-check-row" data-testid="pretrip-done">
+        <span className="driver-check-icon" aria-hidden="true">
+          <ClipboardCheck size={20} />
+        </span>
+        <h2 title={t("drv_pretrip_done_desc")}>{t("drv_pretrip_title")}</h2>
+        <span className="driver-badge done">{t("drv_pretrip_done_badge")}</span>
       </section>
     );
   }
@@ -359,9 +362,9 @@ function PreTripForm({ driver, done, onDone, say }) {
     <section className="driver-card" data-testid="pretrip-form">
       <div className="driver-card-head">
         <h2>
-          <ClipboardCheck size={18} /> {t("drv_pretrip_title")}
+          <ClipboardCheck size={20} aria-hidden="true" /> {t("drv_pretrip_title")}
         </h2>
-        <span className="driver-badge">
+        <span className="driver-badge driver-count">
           {answered}/{PRETRIP_ITEMS.length}
         </span>
       </div>
@@ -624,68 +627,92 @@ function StopCard({ spj, stop, index, current, locked, blocked, arEnabled, onCom
   const canSubmit =
     arrival && (!needsWeighing || weighing.length > 0) && officerPhoto && officerName.trim().length > 0;
 
-  return (
-    <article
-      className={`driver-card stop-card ${completed ? "completed" : ""} ${locked ? "locked" : ""}`}
-      data-testid={`stop-${index}`}
-    >
-      <div className="driver-card-head">
-        <h2>
-          <MapPin size={18} />{" "}
-          {t("drv_stop_title")
-            .replace("{n}", index + 1)
-            .replace("{name}", stop.name)}
-        </h2>
-        {completed && (
+  // The heading's accessible name stays "Titik n: name"; the number is drawn
+  // apart (row badge, hero count) so the name reads large on its own.
+  const title = (
+    <>
+      <span className="sr-only">{t("drv11_stop_prefix").replace("{n}", index + 1)} </span>
+      {stop.name}
+    </>
+  );
+
+  // Every stop that is not the one being worked on is a flat row of the route list.
+  if (!current || completed) {
+    return (
+      <li
+        className={`stop-row${completed ? " is-done" : ""}${locked && !completed ? " is-locked" : ""}`}
+        data-testid={`stop-${index}`}
+      >
+        <span className="stop-row-num" aria-hidden="true">
+          {completed ? <Check size={18} strokeWidth={2.5} /> : index + 1}
+        </span>
+        <div className="stop-row-body">
+          <h3>{title}</h3>
+          <p className="stop-row-meta">
+            {stop.kecamatan} — {stop.address}
+          </p>
+          {completed && stop.queued && (
+            <p className="stop-row-note" data-testid="stop-queued-note">
+              {t("drv6_stop_queued")}
+            </p>
+          )}
+        </div>
+        {completed ? (
           <span className={`driver-badge ${stop.queued ? "queued" : "done"}`}>
             {stop.queued ? t("drv6_stop_queued_badge") : t("drv_stop_selesai")}
           </span>
+        ) : (
+          <MapsLink target={stop} name={stop.name} testId={`stop-maps-${index}`} compact />
         )}
-      </div>
-      <p className="driver-muted">
-        {stop.kecamatan} — {stop.address}
-      </p>
+      </li>
+    );
+  }
 
-      {completed && (
-        <ul className="step-list">
-          {stepLabels.map((label) => (
-            <li key={label} className="step done">
-              <CheckCircle2 size={15} /> {label}
-            </li>
-          ))}
-        </ul>
-      )}
-      {completed && stop.queued && (
-        <p className="driver-muted" data-testid="stop-queued-note">
-          {t("drv6_stop_queued")}
-        </p>
-      )}
-
-      {locked && !completed && <p className="driver-muted">{t("drv_stop_locked")}</p>}
-
-      {!completed && (
-        <div className="driver-actions">
-          <MapsLink target={stop} name={stop.name} testId={`stop-maps-${index}`} />
+  const total = spj.stops?.length || index + 1;
+  return (
+    <article className="driver-card stop-hero" data-testid={`stop-${index}`}>
+      <div className="stop-hero-head">
+        <div className="stop-hero-title">
+          <p className="driver-mono-label">{t("drv11_next_stop")}</p>
+          <h2>{title}</h2>
+          <p className="stop-hero-meta">
+            {stop.kecamatan} — {stop.address}
+          </p>
         </div>
-      )}
+        <p
+          className="stop-hero-count"
+          aria-label={t("drv11_stop_of")
+            .replace("{n}", index + 1)
+            .replace("{total}", total)}
+        >
+          <strong>{index + 1}</strong>
+          <span aria-hidden="true">/{total}</span>
+        </p>
+      </div>
 
-      {current && !completed && !open && blocked && (
+      {!open && blocked && (
         <p className="driver-held" data-testid="stop-held">
           {t("drv6_safety_held")}
         </p>
       )}
 
-      {current && !completed && !open && (
+      {!open && (
         <div className="driver-actions">
           <button
             type="button"
-            className="driver-btn primary"
+            className="driver-btn primary driver-btn-hero"
             data-testid="stop-start"
             disabled={blocked}
             onClick={() => setOpen(true)}
           >
-            <Camera size={18} /> {t("drv_stop_start")}
+            <Camera size={22} aria-hidden="true" /> {t("drv_stop_start")}
           </button>
+          <MapsLink target={stop} name={stop.name} testId={`stop-maps-${index}`} />
+        </div>
+      )}
+      {open && (
+        <div className="driver-actions">
+          <MapsLink target={stop} name={stop.name} testId={`stop-maps-${index}`} />
         </div>
       )}
 
@@ -703,7 +730,7 @@ function StopCard({ spj, stop, index, current, locked, blocked, arEnabled, onCom
         </Suspense>
       )}
 
-      {current && !completed && open && (
+      {open && (
         <div className="stop-form">
           <ol className="step-list">
             {stepLabels.map((label, i) => (
@@ -1057,13 +1084,7 @@ function DeliveryCard({ spj, say, onDone }) {
   const cameraDisabled = busy || !weights.ok;
 
   return (
-    <section className="driver-card" data-testid="delivery-card" data-spj-id={spj.spj_id}>
-      <div className="driver-card-head">
-        <h2>
-          <PackageCheck size={18} /> {t("drv_receipt_title")}
-        </h2>
-      </div>
-      <p className="driver-muted">{t("drv_receipt_intro").replace("{destination}", spj.destination)}</p>
+    <section className="driver-card driver-delivery" data-testid="delivery-card" data-spj-id={spj.spj_id}>
       <TpaGuide
         spj={spj}
         gateAt={gateAt}
@@ -1088,6 +1109,12 @@ function DeliveryCard({ spj, say, onDone }) {
           )
         }
       />
+      <div className="driver-receipt">
+        <h2>
+          <PackageCheck size={20} aria-hidden="true" /> {t("drv_receipt_title")}
+        </h2>
+        <p className="driver-muted">{t("drv_receipt_intro").replace("{destination}", spj.destination)}</p>
+      </div>
       <div className="driver-row">
         <div>
           <label className="driver-label" htmlFor="receipt-gross">
@@ -1134,7 +1161,7 @@ function DeliveryCard({ spj, say, onDone }) {
       )}
       <div className="driver-actions">
         <label
-          className={`driver-btn primary driver-camera${cameraDisabled ? " is-disabled" : ""}`}
+          className={`driver-btn primary driver-btn-hero driver-camera${cameraDisabled ? " is-disabled" : ""}`}
           data-testid="receipt-camera"
         >
           <input
@@ -1150,7 +1177,7 @@ function DeliveryCard({ spj, say, onDone }) {
               e.target.value = ""; // permit choosing the same image again
             }}
           />
-          <Camera size={20} /> {busy ? t("drv_receipt_sending") : t("drv7_receipt_camera")}
+          <Camera size={22} aria-hidden="true" /> {busy ? t("drv_receipt_sending") : t("drv7_receipt_camera")}
         </label>
       </div>
       {receipt && <p className="driver-muted">{t("drv_photo_attached").replace("{name}", receipt.name)}</p>}
@@ -1277,15 +1304,28 @@ function destinationTarget(spj, destinations) {
   return { lat: facility?.lat ?? null, lng: facility?.lng ?? null, name: spj.destination };
 }
 
-function DestinationCard({ spj, destinations }) {
+function DestinationCard({ spj, destinations, row = false }) {
   const { t } = useLanguage();
   const target = destinationTarget(spj, destinations);
   const hasCoord = Number.isFinite(Number(target.lat)) && target.lat !== null && target.lng !== null;
+  if (row) {
+    return (
+      <div className="stop-row is-dest" data-testid="destination-card">
+        <span className="stop-row-num" aria-hidden="true">
+          <Flag size={18} />
+        </span>
+        <div className="stop-row-body">
+          <h3>{t("drv6_dest_title").replace("{name}", spj.destination)}</h3>
+          <p className="stop-row-meta">{hasCoord ? t("drv10_route_dest") : t("drv6_dest_name_only")}</p>
+        </div>
+        <MapsLink target={target} name={spj.destination} testId="destination-maps" compact />
+      </div>
+    );
+  }
   return (
-    <section className="driver-card" data-testid="destination-card">
-      <h2>
-        <Flag size={18} /> {t("drv6_dest_title").replace("{name}", spj.destination)}
-      </h2>
+    <section className="driver-card driver-destination" data-testid="destination-card">
+      <p className="driver-mono-label">{t("drv10_route_dest")}</p>
+      <h2>{spj.destination}</h2>
       {!hasCoord && <p className="driver-muted">{t("drv6_dest_name_only")}</p>}
       <div className="driver-actions">
         <MapsLink target={target} name={spj.destination} testId="destination-maps" />
@@ -1297,20 +1337,24 @@ function DestinationCard({ spj, destinations }) {
 // L3: one field app. The old /field instructions are the Instruksi tab and the
 // exception buttons the Lapor tab; ?tab= keeps the choice in the URL so the
 // back button and the /field redirect land on the right tab.
+// wave11 driver: four tabs in the order of a shift (instructions, the route,
+// the landfill, problems), one task each. Without ?tab= the app opens on the
+// route, and on TPA once every stop is done or a receipt is still owed.
 const TABS = [
-  { id: "rute", icon: Route, label: "drv10_tab_route" },
   { id: "instruksi", icon: ClipboardList, label: "drv10_tab_instructions" },
+  { id: "rute", icon: Route, label: "drv10_tab_route" },
+  { id: "tpa", icon: Warehouse, label: "drv11_tab_tpa" },
   { id: "lapor", icon: MessageSquareWarning, label: "drv10_tab_report" },
 ];
 
 export default function DriverApp() {
   const { t, lang } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = TABS.some((item) => item.id === searchParams.get("tab")) ? searchParams.get("tab") : "rute";
+  const tabParam = TABS.some((item) => item.id === searchParams.get("tab")) ? searchParams.get("tab") : null;
   const selectTab = (id) => {
     const next = new URLSearchParams(searchParams);
-    if (id === "rute") next.delete("tab");
-    else next.set("tab", id);
+    if (id) next.set("tab", id);
+    else next.delete("tab");
     setSearchParams(next, { replace: true });
   };
   const [session, setSession] = useState(() => readDriverSession());
@@ -1569,7 +1613,16 @@ export default function DriverApp() {
 
   useEffect(() => {
     if (!canFlush) return undefined;
-    const onOnline = () => flushRef.current();
+    // One reconnect is one replay: browsers can fire `online` twice in a burst,
+    // and a second flush right after a server error would retry at once instead
+    // of waiting for the periodic retry or the driver's "kirim sekarang".
+    let lastOnline = 0;
+    const onOnline = () => {
+      const now = Date.now();
+      if (now - lastOnline < 1500) return;
+      lastOnline = now;
+      flushRef.current();
+    };
     window.addEventListener("online", onOnline);
     // Connectivity may return without an `online` event.
     const id = setInterval(() => flushRef.current(), 10000);
@@ -1699,10 +1752,14 @@ export default function DriverApp() {
   // Newest completed SPJ still missing its receipt: `history` arrives newest
   // first, and receipt state comes from the server, so two browsers agree.
   const pendingReceipt = spjAktif ? null : history.find((s) => !s.receipt) || null;
+  const receiptDue = !spjAktif && history[0] && !receiptDoneFor(history[0]) ? pendingReceipt : null;
+  const deliverySpj = allStopsDone ? spjView : receiptDue;
   const openInstructions = openInstructionCount(instructionFeed.list, outboxItems);
+  const tab = tabParam || (doneScreen || deliverySpj ? "tpa" : "rute");
+  const stopsLeft = stops.filter((s) => s.status !== "completed").length;
 
   return (
-    <main className="driver-shell" data-testid="driver-app">
+    <main className="driver-shell has-tabs" data-testid="driver-app">
       <header className="driver-header">
         <span className="driver-brand">
           <span className="driver-brand-mark">
@@ -1731,27 +1788,6 @@ export default function DriverApp() {
           )}
         </span>
       </header>
-
-      <nav className="driver-tabs" aria-label={t("drv10_tabs_label")}>
-        {TABS.map(({ id, icon: Icon, label }) => (
-          <button
-            key={id}
-            type="button"
-            className={`driver-tab${tab === id ? " active" : ""}`}
-            data-testid={`driver-tab-${id}`}
-            aria-current={tab === id ? "page" : undefined}
-            onClick={() => selectTab(id)}
-          >
-            <Icon size={20} aria-hidden="true" />
-            <span>{t(label)}</span>
-            {id === "instruksi" && openInstructions > 0 && (
-              <span className="driver-tab-count" data-testid="driver-tab-instruksi-count">
-                {openInstructions}
-              </span>
-            )}
-          </button>
-        ))}
-      </nav>
 
       <SyncStatus
         lastSync={lastSync}
@@ -1786,8 +1822,7 @@ export default function DriverApp() {
 
       {tab === "rute" && (
         <>
-          <section className="driver-card driver-identity">
-            <p className="driver-kicker">{t("drv_kicker")}</p>
+          <section className="driver-identity">
             <h1>
               {driver.driver_name}{" "}
               {/* H3: a picked name is from the simulated roster; a bound account names itself. */}
@@ -1797,122 +1832,197 @@ export default function DriverApp() {
                 </span>
               )}
             </h1>
-            <p className="driver-muted">
-              {driver.truck_code}
-              {spjAktif ? ` — ${spjAktif.spj_number} → ${spjAktif.destination}` : t("drv_no_spj")}
+            <p className="driver-trip-meta">
+              <span className="driver-mono">{driver.truck_code}</span>
+              {spjAktif ? (
+                <>
+                  {" · "}
+                  <span className="driver-mono">{spjAktif.spj_number}</span>
+                  {" → "}
+                  {spjAktif.destination}
+                </>
+              ) : (
+                t("drv_no_spj")
+              )}
             </p>
           </section>
 
+          <PreTripForm
+            driver={driver}
+            done={pretripDone}
+            onDone={() => {
+              rememberPretrip(driver.truck_code);
+              setPretripDone(true);
+              say(t("drv_pretrip_saved"));
+            }}
+            say={say}
+          />
+
+          {spjView && pendingIndex >= 0 && (
+            <StopCard
+              key={`${spjView.spj_id}-${pendingIndex}`}
+              spj={spjView}
+              stop={stops[pendingIndex]}
+              index={pendingIndex}
+              current
+              locked={false}
+              blocked={blocked}
+              arEnabled={arEnabled}
+              onCompleted={() => {
+                loadSpj();
+                say(t("drv_stop_done_toast"));
+              }}
+              say={say}
+            />
+          )}
+
+          {/* A new supervisor instruction interrupts the route, after the current stop. */}
           <InstructionCard feed={instructionFeed} blocked={blocked} outboxItems={outboxItems} say={say} />
 
-          {doneScreen ? (
-            <section className="driver-card driver-done" data-testid="done-screen">
-              <ShieldCheck size={40} />
-              <h1>{t("drv_done_title")}</h1>
-              <p className="driver-muted">{t("drv_done_desc")}</p>
-              {doneScreen.receipt ? (
-                <ReceiptWeights receipt={doneScreen.receipt} />
-              ) : (
-                <p className="driver-muted" data-testid="receipt-weights-pending">
-                  {t("drv7_receipt_weights_pending")}
-                </p>
-              )}
-              <button type="button" className="driver-btn ghost" onClick={() => setDoneScreen(false)}>
-                <ArrowLeft size={16} /> {t("drv_done_back")}
-              </button>
+          {spjView && (
+            <RouteOverview spj={spjView} destination={destinationTarget(spjView, destinations)}>
+              <ol className="driver-stop-list">
+                {stops.map((stop, i) =>
+                  i === pendingIndex ? (
+                    <li key={`${spjView.spj_id}-${i}`} className="stop-row is-next" aria-current="step">
+                      <span className="stop-row-num" aria-hidden="true">
+                        {i + 1}
+                      </span>
+                      <div className="stop-row-body">
+                        <strong className="stop-row-name">{stop.name}</strong>
+                        <p className="stop-row-meta">{t("drv10_route_next")}</p>
+                      </div>
+                    </li>
+                  ) : (
+                    <StopCard
+                      key={`${spjView.spj_id}-${i}`}
+                      spj={spjView}
+                      stop={stop}
+                      index={i}
+                      current={false}
+                      locked={pendingIndex !== -1 && i > pendingIndex}
+                      blocked={blocked}
+                      arEnabled={false}
+                      onCompleted={loadSpj}
+                      say={say}
+                    />
+                  ),
+                )}
+              </ol>
+              <DestinationCard spj={spjView} destinations={destinations} row />
+            </RouteOverview>
+          )}
+
+          {!spjAktif && (
+            <section className="driver-card driver-empty" data-testid="driver-no-spj">
+              <span className="driver-empty-icon" aria-hidden="true">
+                <Truck size={24} />
+              </span>
+              <h2>{t("drv_no_spj_desc")}</h2>
+              <p className="driver-muted">{t("drv_no_spj_hint")}</p>
             </section>
-          ) : (
-            <>
-              <PreTripForm
-                driver={driver}
-                done={pretripDone}
-                onDone={() => {
-                  rememberPretrip(driver.truck_code);
-                  setPretripDone(true);
-                  say(t("drv_pretrip_saved"));
-                }}
-                say={say}
-              />
+          )}
 
-              {spjView && (
-                <RouteOverview spj={spjView} destination={destinationTarget(spjView, destinations)} />
-              )}
-
-              {spjView &&
-                stops.map((stop, i) => (
-                  <StopCard
-                    key={`${spjView.spj_id}-${i}`}
-                    spj={spjView}
-                    stop={stop}
-                    index={i}
-                    current={i === pendingIndex}
-                    locked={pendingIndex !== -1 && i > pendingIndex}
-                    blocked={blocked}
-                    arEnabled={arEnabled}
-                    onCompleted={() => {
-                      loadSpj();
-                      say(t("drv_stop_done_toast"));
-                    }}
-                    say={say}
-                  />
+          {history.length > 0 && (
+            <section className="driver-card" data-testid="history-card">
+              <h2>
+                <ClipboardCheck size={20} aria-hidden="true" /> {t("drv_history_title")}
+              </h2>
+              <ul className="history-list">
+                {history.slice(0, 5).map((s) => (
+                  <li key={s.spj_id}>
+                    <span>
+                      <strong className="driver-mono">{s.spj_number}</strong>
+                      <small>
+                        {s.date} — {s.destination}
+                      </small>
+                    </span>
+                    <span className="driver-badge done">{t("drv_history_done")}</span>
+                  </li>
                 ))}
-
-              {spjView && <DestinationCard spj={spjView} destinations={destinations} />}
-
-              {allStopsDone && (
-                <DeliveryCard
-                  spj={spjView}
-                  say={say}
-                  onDone={(receipt) => {
-                    setDoneScreen({ receipt, spjId: spjView.spj_id });
-                    loadSpj();
-                  }}
-                />
-              )}
-
-              {!spjAktif && history[0] && !receiptDoneFor(history[0]) && (
-                <DeliveryCard
-                  spj={pendingReceipt}
-                  say={say}
-                  onDone={(receipt) => {
-                    setDoneScreen({ receipt, spjId: pendingReceipt.spj_id });
-                    loadSpj();
-                  }}
-                />
-              )}
-
-              {!spjAktif && (
-                <section className="driver-card">
-                  <p className="driver-muted">
-                    {t("drv_no_spj_desc")} {t("drv_no_spj_hint")}
-                  </p>
-                </section>
-              )}
-
-              {history.length > 0 && !doneScreen && (
-                <section className="driver-card" data-testid="history-card">
-                  <h2>
-                    <ClipboardCheck size={18} /> {t("drv_history_title")}
-                  </h2>
-                  <ul className="history-list">
-                    {history.slice(0, 5).map((s) => (
-                      <li key={s.spj_id}>
-                        <span>
-                          <strong>{s.spj_number}</strong>
-                          <small>
-                            {s.date} — {s.destination}
-                          </small>
-                        </span>
-                        <span className="driver-badge done">{t("drv_history_done")}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-            </>
+              </ul>
+            </section>
           )}
         </>
       )}
+
+      {tab === "tpa" &&
+        (doneScreen ? (
+          <section className="driver-card driver-done" data-testid="done-screen">
+            <span className="driver-done-icon" aria-hidden="true">
+              <ShieldCheck size={32} />
+            </span>
+            <h1>{t("drv_done_title")}</h1>
+            <p className="driver-muted">{t("drv_done_desc")}</p>
+            {doneScreen.receipt ? (
+              <ReceiptWeights receipt={doneScreen.receipt} />
+            ) : (
+              <p className="driver-muted" data-testid="receipt-weights-pending">
+                {t("drv7_receipt_weights_pending")}
+              </p>
+            )}
+            <div className="driver-actions">
+              <button
+                type="button"
+                className="driver-btn ghost"
+                onClick={() => {
+                  setDoneScreen(false);
+                  selectTab(null);
+                }}
+              >
+                <ArrowLeft size={18} aria-hidden="true" /> {t("drv_done_back")}
+              </button>
+            </div>
+          </section>
+        ) : deliverySpj ? (
+          <>
+            <DestinationCard spj={deliverySpj} destinations={destinations} />
+            <DeliveryCard
+              spj={deliverySpj}
+              say={say}
+              onDone={(receipt) => {
+                setDoneScreen({ receipt, spjId: deliverySpj.spj_id });
+                loadSpj();
+              }}
+            />
+          </>
+        ) : (
+          <>
+            <section className="driver-card driver-empty" data-testid="tpa-waiting">
+              <span className="driver-empty-icon" aria-hidden="true">
+                <Warehouse size={24} />
+              </span>
+              <h2>{t("drv11_tpa_wait_title")}</h2>
+              <p className="driver-muted">
+                {spjView ? t("drv11_tpa_wait_desc").replace("{n}", stopsLeft) : t("drv_no_spj_desc")}
+              </p>
+            </section>
+            {spjView && <DestinationCard spj={spjView} destinations={destinations} />}
+          </>
+        ))}
+
+      <nav className="driver-tabs" aria-label={t("drv10_tabs_label")}>
+        {TABS.map(({ id, icon: Icon, label }) => (
+          <button
+            key={id}
+            type="button"
+            className={`driver-tab${tab === id ? " active" : ""}`}
+            data-testid={`driver-tab-${id}`}
+            aria-current={tab === id ? "page" : undefined}
+            onClick={() => selectTab(id)}
+          >
+            <span className="driver-tab-icon" aria-hidden="true">
+              <Icon size={22} />
+            </span>
+            <span>{t(label)}</span>
+            {id === "instruksi" && openInstructions > 0 && (
+              <span className="driver-tab-count" data-testid="driver-tab-instruksi-count">
+                {openInstructions}
+              </span>
+            )}
+          </button>
+        ))}
+      </nav>
 
       <Toast message={toast} />
     </main>

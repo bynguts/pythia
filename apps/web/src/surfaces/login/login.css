@@ -1,0 +1,510 @@
+/* Sign-in (command centre and the driver app). Wave 11: a full-bleed product
+   login in the approved world. A forest story pane with a drawn route network
+   on the left; a white form pane on the right. Phones get the form only. */
+
+.login-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  color: var(--ui-ink);
+  background: var(--ui-surface);
+  font-family: var(--font-body);
+}
+
+.login-shell .login-surface {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(420px, 0.88fr);
+}
+
+/* ── Story pane ── */
+
+.login-shell .login-story {
+  position: relative;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: 36px clamp(40px, 5vw, 72px) 44px;
+  overflow: hidden;
+  color: var(--ui-on-dark);
+  background: var(--ui-forest-900);
+}
+
+.login-story-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-head);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.login-story-brand > span {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--ui-forest-900);
+  background: var(--ui-forest-100);
+}
+
+.login-shell .login-story-copy {
+  max-width: 620px;
+  margin-top: auto;
+}
+
+.login-shell .login-story-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 8px;
+  border: 1px solid rgba(221, 243, 228, 0.32);
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-forest-100);
+  font-family: var(--mono);
+  font-size: var(--fs-label, 11px);
+  font-weight: 500;
+  letter-spacing: var(--ls-label, 0.08em);
+  text-transform: uppercase;
+}
+
+.login-shell .login-story-kicker svg {
+  color: var(--ui-forest-500);
+}
+
+.login-shell .login-story-copy h1 {
+  margin: 22px 0 20px;
+  color: var(--ui-on-dark);
+  font-family: var(--font-head);
+  font-size: clamp(44px, 4.8vw, 72px);
+  font-weight: 600;
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.login-shell .login-story-copy p {
+  max-width: 34em;
+  margin: 0;
+  color: var(--ui-on-dark-muted);
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.login-shell .login-proof-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.login-proof-list > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 20px 20px 0 0;
+}
+
+.login-proof-list > div + div {
+  padding-left: 20px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.login-proof-list svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--ui-forest-500);
+}
+
+.login-proof-list strong,
+.login-proof-list small {
+  display: block;
+}
+
+.login-proof-list strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.login-proof-list small {
+  margin-top: 4px;
+  color: var(--ui-on-dark-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* The drawn route network: decoration only, behind the copy. One planned
+   route draws itself in on load; the rest is the quiet street grid. */
+.login-story-art {
+  position: absolute;
+  z-index: -1;
+  top: -140px;
+  right: -64px;
+  width: min(620px, 72%);
+  height: auto;
+  pointer-events: none;
+}
+
+.login-story-art .grid {
+  fill: none;
+  stroke: rgba(221, 243, 228, 0.07);
+  stroke-width: 1;
+}
+
+.login-story-art .street {
+  fill: none;
+  stroke: var(--ui-forest-700);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.login-story-art .planned {
+  fill: none;
+  stroke: var(--ui-forest-500);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: login-route-draw 1.6s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
+}
+
+.login-story-art .stop {
+  fill: var(--ui-forest-900);
+  stroke: var(--ui-forest-500);
+  stroke-width: 3;
+}
+
+.login-story-art .stop.done {
+  fill: var(--ui-forest-500);
+}
+
+.login-story-art .depot {
+  fill: var(--ui-forest-100);
+}
+
+.login-story-art .depot-ring {
+  fill: none;
+  stroke: rgba(221, 243, 228, 0.28);
+  stroke-width: 1.5;
+}
+
+@keyframes login-route-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ── Form pane ── */
+
+.login-shell .login-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 88px clamp(32px, 5vw, 80px) 48px;
+  background: var(--ui-surface);
+}
+
+.login-shell .login-card > * {
+  width: 100%;
+  max-width: 400px;
+  margin-inline: auto;
+}
+
+/* Segmented language switch: a dark pill on cream, 44 px hit boxes. */
+.login-shell .login-language {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: auto;
+  max-width: none;
+  display: flex;
+  padding: 0 1px;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-cream);
+}
+
+/* 44 px hit boxes; the dark pill is drawn 36 px tall inside a transparent ring. */
+.login-shell .login-language button {
+  min-width: 52px;
+  min-height: var(--tap-min);
+  padding: 0 10px;
+  border: 4px solid transparent;
+  border-radius: var(--ui-radius-pill);
+  background-clip: padding-box;
+  color: var(--ui-ink-soft);
+  background: transparent;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.login-shell .login-language button.active {
+  color: var(--ui-on-dark);
+  background: var(--ui-ink);
+}
+
+.login-shell .login-mobile-brand {
+  display: none;
+}
+
+.login-shell .login-card header {
+  margin-bottom: 28px;
+}
+
+.login-shell .login-card h2 {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.login-shell .login-card header p {
+  margin: 10px 0 0;
+  color: var(--ui-ink-soft);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.login-shell .login-card header .login-notice {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-warning-line);
+  border-radius: 14px;
+  color: var(--ui-ink);
+  background: var(--ui-warning-soft);
+  font-size: 15px;
+}
+
+.login-shell .login-form {
+  display: grid;
+  gap: 18px;
+}
+
+.login-shell .login-form label > span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--ui-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.login-shell .login-input {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px 0 16px;
+  border: 1.5px solid var(--ui-border-strong);
+  border-radius: 14px;
+  background: var(--ui-surface);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.login-shell .login-input:hover {
+  border-color: var(--ui-muted);
+}
+
+.login-shell .login-input:focus-within {
+  border-color: var(--ui-forest-700);
+  box-shadow: var(--ui-focus);
+}
+
+.login-shell .login-input svg {
+  flex: none;
+  color: var(--ui-muted);
+}
+
+.login-shell .login-input input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0;
+  border: 0;
+  color: var(--ui-ink);
+  background: transparent;
+  font: inherit;
+  font-size: 16px;
+  outline: none;
+}
+
+.login-shell .login-input input::placeholder {
+  color: var(--ui-muted);
+}
+
+.login-shell .login-input button {
+  flex: none;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  color: var(--ui-ink-soft);
+  background: transparent;
+  cursor: pointer;
+}
+
+.login-shell .login-input button:hover {
+  background: var(--ui-cream);
+}
+
+.login-shell .login-submit {
+  min-height: 52px;
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-on-dark);
+  background: var(--ui-forest-900);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.login-shell .login-submit:hover:not(:disabled) {
+  background: var(--ui-forest-700);
+}
+
+.login-shell .login-submit:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.login-shell .login-submit svg {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.login-shell .login-submit:hover:not(:disabled) svg {
+  transform: translateX(3px);
+}
+
+.login-shell .login-language button:focus-visible,
+.login-shell .login-input button:focus-visible,
+.login-shell .login-submit:focus-visible {
+  outline: 3px solid var(--ui-forest-500);
+  outline-offset: 2px;
+}
+
+.login-shell .login-error {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--ui-danger-line);
+  border-radius: 12px;
+  color: var(--ui-danger);
+  background: var(--ui-danger-soft);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.login-shell .login-help {
+  margin: 28px auto 0;
+  color: var(--ui-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+/* ── The driver app's own sign-in: one column, the form only ── */
+
+.login-shell .login-surface.is-driver {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.login-shell .is-driver .login-mobile-brand,
+.login-shell .login-mobile-brand {
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 40px;
+  font-family: var(--font-head);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.login-shell .is-driver .login-mobile-brand {
+  display: flex;
+}
+
+.login-shell .login-mobile-brand span {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--ui-on-dark);
+  background: var(--ui-forest-900);
+}
+
+.login-shell .is-driver .login-card {
+  padding-top: 96px;
+  justify-content: flex-start;
+}
+
+.login-shell .is-driver .login-input,
+.login-shell .is-driver .login-submit {
+  min-height: 56px;
+}
+
+/* ── Narrow screens: the form alone, the brand above it ── */
+
+@media (max-width: 960px) {
+  .login-shell .login-surface {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .login-shell .login-story {
+    display: none;
+  }
+
+  .login-shell .login-mobile-brand {
+    display: flex;
+  }
+
+  .login-shell .login-card {
+    justify-content: flex-start;
+    padding: 96px 20px 40px;
+  }
+
+  .login-shell .login-language {
+    top: 16px;
+    right: 16px;
+  }
+}
+
+@media (max-width: 380px) {
+  .login-shell .login-card h2 {
+    font-size: 28px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-story-art .planned {
+    animation: none;
+  }
+
+  .login-shell .login-input,
+  .login-shell .login-submit,
+  .login-shell .login-submit svg {
+    transition: none;
+  }
+}

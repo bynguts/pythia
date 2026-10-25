@@ -161,6 +161,10 @@ test("a 16 h old queue and last-sync time survive a reload and still sync", asyn
     await page.goto("/driver");
     await expect(page.getByTestId("driver-last-sync")).toHaveText(`Terakhir sinkron ${hhmm}`);
     await expect(page.getByTestId("driver-pending-count")).toHaveText("1 menunggu kirim");
+    // wave11 driver: the only stop is done on this phone, so the app opens on its TPA
+    // tab; the stop row (with its on-phone badge) is on the Rute tab.
+    await expect(page.getByTestId("driver-tab-tpa")).toHaveAttribute("aria-current", "page");
+    await page.getByTestId("driver-tab-rute").click();
     await expect(page.getByTestId("stop-0")).toContainText("DI HP");
 
     await page.unroute("**/api/**");
