@@ -34,13 +34,13 @@ test("driver gate and brand follow the stored locale", async ({ page }) => {
     localStorage.removeItem("pythia_driver");
   }, principal.token);
   await page.goto("/driver");
-  await expect(page.getByRole("heading", { name: "Who is on duty?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Enter your truck code" })).toBeVisible();
   await expect(page.getByText("Driver PWA")).toBeVisible();
 
   // Switch to Indonesian and reload: copy changes and persists.
   await page.evaluate(() => localStorage.setItem("pythia_lang", "id"));
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Siapa yang bertugas?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Masukkan kode truk" })).toBeVisible();
   await expect(page.getByText("PWA Sopir")).toBeVisible();
 });
 
@@ -89,6 +89,8 @@ test("driver pretrip, stop and receipt surfaces localize end to end", async ({ p
       localStorage.removeItem("pythia_driver");
     }, principal.token);
     await page.goto("/driver");
+    // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
+    await page.getByTestId("driver-truck-search").fill(TEST_TRUCK);
     await page.locator(`[data-testid="pick-${TEST_TRUCK}"]`).click();
 
     // Pretrip surface in English.

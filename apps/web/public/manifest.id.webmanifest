@@ -1,7 +1,7 @@
 {
   "name": "Pythia",
   "short_name": "Pythia",
-  "description": "Pusat kendali AI untuk operasi armada sampah Jakarta. Terpasang sebagai aplikasi lapangan, pengemudi, atau pusat kendali.",
+  "description": "Pusat kendali AI untuk operasi armada sampah Jakarta. Terpasang sebagai aplikasi sopir atau pusat kendali.",
   "lang": "id",
   "dir": "ltr",
   "start_url": "/",
@@ -36,10 +36,10 @@
   ],
   "shortcuts": [
     {
-      "name": "Operasi Lapangan",
-      "short_name": "Lapangan",
-      "description": "Buka aplikasi petugas lapangan",
-      "url": "/field",
+      "name": "Instruksi sopir",
+      "short_name": "Instruksi",
+      "description": "Buka instruksi di aplikasi sopir",
+      "url": "/driver?tab=instruksi",
       "icons": [
         {
           "src": "/pythia-icon-192.png",

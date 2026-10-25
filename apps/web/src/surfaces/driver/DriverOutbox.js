@@ -276,6 +276,36 @@ export async function enqueueDriverOperation({ path, data, label }) {
   return items.length;
 }
 
+// The retired /field app queued instruction confirmations under its own key.
+// They move into this outbox once, with their operation ids, so nothing a
+// driver queued before the merge is lost; the old key goes only when all moved.
+const LEGACY_FIELD_KEY = "pythia_field_outbox";
+
+export async function adoptFieldOutbox() {
+  const legacy = readList(LEGACY_FIELD_KEY);
+  if (legacy.length === 0) return 0;
+  let moved = 0;
+  try {
+    for (const entry of legacy) {
+      if (typeof entry?.dispatchId !== "string" || typeof entry?.status !== "string") continue;
+      await enqueueDriverOperation({
+        path: `/dispatch/${encodeURIComponent(entry.dispatchId)}/confirm`,
+        data: {
+          status: entry.status,
+          note: typeof entry.note === "string" ? entry.note : "",
+          ...(typeof entry.operation_id === "string" ? { operation_id: entry.operation_id } : {}),
+        },
+        label: entry.dispatchId,
+      });
+      moved += 1;
+    }
+    localStorage.removeItem(LEGACY_FIELD_KEY);
+  } catch {
+    // Storage full or blocked: the old queue stays and is retried next start.
+  }
+  return moved;
+}
+
 // Stops the outbox will mark completed once it syncs: "<spj_id>:<index>".
 export function queuedStopKeys(items = readDriverOutbox()) {
   const keys = new Set();

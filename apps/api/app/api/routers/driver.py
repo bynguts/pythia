@@ -7,7 +7,8 @@ import time
 from dataclasses import asdict as _asdict
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
+from pydantic import BaseModel, Field
 
 from app.api.deps import (
     ensure_truck_access,
@@ -18,11 +19,14 @@ from app.api.deps import (
 from app.api.schemas import DamageReportBody, OcrBody, PretripBody, ServiceRecordBody
 from app.api.state import _compliance_cache, _compliance_lock, _refresh_fleet_caches, history_store
 from app.core.env import local_today
+from app.core.storage import StorageError
 from app.field.compliance import WINDOW_DAYS as COMPLIANCE_WINDOW_DAYS
 from app.field.compliance import compute_fleet_scores
 from app.field.damage_reports import DAMAGE_STORE
+from app.field.driver_exceptions import EXCEPTION_STORE, KINDS, VEHICLE_KINDS, DriverException
 from app.field.pretrip import PRETRIP_STORE
 from app.field.service_history import SERVICE_STORE, due_date_for
+from app.field.spj import SPJ_STORE
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -208,3 +212,118 @@ def ocr_timbangan(
     from app.field.timbangan_ocr import read_weight_from_photo
 
     return read_weight_from_photo(body.photo_b64)
+
+
+class DriverExceptionBody(BaseModel):
+    kind: str = Field(pattern="^(" + "|".join(KINDS) + ")$")
+    truck_code: str = Field(min_length=1, max_length=32)
+    driver_name: str = Field(default="", max_length=120)
+    spj_id: str | None = Field(default=None, max_length=64)
+    stop_index: int | None = Field(default=None, ge=0, le=500)
+    note: str = Field(default="", max_length=500)
+    photo_name: str | None = Field(default=None, max_length=200)
+    photo_b64: str | None = Field(default=None, max_length=7_000_000)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+    approx: bool = False
+    reported_at: str | None = Field(default=None, max_length=64)
+    operation_id: str | None = Field(default=None, min_length=8, max_length=80)
+
+
+# The damage report a vehicle exception files, so the existing maintenance
+# hold and damage tab see the truck as out of service.
+_EXCEPTION_DAMAGE = {
+    "truck_breakdown": ("mogok", "Truk mogok/rusak di jalan (laporan cepat sopir)"),
+    "accident": ("kecelakaan", "Kecelakaan dilaporkan sopir (laporan cepat)"),
+}
+
+
+def _store_exception(
+    body: DriverExceptionBody, truck_code: str, actor: str, operation_id: str | None
+) -> DriverException:
+    """Store the report; a vehicle exception also files a "berat" damage report."""
+    rec = EXCEPTION_STORE.create(
+        kind=body.kind,
+        truck_code=truck_code,
+        driver_name=body.driver_name.strip() or truck_code,
+        reported_by=actor,
+        spj_id=body.spj_id,
+        stop_index=body.stop_index,
+        note=body.note.strip(),
+        photo_name=body.photo_name,
+        photo_b64=body.photo_b64,
+        lat=body.lat,
+        lng=body.lng,
+        approx=body.approx,
+        reported_at=body.reported_at,
+        operation_id=operation_id,
+    )
+    if rec.kind in VEHICLE_KINDS:
+        component, default_note = _EXCEPTION_DAMAGE[rec.kind]
+        rep = DAMAGE_STORE.create(
+            truck_code,
+            rec.driver_name,
+            component,
+            "berat",
+            rec.note or default_note,
+            rec.photo_name,
+            rec.photo_b64,
+            "driver_exception",
+        )
+        rec = EXCEPTION_STORE.attach_damage_report(rec.exception_id, rep.report_id)
+        _refresh_fleet_caches()
+    return rec
+
+
+@router.post("/api/driver/exceptions", status_code=201)
+def create_driver_exception(
+    body: DriverExceptionBody,
+    x_operation_id: str | None = Header(default=None),
+    principal: dict = Depends(require_any_principal("dispatch:confirm", "dispatch:create")),
+) -> dict[str, Any]:
+    """One quick exception from the driver app (empty TPS, closed road, breakdown, accident).
+
+    The outbox replays a queued report with the same operation id; a replay
+    returns the stored report instead of filing a second one. The report never
+    completes or skips an SPJ stop.
+    """
+    truck_code = body.truck_code.strip()
+    ensure_truck_access(principal, truck_code)
+    operation_id = body.operation_id or x_operation_id
+    prior = EXCEPTION_STORE.find_operation(operation_id)
+    if prior is not None:
+        return {**prior.public(), "replayed": True}
+    if body.spj_id:
+        spj = SPJ_STORE.get(body.spj_id)
+        if spj is None:
+            raise HTTPException(status_code=404, detail=f"SPJ {body.spj_id} not found")
+        if spj.truck_code != truck_code:
+            raise HTTPException(status_code=409, detail="The SPJ belongs to another truck.")
+    try:
+        rec = _store_exception(body, truck_code, principal["username"], operation_id)
+    except StorageError as exc:
+        logger.error("driver exception persistence failure: %s", exc)
+        raise HTTPException(
+            status_code=503, detail="Exception storage is unavailable; the report was not saved."
+        ) from exc
+    history_store.record_event(
+        "driver_exception",
+        {
+            "exception_id": rec.exception_id,
+            "kind": rec.kind,
+            "truck_code": rec.truck_code,
+            "spj_id": rec.spj_id,
+            "stop_index": rec.stop_index,
+            "actor": rec.reported_by,
+            "damage_report_id": rec.damage_report_id,
+        },
+    )
+    return {**rec.public(), "replayed": False}
+
+
+@router.get("/api/driver/exceptions")
+def list_driver_exceptions(
+    truck_code: str | None = None, _role: str = Depends(require_any_permission(*OPERATOR_READ))
+) -> dict[str, Any]:
+    reports = [r.public() for r in EXCEPTION_STORE.list(truck_code=truck_code)]
+    return {"exceptions": reports, "count": len(reports)}

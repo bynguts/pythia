@@ -39,8 +39,10 @@ test("a truck-bound driver account opens straight on its own truck", async ({ pa
   expect(cached.truck_code).toBe("T-238");
 });
 
+// wave10 driver-field-app: the shared login searches the roster by truck code.
 test("a shared demo login still picks its truck from the roster", async ({ page, request }) => {
   const { token } = await apiLogin(request);
   await openWithSession(page, token, null);
+  await page.getByTestId("driver-truck-search").fill("T-2");
   await expect(page.locator('[data-testid^="pick-"]').first()).toBeVisible({ timeout: 15000 });
 });

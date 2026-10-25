@@ -457,6 +457,8 @@ async function openAr(page, lang = "en") {
     { token: principal.token, lang, truck: TRUCK },
   );
   await page.goto("/driver");
+  // wave10 driver-field-app (L4): AR is offered after arrival, inside the open stop form.
+  await page.getByTestId("stop-1").getByTestId("stop-start").click();
   const open = page.getByTestId("stop-1").getByTestId("ar-nav-open");
   await expect(open).toBeVisible({ timeout: 20000 });
   await open.click();

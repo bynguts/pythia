@@ -71,11 +71,13 @@ test("driver runs full SPJ flow: pretrip, stop evidence, receipt", async ({ page
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation({ latitude: -6.29, longitude: 106.79 });
 
-  // ── Gate: pick driver (Pengemudi Sim 05 drives multiple trucks — target T-220) ──
+  // ── Gate: pick driver (each truck has its own simulated driver — target T-220) ──
   await page.goto("/driver");
   const pretripLoaded = page.waitForResponse((response) =>
     response.url().includes(`/pretrip/today/${TEST_TRUCK}`),
   );
+  // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
+  await page.getByTestId("driver-truck-search").fill("T-220");
   await page.locator('[data-testid="pick-T-220"]').click();
   await pretripLoaded;
   await expect(page.getByText(TEST_TRUCK, { exact: true }).first()).toBeVisible();
@@ -189,6 +191,8 @@ test("driver is offered the newest receipt-pending SPJ, not the oldest", async (
   const newer = await completedSpj(TEST_TRUCK);
 
   await page.goto("/driver");
+  // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
+  await page.getByTestId("driver-truck-search").fill(TEST_TRUCK);
   await page.locator(`[data-testid="pick-${TEST_TRUCK}"]`).click();
   const card = page.getByTestId("delivery-card");
   await expect(card).toBeVisible({ timeout: 15000 });
@@ -214,6 +218,8 @@ test("pretrip with a TIDAK item auto-creates a damage report", async ({ page, co
   await page.evaluate(() => localStorage.removeItem("pythia_driver"));
   await page.reload({ waitUntil: "domcontentloaded" });
 
+  // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
+  await page.getByTestId("driver-truck-search").fill(PRETTRIP_TRUCK);
   await page.locator(`[data-testid="pick-${PRETTRIP_TRUCK}"]`).click();
 
   // Mark "Ban dan roda" TIDAK (ban → severity berat), fill mandatory note.
@@ -247,7 +253,7 @@ test("admin sees damage report and resolves it", async ({ page }) => {
   const rep = await create.json();
 
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: "Laporan Kerusakan" }).click();
+  await page.getByRole("tab", { name: "Laporan Kerusakan" }).click(); // wave9 fleet composition: records tab
   await expect(page.getByText("e2e admin panel note").first()).toBeVisible({ timeout: 15000 });
   await expect(page.getByText("NON-OPERASIONAL").first()).toBeVisible();
 
@@ -305,7 +311,7 @@ test("admin sees spj evidence summary after driver flow", async ({ page }) => {
   });
 
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: "Surat Perintah Jalan" }).click();
+  await page.getByRole("tab", { name: "Surat jalan (SPJ)" }).click(); // wave9 fleet composition: records tab
   await page.getByText(spj.spj_number).first().click();
   await expect(page.getByText(/Petugas: Dicky/)).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/40(\.0)? kg/)).toBeVisible();

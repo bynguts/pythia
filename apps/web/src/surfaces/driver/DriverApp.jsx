@@ -1,11 +1,14 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   Camera,
   Check,
   CheckCircle2,
   ClipboardCheck,
+  ClipboardList,
   MapPin,
+  MessageSquareWarning,
   Navigation,
   PackageCheck,
   Route,
@@ -19,6 +22,7 @@ import {
   LogIn,
 } from "lucide-react";
 import {
+  adoptFieldOutbox,
   dismissRejectedOperation,
   enqueueDriverOperation,
   flushDriverOutbox,
@@ -36,9 +40,15 @@ import {
   NeedsActionList,
   SafetyBanner,
   SESSION_EXPIRED_EVENT,
+  openInstructionCount,
   SyncStatus,
+  useDispatchInstructions,
   useDriverSafety,
 } from "./DriverPanels.jsx";
+import { ExceptionPanel } from "./ExceptionPanel.jsx";
+import { RouteOverview } from "./RouteOverview.jsx";
+import { TpaGuide } from "./TpaGuide.jsx";
+import { rememberRecentTruck, TruckPicker } from "./TruckPicker.jsx";
 import {
   arCapable,
   boundDriverOf,
@@ -676,17 +686,6 @@ function StopCard({ spj, stop, index, current, locked, blocked, arEnabled, onCom
           >
             <Camera size={18} /> {t("drv_stop_start")}
           </button>
-          {arEnabled && (
-            <button
-              type="button"
-              className="driver-btn ghost"
-              data-testid="ar-nav-open"
-              aria-label={t("drv_ar_open_aria").replace("{name}", stop.name)}
-              onClick={openAr}
-            >
-              <Navigation size={18} /> {t("drv_ar_open")}
-            </button>
-          )}
         </div>
       )}
 
@@ -715,7 +714,8 @@ function StopCard({ spj, stop, index, current, locked, blocked, arEnabled, onCom
             ))}
           </ol>
 
-          {/* Step 1: arrival photo (from the picker or the AR navigator) */}
+          {/* Step 1: arrival photo (from the picker or the AR navigator). L4: AR
+              is offered only here, after arrival, to find the TPS point on foot. */}
           {!arrival && arEnabled && (
             <div className="driver-actions">
               <button
@@ -1064,23 +1064,30 @@ function DeliveryCard({ spj, say, onDone }) {
         </h2>
       </div>
       <p className="driver-muted">{t("drv_receipt_intro").replace("{destination}", spj.destination)}</p>
-      {gateAt ? (
-        <p className="driver-geotag" data-testid="gate-arrived">
-          <Flag size={16} />
-          {t("drv6_gate_arrived").replace("{time}", clockTime(gateAt) || "—")}
-        </p>
-      ) : (
-        <div className="driver-actions">
-          <button
-            type="button"
-            className="driver-btn ghost"
-            data-testid="gate-arrival"
-            onClick={arriveAtGate}
-          >
-            <Flag size={18} /> {t("drv6_gate_arrive")}
-          </button>
-        </div>
-      )}
+      <TpaGuide
+        spj={spj}
+        gateAt={gateAt}
+        onArriveGate={arriveAtGate}
+        fallback={
+          gateAt ? (
+            <p className="driver-geotag" data-testid="gate-arrived">
+              <Flag size={16} />
+              {t("drv6_gate_arrived").replace("{time}", clockTime(gateAt) || "—")}
+            </p>
+          ) : (
+            <div className="driver-actions">
+              <button
+                type="button"
+                className="driver-btn ghost"
+                data-testid="gate-arrival"
+                onClick={arriveAtGate}
+              >
+                <Flag size={18} /> {t("drv6_gate_arrive")}
+              </button>
+            </div>
+          )
+        }
+      />
       <div className="driver-row">
         <div>
           <label className="driver-label" htmlFor="receipt-gross">
@@ -1263,12 +1270,16 @@ function useDriverManifest(lang) {
   }, [lang]);
 }
 
-function DestinationCard({ spj, destinations }) {
-  const { t } = useLanguage();
+function destinationTarget(spj, destinations) {
   const facility = destinations.find(
     (d) => d?.destination === spj.destination || d?.name === spj.destination,
   );
-  const target = { lat: facility?.lat ?? null, lng: facility?.lng ?? null, name: spj.destination };
+  return { lat: facility?.lat ?? null, lng: facility?.lng ?? null, name: spj.destination };
+}
+
+function DestinationCard({ spj, destinations }) {
+  const { t } = useLanguage();
+  const target = destinationTarget(spj, destinations);
   const hasCoord = Number.isFinite(Number(target.lat)) && target.lat !== null && target.lng !== null;
   return (
     <section className="driver-card" data-testid="destination-card">
@@ -1283,8 +1294,25 @@ function DestinationCard({ spj, destinations }) {
   );
 }
 
+// L3: one field app. The old /field instructions are the Instruksi tab and the
+// exception buttons the Lapor tab; ?tab= keeps the choice in the URL so the
+// back button and the /field redirect land on the right tab.
+const TABS = [
+  { id: "rute", icon: Route, label: "drv10_tab_route" },
+  { id: "instruksi", icon: ClipboardList, label: "drv10_tab_instructions" },
+  { id: "lapor", icon: MessageSquareWarning, label: "drv10_tab_report" },
+];
+
 export default function DriverApp() {
   const { t, lang } = useLanguage();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = TABS.some((item) => item.id === searchParams.get("tab")) ? searchParams.get("tab") : "rute";
+  const selectTab = (id) => {
+    const next = new URLSearchParams(searchParams);
+    if (id === "rute") next.delete("tab");
+    else next.set("tab", id);
+    setSearchParams(next, { replace: true });
+  };
   const [session, setSession] = useState(() => readDriverSession());
   const [pickedDriver, setPickedDriver] = useState(() => readPickedDriver());
   // A personal driver account is bound to its truck: no picker, no "change".
@@ -1314,6 +1342,7 @@ export default function DriverApp() {
   const [destinations, setDestinations] = useState(() => readDestinations());
   const queuedCount = outboxItems.length;
   const safety = useDriverSafety(driver?.truck_code);
+  const instructionFeed = useDispatchInstructions(driver?.truck_code);
   const blocked = safetyBlocksNewWork(safety);
   const arEnabled = useMemo(
     () =>
@@ -1513,6 +1542,12 @@ export default function DriverApp() {
   }, [loadSpj, say, t]);
 
   useEffect(() => {
+    adoptFieldOutbox().then((moved) => {
+      if (moved > 0) setOutboxItems(readDriverOutbox());
+    });
+  }, []);
+
+  useEffect(() => {
     const onChanged = () => {
       setOutboxItems(readDriverOutbox());
       setRejected(readRejectedOperations());
@@ -1581,6 +1616,7 @@ export default function DriverApp() {
 
   const pickDriver = (d) => {
     const next = { driver_name: d.name, truck_code: d.code };
+    rememberRecentTruck({ name: d.name, code: d.code });
     try {
       localStorage.setItem("pythia_driver", JSON.stringify(next));
     } catch {
@@ -1638,10 +1674,10 @@ export default function DriverApp() {
           )}
         </header>
         {sessionCard}
-        <section className="driver-card">
+        <section className="driver-card" data-testid="driver-truck-gate">
           <div className="driver-card-head">
             <h2>
-              <User size={18} /> {t("drv_gate_title")}
+              <User size={18} /> {t("drv10_pick_title")}
             </h2>
             {/* H3: the roster is the simulated fleet, not real personnel. */}
             <span className="driver-badge driver-provenance" data-testid="driver-roster-sim">
@@ -1649,20 +1685,7 @@ export default function DriverApp() {
             </span>
           </div>
           <p className="driver-muted">{t("drv6_sim_roster")}</p>
-          <ul className="driver-pick-list">
-            {drivers.map((d) => (
-              <li key={d.code} data-testid={`pick-${d.code}`}>
-                <button type="button" className="driver-pick" onClick={() => pickDriver(d)}>
-                  <span>
-                    <strong>{d.name}</strong>
-                    <small>{d.code}</small>
-                  </span>
-                  <Truck size={16} />
-                </button>
-              </li>
-            ))}
-            {drivers.length === 0 && <li className="driver-muted">{t("drv_gate_loading")}</li>}
-          </ul>
+          <TruckPicker drivers={drivers} onPick={pickDriver} />
         </section>
         <Toast message={toast} />
       </main>
@@ -1676,6 +1699,7 @@ export default function DriverApp() {
   // Newest completed SPJ still missing its receipt: `history` arrives newest
   // first, and receipt state comes from the server, so two browsers agree.
   const pendingReceipt = spjAktif ? null : history.find((s) => !s.receipt) || null;
+  const openInstructions = openInstructionCount(instructionFeed.list, outboxItems);
 
   return (
     <main className="driver-shell" data-testid="driver-app">
@@ -1692,7 +1716,7 @@ export default function DriverApp() {
         <span className="driver-header-right">
           {queuedCount > 0 && (
             <span className="driver-queued" data-testid="driver-queued-count">
-              {flushing ? t("drv_syncing") : t("drv_queued_n").replace("{n}", queuedCount)}
+              {flushing ? t("drv_syncing") : t("drv10_waiting_signal").replace("{n}", queuedCount)}
             </span>
           )}
           {!online && (
@@ -1708,129 +1732,184 @@ export default function DriverApp() {
         </span>
       </header>
 
-      <SyncStatus lastSync={lastSync} pending={queuedCount} flushing={flushing} online={online} />
+      <nav className="driver-tabs" aria-label={t("drv10_tabs_label")}>
+        {TABS.map(({ id, icon: Icon, label }) => (
+          <button
+            key={id}
+            type="button"
+            className={`driver-tab${tab === id ? " active" : ""}`}
+            data-testid={`driver-tab-${id}`}
+            aria-current={tab === id ? "page" : undefined}
+            onClick={() => selectTab(id)}
+          >
+            <Icon size={20} aria-hidden="true" />
+            <span>{t(label)}</span>
+            {id === "instruksi" && openInstructions > 0 && (
+              <span className="driver-tab-count" data-testid="driver-tab-instruksi-count">
+                {openInstructions}
+              </span>
+            )}
+          </button>
+        ))}
+      </nav>
+
+      <SyncStatus
+        lastSync={lastSync}
+        pending={queuedCount}
+        flushing={flushing}
+        online={online}
+        onRetry={canFlush ? flushQueue : undefined}
+      />
       {sessionCard}
       <SafetyBanner safety={safety} />
-
-      <section className="driver-card driver-identity">
-        <p className="driver-kicker">{t("drv_kicker")}</p>
-        <h1>
-          {driver.driver_name}{" "}
-          {/* H3: a picked name is from the simulated roster; a bound account names itself. */}
-          {!driver.bound && (
-            <span className="driver-badge driver-provenance" data-testid="driver-identity-sim">
-              {t("drv6_sim_badge")}
-            </span>
-          )}
-        </h1>
-        <p className="driver-muted">
-          {driver.truck_code}
-          {spjAktif ? ` — ${spjAktif.spj_number} → ${spjAktif.destination}` : t("drv_no_spj")}
-        </p>
-      </section>
-
       <NeedsActionList items={rejected} onDismiss={dismissRejected} />
-      <InstructionCard truckCode={driver.truck_code} blocked={blocked} outboxItems={outboxItems} say={say} />
 
-      {doneScreen ? (
-        <section className="driver-card driver-done" data-testid="done-screen">
-          <ShieldCheck size={40} />
-          <h1>{t("drv_done_title")}</h1>
-          <p className="driver-muted">{t("drv_done_desc")}</p>
-          {doneScreen.receipt ? (
-            <ReceiptWeights receipt={doneScreen.receipt} />
-          ) : (
-            <p className="driver-muted" data-testid="receipt-weights-pending">
-              {t("drv7_receipt_weights_pending")}
-            </p>
-          )}
-          <button type="button" className="driver-btn ghost" onClick={() => setDoneScreen(false)}>
-            <ArrowLeft size={16} /> {t("drv_done_back")}
-          </button>
-        </section>
-      ) : (
+      {tab === "instruksi" && (
+        <InstructionCard
+          feed={instructionFeed}
+          blocked={blocked}
+          outboxItems={outboxItems}
+          say={say}
+          showEmpty
+        />
+      )}
+
+      {tab === "lapor" && (
+        <ExceptionPanel
+          driver={driver}
+          spj={spjView}
+          stopIndex={pendingIndex}
+          outboxItems={outboxItems}
+          say={say}
+        />
+      )}
+
+      {tab === "rute" && (
         <>
-          <PreTripForm
-            driver={driver}
-            done={pretripDone}
-            onDone={() => {
-              rememberPretrip(driver.truck_code);
-              setPretripDone(true);
-              say(t("drv_pretrip_saved"));
-            }}
-            say={say}
-          />
+          <section className="driver-card driver-identity">
+            <p className="driver-kicker">{t("drv_kicker")}</p>
+            <h1>
+              {driver.driver_name}{" "}
+              {/* H3: a picked name is from the simulated roster; a bound account names itself. */}
+              {!driver.bound && (
+                <span className="driver-badge driver-provenance" data-testid="driver-identity-sim">
+                  {t("drv6_sim_badge")}
+                </span>
+              )}
+            </h1>
+            <p className="driver-muted">
+              {driver.truck_code}
+              {spjAktif ? ` — ${spjAktif.spj_number} → ${spjAktif.destination}` : t("drv_no_spj")}
+            </p>
+          </section>
 
-          {spjView &&
-            stops.map((stop, i) => (
-              <StopCard
-                key={`${spjView.spj_id}-${i}`}
-                spj={spjView}
-                stop={stop}
-                index={i}
-                current={i === pendingIndex}
-                locked={pendingIndex !== -1 && i > pendingIndex}
-                blocked={blocked}
-                arEnabled={arEnabled}
-                onCompleted={() => {
-                  loadSpj();
-                  say(t("drv_stop_done_toast"));
+          <InstructionCard feed={instructionFeed} blocked={blocked} outboxItems={outboxItems} say={say} />
+
+          {doneScreen ? (
+            <section className="driver-card driver-done" data-testid="done-screen">
+              <ShieldCheck size={40} />
+              <h1>{t("drv_done_title")}</h1>
+              <p className="driver-muted">{t("drv_done_desc")}</p>
+              {doneScreen.receipt ? (
+                <ReceiptWeights receipt={doneScreen.receipt} />
+              ) : (
+                <p className="driver-muted" data-testid="receipt-weights-pending">
+                  {t("drv7_receipt_weights_pending")}
+                </p>
+              )}
+              <button type="button" className="driver-btn ghost" onClick={() => setDoneScreen(false)}>
+                <ArrowLeft size={16} /> {t("drv_done_back")}
+              </button>
+            </section>
+          ) : (
+            <>
+              <PreTripForm
+                driver={driver}
+                done={pretripDone}
+                onDone={() => {
+                  rememberPretrip(driver.truck_code);
+                  setPretripDone(true);
+                  say(t("drv_pretrip_saved"));
                 }}
                 say={say}
               />
-            ))}
 
-          {spjView && <DestinationCard spj={spjView} destinations={destinations} />}
+              {spjView && (
+                <RouteOverview spj={spjView} destination={destinationTarget(spjView, destinations)} />
+              )}
 
-          {allStopsDone && (
-            <DeliveryCard
-              spj={spjView}
-              say={say}
-              onDone={(receipt) => {
-                setDoneScreen({ receipt, spjId: spjView.spj_id });
-                loadSpj();
-              }}
-            />
-          )}
-
-          {!spjAktif && history[0] && !receiptDoneFor(history[0]) && (
-            <DeliveryCard
-              spj={pendingReceipt}
-              say={say}
-              onDone={(receipt) => {
-                setDoneScreen({ receipt, spjId: pendingReceipt.spj_id });
-                loadSpj();
-              }}
-            />
-          )}
-
-          {!spjAktif && (
-            <section className="driver-card">
-              <p className="driver-muted">
-                {t("drv_no_spj_desc")} {t("drv_no_spj_hint")}
-              </p>
-            </section>
-          )}
-
-          {history.length > 0 && !doneScreen && (
-            <section className="driver-card" data-testid="history-card">
-              <h2>
-                <ClipboardCheck size={18} /> {t("drv_history_title")}
-              </h2>
-              <ul className="history-list">
-                {history.slice(0, 5).map((s) => (
-                  <li key={s.spj_id}>
-                    <span>
-                      <strong>{s.spj_number}</strong>
-                      <small>
-                        {s.date} — {s.destination}
-                      </small>
-                    </span>
-                    <span className="driver-badge done">{t("drv_history_done")}</span>
-                  </li>
+              {spjView &&
+                stops.map((stop, i) => (
+                  <StopCard
+                    key={`${spjView.spj_id}-${i}`}
+                    spj={spjView}
+                    stop={stop}
+                    index={i}
+                    current={i === pendingIndex}
+                    locked={pendingIndex !== -1 && i > pendingIndex}
+                    blocked={blocked}
+                    arEnabled={arEnabled}
+                    onCompleted={() => {
+                      loadSpj();
+                      say(t("drv_stop_done_toast"));
+                    }}
+                    say={say}
+                  />
                 ))}
-              </ul>
-            </section>
+
+              {spjView && <DestinationCard spj={spjView} destinations={destinations} />}
+
+              {allStopsDone && (
+                <DeliveryCard
+                  spj={spjView}
+                  say={say}
+                  onDone={(receipt) => {
+                    setDoneScreen({ receipt, spjId: spjView.spj_id });
+                    loadSpj();
+                  }}
+                />
+              )}
+
+              {!spjAktif && history[0] && !receiptDoneFor(history[0]) && (
+                <DeliveryCard
+                  spj={pendingReceipt}
+                  say={say}
+                  onDone={(receipt) => {
+                    setDoneScreen({ receipt, spjId: pendingReceipt.spj_id });
+                    loadSpj();
+                  }}
+                />
+              )}
+
+              {!spjAktif && (
+                <section className="driver-card">
+                  <p className="driver-muted">
+                    {t("drv_no_spj_desc")} {t("drv_no_spj_hint")}
+                  </p>
+                </section>
+              )}
+
+              {history.length > 0 && !doneScreen && (
+                <section className="driver-card" data-testid="history-card">
+                  <h2>
+                    <ClipboardCheck size={18} /> {t("drv_history_title")}
+                  </h2>
+                  <ul className="history-list">
+                    {history.slice(0, 5).map((s) => (
+                      <li key={s.spj_id}>
+                        <span>
+                          <strong>{s.spj_number}</strong>
+                          <small>
+                            {s.date} — {s.destination}
+                          </small>
+                        </span>
+                        <span className="driver-badge done">{t("drv_history_done")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </>
           )}
         </>
       )}

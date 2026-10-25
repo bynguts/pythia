@@ -3,7 +3,7 @@ import { apiFetch, FIELD_ROLE_KEY, FIELD_TOKEN_KEY } from "../../shared/api/clie
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import { LoginPage } from "./LoginPage.jsx";
 
-// gsc P0-2: /driver and /field stay public routes, but every write they make
+// gsc P0-2: /driver stays a public route (/field redirects to it), but every write they make
 // needs a token whose role may act on field work (the same permissions the
 // backend checks: every driver/field write accepts dispatch:confirm or
 // dispatch:create). Without one (a fresh phone), or when the backend no longer
@@ -94,6 +94,7 @@ export function RoleGate({ role = "driver", children }) {
         initialUsername={role}
         notice={forbidden ? t("role_gate_forbidden") : t("role_gate_notice")}
         fieldSession
+        variant="driver"
       />
     );
   }

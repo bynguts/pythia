@@ -81,6 +81,8 @@ test("offline stop submission queues durably, survives reload, and syncs on reco
       localStorage.removeItem("pythia_driver");
     }, principal.token);
     await page.goto("/driver");
+    // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
+    await page.getByTestId("driver-truck-search").fill(TEST_TRUCK);
     await page.locator(`[data-testid="pick-${TEST_TRUCK}"]`).click();
 
     // Pretrip online first (it gates the stop form) — only when today's

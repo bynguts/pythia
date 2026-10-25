@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ClipboardList,
@@ -119,17 +119,17 @@ function newOperationId() {
   return `op-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-// Polls /dispatch/{truck} and shows approved-plan and "send route"
-// instructions. The instruction text comes from the backend and is rendered
-// as it arrives; "Siap" is one tap and queues offline like every driver write.
-export function InstructionCard({ truckCode, blocked, outboxItems, say }) {
-  const { t } = useLanguage();
+// Polls /dispatch/{truck}. The last live list is kept on this phone, so a
+// reload or a dead backend still shows the instructions, labelled as cached
+// with their age (X-Pythia-Cached-At from the service worker).
+export function useDispatchInstructions(truckCode) {
   const [list, setList] = useState(() => readDispatchCache(truckCode));
-  const [stale, setStale] = useState(false);
-  const [answered, setAnswered] = useState(() => new Set());
-  const [busyId, setBusyId] = useState(null);
+  // null while live; otherwise { at } (ISO, may be null when the age is unknown).
+  const [cached, setCached] = useState(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const load = useCallback(async () => {
+    if (!truckCode) return;
     try {
       const res = await apiFetch(`/dispatch/${encodeURIComponent(truckCode)}`, { tokenKey: FIELD_TOKEN_KEY });
       if (res.status === 401) {
@@ -138,28 +138,57 @@ export function InstructionCard({ truckCode, blocked, outboxItems, say }) {
       }
       if (!res.ok) throw new Error(String(res.status));
       const body = await res.json();
+      const items = Array.isArray(body) ? body : [];
       const isStale = res.headers.get("X-Pythia-Stale") === "1";
-      setList(Array.isArray(body) ? body : []);
-      setStale(isStale);
+      setList(items);
+      setLoadFailed(false);
+      setCached(isStale ? { at: res.headers.get("X-Pythia-Cached-At") } : null);
       if (!isStale) {
         markDriverSynced();
         try {
-          localStorage.setItem(dispatchCacheKey(truckCode), JSON.stringify(Array.isArray(body) ? body : []));
+          localStorage.setItem(dispatchCacheKey(truckCode), JSON.stringify(items));
         } catch {
           // The cache is a convenience; the live list is already on screen.
         }
       }
     } catch {
-      setStale(true); // Keep the last known instructions, labelled as cached.
+      // Keep the last known instructions, labelled as cached.
+      setLoadFailed(true);
+      setCached((prev) => prev || { at: null });
     }
   }, [truckCode]);
 
   useEffect(() => {
     setList(readDispatchCache(truckCode));
+    setCached(null);
     load();
     const id = setInterval(load, DISPATCH_POLL_MS);
     return () => clearInterval(id);
   }, [truckCode, load]);
+
+  return { list, cached, loadFailed };
+}
+
+function cachedAgeMinutes(at) {
+  const time = at ? Date.parse(at) : NaN;
+  return Number.isFinite(time) ? Math.max(0, Math.round((Date.now() - time) / 60000)) : null;
+}
+
+// Approved-plan and "send route" instructions. The instruction text comes from
+// the backend and is rendered as it arrives; "Siap" is one tap and queues
+// offline like every driver write. With `showEmpty` (the Instruksi tab) the
+// card also says when there is nothing to do or nothing loaded yet.
+export function InstructionCard({ feed, blocked, outboxItems, say, showEmpty = false }) {
+  const { t } = useLanguage();
+  const { list, cached, loadFailed } = feed;
+  const [answered, setAnswered] = useState(() => new Set());
+  const [busyId, setBusyId] = useState(null);
+  const [reasons, setReasons] = useState({});
+  // One operation id per (instruction, answer): repeated taps replace one
+  // queued entry instead of adding more, and every replay carries the id the
+  // server's replay guard knows.
+  const operationIds = useRef(new Map());
+  const inFlight = useRef(new Set());
 
   const hidden = useMemo(() => {
     const ids = queuedDispatchIds(outboxItems);
@@ -168,13 +197,23 @@ export function InstructionCard({ truckCode, blocked, outboxItems, say }) {
   }, [outboxItems, answered]);
   const visible = pendingInstructions(list, hidden);
 
+  const operationIdFor = (dispatchId, status) => {
+    const key = `${dispatchId}:${status}`;
+    if (!operationIds.current.has(key)) operationIds.current.set(key, newOperationId());
+    return operationIds.current.get(key);
+  };
+
   const confirm = async (dispatch, status) => {
+    // A second tap while the first is still out does nothing.
+    if (inFlight.current.has(dispatch.id)) return;
+    inFlight.current.add(dispatch.id);
     setBusyId(dispatch.id);
     const path = `/dispatch/${encodeURIComponent(dispatch.id)}/confirm`;
+    const reason = (reasons[dispatch.id] || "").trim();
     const data = {
       status,
-      note: status === "READY" ? t("drv6_instr_ready_note") : t("drv6_instr_issue_note"),
-      operation_id: newOperationId(),
+      note: status === "READY" ? t("drv6_instr_ready_note") : reason || t("drv6_instr_issue_note"),
+      operation_id: operationIdFor(dispatch.id, status),
     };
     try {
       let res;
@@ -201,22 +240,54 @@ export function InstructionCard({ truckCode, blocked, outboxItems, say }) {
     } catch (error) {
       say(error instanceof OutboxStorageFullError ? t("drv6_storage_full") : t("drv6_instr_failed"), 8000);
     } finally {
+      inFlight.current.delete(dispatch.id);
       setBusyId(null);
     }
   };
 
-  if (visible.length === 0) return null;
+  const age = cached ? cachedAgeMinutes(cached.at) : null;
+  const cachedBadge = cached && (
+    <span className="driver-badge" data-testid="driver-instructions-cached">
+      {age === null ? t("drv6_instr_cached") : t("drv10_instr_cached_age").replace("{n}", age)}
+    </span>
+  );
+
+  if (visible.length === 0) {
+    if (!showEmpty) return null;
+    const failedEmpty = loadFailed && list.length === 0;
+    return (
+      <section className="driver-card driver-instructions" data-testid="driver-instructions-empty">
+        <div className="driver-card-head">
+          <h2>
+            <ClipboardList size={18} /> {t("drv6_instr_title")}
+          </h2>
+          {cachedBadge}
+        </div>
+        <p className="driver-instruction-empty" role={failedEmpty ? "alert" : undefined}>
+          <strong>
+            {failedEmpty
+              ? navigator.onLine
+                ? t("drv10_instr_load_error")
+                : t("drv10_instr_offline")
+              : t("drv10_instr_empty")}
+          </strong>
+          {!failedEmpty && <span className="driver-muted">{t("drv10_instr_empty_desc")}</span>}
+        </p>
+      </section>
+    );
+  }
   return (
     <section className="driver-card driver-instructions" data-testid="driver-instructions">
       <div className="driver-card-head">
         <h2>
           <ClipboardList size={18} /> {t("drv6_instr_title")}
         </h2>
-        {stale && <span className="driver-badge">{t("drv6_instr_cached")}</span>}
+        {cachedBadge}
       </div>
       <ul className="driver-instruction-list">
         {visible.map((dispatch) => {
           const time = clockTime(dispatch.created_at);
+          const reasonId = `instr-reason-${dispatch.id}`;
           return (
             <li key={dispatch.id} data-testid={`driver-instruction-${dispatch.id}`}>
               <span className="driver-badge">
@@ -227,6 +298,17 @@ export function InstructionCard({ truckCode, blocked, outboxItems, say }) {
               <p className="driver-instruction-text">{dispatch.instruction}</p>
               {time && <p className="driver-muted">{t("drv6_instr_time").replace("{time}", time)}</p>}
               {blocked && <p className="driver-held">{t("drv6_safety_held")}</p>}
+              <label className="driver-label" htmlFor={reasonId}>
+                {t("drv10_instr_reason_label")}
+              </label>
+              <input
+                id={reasonId}
+                className="driver-input"
+                data-testid="driver-instruction-reason"
+                value={reasons[dispatch.id] || ""}
+                onChange={(e) => setReasons((prev) => ({ ...prev, [dispatch.id]: e.target.value }))}
+                placeholder={t("drv10_instr_reason_placeholder")}
+              />
               <div className="driver-actions">
                 <button
                   type="button"
@@ -255,9 +337,17 @@ export function InstructionCard({ truckCode, blocked, outboxItems, say }) {
   );
 }
 
+// Open instructions for the tab badge (the card's own filter).
+export function openInstructionCount(list, outboxItems) {
+  return pendingInstructions(list, queuedDispatchIds(outboxItems)).length;
+}
+
 // ── Sync status and rejected work (R3, audit gap 9) ───────────────────────────
 
-export function SyncStatus({ lastSync, pending, flushing, online }) {
+// `onRetry` (the old /field "sync now"): the queue also retries on its own
+// every 10 s and on reconnect; the button lets a driver who sees a bar of
+// signal try at once.
+export function SyncStatus({ lastSync, pending, flushing, online, onRetry }) {
   const { t } = useLanguage();
   const time = clockTime(lastSync);
   return (
@@ -273,6 +363,16 @@ export function SyncStatus({ lastSync, pending, flushing, online }) {
             ? t("drv6_pending_n").replace("{n}", pending)
             : t("drv6_all_sent")}
       </span>
+      {onRetry && pending > 0 && !flushing && (
+        <button
+          type="button"
+          className="driver-btn ghost driver-sync-now"
+          data-testid="driver-sync-now"
+          onClick={onRetry}
+        >
+          {t("drv10_sync_now")}
+        </button>
+      )}
     </section>
   );
 }

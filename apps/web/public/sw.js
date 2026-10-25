@@ -16,7 +16,6 @@ const CACHE_NAME = "pythia-v2-__BUILD_ID__";
 // PNG icons are pre-cached so an offline launch keeps its home-screen icon.
 const APP_SHELL = [
   "/",
-  "/field",
   "/driver",
   "/manifest.webmanifest",
   "/manifest.driver.webmanifest",

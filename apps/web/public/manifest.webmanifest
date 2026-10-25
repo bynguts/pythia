@@ -1,7 +1,7 @@
 {
   "name": "Pythia",
   "short_name": "Pythia",
-  "description": "AI command center for Jakarta waste fleet operations. Install as the field app, driver app, or command center.",
+  "description": "AI command center for Jakarta waste fleet operations. Install as the driver app or the command center.",
   "lang": "en",
   "dir": "ltr",
   "start_url": "/",
@@ -36,10 +36,10 @@
   ],
   "shortcuts": [
     {
-      "name": "Field Operations",
-      "short_name": "Field",
-      "description": "Open the field worker app",
-      "url": "/field",
+      "name": "Driver instructions",
+      "short_name": "Instructions",
+      "description": "Open the instructions in the driver app",
+      "url": "/driver?tab=instruksi",
       "icons": [
         {
           "src": "/pythia-icon-192.png",

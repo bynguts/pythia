@@ -1,9 +1,10 @@
 import { test, expect, request } from "@playwright/test";
 
-// #44: repeated taps must not enqueue duplicate confirmations. Queue identity
-// is (dispatchId, status): the same choice collapses into one pending entry,
-// while a READY then an ISSUE on the same dispatch are both preserved. Flush
-// retries keep exactly-once observable confirmation behavior.
+// #44: repeated taps must not enqueue duplicate confirmations. wave10
+// driver-field-app: the /field app merged into /driver, whose outbox replaces
+// a repeated (instruction, answer) instead of adding to it; an answered
+// instruction leaves the list, so it takes one answer. Flush retries keep
+// exactly-once observable confirmation behaviour.
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
 async function authenticatedApi() {
@@ -18,11 +19,33 @@ async function authenticatedApi() {
   return { api, token };
 }
 
-async function outboxEntries(page) {
-  return page.evaluate(() => JSON.parse(localStorage.getItem("pythia_field_outbox") || "[]"));
+async function openInstructions(page, token, truck) {
+  await page.goto("/");
+  await page.evaluate(
+    ({ token, truck }) => {
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith("pythia_driver")) localStorage.removeItem(key);
+      }
+      localStorage.setItem("pythia_lang", "id");
+      localStorage.setItem("pythia_field_token", token);
+      localStorage.setItem("pythia_driver", JSON.stringify({ driver_name: "E2E", truck_code: truck }));
+    },
+    { token, truck },
+  );
+  await page.goto("/driver?tab=instruksi", { waitUntil: "domcontentloaded" });
 }
 
-test("double tap while offline enqueues exactly one confirmation, READY then ISSUE both survive", async ({
+async function queuedFor(page, dispatchId) {
+  return page.evaluate(
+    (id) =>
+      JSON.parse(localStorage.getItem("pythia_driver_outbox") || "[]").filter(
+        (entry) => entry.path === `/dispatch/${encodeURIComponent(id)}/confirm`,
+      ),
+    dispatchId,
+  );
+}
+
+test("a triple tap while offline enqueues exactly one confirmation and closes the instruction", async ({
   page,
   context,
 }) => {
@@ -34,35 +57,26 @@ test("double tap while offline enqueues exactly one confirmation, READY then ISS
   expect(create.ok()).toBeTruthy();
   const dispatch = await create.json();
 
-  await page.goto("/field");
-  await page.evaluate((value) => localStorage.setItem("pythia_field_token", value), token);
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await page.getByTestId("truck-select").selectOption("T-001");
-  await expect(page.getByTestId("active-dispatch")).toContainText(instruction, { timeout: 10000 });
+  await openInstructions(page, token, "T-001");
+  const item = page.getByTestId(`driver-instruction-${dispatch.id}`);
+  await expect(item).toContainText(instruction, { timeout: 10000 });
 
-  // Go offline and tap READY three times rapidly.
+  // Go offline and tap READY three times in one go (faster than a re-render).
   await context.setOffline(true);
-  for (let i = 0; i < 3; i += 1) {
-    await page.getByTestId("btn-ready").click();
-  }
-  await expect(page.getByTestId("field-status")).toContainText("antre untuk disinkronkan", {
-    timeout: 10000,
+  await item.getByTestId("driver-instruction-ready").evaluate((button) => {
+    button.click();
+    button.click();
+    button.click();
   });
-
-  let entries = await outboxEntries(page);
-  const readyEntries = entries.filter((e) => e.dispatchId === dispatch.id && e.status === "READY");
-  expect(readyEntries.length).toBe(1);
-
-  // A different intended terminal state on the same dispatch is a distinct
-  // operation and must be preserved alongside the queued READY.
-  await page.getByTestId("btn-issue").click();
-  await page.waitForTimeout(500);
-  entries = await outboxEntries(page);
-  const issueEntries = entries.filter((e) => e.dispatchId === dispatch.id && e.status === "ISSUE");
-  expect(issueEntries.length).toBe(1);
-  expect(entries.filter((e) => e.dispatchId === dispatch.id).length).toBe(2);
+  await expect(page.getByTestId("driver-queued-count")).toHaveText("1 item menunggu sinyal");
+  const entries = await queuedFor(page, dispatch.id);
+  expect(entries).toHaveLength(1);
+  expect(entries[0].data.status).toBe("READY");
+  // Answered: the instruction leaves the list, so no second answer can be queued.
+  await expect(item).toHaveCount(0);
 
   await context.setOffline(false);
+  await api.dispose();
 });
 
 test("flush sends each queued operation exactly once and clears the queue", async ({ page, context }) => {
@@ -74,38 +88,66 @@ test("flush sends each queued operation exactly once and clears the queue", asyn
   expect(create.ok()).toBeTruthy();
   const dispatch = await create.json();
 
-  await page.goto("/field");
-  await page.evaluate((value) => localStorage.setItem("pythia_field_token", value), token);
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await page.getByTestId("truck-select").selectOption("T-001");
-  await expect(page.getByTestId("active-dispatch")).toContainText(instruction, { timeout: 10000 });
+  await openInstructions(page, token, "T-001");
+  const item = page.getByTestId(`driver-instruction-${dispatch.id}`);
+  await expect(item).toContainText(instruction, { timeout: 10000 });
 
-  // Queue two distinct operations offline (READY + ISSUE).
   await context.setOffline(true);
-  await page.getByTestId("btn-ready").click();
-  await page.getByTestId("btn-issue").click();
-  await page.waitForTimeout(500);
+  await item.getByTestId("driver-instruction-issue").click();
+  await expect.poll(async () => (await queuedFor(page, dispatch.id)).length).toBe(1);
 
-  // Back online: the app auto-syncs on reconnect. Verify the outbox drains
-  // and stays drained — a repeated sync must not resurrect or duplicate ops.
+  // Back online: the app syncs on reconnect, and the queue drains and stays drained.
   await context.setOffline(false);
-  await expect
-    .poll(async () => (await outboxEntries(page)).filter((e) => e.dispatchId === dispatch.id).length, {
-      timeout: 20000,
-    })
-    .toBe(0);
-
-  // Second sync pass (now a no-op) — queue stays empty.
-  await page.evaluate(async () => {
-    const items = JSON.parse(localStorage.getItem("pythia_field_outbox") || "[]");
-    // flushOutbox equivalent: nothing left, so nothing is re-sent.
-    localStorage.setItem("pythia_field_outbox", JSON.stringify(items));
-    return items.length;
-  });
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect.poll(async () => (await queuedFor(page, dispatch.id)).length, { timeout: 20000 }).toBe(0);
   await page.waitForTimeout(800);
-  const afterSecond = await outboxEntries(page);
-  expect(afterSecond.filter((e) => e.dispatchId === dispatch.id).length).toBe(0);
+  expect(await queuedFor(page, dispatch.id)).toHaveLength(0);
 
   const status = await (await api.get(`${API}/dispatch/${dispatch.id}/status`)).json();
-  expect(["READY", "ISSUE"]).toContain(status.field_status);
+  expect(status.field_status).toBe("ISSUE");
+  await api.dispose();
+});
+
+test("a confirmation the retired /field app queued is adopted and delivered", async ({ page }) => {
+  const { api, token } = await authenticatedApi();
+  const create = await api.post(`${API}/dispatch`, {
+    data: { truck_code: "T-001", instruction: `E2E legacy ${Date.now()}`, manager_id: "e2e" },
+  });
+  const dispatch = await create.json();
+  await page.goto("/");
+  await page.evaluate(
+    (id) =>
+      localStorage.setItem(
+        "pythia_field_outbox",
+        JSON.stringify([
+          {
+            dispatchId: id,
+            status: "READY",
+            note: "Dikonfirmasi dari aplikasi lapangan",
+            operation_id: "field-legacy-e2e-0001",
+          },
+        ]),
+      ),
+    dispatch.id,
+  );
+  // The adopted entry keeps its operation id (the backend replay guard) and
+  // is delivered exactly once, even across reconnect events and reloads.
+  const sentIds = [];
+  await page.route(`**/dispatch/${dispatch.id}/confirm`, async (route) => {
+    sentIds.push(JSON.parse(route.request().postData()).operation_id);
+    await route.continue();
+  });
+  await openInstructions(page, token, "T-001");
+  await expect
+    .poll(async () => (await (await api.get(`${API}/dispatch/${dispatch.id}/status`)).json()).field_status, {
+      timeout: 20000,
+    })
+    .toBe("READY");
+  expect(await page.evaluate(() => localStorage.getItem("pythia_field_outbox"))).toBeNull();
+  await expect.poll(async () => (await queuedFor(page, dispatch.id)).length, { timeout: 20000 }).toBe(0);
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1500);
+  expect(sentIds).toEqual(["field-legacy-e2e-0001"]);
+  await api.dispose();
 });

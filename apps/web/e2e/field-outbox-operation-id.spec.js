@@ -1,8 +1,9 @@
 import { test, expect, request } from "@playwright/test";
 
-// a queued field confirmation carries one operation id from the
-// moment it is queued, and every flush retry re-sends that same id, so the
-// backend's #44 replay guard keeps the confirmation exactly-once.
+// a queued instruction confirmation carries one operation id from the moment
+// it is queued, and every flush retry re-sends that same id, so the backend's
+// #44 replay guard keeps the confirmation exactly-once. wave10
+// driver-field-app: runs on the driver app's Instruksi tab (/field merged).
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
 async function authenticatedApi() {
@@ -29,24 +30,36 @@ test("a retried field confirmation re-sends the operation id it was queued with"
   expect(create.ok()).toBeTruthy();
   const dispatch = await create.json();
 
-  await page.goto("/field");
-  await page.evaluate((value) => localStorage.setItem("pythia_field_token", value), token);
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await page.getByTestId("truck-select").selectOption("T-001");
-  await expect(page.getByTestId("active-dispatch")).toContainText(instruction, { timeout: 10000 });
+  await page.goto("/");
+  await page.evaluate((value) => {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("pythia_driver")) localStorage.removeItem(key);
+    }
+    localStorage.setItem("pythia_lang", "id");
+    localStorage.setItem("pythia_field_token", value);
+    localStorage.setItem("pythia_driver", JSON.stringify({ driver_name: "E2E", truck_code: "T-001" }));
+  }, token);
+  await page.goto("/driver?tab=instruksi", { waitUntil: "domcontentloaded" });
+  const item = page.getByTestId(`driver-instruction-${dispatch.id}`);
+  await expect(item).toContainText(instruction, { timeout: 10000 });
 
   await context.setOffline(true);
-  await page.getByTestId("btn-ready").click();
-  await page.getByTestId("btn-ready").click();
-  const queued = await page.evaluate(
-    (id) =>
-      JSON.parse(localStorage.getItem("pythia_field_outbox") || "[]").filter(
-        (entry) => entry.dispatchId === id,
+  await item.getByTestId("driver-instruction-ready").click();
+  const path = `/dispatch/${encodeURIComponent(dispatch.id)}/confirm`;
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (p) =>
+          JSON.parse(localStorage.getItem("pythia_driver_outbox") || "[]").filter((e) => e.path === p).length,
+        path,
       ),
-    dispatch.id,
+    )
+    .toBe(1);
+  const queued = await page.evaluate(
+    (p) => JSON.parse(localStorage.getItem("pythia_driver_outbox") || "[]").filter((e) => e.path === p),
+    path,
   );
-  expect(queued).toHaveLength(1);
-  expect(queued[0].operation_id.length).toBeGreaterThanOrEqual(8);
+  expect(queued[0].data.operation_id.length).toBeGreaterThanOrEqual(8);
 
   // First delivery attempt fails server-side; the retry must reuse the id.
   const sentIds = [];
@@ -61,12 +74,14 @@ test("a retried field confirmation re-sends the operation id it was queued with"
     }
   });
   await context.setOffline(false);
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect.poll(() => sentIds.length, { timeout: 15000 }).toBeGreaterThanOrEqual(1);
-  await page.getByRole("button", { name: /sinkronkan sekarang|sync now/i }).click();
+  await page.getByTestId("driver-sync-now").click();
   await expect.poll(() => sentIds.length, { timeout: 15000 }).toBeGreaterThanOrEqual(2);
 
-  expect(new Set(sentIds)).toEqual(new Set([queued[0].operation_id]));
-  const status = await (await api.get(`${API}/dispatch/${dispatch.id}/status`)).json();
-  expect(status.field_status).toBe("READY");
+  expect(new Set(sentIds)).toEqual(new Set([queued[0].data.operation_id]));
+  await expect
+    .poll(async () => (await (await api.get(`${API}/dispatch/${dispatch.id}/status`)).json()).field_status)
+    .toBe("READY");
   await api.dispose();
 });

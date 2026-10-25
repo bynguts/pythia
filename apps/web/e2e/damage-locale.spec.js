@@ -64,7 +64,8 @@ test("damage report panel follows the locale in both modes", async ({ page }) =>
   const seeded = await seedReport();
   try {
     await signIn(page, "en");
-    await page.locator(".records-doc-link", { hasText: "Damage reports" }).click();
+    // wave9 fleet composition: damage reports are a "Fleet documents" tab, not a link button.
+    await page.getByRole("tab", { name: "Damage reports" }).click();
     await expect(page.locator(".damage-panel .panel-head h3")).toBeVisible({ timeout: 20000 });
     await expect(page.locator(".damage-panel .panel-head h3")).toHaveText("Damage Reports");
     await expect(page.locator(".damage-panel .panel-head .pill").first()).toContainText("report");
@@ -83,7 +84,10 @@ test("damage report panel follows the locale in both modes", async ({ page }) =>
     await expect(page.locator(".damage-panel .table-wrap")).toHaveAccessibleName("Damage report list");
 
     await page.getByTestId("lang-switch-id").click();
-    await expect(page.locator(".records-doc-link", { hasText: "Laporan Kerusakan" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Laporan Kerusakan" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     await expect(page.locator(".damage-panel .panel-head h3")).toHaveText("Laporan Kerusakan");
     await expect(page.locator(".damage-panel .panel-head .pill").first()).toContainText("laporan");
     await expect(page.locator(".damage-panel thead")).toContainText("Waktu");

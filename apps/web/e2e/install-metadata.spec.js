@@ -18,9 +18,11 @@ test("both manifests serve valid metadata with field and driver shortcuts", asyn
     expect(manifest.start_url).toBe("/");
     expect(manifest.display).toBe("standalone");
 
-    // #49: role shortcuts for the two PWA surfaces.
+    // #49: role shortcuts. wave10 driver-field-app: /field merged into the
+    // driver app, so the field shortcut opens its Instruksi tab.
     const urls = manifest.shortcuts.map((s) => s.url);
-    expect(urls).toContain("/field");
+    expect(urls).toContain("/driver?tab=instruksi");
+    expect(urls).not.toContain("/field");
     expect(urls).toContain("/driver");
     for (const shortcut of manifest.shortcuts) {
       expect(shortcut.name.length).toBeGreaterThan(0);

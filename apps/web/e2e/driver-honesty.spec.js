@@ -66,6 +66,8 @@ test("the driver picker and header label the roster as SIMULASI", async ({ page,
   await page.goto("/driver");
   await expect(page.getByTestId("driver-roster-sim")).toHaveText("SIMULASI");
   await expect(page.getByText("Nama pengemudi dan truk ini simulasi, bukan data personel.")).toBeVisible();
+  // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
+  await page.getByTestId("driver-truck-search").fill("T-254");
   await page.getByTestId("pick-T-254").getByRole("button").click();
   await expect(page.getByTestId("driver-identity-sim")).toHaveText("SIMULASI");
 });

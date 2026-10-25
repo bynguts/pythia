@@ -126,6 +126,12 @@ async function stubBackend(page, { routeSource = "LIVE_EXTERNAL", path = PATH, w
     route.fulfill({ json: { spj: [], count: 0 } }),
   );
   await page.route(/\/api\/pretrip\/today\//, (route) => route.fulfill({ json: { done: true } }));
+  // wave10 driver-field-app: AR opens from the started stop, which the duty-hour
+  // guard holds late in the simulated day; the guard has its own spec
+  // (driver-safety-banner), so it is answered here as not shipped (404).
+  await page.route(/\/api\/safety\/driver\//, (route) =>
+    route.fulfill({ status: 404, json: { detail: "Not Found" } }),
+  );
   await page.route(/\/api\/spj\/active-path\//, (route) =>
     route.fulfill({
       json: {
@@ -162,6 +168,8 @@ async function openAr(page, lang = "en") {
     { token: principal.token, lang, truck: TRUCK },
   );
   await page.goto("/driver");
+  // wave10 driver-field-app (L4): AR is offered after arrival, inside the open stop form.
+  await page.getByTestId("stop-1").getByTestId("stop-start").click();
   const open = page.getByTestId("stop-1").getByTestId("ar-nav-open");
   await expect(open).toBeVisible({ timeout: 20000 });
   await open.click();

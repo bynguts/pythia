@@ -152,7 +152,19 @@ function ArrowGlyph() {
   );
 }
 
-export function ArNavigator({ spj, stop, index, orientationPermission, onClose, onCapture, onUseForm }) {
+// `kicker` replaces "stop n of m" for a target that is not an SPJ stop (the TPA
+// point); without `onCapture` the arrived panel only closes, so no photo is
+// taken that would not become evidence.
+export function ArNavigator({
+  spj,
+  stop,
+  index,
+  orientationPermission,
+  onClose,
+  onCapture,
+  onUseForm,
+  kicker,
+}) {
   const { t, lang } = useLanguage();
   const videoRef = useRef(null);
   const rootRef = useRef(null);
@@ -494,9 +506,11 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
   // a live compass makes that true; otherwise the honest 2D compass card.
   const stageMode = view === "camera" && compassLive ? "floor" : "card";
   const headingMode = compassLive ? "compass" : headingState === "waiting" ? "waiting" : "north-up";
-  const stopTitle = t("drv_stop_title")
-    .replace("{n}", index + 1)
-    .replace("{name}", stop.name);
+  const stopTitle =
+    kicker ||
+    t("drv_stop_title")
+      .replace("{n}", index + 1)
+      .replace("{name}", stop.name);
   const total = spj?.stops?.length || index + 1;
 
   const capture = async () => {
@@ -731,9 +745,10 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
         </button>
         <div className="ar-top-title">
           <span className="ar-top-kicker">
-            {t("drv_ar_stop_of")
-              .replace("{n}", index + 1)
-              .replace("{total}", total)}
+            {kicker ||
+              t("drv_ar_stop_of")
+                .replace("{n}", index + 1)
+                .replace("{total}", total)}
           </span>
           <strong>{stop.name}</strong>
         </div>
@@ -871,7 +886,11 @@ export function ArNavigator({ spj, stop, index, orientationPermission, onClose, 
                   <CheckCircle2 size={20} aria-hidden="true" /> {t("drv_ar_arrived_title")}
                 </h2>
                 <p>{t("drv_ar_arrived_desc").replace("{n}", ARRIVAL_RADIUS_M)}</p>
-                {view === "camera" ? (
+                {!onCapture ? (
+                  <button type="button" className="ar-btn primary" onClick={onClose}>
+                    <CheckCircle2 size={18} /> {t("drv10_tpa_ar_back")}
+                  </button>
+                ) : view === "camera" ? (
                   <button
                     type="button"
                     className="ar-btn primary"

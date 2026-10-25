@@ -158,15 +158,17 @@ test("English locale, 44 px targets and no horizontal overflow at 390 px", async
   expect(geometry.overflow).toBeLessThanOrEqual(2);
 });
 
-test("fleet workspace safety chip opens the driver-safety tab", async ({ page }) => {
+// wave9 fleet composition: the problem strip is gone; the attention count rides on the
+// "Keselamatan sopir" document tab and the panel inside carries the SIMULASI badge.
+test("fleet workspace safety tab counts drivers needing attention and opens the panel", async ({ page }) => {
   await page.route("**/api/safety/overview", (route) => route.fulfill({ json: overview() }));
   await signIn(page, { role: "dispatcher", path: "/fleet" });
-  const chip = page.getByTestId("problem-chip-safety");
-  await expect(chip).toBeEnabled();
-  await expect(chip).toContainText("2"); // one blocked without override + one gate alert
-  await expect(chip).toContainText("SIMULASI");
-  await chip.click();
-  await expect(page.getByTestId("fleet-safety-surface").getByTestId("safety-panel")).toBeVisible();
+  const tab = page.getByRole("tab", { name: /Keselamatan sopir/ });
+  await expect(tab.getByTestId("safety-tab-count")).toHaveText("2"); // one blocked + one gate alert
+  await tab.click();
+  const surface = page.getByTestId("fleet-safety-surface");
+  await expect(surface.getByTestId("safety-panel")).toBeVisible();
+  await expect(surface.getByTestId("safety-classification")).toHaveText("SIMULASI");
 });
 
 test("live backend overview keeps one classification and a matching badge", async ({ page }) => {

@@ -41,10 +41,12 @@ test("a fresh phone on /driver signs in as the driver in place and keeps the dee
   expect(await page.evaluate(() => localStorage.getItem("pythia_token"))).toBeNull();
 });
 
+// wave10 driver-field-app: /field now redirects to the driver app's Instruksi tab, behind the same gate.
 test("a token the backend no longer knows brings the sign-in back on /field", async ({ page }) => {
   await freshPhone(page, "id");
   await page.evaluate(() => localStorage.setItem("pythia_field_token", "token-from-before-a-restart"));
   await page.goto("/field");
+  await expect(page).toHaveURL(/\/driver\?tab=instruksi$/);
 
   await expect(page.getByTestId("login-notice")).toBeVisible();
   await expect(page.locator('input[autocomplete="username"]')).toHaveValue("driver");
@@ -84,7 +86,7 @@ test("dispatcher adds a DEMO stop at the device position and it is stored DEMO-l
   }, principal);
   await page.reload({ waitUntil: "domcontentloaded" });
 
-  await page.getByRole("button", { name: "Surat Perintah Jalan" }).click();
+  await page.getByRole("tab", { name: "Surat jalan (SPJ)" }).click(); // wave9 fleet composition: records tab
   const demo = page.getByTestId("spj-demo-stop");
   await expect(demo).toHaveText(/DEMO/);
   await expect(page.getByText(/Hanya DEMO: .*35 m/)).toBeVisible();

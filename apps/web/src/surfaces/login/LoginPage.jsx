@@ -8,6 +8,7 @@ import {
   LockKeyhole,
   Radio,
   Route,
+  Truck,
   UserRound,
 } from "lucide-react";
 import { apiFetch, FIELD_ROLE_KEY, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
@@ -17,8 +18,17 @@ import { useLanguage } from "../../shared/i18n/index.jsx";
 // it needs and say why sign-in is required. `fieldSession` stores the token
 // under the field surfaces' own keys and never marks the command center as
 // signed in (gsc M1); the gate then receives the principal to check its role.
-export function LoginPage({ onLogin, initialUsername = "", notice = "", fieldSession = false }) {
+// `variant="driver"` is the driver app's own sign-in (L1, L6): titled for
+// drivers, a driver placeholder, and no command-centre marketing panel.
+export function LoginPage({
+  onLogin,
+  initialUsername = "",
+  notice = "",
+  fieldSession = false,
+  variant = "command",
+}) {
   const { lang, setLang, t } = useLanguage();
+  const driver = variant === "driver";
   const [username, setUsername] = useState(initialUsername);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -62,52 +72,54 @@ export function LoginPage({ onLogin, initialUsername = "", notice = "", fieldSes
 
   return (
     <main className="login-shell">
-      <section className="login-surface" aria-labelledby="login-title">
-        <aside className="login-story">
-          <div className="login-story-brand">
-            <span>P</span>
-            <div>
-              <strong>Pythia</strong>
+      <section className={`login-surface${driver ? " is-driver" : ""}`} aria-labelledby="login-title">
+        {!driver && (
+          <aside className="login-story">
+            <div className="login-story-brand">
+              <span>P</span>
+              <div>
+                <strong>Pythia</strong>
+              </div>
             </div>
-          </div>
-          <div className="login-story-copy">
-            <span className="login-story-kicker">
-              <Radio size={14} /> {t("login_story_kicker")}
-            </span>
-            <h1>
-              {t("login_story_headline_1")}
-              <br />
-              {t("login_story_headline_2")}
-            </h1>
-            <p>{t("login_story_copy")}</p>
-          </div>
-          <div className="login-proof-list" data-testid="login-proof-list">
-            <div>
-              <CheckCircle2 size={17} />
-              <span>
-                <strong>{t("hon_login_proof1_title")}</strong>
-                <small>{t("hon_login_proof1_sub")}</small>
+            <div className="login-story-copy">
+              <span className="login-story-kicker">
+                <Radio size={14} /> {t("login_story_kicker")}
               </span>
+              <h1>
+                {t("login_story_headline_1")}
+                <br />
+                {t("login_story_headline_2")}
+              </h1>
+              <p>{t("login_story_copy")}</p>
             </div>
-            <div>
-              <CheckCircle2 size={17} />
-              <span>
-                <strong>{t("hon_login_proof2_title")}</strong>
-                <small>{t("hon_login_proof2_sub")}</small>
-              </span>
+            <div className="login-proof-list" data-testid="login-proof-list">
+              <div>
+                <CheckCircle2 size={17} />
+                <span>
+                  <strong>{t("hon_login_proof1_title")}</strong>
+                  <small>{t("hon_login_proof1_sub")}</small>
+                </span>
+              </div>
+              <div>
+                <CheckCircle2 size={17} />
+                <span>
+                  <strong>{t("hon_login_proof2_title")}</strong>
+                  <small>{t("hon_login_proof2_sub")}</small>
+                </span>
+              </div>
+              <div>
+                <CheckCircle2 size={17} />
+                <span>
+                  <strong>{t("login_proof3_title")}</strong>
+                  <small>{t("login_proof3_sub")}</small>
+                </span>
+              </div>
             </div>
-            <div>
-              <CheckCircle2 size={17} />
-              <span>
-                <strong>{t("login_proof3_title")}</strong>
-                <small>{t("login_proof3_sub")}</small>
-              </span>
+            <div className="login-story-footer">
+              <Building2 size={16} /> {t("hon_login_footer")}
             </div>
-          </div>
-          <div className="login-story-footer">
-            <Building2 size={16} /> {t("hon_login_footer")}
-          </div>
-        </aside>
+          </aside>
+        )}
 
         <div className="login-card">
           <div className="login-language">
@@ -119,15 +131,13 @@ export function LoginPage({ onLogin, initialUsername = "", notice = "", fieldSes
             </button>
           </div>
           <div className="login-mobile-brand">
-            <span>
-              <Route size={20} />
-            </span>
+            <span>{driver ? <Truck size={20} /> : <Route size={20} />}</span>
             <strong>Pythia</strong>
           </div>
           <header>
-            <span className="login-eyebrow">{t("login_eyebrow")}</span>
-            <h2 id="login-title">{t("login_card_title")}</h2>
-            <p>{t("login_card_sub")}</p>
+            <span className="login-eyebrow">{t(driver ? "drv10_login_eyebrow" : "login_eyebrow")}</span>
+            <h2 id="login-title">{t(driver ? "drv10_login_title" : "login_card_title")}</h2>
+            <p>{t(driver ? "drv10_login_sub" : "login_card_sub")}</p>
             {notice && (
               <p className="login-notice" data-testid="login-notice">
                 {notice}
@@ -146,7 +156,7 @@ export function LoginPage({ onLogin, initialUsername = "", notice = "", fieldSes
                   spellCheck={false}
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
-                  placeholder={t("login_username_placeholder")}
+                  placeholder={t(driver ? "drv10_login_username_placeholder" : "login_username_placeholder")}
                   required
                 />
               </div>

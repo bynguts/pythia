@@ -1003,3 +1003,418 @@
     transition: none;
   }
 }
+
+/* ── Wave 10: one field app (tabs, truck search, route overview, TPA guide,
+   exception buttons) and the driver sign-in. ── */
+.driver-card-head {
+  flex-wrap: wrap;
+}
+
+.driver-tabs {
+  width: min(520px, calc(100% - 32px));
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-elevated);
+  background: var(--ui-surface);
+}
+
+.driver-tab {
+  position: relative;
+  min-height: var(--drv-tap);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-ink);
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.driver-tab.active {
+  color: var(--ui-accent-foreground);
+  background: var(--ui-accent-strong);
+}
+
+.driver-tab:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.driver-tab-count {
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-on-dark);
+  background: var(--ui-danger);
+  font-size: 13px;
+  line-height: 22px;
+  text-align: center;
+}
+
+@media (max-width: 360px) {
+  .driver-tab {
+    flex-direction: column;
+    gap: 2px;
+    font-size: 13px;
+  }
+}
+
+.driver-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.driver-search svg {
+  position: absolute;
+  left: var(--space-3);
+  color: var(--ui-ink-soft);
+  pointer-events: none;
+}
+
+.driver-search .driver-input {
+  width: 100%;
+  padding-left: 40px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.driver-truck-picker .driver-pick-list {
+  max-height: none;
+}
+
+.driver-truck-picker .driver-pick strong {
+  font-family: var(--mono);
+  font-size: 17px;
+}
+
+.driver-truck-picker .driver-pick small {
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.driver-instruction-empty {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 16px;
+}
+
+/* Route overview: an order sketch (no basemap) and the ordered stop list. */
+.driver-route-sketch {
+  margin: 0 0 var(--space-3);
+}
+
+.driver-route-sketch svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-muted);
+}
+
+.driver-route-sketch figcaption {
+  margin: var(--space-1) 0 0;
+  font-size: 13px;
+}
+
+.driver-route-line {
+  fill: none;
+  stroke: var(--ui-ink-soft);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+
+.driver-route-node circle {
+  fill: var(--ui-surface);
+  stroke: var(--ui-ink);
+  stroke-width: 2;
+}
+
+.driver-route-node text {
+  fill: var(--ui-ink);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.driver-route-node.done circle {
+  fill: var(--ui-success);
+  stroke: var(--ui-success);
+}
+
+.driver-route-node.done text,
+.driver-route-node.next text,
+.driver-route-node.dest text {
+  fill: var(--ui-on-dark);
+}
+
+.driver-route-node.next circle {
+  fill: var(--ui-accent-strong);
+  stroke: var(--ui-accent-strong);
+}
+
+.driver-route-node.dest circle {
+  fill: var(--ui-ink);
+  stroke: var(--ui-ink);
+}
+
+.driver-route-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.driver-route-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--ui-border);
+  font-size: 15px;
+}
+
+.driver-route-list li:last-child {
+  border-bottom: 0;
+}
+
+.driver-route-list strong,
+.driver-route-list small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.driver-route-list small {
+  font-size: 13px;
+  color: var(--ui-ink-soft);
+}
+
+.driver-route-list li.done {
+  color: var(--ui-ink-soft);
+}
+
+.driver-route-list li.next strong {
+  color: var(--ui-accent-strong);
+}
+
+.driver-route-num {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ui-ink);
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.driver-route-list li.done .driver-route-num {
+  border-color: var(--ui-success);
+  color: var(--ui-success);
+}
+
+.driver-route-list li.next .driver-route-num {
+  border-color: var(--ui-accent-strong);
+  color: var(--ui-accent-foreground);
+  background: var(--ui-accent-strong);
+}
+
+/* TPA guide: gate, weighbridge, active zone, inside the receipt card. */
+.driver-tpa-guide {
+  margin: var(--space-3) 0;
+  padding: var(--space-4) 0;
+  border-block: 1px solid var(--ui-border);
+}
+
+.driver-tpa-guide h3 {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.driver-tpa-steps {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.driver-tpa-steps li {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.driver-tpa-steps strong {
+  font-size: 16px;
+}
+
+.driver-tpa-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ui-border-strong);
+  border-radius: 50%;
+  color: var(--ui-ink-soft);
+}
+
+.driver-tpa-steps li.current .driver-tpa-icon {
+  border-color: var(--ui-accent-strong);
+  color: var(--ui-accent-foreground);
+  background: var(--ui-accent-strong);
+}
+
+.driver-tpa-steps li.done .driver-tpa-icon {
+  border-color: var(--ui-success);
+  color: var(--ui-success);
+}
+
+.driver-tpa-steps .driver-btn {
+  width: 100%;
+  margin-top: var(--space-2);
+}
+
+.driver-tpa-facts {
+  margin: var(--space-2) 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-2);
+}
+
+.driver-tpa-facts div {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+}
+
+.driver-tpa-facts dt {
+  font-size: 13px;
+  color: var(--ui-ink-soft);
+}
+
+.driver-tpa-facts dd {
+  margin: 2px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Exception quick buttons: at least 64 px tall, two per row, sized for gloves. */
+.driver-exception-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.driver-exception-btn {
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-2);
+  border: 2px solid var(--ui-ink);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-ink);
+  background: var(--ui-surface);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.driver-exception-btn[aria-pressed="true"] {
+  border-color: var(--ui-accent-strong);
+  box-shadow: inset 0 0 0 2px var(--ui-accent-strong);
+}
+
+.driver-exception-btn.is-danger {
+  border-color: var(--ui-danger);
+  color: var(--ui-danger);
+}
+
+.driver-exception-btn:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.driver-exception-sheet {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--ui-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.driver-exception-kind {
+  margin: 0;
+  font-size: 17px;
+}
+
+.driver-btn.danger {
+  color: var(--ui-on-dark);
+  background: var(--ui-danger);
+  border: 0;
+}
+
+.driver-exception-log {
+  margin-top: var(--space-4);
+}
+
+/* Driver sign-in: one column, no command-centre story panel (L1, L6). */
+.login-surface.is-driver {
+  grid-template-columns: minmax(0, 1fr);
+  width: min(520px, 100%);
+  min-height: 0;
+}
+
+.login-surface.is-driver .login-mobile-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 32px;
+}
+
+.login-surface.is-driver .login-mobile-brand span {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--ui-radius);
+  color: var(--ui-accent-foreground);
+  background: var(--ui-accent-strong);
+}
+
+.login-surface.is-driver .login-language button {
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+}
+
+.driver-sync-now {
+  min-height: var(--tap-min);
+  margin-left: auto;
+  padding: 0 var(--space-4);
+  font-size: 15px;
+}

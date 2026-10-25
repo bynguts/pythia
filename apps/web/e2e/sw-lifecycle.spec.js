@@ -59,7 +59,6 @@ test("first install caches the app shell and controls subsequent loads", async (
   // start URL, both of its manifests and their PNG icons.
   const shell = [
     "/",
-    "/field",
     "/driver",
     "/manifest.webmanifest",
     "/manifest.driver.webmanifest",
