@@ -14,6 +14,7 @@ from typing import Any
 
 from app.assistant.scenario import run_scenario
 from app.core.env import local_today
+from app.field.readiness import readiness_payload
 from app.field.recap import daily_recap
 from app.fleet.astar_routing import (
     is_traffic_jam_active,
@@ -249,6 +250,23 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "get_readiness",
+            "description": (
+                "Papan kesiapan pagi per truk: pretrip, instruksi, jam kerja, SPJ, kerusakan. Hanya baca. "
+                "Menampilkan jumlah siap/belum siap dan penghalang per truk yang belum siap."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {"type": "string", "description": "YYYY-MM-DD, default hari ini (WIB)"},
+                    "scope": {"type": "string", "enum": ["plan", "fleet"], "description": "default plan"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_daily_recap",
             "description": (
                 "Rekap penutupan hari: rencana (MODEL) vs realisasi tercatat di aplikasi (SPJ, tanda terima, "
@@ -319,6 +337,22 @@ def _fleet_status_tool(args: dict) -> dict[str, Any]:
     }
 
 
+READINESS_TOOL_TRUCKS = 25  # keeps the answer under the tool output size limit
+
+
+def _readiness_tool(args: dict) -> dict[str, Any]:
+    payload = readiness_payload(args.get("date") or None, args.get("scope") or "plan")
+    pending = [t for t in payload["trucks"] if not t["ready"]]
+    return {
+        **{key: value for key, value in payload.items() if key != "trucks"},
+        "not_ready_trucks": [
+            {"truck_code": t["truck_code"], "blockers": t["blockers"]}
+            for t in pending[:READINESS_TOOL_TRUCKS]
+        ],
+        "not_ready_omitted": max(0, len(pending) - READINESS_TOOL_TRUCKS),
+    }
+
+
 _TOOLS_IMPL: dict[str, Any] = {
     "get_command_center_snapshot": lambda args, ctx: _command_snapshot(ctx),
     "get_fleet_status": lambda args, ctx: _fleet_status_tool(args),
@@ -361,6 +395,7 @@ _TOOLS_IMPL: dict[str, Any] = {
         "note": "STATUS ONLY - Ana must not claim a send.",
     },
     "run_scenario": lambda args, ctx: run_scenario(args),
+    "get_readiness": lambda args, ctx: _readiness_tool(args),
     "get_daily_recap": lambda args, ctx: daily_recap(args.get("date") or local_today()),
     "get_data_provenance": lambda args, ctx: {
         "provenance": data_provenance(),

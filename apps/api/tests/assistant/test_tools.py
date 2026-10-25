@@ -12,8 +12,8 @@ def _ctx():
 
 
 class ToolRegistryTests(unittest.TestCase):
-    def test_15_schemas_declared(self):
-        self.assertEqual(len(TOOL_SCHEMAS), 15)
+    def test_16_schemas_declared(self):
+        self.assertEqual(len(TOOL_SCHEMAS), 16)
         names = {s["function"]["name"] for s in TOOL_SCHEMAS}
         expected = {
             "get_command_center_snapshot",
@@ -31,6 +31,7 @@ class ToolRegistryTests(unittest.TestCase):
             "get_whatsapp_status",
             "get_data_provenance",
             "get_daily_recap",
+            "get_readiness",
         }
         self.assertEqual(names, expected)
 
@@ -70,6 +71,20 @@ class ToolRegistryTests(unittest.TestCase):
         self.assertEqual(result, before)
         self.assertEqual(result["actual"]["classification"], "OBSERVED_IN_APP")
         self.assertIsNone(result["delta"]["tons"])
+
+    def test_readiness_tool_is_compact_read_only_and_within_output_limit(self):
+        import json
+
+        from app.field.readiness import readiness_payload
+
+        result = execute_tool("get_readiness", {"scope": "fleet"}, _ctx())
+        full = readiness_payload(None, "fleet")
+        self.assertEqual(result["counts"], full["counts"])
+        self.assertEqual(result["scope_used"], "fleet")
+        self.assertNotIn("trucks", result)
+        listed = len(result["not_ready_trucks"]) + result["not_ready_omitted"]
+        self.assertEqual(listed, sum(1 for t in full["trucks"] if not t["ready"]))
+        self.assertNotIn("error", json.loads(sanitize_json_payload(result)))
 
     def test_execute_unknown_tool_raises_keyerror(self):
         with self.assertRaises(KeyError):
