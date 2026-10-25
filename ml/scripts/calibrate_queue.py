@@ -22,6 +22,11 @@ Backtest of the daily-arrival input: rolling origin, one month ahead. At each or
 runtime estimator (median trips/day of the latest 12 months present, rounded) and the
 last-month naive (the origin month's trips/day) predict the next calendar month. A pair
 with a gap month (missing from the source) is not scored.
+
+Only the standard library is imported at module level: the pure helpers
+(`runtime_estimate`, `backtest_scores`, `serialize`) are what the API tests recompute
+the committed artifact with, and they must not pull pandas, prophet or xgboost into
+that process. `train_models` (and pandas/numpy) load lazily, only to build the artifact.
 """
 
 from __future__ import annotations
@@ -30,16 +35,7 @@ import json
 import statistics
 from pathlib import Path
 
-import pandas as pd
-from train_models import (
-    BOOTSTRAP_RESAMPLES,
-    BOOTSTRAP_SEED,
-    MODELS_DIR,
-    cluster_bootstrap_skill,
-    load_bantargebang_rows,
-)
-
-OUT = MODELS_DIR / "queue_calibration.json"
+OUT = Path(__file__).resolve().parents[2] / "apps" / "api" / "data" / "models" / "queue_calibration.json"
 SOURCE = (
     "Bantargebang weighing data (data.go.id, bantargebang_hasil_penimbangan.csv): "
     "monthly trips (ritasi) and tonnes per source agency"
@@ -49,50 +45,49 @@ MODEL_NAME = "median_latest_12_months"
 NAIVE_NAME = "naive_last_month"
 
 
-def monthly_arrivals(apply_corrections: bool) -> pd.DataFrame:
-    """Trips/day per calendar month on a full monthly range; a month absent from the source is NaN."""
-    rows = load_bantargebang_rows(apply_corrections=apply_corrections)
-    totals = rows.groupby("periode_data")[["ritasi", "tonase_parsed"]].sum()
-    totals.index = pd.to_datetime(totals.index, format="%Y%m")
-    full = pd.date_range(totals.index.min(), totals.index.max(), freq="MS")
-    out = totals.reindex(full)
-    out["days"] = full.days_in_month
-    out["arrivals_per_day"] = out["ritasi"] / out["days"]
-    out.attrs["corrections_applied"] = rows.attrs.get("corrections_applied", [])
+def _per_day(row: dict) -> float | None:
+    return None if row["trips"] is None else row["trips"] / row["days"]
+
+
+def runtime_estimate(rows: list[dict]) -> tuple[int, list[str]]:
+    """The runtime estimator on month rows: rounded median trips/day of the latest 12 months present."""
+    present = [r for r in rows if r["trips"] is not None][-WINDOW_MONTHS:]
+    return round(statistics.median(_per_day(r) for r in present)), [r["month"] for r in present]
+
+
+def _forecasts(rows: list[dict]) -> list[dict]:
+    """One-month-ahead forecasts at every origin with 12 months present and both months in the source."""
+    out = []
+    for i in range(len(rows) - 1):
+        origin, target = rows[i], rows[i + 1]
+        history = [r for r in rows[: i + 1] if r["trips"] is not None]
+        if len(history) < WINDOW_MONTHS or origin["trips"] is None or target["trips"] is None:
+            continue
+        out.append(
+            {
+                "origin": origin["month"],
+                "month": target["month"],
+                "actual": _per_day(target),
+                "model": float(runtime_estimate(history)[0]),
+                "naive": _per_day(origin),
+            }
+        )
     return out
 
 
-def runtime_estimate(per_day: pd.Series) -> tuple[int, list[str]]:
-    """The runtime estimator on a series: rounded median of the latest 12 months present."""
-    present = per_day.dropna().iloc[-WINDOW_MONTHS:]
-    return round(statistics.median(present.tolist())), [f"{d:%Y-%m}" for d in present.index]
+def backtest_scores(rows: list[dict]) -> dict:
+    """Rolling-origin backtest of the runtime estimator vs last-month naive: every field but the CI.
 
+    `rows` are `arrivals_per_day_by_month` entries (`month`, `trips` or None, `days`).
+    """
+    fc = _forecasts(rows)
+    err_model = [abs(f["model"] - f["actual"]) for f in fc]
+    err_naive = [abs(f["naive"] - f["actual"]) for f in fc]
+    mae_model, mae_naive = statistics.fmean(err_model), statistics.fmean(err_naive)
 
-def backtest_daily_arrivals(per_day: pd.Series) -> dict:
-    """Rolling-origin one-month-ahead backtest: runtime median estimator vs last-month naive."""
-    recs = []
-    for i in range(len(per_day) - 1):
-        history = per_day.iloc[: i + 1].dropna()
-        origin, target = per_day.index[i], per_day.index[i + 1]
-        if len(history) < WINDOW_MONTHS or pd.isna(per_day.iloc[i]) or pd.isna(per_day.iloc[i + 1]):
-            continue
-        actual = float(per_day.iloc[i + 1])
-        model, _window = runtime_estimate(history)
-        naive = float(per_day.iloc[i])
-        recs.append(
-            {
-                "origin": f"{origin:%Y-%m}",
-                "month": f"{target:%Y-%m}",
-                "actual": actual,
-                "model": float(model),
-                "naive": naive,
-            }
-        )
-    fc = pd.DataFrame(recs)
-    err_model = (fc["model"] - fc["actual"]).abs().to_numpy()
-    err_naive = (fc["naive"] - fc["actual"]).abs().to_numpy()
-    p5, p95 = cluster_bootstrap_skill(err_model, err_naive, fc["month"].to_numpy())
-    mae_model, mae_naive = float(err_model.mean()), float(err_naive.mean())
+    def mape(errors: list[float]) -> float:
+        return round(100 * statistics.fmean(e / f["actual"] for e, f in zip(errors, fc, strict=True)), 2)
+
     return {
         "target": "Bantargebang gate trips (ritasi) per day, monthly mean",
         "unit": "trips/day",
@@ -101,14 +96,28 @@ def backtest_daily_arrivals(per_day: pd.Series) -> dict:
         "horizon_months": 1,
         "min_history_months": WINDOW_MONTHS,
         "origins": len(fc),
-        "first_origin": fc["origin"].iloc[0],
-        "last_origin": fc["origin"].iloc[-1],
-        "period": f"{fc['month'].iloc[0]}..{fc['month'].iloc[-1]}",
+        "first_origin": fc[0]["origin"],
+        "last_origin": fc[-1]["origin"],
+        "period": f"{fc[0]['month']}..{fc[-1]['month']}",
         "mae_model": round(mae_model, 1),
         "mae_naive": round(mae_naive, 1),
-        "mape_model_pct": round(float(100 * (err_model / fc["actual"]).mean()), 2),
-        "mape_naive_pct": round(float(100 * (err_naive / fc["actual"]).mean()), 2),
+        "mape_model_pct": mape(err_model),
+        "mape_naive_pct": mape(err_naive),
         "skill_pct": round(100 * (1 - mae_model / mae_naive), 1),
+    }
+
+
+def backtest_daily_arrivals(rows: list[dict]) -> dict:
+    """backtest_scores plus the 90% skill interval (train_models' cluster bootstrap over target months)."""
+    import numpy as np
+    from train_models import BOOTSTRAP_RESAMPLES, BOOTSTRAP_SEED, cluster_bootstrap_skill
+
+    fc = _forecasts(rows)
+    err_model = np.array([abs(f["model"] - f["actual"]) for f in fc])
+    err_naive = np.array([abs(f["naive"] - f["actual"]) for f in fc])
+    p5, p95 = cluster_bootstrap_skill(err_model, err_naive, np.array([f["month"] for f in fc]))
+    return {
+        **backtest_scores(rows),
         "skill_ci90_pct": [round(p5, 1), round(p95, 1)],
         "ci_method": (
             f"cluster bootstrap over target months, {BOOTSTRAP_RESAMPLES} resamples, seed {BOOTSTRAP_SEED}"
@@ -117,16 +126,45 @@ def backtest_daily_arrivals(per_day: pd.Series) -> dict:
     }
 
 
+def monthly_rows(apply_corrections: bool) -> tuple[list[dict], list[str]]:
+    """Per calendar month on a full range: trips, days and tonnes (None when absent); plus the corrections."""
+    import pandas as pd
+    from train_models import load_bantargebang_rows
+
+    rows = load_bantargebang_rows(apply_corrections=apply_corrections)
+    totals = rows.groupby("periode_data")[["ritasi", "tonase_parsed"]].sum()
+    totals.index = pd.to_datetime(totals.index, format="%Y%m")
+    full = pd.date_range(totals.index.min(), totals.index.max(), freq="MS")
+    totals = totals.reindex(full)
+    months = [
+        {
+            "month": f"{month:%Y-%m}",
+            "trips": None if pd.isna(r.ritasi) else int(r.ritasi),
+            "days": int(month.days_in_month),
+            "tons": None if pd.isna(r.ritasi) else float(r.tonase_parsed),
+        }
+        for month, r in zip(full, totals.itertuples(), strict=True)
+    ]
+    return months, [c["id"] for c in rows.attrs.get("corrections_applied", [])]
+
+
 def build_calibration() -> dict:
-    corrected = monthly_arrivals(apply_corrections=True)
-    uncorrected = monthly_arrivals(apply_corrections=False)
-    per_day = corrected["arrivals_per_day"]
-    value, window = runtime_estimate(per_day)
-    raw_value, _raw_window = runtime_estimate(uncorrected["arrivals_per_day"])
-    differs = (corrected["ritasi"] - uncorrected["ritasi"]).abs() > 0
-    present = corrected.dropna(subset=["ritasi"])
-    trips, tons = float(present["ritasi"].sum()), float(present["tonase_parsed"].sum())
-    months = [f"{d:%Y-%m}" for d in corrected.index]
+    corrected, corrections = monthly_rows(apply_corrections=True)
+    uncorrected, _none = monthly_rows(apply_corrections=False)
+    value, window = runtime_estimate(corrected)
+    raw_value, _raw_window = runtime_estimate(uncorrected)
+    present = [r for r in corrected if r["trips"] is not None]
+    trips, tons = sum(r["trips"] for r in present), sum(r["tons"] for r in present)
+    months = [r["month"] for r in corrected]
+    by_month = [
+        {
+            "month": r["month"],
+            "trips": r["trips"],
+            "days": r["days"],
+            "arrivals_per_day": None if r["trips"] is None else round(_per_day(r), 1),
+        }
+        for r in corrected
+    ]
     return {
         "artifact": "queue_calibration",
         "generated_by": "ml/scripts/calibrate_queue.py",
@@ -134,17 +172,9 @@ def build_calibration() -> dict:
         "data_classification": "real",
         "granularity": "monthly totals per source agency; no per-truck, per-day or per-hour records",
         "period": f"{months[0]}..{months[-1]}",
-        "gap_months": [m for m, gap in zip(months, corrected["ritasi"].isna(), strict=True) if gap],
-        "corrections_applied": [c["id"] for c in corrected.attrs["corrections_applied"]],
-        "arrivals_per_day_by_month": [
-            {
-                "month": m,
-                "trips": None if pd.isna(r.ritasi) else int(r.ritasi),
-                "days": int(r.days),
-                "arrivals_per_day": None if pd.isna(r.ritasi) else round(float(r.arrivals_per_day), 1),
-            }
-            for m, r in zip(months, corrected.itertuples(), strict=True)
-        ],
+        "gap_months": [r["month"] for r in corrected if r["trips"] is None],
+        "corrections_applied": corrections,
+        "arrivals_per_day_by_month": by_month,
         "arrivals_per_day": {
             "estimator": f"median trips/day of the latest {WINDOW_MONTHS} months present, rounded",
             "window": f"{window[0]}..{window[-1]}",
@@ -158,24 +188,22 @@ def build_calibration() -> dict:
             ),
             "months_changed_by_corrections": [
                 {
-                    "month": m,
-                    "corrected_per_day": round(float(c), 1),
-                    "uncorrected_per_day": round(float(u), 1),
+                    "month": c["month"],
+                    "corrected_per_day": round(_per_day(c), 1),
+                    "uncorrected_per_day": round(_per_day(u), 1),
                 }
-                for m, c, u, hit in zip(
-                    months, per_day, uncorrected["arrivals_per_day"], differs, strict=True
-                )
-                if hit
+                for c, u in zip(corrected, uncorrected, strict=True)
+                if c["trips"] != u["trips"]
             ],
         },
         "tons_per_rit_overall": {
             "value": round(tons / trips, 2),
             "tons": round(tons, 1),
-            "trips": int(trips),
+            "trips": trips,
             "period": f"{months[0]}..{months[-1]} (gap months excluded)",
             "basis": "sum of corrected tonnes / sum of trips over every month present",
         },
-        "backtest": backtest_daily_arrivals(per_day),
+        "backtest": backtest_daily_arrivals(by_month),
         "wait_validation": "not_observed",
         "wait_validation_note": (
             "the source has no gate-arrival or weigh-start times, so the simulated weighbridge "
@@ -184,11 +212,16 @@ def build_calibration() -> dict:
     }
 
 
+def serialize(calibration: dict) -> str:
+    """The artifact's exact text: insertion order, 2-space indent, trailing newline (written with LF)."""
+    return json.dumps(calibration, indent=2, ensure_ascii=False) + "\n"
+
+
 def write_calibration(path: Path = OUT) -> dict:
     calibration = build_calibration()
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="\n") as handle:
-        handle.write(json.dumps(calibration, indent=2, ensure_ascii=False) + "\n")
+        handle.write(serialize(calibration))
     return calibration
 
 

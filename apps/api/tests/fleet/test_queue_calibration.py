@@ -3,14 +3,20 @@
 `ml/scripts/calibrate_queue.py` writes `queue_calibration.json` from the CSV; the
 queue metric carries it as `calibration` without moving any simulated number, and
 the simulated waits stay unvalidated (`wait_validation: not_observed`).
+
+These tests never import `train_models` (prophet/xgboost/pandas stay out of the
+test process): they recompute the committed artifact through the script's
+stdlib-only helpers and tie its monthly trips back to the CSV with `csv`.
 """
 
 from __future__ import annotations
 
+import ast
+import csv
 import importlib.util
 import json
 import statistics
-import sys
+from collections import defaultdict
 
 import pytest
 
@@ -19,25 +25,22 @@ from app.core.units import TRUCK_CAPACITY_TONS
 from app.field import spj as spj_module
 from app.field.spj import SpjStore
 from app.fleet import queue_simulation
-from app.fleet.queue_simulation import bantargebang_daily_arrivals, queue_minutes_per_truck
+from app.fleet.queue_simulation import WEIGHING_CSV, bantargebang_daily_arrivals, queue_minutes_per_truck
 
-SCRIPTS = paths.REPO_ROOT / "ml" / "scripts"
+SCRIPT = paths.REPO_ROOT / "ml" / "scripts" / "calibrate_queue.py"
 TINY_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 STOP = {"name": "TPS Uji", "kecamatan": "Gambir", "address": "Jl. Uji 1", "lat": -6.17, "lng": 106.82}
 OVERRIDE = {"reason": "Foto bukti tidak tersedia di lokasi", "actor": "supervisor"}
+STDLIB_TOP_LEVEL = {"__future__", "json", "statistics", "pathlib"}
 
 
 @pytest.fixture(scope="module")
 def cq():
-    """The calibration script, imported as run (it imports train_models from its own folder)."""
-    sys.path.insert(0, str(SCRIPTS))
-    try:
-        spec = importlib.util.spec_from_file_location("calibrate_queue", SCRIPTS / "calibrate_queue.py")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        yield module
-    finally:
-        sys.path.remove(str(SCRIPTS))
+    """The calibration script's module; its top level imports only the stdlib."""
+    spec = importlib.util.spec_from_file_location("calibrate_queue", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 @pytest.fixture(scope="module")
@@ -45,15 +48,47 @@ def artifact() -> dict:
     return json.loads(paths.QUEUE_CALIBRATION.read_text(encoding="utf-8"))
 
 
-def test_two_runs_write_byte_identical_json(cq, tmp_path):
-    first, second = tmp_path / "a.json", tmp_path / "b.json"
-    cq.write_calibration(first)
-    cq.write_calibration(second)
-    assert first.read_bytes() == second.read_bytes()
+def test_the_script_imports_train_models_only_lazily():
+    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
+    top = {
+        (node.module if isinstance(node, ast.ImportFrom) else alias.name).split(".")[0]
+        for node in tree.body
+        if isinstance(node, ast.Import | ast.ImportFrom)
+        for alias in node.names
+    }
+    assert top <= STDLIB_TOP_LEVEL
 
 
-def test_the_committed_artifact_is_what_the_script_computes_from_the_csv(cq, artifact):
-    assert json.loads(json.dumps(cq.build_calibration())) == artifact
+def test_the_committed_artifact_is_the_scripts_deterministic_serialization(cq, artifact):
+    # The script writes serialize(calibration) with LF; re-serializing the parsed file
+    # reproduces it exactly, so the text carries no hand edits or run-specific bytes.
+    assert cq.serialize(artifact).encode("utf-8") == paths.QUEUE_CALIBRATION.read_bytes()
+
+
+def test_backtest_and_estimator_recompute_from_the_committed_monthly_trips(cq, artifact):
+    rows = artifact["arrivals_per_day_by_month"]
+    scores = cq.backtest_scores(rows)
+    assert {key: artifact["backtest"][key] for key in scores} == scores
+    value, window = cq.runtime_estimate(rows)
+    assert artifact["arrivals_per_day"]["corrected"] == value
+    assert artifact["arrivals_per_day"]["window"] == f"{window[0]}..{window[-1]}"
+
+
+def test_monthly_trips_match_the_csv_except_the_listed_corrections(artifact):
+    raw: dict[str, int] = defaultdict(int)
+    with WEIGHING_CSV.open(encoding="utf-8-sig") as handle:
+        for row in csv.DictReader(handle):
+            period = row["periode_data"].strip()
+            raw[f"{period[:4]}-{period[4:]}"] += round(float(row["ritasi"]))
+    changed = {m["month"]: m for m in artifact["arrivals_per_day"]["months_changed_by_corrections"]}
+    for month in artifact["arrivals_per_day_by_month"]:
+        if month["trips"] is None:
+            assert month["month"] not in raw and month["month"] in artifact["gap_months"]
+        elif month["month"] in changed:
+            uncorrected = changed[month["month"]]["uncorrected_per_day"]
+            assert uncorrected == round(raw[month["month"]] / month["days"], 1)
+        else:
+            assert month["trips"] == raw[month["month"]]
 
 
 def test_backtest_recomputed_from_the_monthly_trips_matches_the_artifact(artifact):
