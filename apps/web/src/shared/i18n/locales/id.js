@@ -35,6 +35,7 @@ export const id = {
     "Tambah titik TPS dulu: titik DEMO lalu menyusul sebagai titik 2, agar rutenya dimulai di jalan.",
   login_submit: "Masuk",
   login_error: "Nama pengguna atau kata sandi tidak valid.",
+  login_error_unreachable: "Server Pythia tidak terjangkau. Periksa koneksi lalu coba lagi.",
   login_username_placeholder: "contoh: dispatcher",
   login_submitting: "Memeriksa…",
   login_help: "Masalah akses? Hubungi administrator Pythia.",

@@ -35,7 +35,14 @@ export function LoginPage({ onLogin, initialUsername = "", notice = "", fieldSes
         body: { username, password },
         auth: false,
       });
-      if (!res.ok) throw new Error("bad creds");
+      // Only a 401 means the credentials are wrong. A proxy 502/504 or any other
+      // failure says the server was not reached, so a phone on a weak signal is
+      // not told its password is wrong.
+      if (res.status === 401) {
+        setError(t("login_error"));
+        return;
+      }
+      if (!res.ok) throw new Error(`login HTTP ${res.status}`);
       const principal = await res.json();
       if (fieldSession) {
         localStorage.setItem(FIELD_TOKEN_KEY, principal.token);
@@ -47,7 +54,7 @@ export function LoginPage({ onLogin, initialUsername = "", notice = "", fieldSes
       }
       onLogin(principal);
     } catch {
-      setError(t("login_error"));
+      setError(t("login_error_unreachable"));
     } finally {
       setSubmitting(false);
     }
@@ -134,6 +141,9 @@ export function LoginPage({ onLogin, initialUsername = "", notice = "", fieldSes
                 <UserRound size={18} />
                 <input
                   autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                   placeholder={t("login_username_placeholder")}
@@ -148,6 +158,9 @@ export function LoginPage({ onLogin, initialUsername = "", notice = "", fieldSes
                 <input
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder={t("login_password_placeholder")}

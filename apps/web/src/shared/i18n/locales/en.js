@@ -34,6 +34,7 @@ export const en = {
     "Add a TPS stop first: the DEMO stop then follows it as stop 2, so its leg starts on a road.",
   login_submit: "Sign in",
   login_error: "Invalid username or password.",
+  login_error_unreachable: "Can't reach the Pythia server. Check the connection and try again.",
   login_username_placeholder: "e.g. dispatcher",
   login_submitting: "Checking…",
   login_help: "Access issues? Contact the Pythia administrator.",

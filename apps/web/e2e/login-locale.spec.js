@@ -53,3 +53,32 @@ test("invalid credentials error follows the locale", async ({ page }) => {
   await page.getByRole("button", { name: "Masuk", exact: true }).click();
   await expect(page.locator(".login-error")).toContainText("Nama pengguna atau kata sandi tidak valid.");
 });
+
+// gsc phone login: only a 401 means wrong credentials. A dropped connection or a proxy 502
+// (backend down) must say the server was not reached, so a driver on a weak
+// signal does not retype a correct password; phone keyboards must not
+// capitalise or autocorrect what is typed.
+test("unreachable server is not reported as a wrong password", async ({ page }) => {
+  await page.addInitScript((lang) => localStorage.setItem("pythia_lang", lang), "en");
+  await page.goto("/");
+  for (const input of ['input[autocomplete="username"]', 'input[autocomplete="current-password"]']) {
+    await expect(page.locator(input)).toHaveAttribute("autocapitalize", "none");
+    await expect(page.locator(input)).toHaveAttribute("autocorrect", "off");
+  }
+  await page.locator('input[autocomplete="username"]').fill("dispatcher");
+  await page.locator('input[autocomplete="current-password"]').fill("dispatcher-demo-pass");
+
+  await page.route("**/api/auth/login", (route) => route.abort("internetdisconnected"));
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.locator(".login-error")).toHaveText(
+    "Can't reach the Pythia server. Check the connection and try again.",
+  );
+
+  await page.unroute("**/api/auth/login");
+  await page.route("**/api/auth/login", (route) => route.fulfill({ status: 502, body: "Bad Gateway" }));
+  await page.locator(".login-language button", { hasText: "ID" }).click();
+  await page.getByRole("button", { name: "Masuk", exact: true }).click();
+  await expect(page.locator(".login-error")).toHaveText(
+    "Server Pythia tidak terjangkau. Periksa koneksi lalu coba lagi.",
+  );
+});
