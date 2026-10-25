@@ -1,4 +1,5 @@
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { Provenance } from "../../shared/ui/Provenance.jsx";
 
 // R7/R8: the quotas and facility rules the day plan treated as hard limits,
 // each with its source and how sure we are of it (reported, example, assumption).
@@ -15,19 +16,9 @@ function ClassChip({ classification }) {
   const key = `pln6_class_${classification}`;
   const label = t(key);
   return (
-    <span
-      className="plan-rule-class"
-      style={{
-        border: "1px solid var(--ui-border-strong)",
-        borderRadius: "var(--ui-radius-pill)",
-        padding: "0 var(--space-2)",
-        fontSize: "var(--fs-caption)",
-        color: "var(--ui-ink-soft)",
-        whiteSpace: "nowrap",
-      }}
-    >
+    <Provenance kind="proxy" className="plan-rule-class">
       {label === key ? classification : label}
-    </span>
+    </Provenance>
   );
 }
 
@@ -55,14 +46,20 @@ export function PlanQuotaUsage({ plan }) {
   return (
     <div className="plan-quota-usage" data-testid="quota-usage">
       <h4>{t("pln6_quota_title")}</h4>
-      <div className="table-wrap">
-        <table className="ai-outlook-table">
+      <div className="ui-table-wrap">
+        <table className="ui-table plan-table">
           <thead>
             <tr>
               <th scope="col">{t("pln6_quota_district")}</th>
-              <th scope="col">{t("pln6_quota_used")}</th>
-              <th scope="col">{t("pln6_quota_needed")}</th>
-              <th scope="col">{t("pln6_quota_unassigned")}</th>
+              <th scope="col" className="num">
+                {t("pln6_quota_used")}
+              </th>
+              <th scope="col" className="num">
+                {t("pln6_quota_needed")}
+              </th>
+              <th scope="col" className="num">
+                {t("pln6_quota_unassigned")}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -71,23 +68,23 @@ export function PlanQuotaUsage({ plan }) {
                 <td>
                   {row.label}
                   {row.binding_limit && (
-                    <small className="text-danger" style={{ display: "block" }}>
+                    <small className="plan-table-sub text-danger">
                       {t(`pln6_binding_${row.binding_limit}`)}
                     </small>
                   )}
                 </td>
-                <td>
+                <td className="num">
                   {row.quota_rit_per_day == null
                     ? `${number(row.rit_used)} / ${t("pln6_quota_none")}`
                     : `${number(row.rit_used)} / ${number(row.quota_rit_per_day)}`}
                   {row.quota_source?.classification && (
-                    <small style={{ display: "block" }}>
+                    <small className="plan-table-sub">
                       <ClassChip classification={row.quota_source.classification} />
                     </small>
                   )}
                 </td>
-                <td>{number(row.rit_needed)}</td>
-                <td className={row.unassigned_tons > 0 ? "text-danger" : undefined}>
+                <td className="num">{number(row.rit_needed)}</td>
+                <td className={row.unassigned_tons > 0 ? "num text-danger" : "num"}>
                   {number(row.unassigned_tons)} t
                 </td>
               </tr>
@@ -122,7 +119,7 @@ export function PlanRules({ plan }) {
   if (!facilities.length) return null;
   const usage = Object.fromEntries((plan.facility_usage || []).map((f) => [f.facility, f]));
   return (
-    <details className="manual-whatif plan-rules" data-testid="plan-rules">
+    <details className="plan-disclosure plan-rules" data-testid="plan-rules">
       <summary>{t("pln6_rules_title").replace("{date}", plan.plan_date || "")}</summary>
       <p className="kec-note">{t("pln6_rules_note")}</p>
       {facilities.map((facility) => {

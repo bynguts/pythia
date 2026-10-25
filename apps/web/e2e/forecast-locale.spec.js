@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
-// #68: Forecast headings, controls, section kickers, and context rail labels
+// #68: Forecast headings, controls, section intros, and context rail labels
 // follow the selected locale.
 async function signIn(page, lang) {
   await page.goto("/");
@@ -31,7 +31,9 @@ test("forecast section copy follows the locale", async ({ page }) => {
   await signIn(page, "en");
   await openForecast(page);
 
-  await expect(page.locator(".workspace-kicker")).toContainText("Demand intelligence");
+  // wave11 forecast: the approved design drops eyebrow kickers above headings, so the
+  // heading itself carries the copy; no kicker is left to localise.
+  await expect(page.locator(".forecast-workspace .workspace-kicker")).toHaveCount(0);
   await expect(page.locator(".forecast-horizon-control .control-label")).toContainText("Analysis range");
   await expect(page.locator("#forecast-analysis-title")).toHaveText("Service demand map");
   await expect(page.locator(".forecast-primary-analysis .section-intro p")).toContainText(
@@ -48,7 +50,7 @@ test("forecast section copy follows the locale", async ({ page }) => {
   await expect(page.locator(".forecast-horizon-control button").first()).toContainText("7 days");
 
   await page.getByTestId("lang-switch-id").click();
-  await expect(page.locator(".workspace-kicker")).toContainText("Intelijen permintaan");
+  await expect(page.locator("#forecast-title")).toHaveText("Prediksi timbulan sampah");
   await expect(page.locator(".forecast-horizon-control .control-label")).toContainText("Rentang analisis");
   await expect(page.locator("#forecast-analysis-title")).toHaveText("Peta kebutuhan layanan");
   await expect(page.locator(".forecast-context-rail")).toHaveAccessibleName("Faktor pemicu prediksi");

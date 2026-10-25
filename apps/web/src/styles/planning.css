@@ -1,92 +1,4 @@
-/* ── Operations Optimizer & Planning specific styles ── */
-
-.summary-panel h3 {
-  margin: 0 0 12px;
-  font-weight: 800;
-}
-
-.summary-panel ul {
-  margin: 0 0 18px;
-  padding-left: 18px;
-  color: var(--ui-ink-soft);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.summary-panel li {
-  margin-bottom: 8px;
-}
-
-.scenario-panel .control-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.scenario-panel label span {
-  display: block;
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--ui-muted);
-  margin-bottom: 4px;
-}
-
-.scenario-panel input {
-  width: 100%;
-  border-radius: 8px;
-  border: 1px solid var(--ui-border-strong);
-  padding: 10px 12px;
-  min-height: 44px;
-}
-
-.scenario-result {
-  border: 1px solid var(--ui-info-line);
-  background: var(--ui-canvas);
-  border-radius: 8px;
-  padding: 12px;
-  text-align: center;
-  color: var(--ui-ink);
-}
-
-.scenario-result strong {
-  display: block;
-  font-size: 18px;
-}
-
-.scenario-result span {
-  display: block;
-  font-size: 13px;
-  margin-top: 2px;
-}
-
-/* Scenario and stagger simulator extensions */
-.scenario-reqs {
-  display: flex;
-  gap: 12px;
-  margin-top: 16px;
-  justify-content: space-between;
-}
-
-.req-chip {
-  flex: 1;
-  background: var(--ui-accent-soft);
-  padding: 10px;
-  border-radius: 8px;
-  text-align: center;
-  border: 1px solid var(--ui-info-line);
-}
-
-.req-chip b {
-  display: block;
-  font-size: 18px;
-  color: var(--ui-accent);
-}
-
-.req-chip span {
-  font-size: 11px;
-  color: var(--text-muted);
-}
+/* ── Fleet panels that still read these legacy rules (stagger, A*, TPA) ── */
 
 .stagger-compare {
   display: flex;
@@ -142,22 +54,6 @@
   border-radius: 6px;
 }
 
-/* A* Dynamic Rerouting Panel */
-.astar-control {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.success-button {
-  background: var(--ui-accent);
-}
-
-.danger-button {
-  background: var(--red);
-}
-
 .traffic-status-badge {
   font-size: 12px;
   font-weight: 700;
@@ -173,26 +69,6 @@
 .traffic-status-badge.congested {
   background: var(--red-light);
   color: var(--red);
-}
-
-.astar-info-card {
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius);
-  padding: 14px;
-}
-
-.astar-msg {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin: 0 0 12px;
-  line-height: 1.5;
-}
-
-.astar-stats {
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
 }
 
 .astar-stat-col {
@@ -296,192 +172,6 @@
   color: var(--ui-warning);
 }
 
-/* Operations Optimizer UI styling */
-.optimizer-section {
-  margin-top: 20px;
-  border-top: 1px solid var(--border);
-  padding-top: 20px;
-}
-
-.optimizer-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.optimizer-head h3 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.optimizer-plan-card {
-  background: var(--surface-soft);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px;
-  margin-top: 14px;
-}
-
-.plan-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.plan-header strong {
-  font-family: var(--mono);
-  font-size: 13px;
-  color: var(--ink);
-}
-
-.plan-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.plan-stat-item {
-  display: flex;
-  flex-direction: column;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.plan-stat-item strong {
-  font-size: 14px;
-  color: var(--ink);
-  margin-top: 2px;
-}
-
-.unmet-reasons-box {
-  background: var(--red-light);
-  border: 1px solid var(--ui-danger-line);
-  border-radius: 6px;
-  padding: 10px;
-  margin-bottom: 14px;
-  font-size: 12px;
-  color: var(--red);
-}
-
-.unmet-reasons-box strong {
-  display: block;
-  margin-bottom: 4px;
-}
-
-.unmet-reasons-box ul {
-  margin: 0;
-  padding-left: 16px;
-}
-
-.assign-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text);
-  margin: 12px 0 8px 0;
-}
-
-.assign-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px;
-  font-size: 12px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.assign-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.assign-info strong {
-  color: var(--ink);
-}
-
-.assign-info span {
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-.assign-evidence {
-  font-size: 11px;
-  color: var(--text-muted);
-  text-align: right;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.assign-evidence span.ok {
-  color: var(--green);
-  font-weight: 600;
-}
-
-.assign-evidence span.warn {
-  color: var(--red);
-  font-weight: 600;
-}
-
-.optimizer-success {
-  background: var(--green-light);
-  border: 1px solid var(--ui-success-line);
-  border-radius: 6px;
-  padding: 10px;
-  margin-top: 14px;
-  font-size: 12px;
-  color: var(--green-dark);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.plan-status-badge {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.plan-status-badge.proposed {
-  background: var(--amber-light);
-  color: var(--amber);
-}
-
-.plan-status-badge.approved {
-  background: var(--green-light);
-  color: var(--green);
-}
-
-/* ── Migrated from the retired legacy.css layer (issue #66) ─────────────
-   Only declarations no later layer already defined; duplicate selector
-   ownership is what made visual fixes order-dependent. ─────────────── */
-
-.scenario-result {
-  border-top: 1px solid var(--ui-border);
-  border-bottom: 1px solid var(--ui-border);
-}
-
-.scenario-result strong {
-  font-family: inherit;
-  font-weight: 600;
-}
-
-.scenario-reqs {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.req-chip b {
-  font-weight: 500;
-}
-
 .traffic-status-badge {
   display: inline-flex;
   align-items: center;
@@ -495,26 +185,6 @@
 
 .traffic-status-badge.congested {
   border: 1px solid var(--ui-danger-line);
-}
-
-.astar-info-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.astar-msg-icon.congested {
-  background: var(--ui-danger-soft);
-  color: var(--ui-danger);
-}
-
-.astar-msg-icon.clear {
-  background: var(--ui-accent-soft);
-  color: var(--ui-success);
-}
-
-.astar-stats {
-  grid-template-columns: repeat(3, 1fr);
 }
 
 .astar-stat-col {
@@ -536,29 +206,6 @@
 
 .astar-stat-col strong {
   font-weight: 700;
-}
-
-.astar-reroute-details {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-border);
-  border-radius: 8px;
-  padding: 10px 12px;
-}
-
-.astar-route-step {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: var(--fs-caption);
-  color: var(--ui-muted);
-}
-
-.astar-route-step strong {
-  color: var(--ui-ink);
-  font-weight: 600;
 }
 
 .tpa-logs {
@@ -654,191 +301,1100 @@
   font-variant-numeric: tabular-nums;
 }
 
-.plan-stats-grid {
-  border-top: 1px solid var(--ui-border);
-  border-bottom: 1px solid var(--ui-border);
+/* ── wave11 planning (Rencana) ──────────────────────────────────────────────
+   One stepper strip, then three full-width stages. Each stage is the only
+   surface; inside it, input sits left and result right with one hairline
+   between them, so no stage leaves a hole beside a longer neighbour. Every
+   selector is scoped under .planning-workspace so it outranks legacy layers. */
+.planning-workspace {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+  grid-column: 1 / -1;
+}
+.planning-workspace .planning-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.planning-workspace .planning-heading h1 {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.planning-workspace .planning-heading p {
+  margin: var(--space-1) 0 0;
+  max-width: 64ch;
+  color: var(--ui-muted);
+  font-size: var(--fs-body);
+}
+.planning-workspace .planning-status {
+  align-self: flex-end;
+  margin: 0;
 }
 
-.plan-stat-item {
-  padding: var(--space-3);
+/* Stepper: one joined strip; a 3 px rule under each cell says done / now / next. */
+.planning-workspace .planning-progress {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  list-style: none;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-surface);
+  overflow: hidden;
+}
+.planning-workspace .planning-progress li {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 14px var(--space-5) 16px;
+  color: var(--ui-muted);
+}
+.planning-workspace .planning-progress li + li {
   border-left: 1px solid var(--ui-border);
 }
-
-.plan-stat-item:first-child {
-  border-left: 0;
+.planning-workspace .planning-progress li::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: transparent;
+}
+.planning-workspace .planning-progress li.is-done::after {
+  background: var(--ui-forest-700);
+}
+.planning-workspace .planning-progress li.is-current::after {
+  background: var(--ui-forest-900);
+}
+.planning-workspace .planning-progress-mark {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--ui-muted);
+  background: var(--ui-cream);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.planning-workspace .is-done .planning-progress-mark {
+  color: var(--ui-on-dark);
+  background: var(--ui-forest-700);
+}
+.planning-workspace .is-current .planning-progress-mark {
+  color: var(--ui-on-dark);
+  background: var(--ui-forest-900);
+}
+.planning-workspace .planning-progress-text {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.planning-workspace .planning-progress-text b {
+  overflow: hidden;
+  color: var(--ui-ink);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.planning-workspace .is-next .planning-progress-text b {
+  color: var(--ui-ink-soft);
+}
+.planning-workspace .planning-progress-text small {
+  color: var(--ui-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-label, 11px);
+  letter-spacing: var(--ls-label, 0.08em);
+  text-transform: uppercase;
+}
+.planning-workspace .is-current .planning-progress-text small {
+  color: var(--ui-forest-700);
 }
 
-.assign-card {
+/* Stages */
+.planning-workspace .planning-flow {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.planning-workspace .planning-stage-card {
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-5);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-surface);
+  box-shadow: none;
+  scroll-margin-top: calc(var(--ui-topbar-height) + var(--space-4));
+}
+.planning-workspace .planning-stage-heading {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-5);
+  padding: 0 0 var(--space-4);
+  border-bottom: 1px solid var(--ui-border);
+}
+.planning-workspace .planning-stage-number {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--ui-ink-soft);
+  background: var(--ui-cream);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.planning-workspace .planning-stage-heading h2 {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: var(--fs-title, 19px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.planning-workspace .planning-stage-heading p {
+  margin: 2px 0 0;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.planning-workspace .scenario-panel {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Input | result inside a stage, one hairline between. */
+.planning-workspace .plan-stage-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+}
+.planning-workspace .plan-stage-main {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-4);
+  padding-right: var(--space-6);
+}
+.planning-workspace .plan-stage-side {
+  min-width: 0;
+  align-self: stretch;
+  padding-left: var(--space-6);
+  border-left: 1px solid var(--ui-border);
+}
+/* No 7-day outlook yet: one column, the day's numbers as a single four-cell strip and
+   the empty outlook as a quiet line under it. */
+.planning-workspace .plan-stage-split.is-stacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+.planning-workspace .plan-stage-split.is-stacked .plan-stage-main {
+  padding-right: 0;
+}
+.planning-workspace .plan-stage-split.is-stacked .plan-outlook-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.planning-workspace .plan-stage-split.is-stacked .plan-stage-side {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-5);
+  padding: var(--space-4) 0 0;
+  border-left: 0;
   border-top: 1px solid var(--ui-border);
 }
-
-.assign-card:first-child {
-  border-top: 0;
+.planning-workspace .plan-stage-split.is-stacked .plan-stage-side .plan-block-head-row {
+  margin: 0;
+  gap: var(--space-3);
+}
+.planning-workspace .plan-stage-split.is-stacked .ai-feed-empty {
+  margin: 0;
+}
+.planning-workspace .plan-outlook-unit {
+  margin-left: 2px;
+  color: var(--ui-muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.planning-workspace .plan-block-head h3 {
+  margin: 0;
+  color: var(--ui-ink);
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: 600;
+}
+.planning-workspace .plan-block-head p {
+  margin: var(--space-1) 0 0;
+  max-width: 60ch;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+}
+.planning-workspace .plan-block-head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
-/* w10num (teardown v4 R2/R3): baseline outlook block, compact day kind, one-column review. */
+/* Step 01: plan day, its forecast basis, the four figures. */
 .planning-workspace .plan-date-row {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-3);
-  margin-bottom: var(--space-4);
+  margin: 0;
 }
-
-.planning-workspace .plan-date-row label {
-  display: flex;
-  flex-direction: column;
+.planning-workspace .plan-date-row label,
+.planning-workspace .manual-whatif-grid label {
+  min-width: 0;
+  display: grid;
   gap: 6px;
 }
-
 .planning-workspace .plan-date-row label > span,
 .planning-workspace .manual-whatif-grid label > span {
   color: var(--ui-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--fs-caption);
+  font-weight: 500;
 }
-
-.planning-workspace .plan-date-row input {
+.planning-workspace .plan-date-row input,
+.planning-workspace .manual-whatif-grid select {
   min-height: var(--tap-min);
-}
-
-.planning-workspace .day-kind-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 2px 10px;
+  padding: 0 14px;
   border: 1px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-pill);
-  color: var(--ui-ink-soft);
-  background: var(--ui-surface);
-  font-size: var(--fs-caption);
-}
-
-.plan-outlook {
-  margin-bottom: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-control);
-  background: var(--ui-surface);
-}
-
-.plan-outlook.is-scenario {
-  border-color: var(--ui-warning-line);
-}
-
-.plan-outlook-basis {
-  margin: 0 0 var(--space-3);
-  color: var(--ui-muted);
-  font-size: var(--fs-caption);
-}
-
-.plan-outlook-grid {
-  margin: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
-  gap: var(--space-3);
-}
-
-.plan-outlook-grid > div {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.plan-outlook-grid dt {
-  color: var(--ui-muted);
-  font-size: 12px;
-}
-
-.plan-outlook-grid dd {
-  margin: 0;
   color: var(--ui-ink);
-  font-size: 20px;
-  font-weight: 650;
+  background: var(--ui-surface);
+  font: inherit;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
-
-.plan-outlook-grid small {
+.planning-workspace .plan-date-row input:focus-visible,
+.planning-workspace .manual-whatif-grid select:focus-visible {
+  outline: none;
+  border-color: var(--ui-forest-700);
+  box-shadow: var(--ui-focus);
+}
+.planning-workspace .day-kind-chip {
+  margin-bottom: 12px;
+}
+.planning-workspace .plan-outlook {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.planning-workspace .plan-outlook-basis {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+}
+.planning-workspace .plan-lanes-note,
+.planning-workspace .plan-xr-agreed {
+  margin: 0;
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+}
+/* Joined strips: a 1 px gap over a hairline ground draws the dividers in any wrap. */
+.planning-workspace .plan-outlook-grid,
+.planning-workspace .plan-stats-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--ui-border);
+  border-radius: 14px;
+  background: var(--ui-border);
+  overflow: hidden;
+}
+.planning-workspace .plan-stats-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.planning-workspace .plan-outlook-grid > div,
+.planning-workspace .plan-stats-grid > div {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  margin: 0;
+  padding: 14px var(--space-4);
+  border: 0;
+  background: var(--ui-surface);
+}
+.planning-workspace .plan-outlook-grid dt,
+.planning-workspace .plan-stats-grid dt {
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.planning-workspace .plan-outlook-grid dd,
+.planning-workspace .plan-stats-grid dd {
+  margin: 0;
+  color: var(--ui-ink);
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.planning-workspace .plan-stats-grid dd {
+  font-size: 18px;
+}
+.planning-workspace .plan-stats-grid dd.text-danger,
+.planning-workspace .plan-stats-grid dd.text-success {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.planning-workspace .plan-outlook-grid [data-testid="fleet-denominator"] {
+  font-size: 16px;
+}
+.planning-workspace .plan-outlook-grid small {
   color: var(--ui-muted);
   font-size: 12px;
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
+/* The 7-day outlook: a plain table, not a tinted box. */
 .planning-workspace .ai-outlook {
   max-height: none;
-  overflow-x: auto;
+  margin: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+.planning-workspace .ai-outlook h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.planning-workspace .ai-feed-empty {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  text-align: left;
+}
+.planning-workspace .plan-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.planning-workspace .plan-table th {
+  padding: 0 var(--space-3) 10px;
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-muted);
+  background: transparent;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: var(--ls-label, 0.08em);
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.planning-workspace .plan-table td {
+  height: 44px;
+  padding: 8px var(--space-3);
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-ink);
+  vertical-align: middle;
+}
+.planning-workspace .plan-table th:first-child,
+.planning-workspace .plan-table td:first-child {
+  padding-left: 0;
+}
+.planning-workspace .plan-table th:last-child,
+.planning-workspace .plan-table td:last-child {
+  padding-right: 0;
+}
+.planning-workspace .plan-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.planning-workspace .plan-table .num {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.planning-workspace .plan-table-date {
+  white-space: nowrap;
+}
+.planning-workspace .plan-table-event {
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-caption);
+}
+.planning-workspace .plan-table .text-muted {
+  color: var(--ui-muted);
+}
+.planning-workspace .plan-table-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
 }
 
+/* Quiet disclosures: a hairline and a 44 px summary row, no box. */
+.planning-workspace .plan-disclosure {
+  margin: var(--space-5) 0 0;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--ui-border);
+  border-radius: 0;
+  background: transparent;
+}
+.planning-workspace .plan-disclosure > summary {
+  min-height: var(--tap-min);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ui-ink-soft);
+  font-size: 14px;
+  font-weight: 500;
+  list-style: none;
+  cursor: pointer;
+}
+.planning-workspace .plan-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.planning-workspace .plan-disclosure > summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-left: var(--space-1);
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+.planning-workspace .plan-disclosure[open] > summary::after {
+  transform: translateY(2px) rotate(225deg);
+}
+.planning-workspace .plan-disclosure > summary:hover {
+  color: var(--ui-ink);
+}
+.planning-workspace .plan-disclosure > summary:focus-visible {
+  outline: 2px solid var(--ui-forest-700);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.planning-workspace .plan-disclosure .kec-note {
+  margin: 0 0 var(--space-4);
+  max-width: 70ch;
+}
 .planning-workspace .manual-whatif-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-  gap: var(--space-4);
-  margin-bottom: var(--space-3);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4) var(--space-5);
+  margin: 0 0 var(--space-3);
 }
-
-.planning-workspace .manual-whatif-grid label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.planning-workspace .manual-whatif-grid select {
+.planning-workspace .manual-whatif-grid input[type="range"] {
+  width: 100%;
   min-height: var(--tap-min);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--ui-forest-700);
 }
-
+.planning-workspace .manual-whatif-grid small {
+  color: var(--ui-ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
 .planning-workspace .manual-whatif-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-2);
+  margin: 0;
+}
+
+/* Notes that carry a state (shortfall, unmet rules, errors). */
+.planning-workspace .plan-note {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  color: var(--ui-ink-soft);
+  background: var(--ui-surface);
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+}
+.planning-workspace .plan-note-danger {
+  border-color: var(--ui-danger-line);
+  background: var(--ui-danger-soft);
+}
+.planning-workspace .plan-note-danger strong {
+  color: var(--ui-danger);
+}
+.planning-workspace .plan-note ul {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+}
+.planning-workspace .kec-note {
+  margin: 0;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+}
+
+/* Step 02: the one action on the left, what it plans for on the right. */
+.planning-workspace .optimizer-section {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.planning-workspace .plan-generate-btn {
+  justify-self: start;
+  width: auto;
+}
+.planning-workspace .plan-preflight-grid {
+  margin: 0;
+  display: grid;
+  gap: 0;
+  border: 0;
+  background: transparent;
+}
+.planning-workspace .plan-preflight-grid > div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px var(--space-4);
+  padding: var(--space-3) 0;
+  border: 0;
+  border-bottom: 1px solid var(--ui-border);
+  background: transparent;
+}
+.planning-workspace .plan-preflight-grid > div:first-child {
+  padding-top: 0;
+}
+.planning-workspace .plan-preflight-grid > div:last-child {
+  border-bottom: 0;
+}
+.planning-workspace .plan-preflight-grid span {
+  color: var(--ui-ink-soft);
+  font-size: 14px;
+}
+.planning-workspace .plan-preflight-grid strong {
+  grid-row: span 2;
+  align-self: center;
+  color: var(--ui-ink);
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.planning-workspace .plan-preflight-grid .prov {
+  justify-self: start;
+}
+
+/* Step 02 with a plan: header, figures, then the trips as a flat list. */
+.planning-workspace .optimizer-plan {
+  display: grid;
+  gap: var(--space-5);
+}
+/* One-column grids clamp their track so a wide table scrolls inside its wrap instead of
+   widening the page on a phone. */
+.planning-workspace :is(.planning-flow, .optimizer-plan, .plan-stage-main, .plan-quota-usage) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.planning-workspace :is(.optimizer-plan, .plan-stage-main, .plan-quota-usage) > * {
+  min-width: 0;
+}
+.planning-workspace .plan-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+}
+.planning-workspace .plan-header h3,
+.planning-workspace .assign-title,
+.planning-workspace .plan-quota-usage h4 {
+  margin: 0;
+  color: var(--ui-ink);
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: 600;
+}
+.planning-workspace .assign-title {
+  margin-bottom: var(--space-2);
+}
+.planning-workspace .assignments-container {
+  max-height: 340px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  border: 0;
+  border-top: 1px solid var(--ui-border);
+  list-style: none;
+}
+.planning-workspace .assign-card {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--ui-border);
+  border-radius: 0;
+  background: transparent;
+  font-size: 14px;
+}
+.planning-workspace .assign-info {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.planning-workspace .assign-info strong {
+  color: var(--ui-ink);
+  font-weight: 600;
+}
+.planning-workspace .assign-info > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  text-transform: capitalize;
+}
+.planning-workspace .assign-info .kec-note {
+  text-transform: none;
+}
+.planning-workspace .assign-evidence {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  color: var(--ui-muted);
+  font-size: 12px;
+  text-align: right;
+}
+.planning-workspace .assign-evidence b {
+  color: var(--ui-ink);
+  font-family: var(--mono);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.planning-workspace .assign-evidence .ok {
+  color: var(--ui-success);
+  font-weight: 600;
+}
+.planning-workspace .assign-evidence .warn {
+  color: var(--ui-danger);
+  font-weight: 600;
+}
+.planning-workspace .plan-quota-usage {
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--ui-border);
+}
+.planning-workspace .plan-quota-usage h4 {
   margin-bottom: var(--space-3);
 }
-
-.planning-workspace .manual-whatif-actions button,
-.planning-workspace .plan-generate-btn {
-  width: auto;
-  min-height: var(--tap-min);
-  padding: 0 20px;
+.planning-workspace .plan-quota-usage .kec-note {
+  margin-top: var(--space-3);
+}
+.planning-workspace .plan-rules {
+  margin: 0;
+}
+.planning-workspace .plan-rules section {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--ui-border);
+}
+.planning-workspace .plan-rules h4 {
+  margin: 0 0 var(--space-1);
+  font-size: 14px;
+  font-weight: 600;
+}
+.planning-workspace .plan-rules section > p {
+  margin: 0 0 var(--space-2);
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-caption);
+}
+.planning-workspace .plan-rules ul {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+}
+.planning-workspace .plan-rules a {
+  color: var(--ui-forest-700);
 }
 
-.planning-workspace .plan-generate-btn {
-  margin-bottom: 14px;
+/* Step 03: one decision brief beside its authority column (no nested panels). */
+.planning-workspace .planning-review-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  gap: 0;
+  align-items: start;
 }
-
-.planning-workspace .plan-preflight-grid {
-  margin-bottom: var(--space-4);
+.planning-workspace .planning-summary {
+  min-width: 0;
+  padding-right: var(--space-6);
 }
-
-.planning-workspace .optimizer-empty-state {
+.planning-workspace .planning-approval {
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 0 var(--space-5);
+  border: 0;
+  border-left: 1px solid var(--ui-border);
+  align-self: stretch;
+  background: transparent;
+}
+.planning-workspace .exec-brief {
+  display: grid;
+  gap: var(--space-2);
+}
+.planning-workspace .exec-brief-title {
+  margin: 0;
+  color: var(--ui-ink-soft);
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: 600;
+}
+.planning-workspace .exec-headline {
+  margin: var(--space-1) 0 0;
+  max-width: 30ch;
+  color: var(--ui-ink);
+  font-family: var(--font-head);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.planning-workspace .exec-brief-note,
+.planning-workspace .exec-scenario-note {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+}
+.planning-workspace .exec-reasons {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  max-width: 70ch;
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+}
+.planning-workspace .exec-reasons li {
+  position: relative;
+  padding-left: var(--space-4);
+  color: var(--ui-ink-soft);
+  font-size: 15px;
+  line-height: 1.55;
+}
+.planning-workspace .exec-reasons li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.66em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ui-forest-700);
+}
+.planning-workspace .exec-queue {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--ui-border);
+}
+.planning-workspace .exec-queue-head h4 {
+  margin: 0;
+  color: var(--ui-ink);
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: 600;
+}
+.planning-workspace .exec-queue-head p {
+  margin: var(--space-1) 0 0;
+  max-width: 70ch;
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+}
+.planning-workspace .exec-queue-strip {
+  margin: var(--space-3) 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 1px;
+  border: 1px solid var(--ui-border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--ui-border);
+}
+.planning-workspace .exec-queue-strip > div {
+  min-width: 0;
+  padding: 14px var(--space-4);
+  background: var(--ui-surface);
+}
+.planning-workspace .exec-queue-strip dt {
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  line-height: 1.35;
+}
+.planning-workspace .exec-queue-strip dd {
+  margin: 6px 0 0;
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 14px 16px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--space-2);
 }
-
-.planning-workspace .optimizer-empty-state > svg {
-  flex-shrink: 0;
-  margin-top: 2px;
-  color: var(--ui-accent);
+.planning-workspace .exec-queue-strip strong {
+  color: var(--ui-ink);
+  font-family: var(--mono);
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
-
-.planning-workspace .optimizer-empty-state strong {
-  font-size: 13px;
+.planning-workspace .exec-queue-strip small {
+  flex-basis: 100%;
+  color: var(--ui-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
-
-.planning-workspace .optimizer-empty-state p {
+.planning-workspace .exec-queue-better strong,
+.planning-workspace .exec-queue-delta {
+  color: var(--ui-success);
+}
+.planning-workspace .exec-queue-delta {
+  font-size: 12px;
+  font-weight: 600;
+}
+.planning-workspace .exec-queue-foot {
+  margin: var(--space-2) 0 0;
   color: var(--ui-muted);
   font-size: 12px;
 }
-
-.exec-scenario-note {
-  margin: 0 0 var(--space-2);
+.planning-workspace .planning-approval-body {
+  display: grid;
+  gap: var(--space-3);
+}
+.planning-workspace .planning-approval-head {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+}
+.planning-workspace .planning-approval-head h3 {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: 600;
+}
+.planning-workspace .planning-approval-role,
+.planning-workspace .planning-approval-note {
+  margin: 0;
+  color: var(--ui-ink-soft);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.planning-workspace .planning-approval-role b {
+  color: var(--ui-ink);
+  font-weight: 600;
+}
+.planning-workspace .planning-approval-blocked {
+  color: var(--ui-danger);
+}
+.planning-workspace .approval-evidence-list {
+  margin: 0;
+  display: grid;
+  border-top: 1px solid var(--ui-border);
+}
+.planning-workspace .approval-evidence-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+.planning-workspace .approval-evidence-list dt {
   color: var(--ui-muted);
   font-size: var(--fs-caption);
 }
-
-.plan-lanes-note,
-.plan-xr-agreed {
-  margin: var(--space-2) 0 0;
+.planning-workspace .approval-evidence-list dd {
+  margin: 0;
+  color: var(--ui-ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.planning-workspace .planning-approval .approve-dispatch-btn,
+.planning-workspace .planning-approval-goto {
+  justify-self: start;
+  width: auto;
+}
+.planning-workspace .planning-approval-plan {
+  display: grid;
+  gap: var(--space-2);
+}
+.planning-workspace .planning-approval-from {
+  margin: 0;
+  color: var(--ui-ink-soft);
   font-size: var(--fs-caption);
+}
+.planning-workspace .planning-approval-waiting {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  color: var(--ui-ink-soft);
+  background: var(--ui-canvas);
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+}
+.planning-workspace .planning-approval-waiting > svg {
+  margin-top: 2px;
+  color: var(--ui-warning);
+}
+.planning-workspace .planning-approval-waiting b {
+  display: block;
+  color: var(--ui-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+.planning-workspace .planning-approval-done {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ui-success);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+@media (max-width: 1100px) {
+  .planning-workspace .plan-stage-split,
+  .planning-workspace .planning-review-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .planning-workspace .plan-stage-main,
+  .planning-workspace .planning-summary {
+    padding-right: 0;
+  }
+  .planning-workspace .plan-stage-side,
+  .planning-workspace .planning-approval {
+    margin-top: var(--space-5);
+    padding: var(--space-5) 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--ui-border);
+  }
+}
+
+@media (max-width: 900px) {
+  .planning-workspace .plan-stage-split.is-stacked .plan-outlook-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .planning-workspace {
+    gap: var(--space-4);
+  }
+  .planning-workspace .planning-heading h1 {
+    font-size: 24px;
+  }
+  .planning-workspace .planning-heading p {
+    font-size: 14px;
+  }
+  .planning-workspace .planning-progress li {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 12px;
+  }
+  .planning-workspace .planning-progress-text b {
+    font-size: 13px;
+  }
+  .planning-workspace .planning-progress-text small {
+    display: none;
+  }
+  .planning-workspace .planning-stage-card {
+    padding: var(--space-4);
+    border-radius: 14px;
+  }
+  .planning-workspace .planning-stage-heading {
+    margin-bottom: var(--space-4);
+  }
+  .planning-workspace .manual-whatif-grid,
+  .planning-workspace .plan-stats-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .planning-workspace .plan-outlook-grid dd {
+    font-size: 19px;
+  }
+  .planning-workspace .plan-generate-btn {
+    justify-self: stretch;
+    width: 100%;
+  }
+  .planning-workspace .exec-headline {
+    font-size: 21px;
+  }
+  .planning-workspace .assign-card {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 380px) {
+  .planning-workspace .plan-outlook-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

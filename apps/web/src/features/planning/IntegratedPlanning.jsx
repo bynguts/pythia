@@ -1,16 +1,23 @@
-import { CheckCircle2, CircleDot } from "lucide-react";
+import { Check } from "lucide-react";
 import { StatusBadge } from "../../shared/ui/StatusBadge.jsx";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 
-export function IntegratedPlanning({ summary, scenario, evidence, unmetCount, planStatus }) {
+const STEPS = [
+  { number: "01", label: "w10num_step_forecast" },
+  { number: "02", label: "w10num_step_allocation" },
+  { number: "03", label: "w10num_step_approval" },
+];
+
+// wave11 planning: three full-width stages on one surface each, read top to bottom.
+// Each stage puts its input on the left and its result on the right, so no stage
+// leaves a hole beside a longer neighbour. The stepper follows the real state:
+// the forecast loads, a plan is built, a plan is approved.
+export function IntegratedPlanning({ summary, scenario, evidence, unmetCount, planStatus, hasOutlook }) {
   const { t, lang } = useLanguage();
+  const current = !hasOutlook ? 0 : planStatus === "approved" ? 3 : planStatus ? 2 : 1;
+  const stepState = (index) => (index < current ? "done" : index === current ? "current" : "next");
   const stages = [
-    {
-      number: "01",
-      title: t("w10num_stage1_title"),
-      description: t("w10num_stage1_sub"),
-      key: "inputs",
-    },
+    { number: "01", title: t("w10num_stage1_title"), description: t("w10num_stage1_sub"), key: "inputs" },
     {
       number: "02",
       title: t("w10num_stage2_title"),
@@ -21,7 +28,7 @@ export function IntegratedPlanning({ summary, scenario, evidence, unmetCount, pl
 
   return (
     <section className="planning-workspace workspace-page" data-testid="planning-workspace">
-      <header className="workspace-heading">
+      <header className="workspace-heading planning-heading">
         <div>
           <h1>{t("w10num_plan_title")}</h1>
           <p>{t("w10num_plan_sub")}</p>
@@ -46,32 +53,28 @@ export function IntegratedPlanning({ summary, scenario, evidence, unmetCount, pl
       </header>
 
       <ol className="planning-progress" aria-label={t("w10num_stages_label")}>
-        <li className="active">
-          <CircleDot size={17} />
-          <span>
-            <b>01</b>
-            {t("w10num_step_forecast")}
-          </span>
-        </li>
-        <li>
-          <span className="progress-line" />
-          <CircleDot size={17} />
-          <span>
-            <b>02</b>
-            {t("w10num_step_allocation")}
-          </span>
-        </li>
-        <li>
-          <span className="progress-line" />
-          <CheckCircle2 size={17} />
-          <span>
-            <b>03</b>
-            {t("w10num_step_approval")}
-          </span>
-        </li>
+        {STEPS.map((step, index) => {
+          const state = stepState(index);
+          return (
+            <li
+              key={step.number}
+              className={`is-${state}`}
+              aria-current={state === "current" ? "step" : undefined}
+              data-state={state}
+            >
+              <span className="planning-progress-mark" aria-hidden="true">
+                {state === "done" ? <Check size={14} strokeWidth={2.5} /> : step.number}
+              </span>
+              <span className="planning-progress-text">
+                <b>{t(step.label)}</b>
+                <small>{t(`w11plan_step_${state}`)}</small>
+              </span>
+            </li>
+          );
+        })}
       </ol>
 
-      <div className="planning-decision-grid">
+      <div className="planning-flow">
         {stages.map((stage) => (
           <section
             className={`planning-stage-card stage-${stage.number}`}
@@ -79,7 +82,7 @@ export function IntegratedPlanning({ summary, scenario, evidence, unmetCount, pl
             aria-labelledby={`planning-stage-${stage.number}`}
           >
             <header className="planning-stage-heading">
-              <span>{stage.number}</span>
+              <span className="planning-stage-number">{stage.number}</span>
               <div>
                 <h2 id={`planning-stage-${stage.number}`}>{stage.title}</h2>
                 <p>{stage.description}</p>
@@ -91,7 +94,7 @@ export function IntegratedPlanning({ summary, scenario, evidence, unmetCount, pl
 
         <section className="planning-stage-card planning-approval-stage" aria-labelledby="planning-stage-03">
           <header className="planning-stage-heading">
-            <span>03</span>
+            <span className="planning-stage-number">03</span>
             <div>
               <h2 id="planning-stage-03">{t("w10num_stage3_title")}</h2>
               <p>{t("w10num_stage3_sub")}</p>

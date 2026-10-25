@@ -80,7 +80,6 @@ export function MonthlyIntakeStrip() {
     >
       <div className="section-intro compact">
         <div>
-          <span className="surface-kicker">{t("hon_mi_kicker")}</span>
           <h2 id="monthly-intake-title">{t("hon_mi_title")}</h2>
         </div>
         {months.length > 0 && horizons.length > 0 && (
@@ -118,7 +117,7 @@ export function MonthlyIntakeStrip() {
                   {t("hon_mi_unit")}
                 </strong>
                 <span
-                  className={`classification-badge ${m.within_backtested_horizon ? "real" : "proxy"}`}
+                  className={`monthly-intake-horizon ${m.within_backtested_horizon ? "is-within" : "is-outside"}`}
                   data-testid="monthly-intake-horizon"
                   data-within={m.within_backtested_horizon ? "true" : "false"}
                 >

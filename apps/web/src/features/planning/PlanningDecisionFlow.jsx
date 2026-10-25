@@ -10,8 +10,10 @@ import { PlanningApproval, ScenarioPanel } from "./PlanningApproval.jsx";
 import { PlanQuotaUsage, PlanRules } from "./PlanConstraints.jsx";
 import { isWeekendDate, localIsoDate } from "./planDate.js";
 import { readPlanningScenario } from "./scenarioLink.js";
+import { Provenance } from "../../shared/ui/Provenance.jsx";
 import { WEIGHBRIDGE_LANES } from "../twin/twinLinks.js";
-import { Users, Workflow } from "lucide-react";
+import { ROLE_PERMISSIONS } from "../settings/roles.js";
+import { ArrowRight, SlidersHorizontal } from "lucide-react";
 
 const VENUES = ["gbk", "jis", "monas"];
 const MAX_PLAN_DAYS = 30; // /api/baseline/scenario serves up to 30 days ahead
@@ -60,7 +62,41 @@ export function PlanningDecisionFlow({
   const lanesOpen = handoff?.lanes ?? null;
   const scenarioActive = rainfall > 0 || attendance > 0 || lanesOpen != null;
 
-  const role = localStorage.getItem("pythia_role") || "guest";
+  const storedRole = localStorage.getItem("pythia_role") || "guest";
+  // The server's view of this session decides who may approve; the stored role only
+  // labels the column while that answer is pending or unreachable.
+  const [session, setSession] = useState(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    apiFetch("/auth/session", { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then(setSession)
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+  const role = session?.role || storedRole;
+  const canApprove = (session?.permissions || ROLE_PERMISSIONS[role] || []).includes("operations:approve");
+
+  // The approver's inbox: with no plan built on this page, step 03 shows the newest
+  // plan proposed from any browser (a dispatcher proposes, a supervisor approves).
+  const [inboxPlan, setInboxPlan] = useState(null);
+  const inboxOpen = canApprove && !plan && !approved;
+  useEffect(() => {
+    if (!inboxOpen) return undefined;
+    const controller = new AbortController();
+    const load = () =>
+      apiFetch("/operations/plans?status=proposed&limit=1", { signal: controller.signal })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((plans) => plans && setInboxPlan(plans[0] || null))
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 30000);
+    return () => {
+      controller.abort();
+      clearInterval(id);
+    };
+  }, [inboxOpen]);
+  const reviewPlan = plan || inboxPlan;
 
   const [aiOutlook, setAiOutlook] = useState([]);
 
@@ -206,12 +242,13 @@ export function PlanningDecisionFlow({
   }
 
   async function approvePlan() {
-    if (!plan) return;
+    if (!reviewPlan) return;
+    const fromInbox = !plan;
     const request = ++planRequest.current;
     setPlanLoading(true);
     setOptimizerError(null);
     try {
-      const response = await apiFetch(`/operations/${encodeURIComponent(plan.plan_id)}/approve`, {
+      const response = await apiFetch(`/operations/${encodeURIComponent(reviewPlan.plan_id)}/approve`, {
         method: "POST",
       });
       if (!response.ok) {
@@ -221,7 +258,8 @@ export function PlanningDecisionFlow({
       }
       const approvedData = await response.json();
       if (request === planRequest.current) {
-        setPlan(approvedData);
+        if (fromInbox) setInboxPlan(approvedData);
+        else setPlan(approvedData);
         setApproved(true);
       }
     } catch {
@@ -290,190 +328,217 @@ export function PlanningDecisionFlow({
       ? (delta / outlook.baseline.total_tonnage_t) * 100
       : null;
 
+  const assigned = plan?.assignments || [];
+
   return (
     <IntegratedPlanning
       summary={<ExecutiveSummary outlook={outlook} snapshot={snapshot} queue={queue} />}
+      hasOutlook={outlook != null}
       scenario={{
         inputs: (
           <ScenarioPanel mode="inputs">
-            <div className="panel-title">
-              <div>
-                <h2>{t("w10num_plan_basis_title")}</h2>
-                <p>{t("w10num_plan_basis_sub")}</p>
-              </div>
-              <div className="panel-header-icon-wrap">
-                <Users size={18} />
-              </div>
-            </div>
-            <div className="plan-date-row">
-              <label>
-                <span>{t("pln6_plan_date")}</span>
-                <input
-                  type="date"
-                  data-testid="plan-date"
-                  value={planDate}
-                  min={localIsoDate()}
-                  onChange={(event) => event.target.value && setPlanDate(event.target.value)}
-                />
-              </label>
-              <span className="day-kind-chip" data-testid="plan-day-kind">
-                {t(weekend ? "pln6_day_weekend" : "pln6_day_weekday")}
-              </span>
-            </div>
-
-            <div
-              className={`plan-outlook${isScenario ? " is-scenario" : ""}`}
-              data-testid="plan-outlook"
-              data-kind={isScenario ? "scenario" : outlook?.kind || "loading"}
-              aria-live="polite"
-            >
-              <p className="plan-outlook-basis">
-                {isScenario ? (
-                  <span className="scenario-badge" data-testid="plan-scenario-badge">
-                    {t("w10num_scenario_badge")}
+            {/* Without a 7-day outlook the empty column would leave a hole: stack instead. */}
+            <div className={`plan-stage-split${aiOutlook.length ? "" : " is-stacked"}`}>
+              <div className="plan-stage-main">
+                <div className="plan-block-head">
+                  <h3>{t("w10num_plan_basis_title")}</h3>
+                  <p>{t("w10num_plan_basis_sub")}</p>
+                </div>
+                <div className="plan-date-row">
+                  <label>
+                    <span>{t("pln6_plan_date")}</span>
+                    <input
+                      type="date"
+                      data-testid="plan-date"
+                      value={planDate}
+                      min={localIsoDate()}
+                      onChange={(event) => event.target.value && setPlanDate(event.target.value)}
+                    />
+                  </label>
+                  <span className="prov prov-proxy day-kind-chip" data-testid="plan-day-kind">
+                    {t(weekend ? "pln6_day_weekend" : "pln6_day_weekday")}
                   </span>
-                ) : (
-                  <span className="classification-badge modeled">{t("w10num_badge_model")}</span>
-                )}{" "}
-                {isScenario
-                  ? t("w10num_plan_scenario_basis")
-                      .replace("{label}", scenarioLabel)
-                      .replace("{date}", outlook.date)
-                  : outlook
-                    ? t(dayIndex === 0 ? "w10num_plan_today_basis" : "w10num_plan_day_basis").replace(
-                        "{date}",
-                        outlook.date,
-                      )
-                    : t(loading ? "w10num_calculating" : "w10num_loading")}
-              </p>
-              {isScenario && agreement && (
-                <p
-                  className="plan-xr-agreed"
-                  data-testid="plan-xr-agreed"
-                  data-participants={agreement.participants}
+                </div>
+
+                <div
+                  className={`plan-outlook${isScenario ? " is-scenario" : ""}`}
+                  data-testid="plan-outlook"
+                  data-kind={isScenario ? "scenario" : outlook?.kind || "loading"}
+                  aria-live="polite"
                 >
-                  <strong>{t("dr_plan_agreed").replace("{n}", number(agreement.participants))}</strong>
-                  {" · "}
-                  <span>{t("dr_plan_agreed_note")}</span>
-                </p>
-              )}
-              {isScenario && lanesOpen != null && (
-                <p className="plan-lanes-note" data-testid="plan-lanes-note">
-                  {t("w10num_plan_lanes_note")
-                    .replace("{closed}", WEIGHBRIDGE_LANES - lanesOpen)
-                    .replace("{total}", WEIGHBRIDGE_LANES)}
-                  {laneQueueShown && (
-                    <>
-                      {" "}
-                      <strong
-                        data-testid="plan-lanes-queue"
-                        data-before={laneQueueShown.before.queue_minutes_per_truck}
-                        data-after={laneQueueShown.after.queue_minutes_per_truck}
-                      >
-                        {t("w10num_plan_lanes_queue")
-                          .replace("{before}", number(laneQueueShown.before.queue_minutes_per_truck))
-                          .replace("{after}", number(laneQueueShown.after.queue_minutes_per_truck))}
-                      </strong>
-                    </>
+                  <p className="plan-outlook-basis">
+                    {isScenario ? (
+                      <span className="prov prov-sim scenario-badge" data-testid="plan-scenario-badge">
+                        {t("w10num_scenario_badge")}
+                      </span>
+                    ) : (
+                      <Provenance kind="model">{t("w10num_badge_model")}</Provenance>
+                    )}{" "}
+                    <span>
+                      {isScenario
+                        ? t("w10num_plan_scenario_basis")
+                            .replace("{label}", scenarioLabel)
+                            .replace("{date}", outlook.date)
+                        : outlook
+                          ? t(dayIndex === 0 ? "w10num_plan_today_basis" : "w10num_plan_day_basis").replace(
+                              "{date}",
+                              outlook.date,
+                            )
+                          : t(loading ? "w10num_calculating" : "w10num_loading")}
+                    </span>
+                  </p>
+                  {isScenario && agreement && (
+                    <p
+                      className="plan-xr-agreed"
+                      data-testid="plan-xr-agreed"
+                      data-participants={agreement.participants}
+                    >
+                      <strong>{t("dr_plan_agreed").replace("{n}", number(agreement.participants))}</strong>
+                      {" · "}
+                      <span>{t("dr_plan_agreed_note")}</span>
+                    </p>
                   )}
-                </p>
-              )}
-              {outlook && (
-                <dl className="plan-outlook-grid">
-                  <div>
-                    <dt>{t("w10num_plan_total")}</dt>
-                    <dd data-testid="plan-total" data-value={outlook.total_tonnage_t}>
-                      {number(outlook.total_tonnage_t)} t
-                    </dd>
-                    {deltaPct != null && (
-                      <small data-testid="plan-delta">
-                        {t("w10num_plan_vs_baseline")
-                          .replace("{base}", number(outlook.baseline.total_tonnage_t))
-                          .replace("{pct}", signedPercent(deltaPct))}
-                      </small>
-                    )}
+                  {isScenario && lanesOpen != null && (
+                    <p className="plan-lanes-note" data-testid="plan-lanes-note">
+                      {t("w10num_plan_lanes_note")
+                        .replace("{closed}", WEIGHBRIDGE_LANES - lanesOpen)
+                        .replace("{total}", WEIGHBRIDGE_LANES)}
+                      {laneQueueShown && (
+                        <>
+                          {" "}
+                          <strong
+                            data-testid="plan-lanes-queue"
+                            data-before={laneQueueShown.before.queue_minutes_per_truck}
+                            data-after={laneQueueShown.after.queue_minutes_per_truck}
+                          >
+                            {t("w10num_plan_lanes_queue")
+                              .replace("{before}", number(laneQueueShown.before.queue_minutes_per_truck))
+                              .replace("{after}", number(laneQueueShown.after.queue_minutes_per_truck))}
+                          </strong>
+                        </>
+                      )}
+                    </p>
+                  )}
+                  {outlook && (
+                    <dl className="plan-outlook-grid">
+                      <div>
+                        <dt>{t("w10num_plan_total")}</dt>
+                        <dd data-testid="plan-total" data-value={outlook.total_tonnage_t}>
+                          {number(outlook.total_tonnage_t)} t
+                        </dd>
+                        {deltaPct != null && (
+                          <small data-testid="plan-delta">
+                            {t("w10num_plan_vs_baseline")
+                              .replace("{base}", number(outlook.baseline.total_tonnage_t))
+                              .replace("{pct}", signedPercent(deltaPct))}
+                          </small>
+                        )}
+                      </div>
+                      <div>
+                        <dt>{t("w10num_today_at_risk")}</dt>
+                        <dd data-testid="plan-at-risk" data-value={outlook.kecamatan_at_risk}>
+                          {outlook.kecamatan_at_risk}{" "}
+                          <span className="plan-outlook-unit">
+                            {t("w11plan_of_m").replace("{m}", outlook.kecamatan_count)}
+                          </span>
+                        </dd>
+                        <small>{t("w10num_today_at_risk_helper")}</small>
+                      </div>
+                      <div>
+                        <dt>{t("w10num_today_trucks")}</dt>
+                        <dd data-testid="plan-trucks" data-value={outlook.trucks_needed}>
+                          {number(outlook.trucks_needed)}
+                        </dd>
+                        <small>
+                          {t("w10num_trucks_city_note").replace("{t}", outlook.units?.truck_capacity_tons)}
+                        </small>
+                      </div>
+                      <div>
+                        <dt>{t("w10num_fleet_pilot")}</dt>
+                        <dd data-testid="fleet-denominator">{fleetDenominator(t, outlook.fleet)}</dd>
+                        <Provenance kind="sim" bare>
+                          {t("honesty_sim_badge")}
+                        </Provenance>
+                      </div>
+                    </dl>
+                  )}
+                </div>
+              </div>
+
+              <div className="ai-outlook plan-stage-side">
+                <div className="plan-block-head plan-block-head-row">
+                  <h3>{t("w10num_ai_outlook")}</h3>
+                  <Provenance kind="model">{t("w10num_badge_model")}</Provenance>
+                </div>
+                {aiOutlook.length === 0 ? (
+                  <p className="ai-feed-empty">{t("w10num_ai_outlook_empty")}</p>
+                ) : (
+                  <div className="ui-table-wrap">
+                    <table className="ui-table plan-table ai-outlook-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">{t("w10num_th_date")}</th>
+                          <th scope="col" className="num">
+                            {t("w10num_th_rain")}
+                          </th>
+                          <th scope="col">{t("w10num_th_event")}</th>
+                          <th scope="col" className="num">
+                            {t("w11plan_th_delta")}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {aiOutlook.map((d) => (
+                          <tr key={d.date}>
+                            <td className="plan-table-date">
+                              {new Date(`${d.date}T00:00:00`).toLocaleDateString(locale, {
+                                weekday: "short",
+                                day: "2-digit",
+                                month: "short",
+                              })}
+                              {d.is_holiday ? ` ${t("w10num_holiday_suffix")}` : ""}
+                            </td>
+                            <td className="num">{number(d.rainfall_mm)} mm</td>
+                            <td className="plan-table-event">
+                              {d.events?.length
+                                ? d.events
+                                    .map((e) =>
+                                      t("w10num_event_people")
+                                        .replace("{name}", e.name)
+                                        .replace("{n}", number(e.expected_attendance)),
+                                    )
+                                    .join(", ")
+                                : "—"}
+                            </td>
+                            <td
+                              className={`num ${
+                                d.volume_delta_pct > 15
+                                  ? "text-danger"
+                                  : d.volume_delta_pct > 5
+                                    ? "text-warning"
+                                    : "text-muted"
+                              }`}
+                            >
+                              {signedNumber(d.volume_delta_pct)}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <div>
-                    <dt>{t("w10num_today_at_risk")}</dt>
-                    <dd data-testid="plan-at-risk" data-value={outlook.kecamatan_at_risk}>
-                      {t("w10num_n_of_m")
-                        .replace("{n}", outlook.kecamatan_at_risk)
-                        .replace("{m}", outlook.kecamatan_count)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{t("w10num_today_trucks")}</dt>
-                    <dd data-testid="plan-trucks" data-value={outlook.trucks_needed}>
-                      {number(outlook.trucks_needed)}
-                    </dd>
-                    <small>
-                      {t("w10num_trucks_city_note").replace("{t}", outlook.units?.truck_capacity_tons)}
-                    </small>
-                  </div>
-                  <div>
-                    <dt>{t("w10num_fleet_pilot")}</dt>
-                    <dd data-testid="fleet-denominator">{fleetDenominator(t, outlook.fleet)}</dd>
-                    <small>{t("honesty_sim_badge")}</small>
-                  </div>
-                </dl>
-              )}
+                )}
+              </div>
             </div>
 
-            <div className="ai-outlook">
-              <h3>{t("w10num_ai_outlook")}</h3>
-              {aiOutlook.length === 0 ? (
-                <div className="ai-feed-empty">{t("w10num_ai_outlook_empty")}</div>
-              ) : (
-                <table className="ai-outlook-table">
-                  <thead>
-                    <tr>
-                      <th>{t("w10num_th_date")}</th>
-                      <th>{t("w10num_th_rain")}</th>
-                      <th>{t("w10num_th_event")}</th>
-                      <th>Δ Volume</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {aiOutlook.map((d) => (
-                      <tr key={d.date}>
-                        <td>
-                          {new Date(`${d.date}T00:00:00`).toLocaleDateString(locale, {
-                            day: "2-digit",
-                            month: "short",
-                          })}
-                          {d.is_holiday ? ` ${t("w10num_holiday_suffix")}` : ""}
-                        </td>
-                        <td>{number(d.rainfall_mm)} mm</td>
-                        <td>
-                          {d.events?.length
-                            ? d.events
-                                .map((e) =>
-                                  t("w10num_event_people")
-                                    .replace("{name}", e.name)
-                                    .replace("{n}", number(e.expected_attendance)),
-                                )
-                                .join(", ")
-                            : "—"}
-                        </td>
-                        <td
-                          className={
-                            d.volume_delta_pct > 15
-                              ? "text-danger"
-                              : d.volume_delta_pct > 5
-                                ? "text-warning"
-                                : "text-normal"
-                          }
-                        >
-                          {signedNumber(d.volume_delta_pct)}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-            <details className="manual-whatif" open={scenarioActive} data-testid="manual-whatif">
-              <summary>{t("w10num_scenario_open")}</summary>
+            <details
+              className="plan-disclosure manual-whatif"
+              open={scenarioActive}
+              data-testid="manual-whatif"
+            >
+              <summary>
+                <SlidersHorizontal size={16} aria-hidden="true" />
+                {t("w10num_scenario_open")}
+              </summary>
               <p className="kec-note">{t("w10num_scenario_explain")}</p>
               <div className="manual-whatif-grid">
                 <label>
@@ -517,19 +582,20 @@ export function PlanningDecisionFlow({
                   </select>
                 </label>
               </div>
+              {/* The forecast reruns on every change; these only reset or force a rerun. */}
               <div className="manual-whatif-actions">
                 {scenarioActive && (
-                  <button className="ghost-button" type="button" onClick={resetScenario}>
+                  <button className="text-button" type="button" onClick={resetScenario}>
                     {t("w10num_scn_reset")}
                   </button>
                 )}
-                <button className="primary-button" onClick={run} disabled={loading}>
+                <button className="ghost-button" type="button" onClick={run} disabled={loading}>
                   {loading ? t("w10num_calculating") : t("btn_run_scenario")}
                 </button>
               </div>
             </details>
             {forecastError && (
-              <p className="unmet-reasons-box optimizer-error" role="alert">
+              <p className="plan-note plan-note-danger optimizer-error" role="alert">
                 {t(dateInRange ? "w10num_forecast_error" : "w10num_date_out_of_range")}
               </p>
             )}
@@ -538,16 +604,30 @@ export function PlanningDecisionFlow({
         recommendation: (
           <ScenarioPanel mode="recommendation">
             <div className="optimizer-section">
-              <div className="optimizer-head">
-                <h3>{t("plan_opt_title")}</h3>
-              </div>
-
               {!plan && (
-                <>
-                  <div className="plan-preflight-grid" aria-label={t("w10num_preflight")}>
+                <div className="plan-stage-split">
+                  <div className="plan-stage-main">
+                    <div className="plan-block-head">
+                      <h3>{t("plan_opt_title")}</h3>
+                      <p>{t("plan_awaiting_desc")}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="primary-button plan-generate-btn"
+                      onClick={generatePlan}
+                      disabled={planLoading || loading}
+                    >
+                      {planLoading ? t("w10num_optimizing") : t("btn_generate_plan")}
+                      {!planLoading && <ArrowRight size={16} aria-hidden="true" />}
+                    </button>
+                  </div>
+                  <div className="plan-preflight-grid" role="group" aria-label={t("w10num_preflight")}>
                     <div>
                       <span>{t("plan_demand")}</span>
                       <strong>{outlook ? `${number(outlook.total_tonnage_t)} t` : "—"}</strong>
+                      <Provenance kind="model" bare>
+                        {t("w10num_badge_model")}
+                      </Provenance>
                     </div>
                     <div>
                       <span>{t("w10num_extra_need")}</span>
@@ -559,6 +639,9 @@ export function PlanningDecisionFlow({
                               .replace("{short}", number(outlook.recommendation.shortfall_trucks))
                           : "—"}
                       </strong>
+                      <Provenance kind="sim" bare>
+                        {t("honesty_sim_badge")}
+                      </Provenance>
                     </div>
                     <div>
                       <span>{t("plan_tpa_queue")}</span>
@@ -569,133 +652,130 @@ export function PlanningDecisionFlow({
                               .replace("{m}", number(Math.round(queue.estimated_wait_minutes)))
                           : "—"}
                       </strong>
+                      <Provenance kind="sim" bare>
+                        {t("honesty_sim_badge")}
+                      </Provenance>
                     </div>
                   </div>
-
-                  <button
-                    className="primary-button plan-generate-btn"
-                    onClick={generatePlan}
-                    disabled={planLoading || loading}
-                  >
-                    {planLoading ? t("w10num_optimizing") : t("btn_generate_plan")}
-                  </button>
-
-                  <div className="optimizer-empty-state" aria-live="polite">
-                    <Workflow size={18} />
-                    <div>
-                      <strong>{t("plan_awaiting_title")}</strong>
-                      <p>{t("plan_awaiting_desc")}</p>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {errorKey && (
-                <div className="unmet-reasons-box optimizer-error" role="alert">
-                  <strong>{t("w10num_plan_label")}</strong> {t(errorKey)}
                 </div>
               )}
 
+              {errorKey && (
+                <p className="plan-note plan-note-danger optimizer-error" role="alert">
+                  <strong>{t("w10num_plan_label")}</strong> {t(errorKey)}
+                </p>
+              )}
+
               {plan && (
-                <div className="optimizer-plan-card">
-                  <div className="plan-header">
-                    <strong>{t("w10num_plan_id").replace("{id}", plan.plan_id)}</strong>
-                    <span className={`plan-status-badge ${plan.status}`}>
-                      {t(
-                        plan.status === "proposed"
-                          ? "w10num_status_proposed"
-                          : plan.status === "approved"
-                            ? "w10num_status_approved"
-                            : "w10num_status_unknown",
+                <div className="optimizer-plan">
+                  <div className="plan-stage-split">
+                    <div className="plan-stage-main">
+                      <div className="plan-header">
+                        <h3>{t("w10num_plan_id").replace("{id}", plan.plan_id)}</h3>
+                        <span
+                          className={`prov ${plan.status === "approved" ? "prov-real" : "prov-sim"} plan-status-badge`}
+                        >
+                          {t(
+                            plan.status === "proposed"
+                              ? "w10num_status_proposed"
+                              : plan.status === "approved"
+                                ? "w10num_status_approved"
+                                : "w10num_status_unknown",
+                          )}
+                        </span>
+                      </div>
+
+                      {plan.scope && (
+                        <p className="kec-note" data-testid="plan-scope">
+                          {t("pln6_scope")
+                            .replace("{date}", plan.plan_date || planDate)
+                            .replace("{n}", number(plan.scope.districts))
+                            .replace("{total}", number(plan.scope.district_total))}
+                        </p>
                       )}
-                    </span>
-                  </div>
+                      <dl className="plan-stats-grid">
+                        <div className="plan-stat-item">
+                          <dt>{t("w10num_plan_demand_total")}</dt>
+                          <dd>{number(plan.total_demand_tons)} t</dd>
+                        </div>
+                        <div className="plan-stat-item">
+                          <dt>{t("w10num_plan_assigned")}</dt>
+                          <dd>{number(plan.total_assigned_tons)} t</dd>
+                        </div>
+                        <div className="plan-stat-item">
+                          <dt>{t("w10num_plan_status")}</dt>
+                          <dd className={plan.unmet_reasons?.length ? "text-danger" : "text-success"}>
+                            {t(plan.unmet_reasons?.length ? "w10num_plan_unmet" : "w10num_plan_feasible")}
+                          </dd>
+                        </div>
+                      </dl>
 
-                  {plan.scope && (
-                    <p className="kec-note" data-testid="plan-scope">
-                      {t("pln6_scope")
-                        .replace("{date}", plan.plan_date || planDate)
-                        .replace("{n}", number(plan.scope.districts))
-                        .replace("{total}", number(plan.scope.district_total))}
-                    </p>
-                  )}
-                  <div className="plan-stats-grid">
-                    <div className="plan-stat-item">
-                      <span>{t("w10num_plan_demand_total")}</span>
-                      <strong>{number(plan.total_demand_tons)} t</strong>
+                      {plan.feasible === false && plan.unassigned_tons > 0 && (
+                        <p className="plan-note plan-note-danger" role="status" data-testid="plan-shortfall">
+                          <strong>{t("pln6_infeasible").replace("{t}", number(plan.unassigned_tons))}</strong>{" "}
+                          {t("pln6_infeasible_note")}
+                        </p>
+                      )}
+                      {plan.feasible === true && plan.quota_usage && (
+                        <p className="kec-note" data-testid="plan-feasible">
+                          {t("pln6_feasible")}
+                        </p>
+                      )}
+                      {plan.unmet_reasons?.length > 0 && (
+                        <div className="plan-note plan-note-danger">
+                          <strong>{t("w10num_constraint_warnings")}</strong>
+                          <ul>
+                            {plan.unmet_reasons.map((r, i) => (
+                              <li key={i}>{reason(r)}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
-                    <div className="plan-stat-item">
-                      <span>{t("w10num_plan_assigned")}</span>
-                      <strong>{number(plan.total_assigned_tons)} t</strong>
-                    </div>
-                    <div className="plan-stat-item">
-                      <span>{t("w10num_plan_status")}</span>
-                      <strong className={plan.unmet_reasons?.length ? "text-danger" : "text-success"}>
-                        {t(plan.unmet_reasons?.length ? "w10num_plan_unmet" : "w10num_plan_feasible")}
-                      </strong>
-                    </div>
-                  </div>
 
-                  {plan.feasible === false && plan.unassigned_tons > 0 && (
-                    <div className="unmet-reasons-box" role="status" data-testid="plan-shortfall">
-                      <strong>{t("pln6_infeasible").replace("{t}", number(plan.unassigned_tons))}</strong>{" "}
-                      {t("pln6_infeasible_note")}
-                    </div>
-                  )}
-                  {plan.feasible === true && plan.quota_usage && (
-                    <p className="kec-note" data-testid="plan-feasible">
-                      {t("pln6_feasible")}
-                    </p>
-                  )}
-                  <PlanQuotaUsage plan={plan} />
-                  <PlanRules plan={plan} />
-                  {plan.unmet_reasons?.length > 0 && (
-                    <div className="unmet-reasons-box">
-                      <strong>{t("w10num_constraint_warnings")}</strong>
-                      <ul>
-                        {plan.unmet_reasons.map((r, i) => (
-                          <li key={i}>{reason(r)}</li>
+                    <div className="plan-stage-side">
+                      <h4 className="assign-title">{t("w10num_assignments")}</h4>
+                      <ul className="assignments-container">
+                        {assigned.map((a, i) => (
+                          <li key={i} className="assign-card">
+                            <div className="assign-info">
+                              <strong>{t("w10num_truck").replace("{code}", a.truck_code)}</strong>
+                              <span>
+                                <ArrowRight size={13} aria-hidden="true" /> {a.area.replace(/_/g, " ")}
+                              </span>
+                              {a.shift && (
+                                <span className="kec-note">
+                                  {t("pln6_trip")
+                                    .replace("{n}", number(a.trip_index))
+                                    .replace("{shift}", t(`pln6_shift_${a.shift}`))
+                                    .replace(
+                                      "{facility}",
+                                      plan.rules?.facilities?.find((f) => f.name === a.facility)
+                                        ?.display_name || a.facility,
+                                    )}
+                                </span>
+                              )}
+                            </div>
+                            <div className="assign-evidence">
+                              <span>
+                                {t("w10num_load")} <b>{number(a.assigned_tons)} t</b>
+                              </span>
+                              {a.evidence?.permit_compliant ? (
+                                <span className="ok">{t("w10num_permit_ok")}</span>
+                              ) : (
+                                <span className="warn">{t("w10num_permit_missing")}</span>
+                              )}
+                            </div>
+                          </li>
                         ))}
                       </ul>
+                      {!assigned.length && (
+                        <p className="kec-note optimizer-empty">{t("w10num_no_assignments")}</p>
+                      )}
                     </div>
-                  )}
-
-                  <div className="assign-title">{t("w10num_assignments")}</div>
-                  <div className="assignments-container">
-                    {(plan.assignments || []).map((a, i) => (
-                      <div key={i} className="assign-card">
-                        <div className="assign-info">
-                          <strong>{t("w10num_truck").replace("{code}", a.truck_code)}</strong>
-                          <span>&rarr; {a.area.replace(/_/g, " ").toUpperCase()}</span>
-                          {a.shift && (
-                            <span className="kec-note">
-                              {t("pln6_trip")
-                                .replace("{n}", number(a.trip_index))
-                                .replace("{shift}", t(`pln6_shift_${a.shift}`))
-                                .replace(
-                                  "{facility}",
-                                  plan.rules?.facilities?.find((f) => f.name === a.facility)?.display_name ||
-                                    a.facility,
-                                )}
-                            </span>
-                          )}
-                        </div>
-                        <div className="assign-evidence">
-                          <span>
-                            {t("w10num_load")} <b>{number(a.assigned_tons)} t</b>
-                          </span>
-                          {a.evidence?.permit_compliant ? (
-                            <span className="ok">{t("w10num_permit_ok")}</span>
-                          ) : (
-                            <span className="warn">{t("w10num_permit_missing")}</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                    {!plan.assignments?.length && (
-                      <p className="kec-note optimizer-empty">{t("w10num_no_assignments")}</p>
-                    )}
                   </div>
+                  <PlanQuotaUsage plan={plan} />
+                  <PlanRules plan={plan} />
                 </div>
               )}
             </div>
@@ -704,15 +784,17 @@ export function PlanningDecisionFlow({
       }}
       evidence={
         <PlanningApproval
-          plan={plan}
+          plan={reviewPlan}
           planLoading={planLoading}
           approved={approved}
           approvePlan={approvePlan}
           role={role}
+          canApprove={canApprove}
+          fromInbox={!plan && inboxPlan != null}
         />
       }
-      unmetCount={plan?.unmet_reasons?.length || 0}
-      planStatus={plan?.status}
+      unmetCount={reviewPlan?.unmet_reasons?.length || 0}
+      planStatus={reviewPlan?.status}
     />
   );
 }

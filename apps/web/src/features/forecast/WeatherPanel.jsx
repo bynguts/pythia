@@ -1,6 +1,6 @@
 import { signedPercent } from "../../shared/hooks/useSnapshot.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
-import { StatusPill } from "../../shared/ui/StatusPill.jsx";
+import { Provenance } from "../../shared/ui/Provenance.jsx";
 import { CloudRain } from "lucide-react";
 
 // Teardown v4 P4: a forecast is never "live"; the advice comes from the risk
@@ -19,19 +19,17 @@ export function WeatherPanel({ weather }) {
   const day = (iso, options) => new Date(`${iso}T00:00:00`).toLocaleDateString(locale, options);
 
   return (
-    <section className="panel weather-panel">
-      <div className="panel-title">
-        <div>
-          <h2>{t("w10num_wx_title")}</h2>
-          <p>{t("w10num_wx_sub")}</p>
-        </div>
-        <StatusPill tone={weather?.source === "open-meteo" ? "success" : "warning"}>
+    <section className="weather-panel" aria-labelledby="weather-panel-title">
+      <div className="context-block-head">
+        <h3 id="weather-panel-title">{t("w10num_wx_title")}</h3>
+        <Provenance kind={weather?.source === "open-meteo" ? "model" : "stale"}>
           {t(weather?.source === "open-meteo" ? "w10num_wx_source_forecast" : "w10num_wx_source_fallback")}
-        </StatusPill>
+        </Provenance>
       </div>
+      <p className="context-block-note">{t("w10num_wx_sub")}</p>
       {peak && (
         <div className="weather-hero">
-          <CloudRain size={26} />
+          <CloudRain size={20} aria-hidden="true" />
           <div>
             <strong>{day(peak.date, { weekday: "long", day: "numeric", month: "short" })}</strong>
             <span>
@@ -43,22 +41,8 @@ export function WeatherPanel({ weather }) {
           <b>{signedPercent(peak.waste_impact_percent)}</b>
         </div>
       )}
-      <div className="weather-strip">
-        {trendRows.map((item) => (
-          <article key={item.date} className={`weather-day ${item.risk_level}`}>
-            <div>
-              <strong>{day(item.date, { weekday: "short" })}</strong>
-              <small>{day(item.date, { month: "short", day: "numeric" })}</small>
-            </div>
-            <span>{Math.round(item.rainfall_mm)} mm</span>
-            <small>
-              {Math.round(item.temperature_min_c)}–{Math.round(item.temperature_max_c)} °C
-            </small>
-          </article>
-        ))}
-      </div>
-      <div className="weather-trend-chart" aria-label={t("w10num_wx_trend")}>
-        <h3>{t("w10num_wx_trend")}</h3>
+      <div className="weather-trend-chart">
+        <h4>{t("w10num_wx_trend")}</h4>
         {trendRows.map((item) => {
           const rainWidth = Math.max(4, ((item.rainfall_mm || 0) / maxRainfall) * 100);
           const impactWidth = Math.max(4, ((item.waste_impact_percent || 0) / maxImpact) * 100);

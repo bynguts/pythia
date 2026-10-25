@@ -107,7 +107,7 @@ export function ExecutiveSummary({ outlook, snapshot, queue }) {
       <p className="exec-brief-note">{t("exec_sub")}</p>
       {outlook?.kind === "scenario" && (
         <p className="exec-scenario-note">
-          <span className="scenario-badge">{t("w10num_scenario_badge")}</span>{" "}
+          <span className="prov prov-sim scenario-badge">{t("w10num_scenario_badge")}</span>{" "}
           {t("w10num_exec_scenario_note")}
         </p>
       )}

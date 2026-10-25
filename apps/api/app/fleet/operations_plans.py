@@ -98,11 +98,35 @@ class OperationsPlanStore:
             row = connection.execute("SELECT * FROM operations_plans WHERE plan_id=?", (plan_id,)).fetchone()
         if row is None:
             return None
+        return self._payload(row)
+
+    @staticmethod
+    def _payload(row: sqlite3.Row) -> dict[str, Any]:
         payload = json.loads(row["payload"])
         payload["status"] = row["status"]
+        payload["created_at"] = row["created_at"]
+        if row["approved_at"]:
+            payload["approved_at"] = row["approved_at"]
+            payload["approved_by"] = row["approved_by"]
         if row["dispatch_ids"]:
             payload["dispatch_ids"] = json.loads(row["dispatch_ids"])
         return payload
+
+    def list_plans(self, status: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+        """Stored plans, newest first; `status` narrows to proposed or approved.
+
+        This is how a plan built in one browser reaches the approver in another.
+        """
+        query = "SELECT * FROM operations_plans"
+        params: list[Any] = []
+        if status:
+            query += " WHERE status=?"
+            params.append(status)
+        query += " ORDER BY created_at DESC, rowid DESC LIMIT ?"
+        params.append(limit)
+        with closing(self._connect()) as connection:
+            rows = connection.execute(query, params).fetchall()
+        return [self._payload(row) for row in rows]
 
     def approve(self, plan_id: str, approved_by: str, create_dispatch) -> tuple[dict[str, Any], bool]:
         """Approve a plan at-most-once.

@@ -23,6 +23,7 @@ from app.field.permits import PERMIT_STORE
 from app.fleet.data import TRUCKS, events_permits_payload, tpa_queue_status_payload
 from app.fleet.operations_optimizer import Demand, Vehicle, build_operational_plan
 from app.fleet.operations_rules import PlanningRules, resolve_rules
+from app.fleet.queue_simulation import QUEUE_QUANTITIES, QUEUE_STAGE
 from app.forecast.engine import simulate_staggered_dispatch
 from app.forecast.real_data import load_kecamatan_map
 
@@ -240,10 +241,26 @@ def create_operations_plan(
         "facility_usage": plan.facility_usage,
         "rules": rules.payload(),
         "scenario": scenario,
+        # The role that built it, so an approver in another browser sees who proposed it.
+        "proposed_by": _role,
     }
     payload = _OPERATIONS_PLAN_STORE.save_proposed(plan.plan_id, payload)
     history_store.record_event("operations_plan_created", {"plan_id": plan.plan_id, "scenario": scenario})
     return payload
+
+
+@router.get("/api/operations/plans")
+def list_operations_plans(
+    status: str | None = Query(None, pattern="^(proposed|approved)$"),
+    limit: int = Query(20, ge=1, le=100),
+    _role: str = Depends(require_any_permission("operations:plan", "operations:approve")),
+) -> list[dict[str, Any]]:
+    """Stored plans, newest first (same shape as approve returns).
+
+    `status=proposed` is the approver's inbox: a dispatcher proposes a plan in one
+    browser, a supervisor opens Rencana in another and approves it by id.
+    """
+    return _OPERATIONS_PLAN_STORE.list_plans(status=status, limit=limit)
 
 
 @router.get("/api/operations/instructions/{truck_code}")
@@ -321,7 +338,14 @@ def get_tpa_queue_status(scenario: str = Query("live", pattern="^(live|peak)$"))
     cached = _tpa_cache.get(scenario)
     now = time.time()
     if cached is None or now - cached["ts"] > 5.0:
-        cached = {"payload": tpa_queue_status_payload(scenario=scenario), "ts": now}
+        # The wait here is the modelled peak hour's, not the day mean of /tpa/queue-metric.
+        payload = {
+            **tpa_queue_status_payload(scenario=scenario),
+            "quantity": "peak_hour_mean_per_truck",
+            "quantity_label": QUEUE_QUANTITIES["peak_hour_mean_per_truck"],
+            "stage": QUEUE_STAGE,
+        }
+        cached = {"payload": payload, "ts": now}
         _tpa_cache[scenario] = cached
     return cached["payload"]
 

@@ -1,19 +1,12 @@
 import { useState } from "react";
-import { MapPinned } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
+import { Provenance } from "../../shared/ui/Provenance.jsx";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { fetchOutlook, useBaseline } from "../../shared/hooks/useBaseline.js";
 import { signedPercent } from "../../shared/hooks/useSnapshot.js";
 
 const CITIES = ["Jakarta Pusat", "Jakarta Barat", "Jakarta Selatan", "Jakarta Timur", "Jakarta Utara"];
 const VENUES = ["gbk", "jis", "monas"];
-
-// #42: darkened to meet WCAG AA (4.5:1) against the card background.
-const READINESS_COLOR = {
-  sufficient: "#15803d",
-  tight: "#92400e",
-  under_capacity: "#b91c1c",
-  unknown: "#475569",
-};
 
 function horizonStats(row) {
   const series = row.series || [];
@@ -22,63 +15,86 @@ function horizonStats(row) {
   return { days: series.length, total: series.reduce((sum, day) => sum + day.predicted_tons, 0), peak };
 }
 
-// One row per kecamatan from the baseline (or its what-if): the list the summary
-// tab shows as the top 8 and the kecamatan tab shows in full.
-export function KecamatanRows({ rows, loading, selectedSlug, onSelect }) {
+// wave11 forecast: one ranked, flat list of districts (heaviest first, as the API
+// sorts them): rank, name and what it needs, then the tonnage and its risk on the
+// right. The bar is decorative; the text carries the amount once. A selectable list
+// puts a real button on the name so the row works from the keyboard.
+export function KecamatanRows({ rows, loading, selectedSlug, onSelect, rankOf }) {
   const { t, lang } = useLanguage();
   const locale = localeFor(lang);
   const maxTons = rows.length ? Math.max(...rows.map((row) => row.predicted_tons)) : 1;
   if (loading) return <p className="panel-loading">{t("w10num_loading")}</p>;
   return (
-    <div className="kec-list">
-      {rows.map((k) => {
+    <ol className="kec-list">
+      {rows.map((k, index) => {
         const stats = horizonStats(k);
+        const rank = rankOf ? rankOf(k) : index + 1;
+        const risky = k.risk_level && k.risk_level !== "normal";
         return (
-          <article
-            className={`kec-row${selectedSlug === k.slug ? " active" : ""}`}
+          <li
+            className={`kec-row${selectedSlug === k.slug ? " active" : ""}${risky ? ` is-${k.risk_level}` : ""}`}
             key={k.slug}
-            onClick={onSelect ? () => onSelect(selectedSlug === k.slug ? null : k.slug) : undefined}
           >
-            <div className="kec-head">
-              <strong>{k.kecamatan}</strong>
-              <span>{k.city}</span>
-            </div>
-            {/* #42: the bar is decorative; the kec-meta text announces amount and unit. */}
-            <div className="bar" aria-hidden="true">
-              <span style={{ width: `${Math.min(100, (k.predicted_tons / maxTons) * 100)}%` }} />
-            </div>
-            <div className="kec-meta">
-              <b>{k.predicted_tons.toLocaleString(locale)} t</b>
-              <span>
-                {t("w10num_kec_resources")
-                  .replace("{trucks}", k.trucks_required)
-                  .replace("{crews}", k.crews_required)
-                  .replace("{hours}", k.man_hours_required)}
-              </span>
-              {k.risk_level && k.risk_level !== "normal" && (
-                <span className={`kec-risk risk-${k.risk_level}`}>
-                  {t(`w10num_risk_${k.risk_level}`)} · {signedPercent(k.spike_percent)}
+            <span className="kec-rank" aria-hidden="true">
+              {String(rank).padStart(2, "0")}
+            </span>
+            <div className="kec-main">
+              <div className="kec-head">
+                {onSelect ? (
+                  <button
+                    type="button"
+                    className="kec-name"
+                    aria-pressed={selectedSlug === k.slug}
+                    onClick={() => onSelect(selectedSlug === k.slug ? null : k.slug)}
+                  >
+                    {k.kecamatan}
+                  </button>
+                ) : (
+                  <strong className="kec-name">{k.kecamatan}</strong>
+                )}
+                <span>{k.city}</span>
+              </div>
+              {/* #42: the bar is decorative; the kec-meta text announces amount and unit. */}
+              <div className="bar" aria-hidden="true">
+                <span style={{ width: `${Math.min(100, (k.predicted_tons / maxTons) * 100)}%` }} />
+              </div>
+              <p className="kec-meta">
+                <span>
+                  {t("w10num_kec_resources")
+                    .replace("{trucks}", k.trucks_required)
+                    .replace("{crews}", k.crews_required)
+                    .replace("{hours}", k.man_hours_required)}
                 </span>
-              )}
+                <span
+                  className={`kec-facility tps-${k.facility_over_capacity ? "over" : k.facility_readiness || "unknown"}`}
+                >
+                  {k.facility_over_capacity
+                    ? t("w10num_tps_over")
+                    : t(`w10num_tps_${k.facility_readiness || "unknown"}`)}
+                </span>
+              </p>
               {stats && (
-                <span className="kec-horizon">
+                <p className="kec-horizon">
                   {t("w10num_kec_horizon")
                     .replace("{days}", stats.days)
                     .replace("{total}", Math.round(stats.total).toLocaleString(locale))
                     .replace("{date}", stats.peak.date)
                     .replace("{peak}", Math.round(stats.peak.predicted_tons))}
+                </p>
+              )}
+            </div>
+            <div className="kec-figure">
+              <b>{k.predicted_tons.toLocaleString(locale)} t</b>
+              {risky && (
+                <span className={`kec-risk risk-${k.risk_level}`}>
+                  {t(`w10num_risk_${k.risk_level}`)} · {signedPercent(k.spike_percent)}
                 </span>
               )}
-              <span className="kec-facility" style={{ color: READINESS_COLOR[k.facility_readiness] }}>
-                {k.facility_over_capacity
-                  ? t("w10num_tps_over")
-                  : t(`w10num_tps_${k.facility_readiness || "unknown"}`)}
-              </span>
             </div>
-          </article>
+          </li>
         );
       })}
-    </div>
+    </ol>
   );
 }
 
@@ -128,18 +144,20 @@ export function KecamatanMapPanel({ horizon = "7d" }) {
   const selected = rows.find((row) => row.slug === selectedSlug);
   const number = (value) => Number(value ?? 0).toLocaleString(locale, { maximumFractionDigits: 1 });
 
+  const rankBySlug = Object.fromEntries(rows.map((row, index) => [row.slug, index + 1]));
+
   return (
     <section className="panel wide kecamatan-panel" data-testid="kecamatan-panel">
-      <div className="panel-title">
+      <header className="ui-section-head kecamatan-head">
         <div>
           <h2>{t("w10num_kec_title")}</h2>
           <p>
             {active ? (
-              <span className="scenario-badge" data-testid="kecamatan-scenario-badge">
+              <span className="prov prov-sim scenario-badge" data-testid="kecamatan-scenario-badge">
                 {t("w10num_scenario_badge")}
               </span>
             ) : (
-              <span className="classification-badge modeled">{t("w10num_badge_model")}</span>
+              <Provenance kind="model">{t("w10num_badge_model")}</Provenance>
             )}{" "}
             {data
               ? t(active ? "w10num_kec_total_scenario" : "w10num_kec_total")
@@ -149,59 +167,11 @@ export function KecamatanMapPanel({ horizon = "7d" }) {
               : t("w10num_loading")}
           </p>
         </div>
-        <div className="panel-header-icon-wrap">
-          <MapPinned size={18} />
-        </div>
-      </div>
-
-      <details className="scenario-disclosure" open={Boolean(active)}>
-        <summary>{t("w10num_scenario_open")}</summary>
-        <p className="kec-note">{t("w10num_scenario_explain")}</p>
-        <div className="scenario-controls">
-          <label>
-            {t("w10num_scn_rain")}: <b>{rain ? `${rain} mm` : t("w10num_scn_rain_forecast")}</b>
-            <input type="range" min="0" max="100" value={rain} onChange={(e) => setRain(+e.target.value)} />
-          </label>
-          <label>
-            {t("w10num_scn_attendance")}: <b>{attendance.toLocaleString(locale)}</b>
-            <input
-              type="range"
-              min="0"
-              max="200000"
-              step="5000"
-              value={attendance}
-              onChange={(e) => setAttendance(+e.target.value)}
-            />
-          </label>
-          <label>
-            {t("w10num_scn_venue")}
-            <select className="city-select" value={venue} onChange={(e) => setVenue(e.target.value)}>
-              {VENUES.map((id) => (
-                <option key={id} value={id}>
-                  {t(`w10num_venue_${id}`)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className="primary-button" onClick={runScenario} disabled={loading}>
-            {loading ? t("w10num_calculating") : t("w10num_scn_run")}
-          </button>
-          {active && (
-            <button className="text-button" type="button" onClick={resetScenario}>
-              {t("w10num_scn_reset")}
-            </button>
-          )}
-        </div>
-        {scenarioError && (
-          <p className="kec-note" role="alert">
-            {t("w10num_scn_error")}
-          </p>
-        )}
-      </details>
+      </header>
 
       <div className="forecast-filter-bar">
         <input
-          type="text"
+          type="search"
           placeholder={t("w10num_kec_search")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -223,72 +193,120 @@ export function KecamatanMapPanel({ horizon = "7d" }) {
         </select>
       </div>
 
+      <details className="scenario-disclosure" open={Boolean(active)}>
+        <summary>
+          <SlidersHorizontal size={16} aria-hidden="true" />
+          {t("w10num_scenario_open")}
+        </summary>
+        <p className="kec-note">{t("w10num_scenario_explain")}</p>
+        <div className="scenario-controls">
+          <label>
+            <span>
+              {t("w10num_scn_rain")}: <b>{rain ? `${rain} mm` : t("w10num_scn_rain_forecast")}</b>
+            </span>
+            <input type="range" min="0" max="100" value={rain} onChange={(e) => setRain(+e.target.value)} />
+          </label>
+          <label>
+            <span>
+              {t("w10num_scn_attendance")}: <b>{attendance.toLocaleString(locale)}</b>
+            </span>
+            <input
+              type="range"
+              min="0"
+              max="200000"
+              step="5000"
+              value={attendance}
+              onChange={(e) => setAttendance(+e.target.value)}
+            />
+          </label>
+          <label>
+            <span>{t("w10num_scn_venue")}</span>
+            <select className="city-select" value={venue} onChange={(e) => setVenue(e.target.value)}>
+              {VENUES.map((id) => (
+                <option key={id} value={id}>
+                  {t(`w10num_venue_${id}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="scenario-actions">
+            {active && (
+              <button className="text-button" type="button" onClick={resetScenario}>
+                {t("w10num_scn_reset")}
+              </button>
+            )}
+            <button className="ghost-button" type="button" onClick={runScenario} disabled={loading}>
+              {loading ? t("w10num_calculating") : t("w10num_scn_run")}
+            </button>
+          </div>
+        </div>
+        {scenarioError && (
+          <p className="kec-note" role="alert">
+            {t("w10num_scn_error")}
+          </p>
+        )}
+      </details>
+
       {selected && (
-        <div className="kec-details-panel" data-testid="kec-details">
+        <section className="kec-details-panel" data-testid="kec-details" aria-labelledby="kec-details-title">
           <div className="kec-details-panel-title">
             <div>
-              <h3>
+              <h3 id="kec-details-title">
                 {selected.kecamatan} ({selected.city})
               </h3>
               <p>{t("w10num_kec_detail_sub")}</p>
             </div>
-            <button className="text-button" onClick={() => setSelectedSlug(null)}>
+            <button className="text-button" type="button" onClick={() => setSelectedSlug(null)}>
               {t("w10num_close")}
             </button>
           </div>
           <div className="kec-details-grid">
-            <div className="kec-details-section">
-              <h4>{t("w10num_kec_detail_volume")}</h4>
-              <ul className="kec-details-list">
-                <li className="kec-details-item">
-                  <span>{t("w10num_kec_detail_normal")}</span>
-                  <b>{number(selected.normal_tons)} t</b>
-                </li>
-                <li className="kec-details-item">
-                  <span>{t("w10num_kec_detail_spike")}</span>
-                  <b>
-                    {signedPercent(selected.spike_percent)} · {t(`w10num_risk_${selected.risk_level}`)}
-                  </b>
-                </li>
-                <li className="kec-details-item-total">
-                  <span>{t("w10num_kec_detail_day")}</span>
-                  <span>{number(selected.predicted_tons)} t</span>
-                </li>
-              </ul>
-            </div>
-            <div className="kec-details-section">
-              <h4>{t("w10num_kec_detail_needs")}</h4>
-              <ul className="kec-details-list">
-                <li className="kec-details-item">
-                  <span>{t("w10num_kec_detail_trucks")}</span>
-                  <b>{selected.trucks_required}</b>
-                </li>
-                <li className="kec-details-item">
-                  <span>{t("w10num_kec_detail_crews")}</span>
-                  <b>
-                    {t("w10num_kec_detail_crews_value")
-                      .replace("{crews}", selected.crews_required)
-                      .replace("{workers}", selected.workers_required)}
-                  </b>
-                </li>
-                <li className="kec-details-item">
-                  <span>{t("w10num_kec_detail_hours")}</span>
-                  <b>{selected.man_hours_required}</b>
-                </li>
-                <li className="kec-details-item">
-                  <span>{t("w10num_kec_detail_bins")}</span>
-                  <b>{selected.bins_required}</b>
-                </li>
-                <li className="kec-details-item-total">
-                  <span>{t("w10num_kec_detail_tps")}</span>
-                  <span className={selected.facility_over_capacity ? "status-overcapacity" : "status-normal"}>
-                    {selected.facility_over_capacity
-                      ? t("w10num_tps_over")
-                      : t(`w10num_tps_${selected.facility_readiness || "unknown"}`)}
-                  </span>
-                </li>
-              </ul>
-            </div>
+            <dl className="kec-details-list">
+              <div>
+                <dt>{t("w10num_kec_detail_normal")}</dt>
+                <dd>{number(selected.normal_tons)} t</dd>
+              </div>
+              <div>
+                <dt>{t("w10num_kec_detail_spike")}</dt>
+                <dd>
+                  {signedPercent(selected.spike_percent)} · {t(`w10num_risk_${selected.risk_level}`)}
+                </dd>
+              </div>
+              <div className="is-total">
+                <dt>{t("w10num_kec_detail_day")}</dt>
+                <dd>{number(selected.predicted_tons)} t</dd>
+              </div>
+            </dl>
+            <dl className="kec-details-list">
+              <div>
+                <dt>{t("w10num_kec_detail_trucks")}</dt>
+                <dd>{selected.trucks_required}</dd>
+              </div>
+              <div>
+                <dt>{t("w10num_kec_detail_crews")}</dt>
+                <dd>
+                  {t("w10num_kec_detail_crews_value")
+                    .replace("{crews}", selected.crews_required)
+                    .replace("{workers}", selected.workers_required)}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("w10num_kec_detail_hours")}</dt>
+                <dd>{selected.man_hours_required}</dd>
+              </div>
+              <div>
+                <dt>{t("w10num_kec_detail_bins")}</dt>
+                <dd>{selected.bins_required}</dd>
+              </div>
+              <div className="is-total">
+                <dt>{t("w10num_kec_detail_tps")}</dt>
+                <dd className={selected.facility_over_capacity ? "status-overcapacity" : "status-normal"}>
+                  {selected.facility_over_capacity
+                    ? t("w10num_tps_over")
+                    : t(`w10num_tps_${selected.facility_readiness || "unknown"}`)}
+                </dd>
+              </div>
+            </dl>
           </div>
           {selected.series?.length > 1 && (
             <div className="kec-series" data-testid="kec-daily-series">
@@ -312,7 +330,7 @@ export function KecamatanMapPanel({ horizon = "7d" }) {
               </div>
             </div>
           )}
-        </div>
+        </section>
       )}
 
       <KecamatanRows
@@ -320,10 +338,11 @@ export function KecamatanMapPanel({ horizon = "7d" }) {
         loading={!data}
         selectedSlug={selectedSlug}
         onSelect={setSelectedSlug}
+        rankOf={(row) => rankBySlug[row.slug]}
       />
 
       {filteredRows.length > 8 && (
-        <button className="text-button show-more-btn" onClick={() => setShowAll(!showAll)}>
+        <button className="link-button show-more-btn" type="button" onClick={() => setShowAll(!showAll)}>
           {showAll ? t("w10num_show_top8") : t("w10num_show_all_kec").replace("{n}", filteredRows.length)}
         </button>
       )}

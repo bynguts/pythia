@@ -1,136 +1,4 @@
-/* ── Weather & Forecast specific styles ── */
-
-.prediction-list {
-  display: grid;
-  gap: 12px;
-  max-height: 340px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.prediction {
-  border-bottom: 1px solid var(--ui-border);
-  padding-bottom: 12px;
-}
-
-.prediction:last-child {
-  border: 0;
-  padding-bottom: 0;
-}
-
-.prediction div {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-
-.prediction strong {
-  font-weight: 800;
-}
-
-.prediction span {
-  color: var(--ui-muted);
-  font-size: 13px;
-}
-
-.bar {
-  height: 8px;
-  background: var(--ui-border-strong);
-  border-radius: 6px;
-  overflow: hidden;
-  margin-bottom: 6px;
-}
-
-.bar span {
-  display: block;
-  height: 100%;
-  background: var(--ui-accent);
-  border-radius: 6px;
-}
-
-.prediction-meta {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-}
-
-.prediction-meta b {
-  color: var(--ui-accent);
-  font-weight: 800;
-}
-
-.weather-hero {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  background: var(--ui-canvas);
-  border: 1px solid var(--ui-info-line);
-  border-radius: 8px;
-  margin-bottom: 12px;
-  color: var(--ui-ink);
-}
-
-.weather-hero strong {
-  display: block;
-}
-
-.weather-hero span {
-  display: block;
-  font-size: 12px;
-  color: var(--ui-ink-soft);
-}
-
-.weather-hero b {
-  margin-left: auto;
-  font-size: 18px;
-  font-weight: 800;
-}
-
-.weather-strip {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(42px, 1fr));
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.weather-day {
-  text-align: center;
-  background: var(--ui-canvas);
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 6px;
-  padding: 7px 4px;
-}
-
-.weather-day.critical {
-  border-color: var(--ui-danger-line);
-  background: var(--ui-danger-soft);
-}
-
-.weather-day strong {
-  display: block;
-  font-size: 12px;
-}
-
-.weather-day span {
-  display: block;
-  margin: 3px 0 1px;
-  font-weight: 800;
-  font-size: 13px;
-}
-
-.weather-day small {
-  display: block;
-  font-size: 11px;
-  color: var(--ui-muted);
-}
-
-.weather-advice {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--ui-muted);
-}
+/* ── Event, facility and fleet panels that still read these legacy rules ── */
 
 /* Crowd Events Panel */
 .events-list {
@@ -226,201 +94,6 @@
   text-shadow: none !important;
 }
 
-/* Case 2 â€” Kecamatan map panel */
-.scenario-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.scenario-controls label {
-  display: flex;
-  flex-direction: column;
-  font-size: 12px;
-  color: var(--muted, #64748b);
-  gap: 4px;
-  min-width: 160px;
-}
-
-.scenario-controls .scenario-check {
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  min-width: auto;
-}
-
-.kec-list {
-  display: grid;
-  /* #71: the card floor never exceeds its own container, so narrow
-     viewports (320px+) never force page-level horizontal scroll. */
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
-  gap: 12px;
-}
-
-.kec-row {
-  border: 1px solid var(--ui-border);
-  border-radius: 8px;
-  padding: 12px;
-}
-
-.kec-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 8px;
-}
-
-.kec-head strong {
-  font-size: 14px;
-}
-
-.kec-head span {
-  font-size: 11px;
-  color: var(--muted, #64748b);
-}
-
-.kec-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  align-items: center;
-  margin-top: 8px;
-  font-size: 12px;
-}
-
-.kec-meta b {
-  font-size: 14px;
-}
-
-.kec-facility {
-  font-weight: 600;
-  font-size: 11px;
-}
-
-.kec-note {
-  font-size: 11px;
-  color: var(--muted, #64748b);
-  margin-top: 12px;
-}
-
-.kec-row {
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
-}
-
-.kec-row:hover {
-  background: var(--ui-canvas) !important;
-}
-
-.kec-row.active {
-  background: var(--ui-surface-muted) !important;
-  border-color: var(--ui-border-strong) !important;
-}
-
-.kec-details-panel {
-  border: 1px dashed var(--ui-border);
-  background: var(--ui-canvas);
-  margin-top: 16px;
-  padding: 16px;
-  border-radius: 8px;
-}
-
-.kec-details-panel-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  border-bottom: 1px solid var(--ui-border);
-  padding-bottom: 8px;
-}
-
-.kec-details-panel-title h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: bold;
-}
-
-.kec-details-panel-title p {
-  margin: 2px 0 0 0;
-  font-size: 11px;
-  color: var(--ui-muted);
-}
-
-.kec-details-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 16px;
-}
-
-.kec-details-section h4 {
-  font-size: 11px;
-  text-transform: uppercase;
-  color: var(--ui-muted);
-  margin: 0 0 8px 0;
-  font-weight: bold;
-}
-
-.kec-details-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  font-size: 12px;
-}
-
-.kec-details-item {
-  display: flex;
-  justify-content: space-between;
-  padding: 4px 0;
-}
-
-.kec-details-item-total {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 0 4px 0;
-  border-top: 1px solid var(--ui-border);
-  margin-top: 4px;
-  font-weight: bold;
-}
-
-.kec-details-drivers {
-  margin-top: 12px;
-  border-top: 1px solid var(--ui-border);
-  padding-top: 8px;
-}
-
-.kec-details-drivers h4 {
-  font-size: 11px;
-  text-transform: uppercase;
-  color: var(--ui-muted);
-  margin: 0 0 6px 0;
-  font-weight: bold;
-}
-
-.kec-driver-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  margin-bottom: 4px;
-}
-
-.kec-driver-bullet {
-  color: var(--ui-warning);
-  font-weight: bold;
-}
-
-.forecast-filter-bar {
-  display: flex;
-  gap: 12px;
-  margin-top: 12px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-}
-
 .search-input {
   flex: 1;
   min-width: 150px;
@@ -446,113 +119,6 @@
   font-weight: bold;
 }
 
-/* ── Migrated from the retired legacy.css layer (issue #66) ─────────────
-   Only declarations no later layer already defined; duplicate selector
-   ownership is what made visual fixes order-dependent. ─────────────── */
-
-.weather-hero {
-  grid-template-columns: 26px minmax(0, 1fr) auto;
-}
-
-.weather-strip {
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-control);
-  overflow: hidden;
-  background: var(--ui-surface);
-}
-
-.weather-day {
-  min-height: 44px;
-  display: grid;
-  grid-template-columns: minmax(72px, 1fr) auto auto;
-  align-items: center;
-  gap: 10px;
-  border-bottom: 1px solid var(--ui-border);
-}
-
-.weather-day:last-child {
-  border-bottom: 0;
-}
-
-.weather-day > div {
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.weather-day strong {
-  font-weight: 700;
-}
-
-.weather-day span {
-  justify-self: end;
-  font-variant-numeric: tabular-nums;
-}
-
-.weather-day small {
-  white-space: nowrap;
-}
-
-.weather-day > small {
-  justify-self: end;
-  min-width: 48px;
-  text-align: right;
-}
-
-.weather-trend-chart {
-  margin-top: var(--space-3);
-}
-
-.weather-trend-row {
-  min-height: 34px;
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 44px 40px;
-  align-items: center;
-  gap: 8px;
-  color: var(--ui-ink);
-  font-size: var(--fs-caption);
-}
-
-.weather-trend-row > span {
-  color: var(--ui-muted);
-  font-weight: 700;
-}
-
-.weather-trend-bars {
-  height: 14px;
-  display: grid;
-  gap: 3px;
-  padding: 2px;
-  background: transparent;
-}
-
-.weather-trend-bars i {
-  height: 4px;
-  display: block;
-  border-radius: 999px;
-}
-
-.weather-trend-bars .rainfall-bar {
-  background: #8fb7d9;
-}
-
-.weather-trend-bars .impact-bar {
-  background: #df765d;
-}
-
-.weather-trend-row b,
-.weather-trend-row em {
-  justify-self: end;
-  font-style: normal;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.weather-trend-row em {
-  color: var(--ui-danger);
-}
-
 .event-header h3 {
   line-height: 1.3;
 }
@@ -563,52 +129,6 @@
 
 .event-metric strong {
   font-weight: 580;
-}
-
-.scenario-controls {
-  grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr) auto auto;
-  padding: var(--space-4) 0;
-  border: 1px solid var(--ui-border);
-  border-right: 0;
-  border-left: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.scenario-controls .primary-button {
-  width: auto;
-  min-width: 180px;
-}
-
-/* #71: collapse the scenario grid on narrow viewports so the panel never
-   forces page-level horizontal overflow (320px+). */
-@media (max-width: 700px) {
-  .scenario-controls {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .scenario-controls .primary-button {
-    min-width: 0;
-    width: 100%;
-  }
-}
-
-.kec-row {
-  background: var(--ui-surface);
-}
-
-.kec-row:hover,
-.kec-row.active {
-  border-color: var(--ui-border-strong);
-  background: var(--ui-canvas);
-}
-
-.kec-head strong {
-  font-weight: 580;
-}
-
-.kec-note {
-  line-height: 1.5;
 }
 
 /* #31: meet the product's 44px minimum touch target on touch viewports. */
@@ -624,164 +144,6 @@
   min-width: 220px;
 }
 
-/* w10num (teardown v4 T1/P2/P3/P5): baseline basis line, tabs, week trend, scenario label. */
-.forecast-workspace .baseline-basis {
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--ui-muted);
-  font-size: var(--fs-caption);
-}
-
-.forecast-workspace .classification-badge.modeled,
-.planning-workspace .classification-badge.modeled {
-  border: 1px solid var(--ui-info-line);
-  color: var(--ui-info);
-  background: var(--ui-info-soft);
-}
-
-.scenario-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border: 1px solid var(--ui-warning-line);
-  border-radius: var(--ui-radius-pill);
-  color: var(--ui-warning);
-  background: var(--ui-warning-soft);
-  font-size: var(--fs-caption);
-  font-weight: 650;
-}
-
-.forecast-workspace .forecast-tabs {
-  max-width: 100%;
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-
-.forecast-workspace .forecast-tabs .workspace-tab {
-  min-height: var(--tap-min);
-  white-space: nowrap;
-}
-
-.forecast-tabpanel {
-  display: grid;
-  gap: var(--space-4);
-  min-width: 0;
-}
-
-.forecast-events-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
-  gap: var(--space-4);
-  align-items: start;
-}
-
-.week-trend {
-  margin: 0 0 var(--space-4);
-  padding: var(--space-3);
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-control);
-  background: var(--ui-surface);
-}
-
-.week-trend figcaption {
-  margin-bottom: var(--space-2);
-  color: var(--ui-muted);
-  font-size: var(--fs-caption);
-}
-
-.week-trend ol {
-  height: 112px;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(36px, 1fr));
-  gap: var(--space-1);
-  list-style: none;
-}
-
-.week-trend li {
-  min-width: 0;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto auto;
-  text-align: center;
-}
-
-.week-trend-bar {
-  align-self: end;
-  display: block;
-  border-radius: 4px 4px 0 0;
-  background: var(--ui-accent-soft);
-  border: 1px solid var(--ui-success-line);
-}
-
-.week-trend li.at-risk .week-trend-bar {
-  background: var(--ui-danger-soft);
-  border-color: var(--ui-danger-line);
-}
-
-.week-trend b {
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
-.week-trend small {
-  overflow: hidden;
-  color: var(--ui-muted);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.kec-risk {
-  font-weight: 650;
-}
-
-.kec-risk.risk-high,
-.kec-risk.risk-elevated {
-  color: var(--ui-warning);
-}
-
-.kec-risk.risk-critical {
-  color: var(--ui-danger);
-}
-
-.scenario-disclosure {
-  margin-bottom: var(--space-3);
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-control);
-  padding: var(--space-2) var(--space-3);
-}
-
-.scenario-disclosure > summary {
-  min-height: var(--tap-min);
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  font-weight: 650;
-}
-
-.monthly-intake-quantity {
-  margin: var(--space-2) 0 0;
-  color: var(--ui-muted);
-  font-size: var(--fs-caption);
-}
-
-/* P5: weather days wrap instead of clipping ("Jum 3( 31"), facility tiles wrap. */
-.forecast-workspace .weather-day {
-  grid-template-columns: minmax(0, 1fr) auto;
-  row-gap: 0;
-}
-
-.forecast-workspace .weather-day > small {
-  grid-column: 1 / -1;
-  justify-self: start;
-  text-align: left;
-  color: var(--ui-muted);
-}
-
 .forecast-workspace .facility-summary {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
 }
@@ -789,18 +151,6 @@
 .forecast-workspace .facility-summary span,
 .forecast-workspace .facility-meta span {
   overflow-wrap: anywhere;
-}
-
-@media (max-width: 600px) {
-  .forecast-workspace .forecast-heading {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .forecast-workspace .forecast-heading-actions {
-    width: 100%;
-    flex-wrap: wrap;
-  }
 }
 
 /* w10num (teardown v4 F5): the TPA panel's two labelled numbers, peak vs now. */
@@ -832,8 +182,820 @@
   font-size: var(--fs-caption);
 }
 
-/* The carbon panel (moved from Armada) sits behind a plain disclosure: no frame around its card. */
-.forecast-carbon.scenario-disclosure {
-  border: 0;
+/* ── wave11 forecast (Prediksi) ──────────────────────────────────────────────
+   District demand is the primary surface (~70%): a ranked flat list. Drivers
+   sit in one context rail split by hairlines; the city table is the evidence.
+   Every selector is scoped under .forecast-workspace to outrank legacy layers. */
+.forecast-workspace {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+  grid-column: 1 / -1;
+}
+.forecast-workspace .forecast-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-5);
+  margin: 0;
   padding: 0;
+  border: 0;
+  background: transparent;
+}
+.forecast-workspace .forecast-heading h1 {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.forecast-workspace .forecast-heading p {
+  margin: var(--space-1) 0 0;
+  max-width: 64ch;
+  color: var(--ui-muted);
+  font-size: var(--fs-body);
+}
+.forecast-workspace .forecast-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin: 0;
+}
+.forecast-workspace .forecast-horizon-control {
+  display: grid;
+  gap: 6px;
+}
+.forecast-workspace .control-label {
+  margin: 0;
+  color: var(--ui-muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: var(--ls-label, 0.08em);
+  text-transform: uppercase;
+}
+.forecast-workspace .baseline-basis {
+  margin: 0 0 calc(var(--space-2) - var(--space-5));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-caption);
+}
+.forecast-workspace .ui-tabs {
+  justify-self: start;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.forecast-workspace .ui-tab {
+  white-space: nowrap;
+}
+.forecast-workspace .forecast-tabpanel {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  margin-top: calc(var(--space-2) - var(--space-5));
+}
+
+/* Summary: demand 70 / drivers 30. */
+.forecast-workspace .forecast-command-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(300px, 3fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+.forecast-workspace .forecast-primary-analysis,
+.forecast-workspace .forecast-context-rail,
+.forecast-workspace .forecast-evidence-section,
+.forecast-workspace .kecamatan-panel {
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-5);
+  display: block;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-surface);
+  box-shadow: none;
+}
+.forecast-workspace .section-intro,
+.forecast-workspace .kecamatan-head {
+  margin: 0 0 var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+.forecast-workspace .section-intro h2,
+.forecast-workspace .kecamatan-head h2 {
+  margin: 0;
+  color: var(--ui-ink);
+  font-family: var(--font-head);
+  font-size: var(--fs-title, 19px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.forecast-workspace .section-intro p,
+.forecast-workspace .kecamatan-head p {
+  margin: var(--space-1) 0 0;
+  max-width: 64ch;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+}
+.forecast-workspace .kecamatan-head p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ui-ink-soft);
+}
+
+/* Ranked district rows: rank · name, needs, bar · tonnage and risk. */
+.forecast-workspace .kec-list {
+  margin: 0 calc(var(--space-5) * -1);
+  padding: 0;
+  display: block;
+  list-style: none;
+  border-top: 1px solid var(--ui-border);
+}
+.forecast-workspace .kec-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-4);
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  border: 0;
+  border-bottom: 1px solid var(--ui-border);
+  border-radius: 0;
+  background: var(--ui-surface);
+  cursor: default;
+  transition: background-color 0.15s ease;
+}
+.forecast-workspace .kec-row:last-child {
+  border-bottom: 0;
+}
+.forecast-workspace .kec-rank {
+  padding-top: 2px;
+  color: var(--ui-muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.forecast-workspace .kec-main {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+.forecast-workspace .kec-head {
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--space-2);
+}
+.forecast-workspace .kec-name {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--ui-ink);
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+}
+.forecast-workspace button.kec-name {
+  cursor: pointer;
+}
+/* The name button covers the whole row, so the row is one 44 px+ target. */
+.forecast-workspace button.kec-name::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.forecast-workspace button.kec-name:focus-visible {
+  outline: none;
+}
+.forecast-workspace button.kec-name:focus-visible::after {
+  outline: 2px solid var(--ui-forest-700);
+  outline-offset: -2px;
+}
+.forecast-workspace .kec-row:has(button.kec-name):hover {
+  background: var(--ui-canvas);
+}
+.forecast-workspace .kec-row.active {
+  background: var(--ui-cream);
+}
+.forecast-workspace .kec-head > span {
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.forecast-workspace .kec-row .bar {
+  height: 4px;
+  max-width: 420px;
+  margin: 2px 0;
+  overflow: hidden;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-cream);
+}
+.forecast-workspace .kec-row .bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ui-forest-700);
+}
+.forecast-workspace .kec-row.is-high .bar span,
+.forecast-workspace .kec-row.is-elevated .bar span {
+  background: var(--ui-warning);
+}
+.forecast-workspace .kec-row.is-critical .bar span {
+  background: var(--ui-danger);
+}
+.forecast-workspace .kec-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--space-3);
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+}
+.forecast-workspace .kec-facility {
+  font-size: var(--fs-caption);
+  font-weight: 500;
+}
+.forecast-workspace .tps-sufficient {
+  color: var(--ui-success);
+}
+.forecast-workspace .tps-tight {
+  color: var(--ui-warning);
+}
+.forecast-workspace .tps-under_capacity,
+.forecast-workspace .tps-over {
+  color: var(--ui-danger);
+}
+.forecast-workspace .tps-unknown {
+  color: var(--ui-muted);
+}
+.forecast-workspace .kec-horizon {
+  margin: 0;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+.forecast-workspace .kec-figure {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  text-align: right;
+}
+.forecast-workspace .kec-figure b {
+  color: var(--ui-ink);
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.forecast-workspace .kec-risk {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.forecast-workspace .kec-risk.risk-high,
+.forecast-workspace .kec-risk.risk-elevated {
+  color: var(--ui-warning);
+}
+.forecast-workspace .kec-risk.risk-critical {
+  color: var(--ui-danger);
+}
+.forecast-workspace .show-more-btn {
+  width: auto;
+  min-width: 0;
+  margin: var(--space-2) 0 calc(var(--space-2) * -1);
+  font-weight: 600;
+}
+.forecast-workspace .panel-loading {
+  margin: 0;
+  padding: var(--space-4) 0;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+
+/* Context rail: blocks split by hairlines, no boxes inside. */
+.forecast-workspace .forecast-context-rail > * + * {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--ui-border);
+}
+.forecast-workspace .forecast-context-rail .section-intro {
+  margin-bottom: 0;
+}
+.forecast-workspace .week-trend {
+  margin-inline: 0;
+  margin-bottom: 0;
+  background: transparent;
+}
+.forecast-workspace .week-trend figcaption {
+  margin: 0 0 var(--space-3);
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-caption);
+}
+.forecast-workspace .week-trend ol {
+  height: 104px;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(30px, 1fr));
+  gap: 6px;
+  list-style: none;
+}
+.forecast-workspace .week-trend li {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  gap: 2px;
+  text-align: center;
+}
+.forecast-workspace .week-trend-bar {
+  align-self: end;
+  display: block;
+  border-radius: 6px 6px 2px 2px;
+  background: var(--ui-forest-100);
+}
+.forecast-workspace .week-trend li:first-child .week-trend-bar {
+  background: var(--ui-forest-700);
+}
+.forecast-workspace .week-trend li.at-risk .week-trend-bar {
+  background: var(--ui-danger-line);
+}
+.forecast-workspace .week-trend b {
+  color: var(--ui-ink);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.forecast-workspace .week-trend small {
+  overflow: hidden;
+  color: var(--ui-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.forecast-workspace .weather-panel {
+  display: grid;
+  gap: var(--space-3);
+  background: transparent;
+}
+.forecast-workspace .context-block-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.forecast-workspace .context-block-head h3 {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: 600;
+}
+.forecast-workspace .context-block-note,
+.forecast-workspace .weather-advice {
+  margin: 0;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+}
+.forecast-workspace .weather-hero {
+  margin: 0;
+  padding: var(--space-3) 0;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  border: 0;
+  border-top: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ui-ink);
+}
+.forecast-workspace .weather-hero > svg {
+  color: var(--ui-info);
+}
+.forecast-workspace .weather-hero strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+.forecast-workspace .weather-hero span {
+  display: block;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+.forecast-workspace .weather-hero b {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.forecast-workspace .weather-trend-chart {
+  margin: 0;
+}
+.forecast-workspace .weather-trend-chart h4 {
+  margin: 0 0 var(--space-2);
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+.forecast-workspace .weather-trend-row {
+  min-height: 30px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 48px 44px;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ui-ink);
+  font-size: 12px;
+}
+.forecast-workspace .weather-trend-row > span {
+  color: var(--ui-muted);
+  font-weight: 500;
+}
+.forecast-workspace .weather-trend-bars {
+  height: 12px;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  padding: 0;
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+}
+.forecast-workspace .weather-trend-bars i {
+  height: 4px;
+  display: block;
+  border-radius: var(--ui-radius-pill);
+}
+.forecast-workspace .weather-trend-bars .rainfall-bar {
+  background: var(--ui-info);
+}
+.forecast-workspace .weather-trend-bars .impact-bar {
+  background: var(--ui-warning-line);
+}
+.forecast-workspace .weather-trend-row b,
+.forecast-workspace .weather-trend-row em {
+  justify-self: end;
+  font-family: var(--mono);
+  font-style: normal;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.forecast-workspace .weather-trend-row em {
+  color: var(--ui-warning);
+}
+
+/* Evidence: a plain city table inside one surface. */
+.forecast-workspace .forecast-evidence-section .section-intro {
+  margin-bottom: var(--space-3);
+}
+.forecast-workspace .prediction-panel {
+  display: grid;
+  gap: var(--space-3);
+}
+.forecast-workspace .prediction-head h3 {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: 600;
+}
+.forecast-workspace .prediction-head p {
+  margin: var(--space-1) 0 0;
+  max-width: 70ch;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+}
+.forecast-workspace .prediction-sample-note,
+.forecast-workspace .table-empty-state {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  color: var(--ui-ink-soft);
+  background: var(--ui-canvas);
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+}
+.forecast-workspace .prediction-sample-note {
+  border-color: var(--ui-warning-line);
+  background: var(--ui-warning-soft);
+}
+.forecast-workspace .prediction-city {
+  color: var(--ui-ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.forecast-workspace .prediction-date {
+  color: var(--ui-muted);
+}
+.forecast-workspace .prediction-spike {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.forecast-workspace .prediction-spike-track {
+  width: 72px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-cream);
+}
+.forecast-workspace .prediction-spike-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ui-info);
+}
+.forecast-workspace .prediction-spike.tone-warning .prediction-spike-track span {
+  background: var(--ui-warning);
+}
+.forecast-workspace .prediction-spike.tone-danger .prediction-spike-track span {
+  background: var(--ui-danger);
+}
+.forecast-workspace .prediction-spike b {
+  color: var(--ui-ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.forecast-workspace .prediction-spike.tone-warning b {
+  color: var(--ui-warning);
+}
+.forecast-workspace .prediction-spike.tone-danger b {
+  color: var(--ui-danger);
+}
+.forecast-workspace .prediction-backup {
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-caption);
+}
+
+/* Quiet disclosures (scenario what-if, carbon estimate). */
+.forecast-workspace .scenario-disclosure {
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+  border-radius: 0;
+  background: transparent;
+}
+.forecast-workspace .forecast-carbon.scenario-disclosure {
+  margin: 0;
+  border-top: 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+.forecast-workspace .scenario-disclosure > summary {
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ui-ink-soft);
+  font-size: 14px;
+  font-weight: 500;
+  list-style: none;
+  cursor: pointer;
+}
+.forecast-workspace .scenario-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.forecast-workspace .scenario-disclosure > summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-left: var(--space-1);
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+.forecast-workspace .scenario-disclosure[open] > summary::after {
+  transform: translateY(2px) rotate(225deg);
+}
+.forecast-workspace .scenario-disclosure > summary:hover {
+  color: var(--ui-ink);
+}
+.forecast-workspace .scenario-disclosure > summary:focus-visible {
+  outline: 2px solid var(--ui-forest-700);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.forecast-workspace .scenario-disclosure[open] {
+  padding-bottom: var(--space-4);
+}
+.forecast-workspace .kec-note {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+}
+.forecast-workspace .scenario-controls {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: var(--space-4);
+  border: 0;
+  background: transparent;
+}
+.forecast-workspace .scenario-controls label {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.forecast-workspace .scenario-controls label b {
+  color: var(--ui-ink);
+  font-family: var(--mono);
+  font-weight: 500;
+}
+.forecast-workspace .scenario-controls input[type="range"] {
+  width: 100%;
+  min-height: var(--tap-min);
+  margin: 0;
+  accent-color: var(--ui-forest-700);
+}
+.forecast-workspace .scenario-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Kecamatan tab: filters, then the same ranked list, detail in place. */
+.forecast-workspace .forecast-filter-bar {
+  margin: 0 0 var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.forecast-workspace .search-input,
+.forecast-workspace .city-select {
+  min-height: var(--tap-min);
+  padding: 0 14px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-ink);
+  background: var(--ui-surface);
+  font: inherit;
+  font-size: 14px;
+}
+.forecast-workspace .search-input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.forecast-workspace .search-input:focus-visible,
+.forecast-workspace .city-select:focus-visible {
+  outline: none;
+  border-color: var(--ui-forest-700);
+  box-shadow: var(--ui-focus);
+}
+.forecast-workspace .kec-details-panel {
+  margin: 0 calc(var(--space-5) * -1);
+  padding: var(--space-4) var(--space-5);
+  border: 0;
+  border-top: 1px solid var(--ui-border);
+  border-radius: 0;
+  background: var(--ui-canvas);
+}
+.forecast-workspace .kec-details-panel-title {
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border: 0;
+}
+.forecast-workspace .kec-details-panel-title h3 {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: 600;
+}
+.forecast-workspace .kec-details-panel-title p {
+  margin: 2px 0 0;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.forecast-workspace .kec-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+.forecast-workspace .kec-details-list {
+  margin: 0;
+  display: grid;
+}
+.forecast-workspace .kec-details-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ui-border);
+  font-size: var(--fs-caption);
+}
+.forecast-workspace .kec-details-list > div.is-total {
+  border-bottom: 0;
+  font-weight: 600;
+}
+.forecast-workspace .kec-details-list dt {
+  color: var(--ui-ink-soft);
+}
+.forecast-workspace .kec-details-list dd {
+  margin: 0;
+  color: var(--ui-ink);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.forecast-workspace .kec-details-list dd.status-normal,
+.forecast-workspace .kec-details-list dd.status-overcapacity {
+  font-family: var(--font-body);
+}
+.forecast-workspace .kecamatan-panel > .kec-note {
+  margin-top: var(--space-4);
+}
+
+@media (max-width: 1180px) {
+  .forecast-workspace .forecast-command-grid {
+    grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
+  }
+}
+
+@media (max-width: 920px) {
+  .forecast-workspace .forecast-command-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .forecast-workspace .scenario-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .forecast-workspace {
+    gap: var(--space-4);
+  }
+  .forecast-workspace .forecast-heading h1 {
+    font-size: 24px;
+  }
+  .forecast-workspace .forecast-heading p {
+    font-size: 14px;
+  }
+  .forecast-workspace .baseline-basis,
+  .forecast-workspace .forecast-tabpanel {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  .forecast-workspace .forecast-primary-analysis,
+  .forecast-workspace .forecast-context-rail,
+  .forecast-workspace .forecast-evidence-section,
+  .forecast-workspace .kecamatan-panel {
+    padding: var(--space-4);
+    border-radius: 14px;
+  }
+  .forecast-workspace .kec-list,
+  .forecast-workspace .kec-details-panel {
+    margin-inline: calc(var(--space-4) * -1);
+  }
+  .forecast-workspace .kec-row {
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    gap: var(--space-3);
+    padding: 14px var(--space-4);
+  }
+  .forecast-workspace .kec-figure b {
+    font-size: 16px;
+  }
+  .forecast-workspace .kec-details-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .forecast-workspace .kec-row {
+    transition: none;
+  }
 }

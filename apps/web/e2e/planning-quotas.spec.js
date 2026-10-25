@@ -15,9 +15,9 @@ async function login(page, username) {
   return response.json();
 }
 
-async function signIn(page, lang = "id") {
+async function signIn(page, lang = "id", username = "dispatcher") {
   await page.goto("/");
-  const principal = await login(page, "dispatcher");
+  const principal = await login(page, username);
   await page.evaluate(
     ({ token, role, lang }) => {
       localStorage.setItem("pythia_auth", "true");
@@ -155,7 +155,10 @@ test("quota use per district and an infeasible remainder are shown, not hidden",
   await page.route("**/api/operations/plan?**", (route) =>
     route.fulfill({ contentType: "application/json", body: JSON.stringify(STUB_PLAN) }),
   );
-  await signIn(page);
+  // wave11 plan approval handoff: a dispatcher may build but not approve (separation of
+  // duties), so step 03 shows them a waiting state; the administrator holds both
+  // permissions and still sees the approve button this test checks.
+  await signIn(page, "id", "administrator");
   await page.getByRole("button", { name: "Rencana", exact: true }).click();
   await page.getByRole("button", { name: "Susun Alokasi Armada" }).click();
 

@@ -35,22 +35,8 @@ export function ReportActions() {
   }
 
   return (
-    <button
-      className="primary-button"
-      onClick={downloadSummaryPdf}
-      style={{
-        width: "auto",
-        minHeight: "38px",
-        height: "38px",
-        padding: "0 18px",
-        fontSize: "13px",
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "8px",
-        whiteSpace: "nowrap",
-      }}
-    >
-      <Download size={15} /> {t("btn_export_pdf")}
+    <button className="ghost-button report-actions-button" type="button" onClick={downloadSummaryPdf}>
+      <Download size={16} aria-hidden="true" /> {t("btn_export_pdf")}
     </button>
   );
 }
