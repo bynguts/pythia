@@ -42,14 +42,19 @@ test("cold Fleet load reuses aggregate map truth for route playback", async ({ p
       breadcrumbRequests.push(request.url());
   });
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByTestId("deck-tools-toggle").click();
-  const playback = page.getByRole("combobox", { name: "Putar ulang perjalanan" });
+  // wave9 fleet composition: replay moved from a layers-panel combobox into the truck
+  // drawer's "Riwayat" view (Truk tab → row → Riwayat → Putar ulang perjalanan).
+  await page.getByRole("tab", { name: "Truk" }).click();
+  await page.getByPlaceholder("Cari kode, plat, sopir, wilayah").fill("T-047");
+  await page.locator('[data-testid=truck-row][data-truck="T-047"]').click();
+  await page.getByTestId("truck-drawer-history").click();
+  const playback = page.getByTestId("truck-replay");
   // beforeEach's jam reset invalidates the map-truth cache, so this first
   // fetch is a cold OSRM-bound rebuild (3-7 s measured): wait like the other
   // map-truth checks in this file instead of the 5 s default.
-  await expect(playback.locator('option[value="T-047"]')).toHaveCount(1, { timeout: 30000 });
+  await expect(playback).toBeVisible({ timeout: 30000 });
   expect(breadcrumbRequests).toEqual([]);
-  await playback.selectOption("T-047");
+  await playback.click();
   await expect(page.locator(".playback-marker")).toBeVisible();
 });
 
@@ -66,10 +71,13 @@ test("actual routes colored by violation state", async ({ page }) => {
 
 test("map legend shows provenance tags", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByTestId("deck-tools-toggle").click();
-  await page.locator(".deck-legend > summary").click();
-  const legend = page.locator(".deck-legend-body");
-  await expect(legend).toContainText("LANGSUNG");
+  // wave9: the one legend lives on the map (open on wide screens, folded on phones).
+  const details = page.getByTestId("map-legend");
+  if (!(await details.evaluate((el) => el.open))) await details.locator("summary").click();
+  const legend = details.locator(".map-key-body");
+  // wave9 fleet composition: the standalone OSRM route row (tagged LANGSUNG) is gone; a
+  // route is drawn only for the selected decision, tagged with its own source.
+  await expect(legend).not.toContainText("LANGSUNG");
   await expect(legend).toContainText("MODEL");
   await expect(legend).toContainText("SIMULASI");
 });
@@ -186,7 +194,8 @@ async function verifiedJamCleared(page) {
 // in the caller can restore the cleared state even on failure.
 async function runJamDiversionScenario(page) {
   await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=true`, { headers: authHeaders });
-  await expect(page.getByTestId("deck-tools-panel").locator(".traffic-status-badge")).toContainText(
+  // wave9 fleet composition: the reroute monitor lives in the "Perlu tindakan" rail tab.
+  await expect(page.getByTestId("fleet-rail-action").locator(".traffic-status-badge")).toContainText(
     /JAM TERDETEKSI AI|Jam Active|Macet Aktif/,
     { timeout: 45000 },
   );
@@ -206,7 +215,7 @@ async function runJamDiversionScenario(page) {
     )
     .toBe(true);
   await expect(
-    page.locator(".astar-stat-col strong").filter({ hasText: /Diverted \(A\*\)|Dialihkan \(A\*\)/ }),
+    page.locator(".astar-stat-col strong").filter({ hasText: /Diverted automatically|Dialihkan otomatis/ }),
   ).toBeVisible({ timeout: 20000 });
 
   const reroute = await (
@@ -245,11 +254,12 @@ async function runJamDiversionScenario(page) {
 }
 
 test("jam toggle diverts T-047 end-to-end (UI, reroute API, map-truth agree)", async ({ page }) => {
+  // Two OSRM-bound map-truth rebuilds (jam on, then off) do not fit the default 60 s.
+  test.slow();
   // Known initial state first, restored even when the scenario fails (#69).
   await verifiedJamCleared(page);
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByTestId("deck-tools-toggle").click();
-  await expect(page.getByTestId("deck-tools-panel")).toBeVisible();
+  await expect(page.getByTestId("fleet-rail-action").getByTestId("astar-panel")).toBeVisible();
   await page.waitForFunction(() => (window.__pythiaMapFeatures?.actualKinds || []).length > 0, null, {
     timeout: 15000,
   });
@@ -272,17 +282,19 @@ test("jam toggle diverts T-047 end-to-end (UI, reroute API, map-truth agree)", a
 });
 
 test("restore traffic returns T-047 to compliant and clears abandoned line", async ({ page }) => {
+  // The jam rebuild of map truth is bound to public OSRM: 30-40 s measured when it
+  // is slow, so the abandoned line gets the same 45 s as the other jam waits.
+  test.slow();
   // #69: known initial state (cleared) before turning the jam on, so the
   // scenario cannot race a leftover jam from a prior run or test.
   await verifiedJamCleared(page);
   await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=true`, { headers: authHeaders });
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByTestId("deck-tools-toggle").click();
-  await expect(page.getByTestId("deck-tools-panel")).toBeVisible();
+  await expect(page.getByTestId("fleet-rail-action").getByTestId("astar-panel")).toBeVisible();
   await page.waitForFunction(
     () => (window.__pythiaMapFeatures?.assignedKinds || []).includes("astar-abandoned"),
     null,
-    { timeout: 15000 },
+    { timeout: 45000 },
   );
 
   await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`, { headers: authHeaders });
@@ -317,7 +329,7 @@ async function restoreScenario(page) {
       { timeout: 45000, intervals: [1000, 2000, 3000] },
     )
     .toBe(true);
-  await expect(page.getByTestId("deck-tools-panel").locator(".traffic-status-badge")).toContainText(
+  await expect(page.getByTestId("fleet-rail-action").locator(".traffic-status-badge")).toContainText(
     /KORIDOR NORMAL|Corridor Clear|Koridor Lancar/,
     { timeout: 20000 },
   );
@@ -330,7 +342,7 @@ async function restoreScenario(page) {
   await page.waitForFunction(
     () => !(window.__pythiaMapFeatures?.assignedKinds || []).includes("astar-abandoned"),
     null,
-    { timeout: 15000 },
+    { timeout: 45000 },
   );
 }
 

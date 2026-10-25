@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Compass } from "lucide-react";
-import { useLanguage } from "../../shared/i18n/index.jsx";
+import { Compass, Info } from "lucide-react";
+import { translate, useLanguage } from "../../shared/i18n/index.jsx";
 import { apiFetch } from "../../shared/api/client.js";
+import { fleetDenominator } from "../../shared/hooks/useBaseline.js";
+import { routeMeta, routeName, routeSource } from "./decisionRoute.js";
 import { createCruiseEngine } from "./cruiseEngine.js";
 
 const JAKARTA_CENTER = [106.8456, -6.2088];
@@ -40,6 +43,33 @@ const MAP_LOCALE_ID = {
   "NavigationControl.ZoomOut": "Perkecil",
   "Popup.Close": "Tutup popup",
 };
+
+const ACTIVE_FLEET_STATUSES = ["active", "deviation"];
+// An SPJ rarely has more stops than this; beyond it the numbers stop helping.
+const SPJ_STOP_MARKER_CAP = 12;
+// Canvas layers draw before the reference layers they would otherwise cover.
+const OPERATIONAL_LAYERS = [
+  "assigned-routes-line",
+  "actual-routes-line",
+  "osrm-route-line",
+  "spj-active-route",
+];
+
+// Curated trucks plus the first generated ones (19 markers instead of 59).
+function isDefaultVisibleTruck(truck, index) {
+  return !/^T-2\d\d$/.test(truck.truck_code) || index < 19;
+}
+
+function referenceLayerBefore(map) {
+  return OPERATIONAL_LAYERS.find((id) => map.getLayer(id));
+}
+
+// MapLibre paint needs literal colours: read them from tokens.css so canvas
+// layers share the DOM palette (one accent, semantic status colours).
+function tokenColor(name, fallback) {
+  if (typeof document === "undefined") return fallback;
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
 
 function dataClass(value, lang) {
   const classes = {
@@ -297,13 +327,17 @@ export function LiveFleetMap({
   attendance,
   rainfall,
   onSelectTruck,
-  layers = { heatmap: false, osrm: true, unlicensed: true, tps: true, wr: true },
+  layers = { heatmap: false, unlicensed: true, tps: true, wr: true },
   playbackTruck,
   onBreadcrumbsLoaded,
   jamActive = false,
   focusRequest = null,
+  // Teardown v4 M3: the selected decision's one route, drawn only while it is selected.
+  decisionRoute = null,
 }) {
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
+  const tRef = useRef(t);
+  tRef.current = t;
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const languageRef = useRef(lang);
@@ -314,15 +348,18 @@ export function LiveFleetMap({
   const [basemap] = useState("streets");
   const [styleTick, setStyleTick] = useState(0);
   const [showAllFleet, setShowAllFleet] = useState(false);
+  const [resetHost, setResetHost] = useState(null);
+  // The legend starts folded at every width (a chip); the map stays the subject.
+  const [legendOpen, setLegendOpen] = useState(false);
   const [streetsOffline, setStreetsOffline] = useState(false);
   const streetsFallbackRef = useRef(false);
   const basemapRef = useRef("streets");
   basemapRef.current = basemap;
-  const [routeInfo, setRouteInfo] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [followTruck, setFollowTruck] = useState(null);
-  const routeInfoRef = useRef(null);
+  const routeInfoRef = useRef(decisionRoute);
+  routeInfoRef.current = decisionRoute;
   const [tpsSearch, setTpsSearch] = useState([]);
   const [wrSearch, setWrSearch] = useState([]);
   const [heatSearch, setHeatSearch] = useState([]);
@@ -502,8 +539,23 @@ export function LiveFleetMap({
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     map.addControl(new maplibregl.FullscreenControl(), "top-right");
-    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-left");
+    // Reset view sits with the other map controls; React renders the button into it.
+    const resetControlHost = document.createElement("div");
+    resetControlHost.className = "maplibregl-ctrl maplibregl-ctrl-group";
+    map.addControl({ onAdd: () => resetControlHost, onRemove: () => resetControlHost.remove() }, "top-right");
+    setResetHost(resetControlHost);
+    // e2e reads layer visibility from the live map; never exposed outside automation.
+    if (IS_AUTOMATION) window.__pythiaMap = map;
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-right");
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+    // Compact attribution opens expanded; fold it once the tiles are in so its
+    // text never sits on the route card. The (i) button still expands it.
+    map.once("idle", () => {
+      map
+        .getContainer()
+        .querySelector(".maplibregl-ctrl-attrib")
+        ?.classList.remove("maplibregl-compact-show");
+    });
     map.on("style.load", () => setStyleTick((t) => t + 1));
     setMapInstance(map);
 
@@ -515,11 +567,10 @@ export function LiveFleetMap({
       focusMapPin(
         map,
         coords[Math.floor(coords.length / 2)],
-        new maplibregl.Popup({ offset: 20 }).setHTML(
-          `<div class="map-popup"><h4>${r?.name || mapLabel("Rute rekomendasi", "Recommended route")}</h4>` +
-            `<p>${r?.distance_km ?? "—"} km · ~${r?.eta_minutes ?? "—"} ${mapLabel("menit", "min")}</p>` +
-            `<small>${r?.source || "OSRM"} · ${r?.path?.length || coords.length} ${mapLabel("titik geometri", "geometry points")}</small>` +
-            `<p class="popup-src">${mapLabel("LANGSUNG · perutean OSRM", "LIVE · OSRM routing")}</p></div>`,
+        new maplibregl.Popup({ offset: 20 }).setText(
+          r
+            ? `${routeName(tRef.current, r)} · ${routeMeta(tRef.current, r, languageRef.current)} · ${routeSource(tRef.current, r)}`
+            : "",
         ),
         { zoom: Math.max(12, map.getZoom()), offset: [0, -60], duration: 450 },
       );
@@ -578,6 +629,7 @@ export function LiveFleetMap({
         m.marker?.remove();
       });
       unlicensedMarkersRef.current = [];
+      if (IS_AUTOMATION && window.__pythiaMap === mapRef.current) delete window.__pythiaMap;
       mapRef.current?.remove();
       mapRef.current = null;
       setMapInstance(null);
@@ -736,7 +788,7 @@ export function LiveFleetMap({
               ["==", ["get", "kind"], "actual-violation"],
               "#b42318",
               ["==", ["get", "kind"], "astar-active"],
-              "#0891b2",
+              tokenColor("--ui-info", "#1b6f84"),
               "#176b54",
             ],
             "line-width": ["case", ["==", ["get", "kind"], "astar-active"], 5, 3],
@@ -791,9 +843,7 @@ export function LiveFleetMap({
 
       // Limit visible truck markers: curated + first 15 generated by default
       // (19 markers instead of 59). Toggle in map controls shows all.
-      const visibleTrucks = showAllFleet
-        ? trucks
-        : trucks.filter((t, i) => !/^T-2\d\d$/.test(t.truck_code) || i < 19);
+      const visibleTrucks = showAllFleet ? trucks : trucks.filter(isDefaultVisibleTruck);
       visibleTrucks
         .filter((truck) => truck.latest_position)
         .forEach((truck) => {
@@ -1072,59 +1122,102 @@ export function LiveFleetMap({
             properties: { spjNumber: spj.spj_number, driver: spj.driver_name },
             geometry: { type: "LineString", coordinates: path.map((p) => [p.lng, p.lat]) },
           });
-          path.slice(0, -1).forEach((p, i) => {
+          // The path is road geometry (hundreds of vertices): only the planned
+          // pickup stops get a numbered marker, plus the disposal destination.
+          (spj.stops || []).slice(0, SPJ_STOP_MARKER_CAP).forEach((stop, i) => {
+            if (stop.lat == null || stop.lng == null) return;
             stopFeatures.push({
               type: "Feature",
               properties: {
+                kind: "stop",
                 label: String(i + 1),
-                stopName: spj.stops?.[i]?.name || "",
+                order: i,
+                stopName: stop.name || "",
                 spjNumber: spj.spj_number,
               },
-              geometry: { type: "Point", coordinates: [p.lng, p.lat] },
+              geometry: { type: "Point", coordinates: [stop.lng, stop.lat] },
             });
+          });
+          const dest = path[path.length - 1];
+          stopFeatures.push({
+            type: "Feature",
+            properties: {
+              kind: "dest",
+              label: "",
+              order: SPJ_STOP_MARKER_CAP,
+              stopName: spj.destination || "",
+              spjNumber: spj.spj_number,
+            },
+            geometry: { type: "Point", coordinates: [dest.lng, dest.lat] },
           });
         });
 
-        removeSpjLayers();
-        map.addSource("spj-active-route", { type: "geojson", data: featureCollection(lineFeatures) });
-        map.addLayer({
-          id: "spj-active-route",
-          type: "line",
-          source: "spj-active-route",
-          paint: {
-            "line-color": "#7c3aed",
-            "line-width": 4,
-            "line-dasharray": [1, 1.5],
-            "line-opacity": 0.9,
-          },
-        });
-        map.addSource("spj-active-stops", { type: "geojson", data: featureCollection(stopFeatures) });
-        map.addLayer({
-          id: "spj-active-stops",
-          type: "circle",
-          source: "spj-active-stops",
-          paint: {
-            "circle-radius": 8,
-            "circle-color": "#ffffff",
-            "circle-stroke-color": "#7c3aed",
-            "circle-stroke-width": 3,
-          },
-        });
-        map.addLayer({
-          id: "spj-active-stop-labels",
-          type: "symbol",
-          source: "spj-active-stops",
-          layout: {
-            "text-field": ["get", "label"],
-            "text-size": 10,
-            "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
-            "text-allow-overlap": true,
-          },
-          paint: {
-            "text-color": "#7c3aed",
-            "text-halo-color": "#ffffff",
-            "text-halo-width": 1.5,
-          },
+        if (typeof window !== "undefined") {
+          window.__pythiaSpjMap = {
+            routes: lineFeatures.length,
+            stopLabels: stopFeatures
+              .filter((f) => f.properties.kind === "stop")
+              .map((f) => f.properties.label),
+            destinations: stopFeatures.filter((f) => f.properties.kind === "dest").length,
+          };
+        }
+
+        const lineData = featureCollection(lineFeatures);
+        const stopData = featureCollection(stopFeatures);
+        if (map.getSource("spj-active-route") && map.getSource("spj-active-stops")) {
+          map.getSource("spj-active-route").setData(lineData);
+          map.getSource("spj-active-stops").setData(stopData);
+        } else {
+          removeSpjLayers();
+          const ink = tokenColor("--ui-primary", "#1d2320");
+          map.addSource("spj-active-route", { type: "geojson", data: lineData });
+          map.addLayer({
+            id: "spj-active-route",
+            type: "line",
+            source: "spj-active-route",
+            paint: {
+              "line-color": ink,
+              "line-width": 3.5,
+              "line-dasharray": [2, 1.5],
+              "line-opacity": 0.85,
+            },
+          });
+          map.addSource("spj-active-stops", { type: "geojson", data: stopData });
+          map.addLayer({
+            id: "spj-active-stops",
+            type: "circle",
+            source: "spj-active-stops",
+            paint: {
+              "circle-radius": ["case", ["==", ["get", "kind"], "dest"], 6, 9],
+              "circle-color": [
+                "case",
+                ["==", ["get", "kind"], "dest"],
+                tokenColor("--ui-accent", "#16613a"),
+                "#ffffff",
+              ],
+              "circle-stroke-color": ink,
+              "circle-stroke-width": 2,
+            },
+          });
+          map.addLayer({
+            id: "spj-active-stop-labels",
+            type: "symbol",
+            source: "spj-active-stops",
+            filter: ["==", ["get", "kind"], "stop"],
+            layout: {
+              "text-field": ["get", "label"],
+              "text-size": 11,
+              "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+              "text-allow-overlap": false,
+              "text-ignore-placement": false,
+              "symbol-sort-key": ["get", "order"],
+            },
+            paint: { "text-color": ink },
+          });
+        }
+        // Operational layers stay above the reference layers (TPS, WR, heatmap).
+        ["spj-active-route", "spj-active-stops", "spj-active-stop-labels"].forEach((id) => {
+          if (map.getLayer(id)) map.moveLayer(id);
         });
       } catch {
         // SPJ layer is non-critical
@@ -1246,53 +1339,6 @@ export function LiveFleetMap({
   }, [mapInstance, attendance, rainfall, styleTick]);
 
   useEffect(() => {
-    async function renderOsrm() {
-      const map = mapInstance;
-      if (!map) return;
-      try {
-        const response = await apiFetch("/routes/osrm");
-        if (!response.ok) throw new Error("osrm unavailable");
-        const route = await response.json();
-        routeInfoRef.current = route;
-        setRouteInfo({
-          name: route.name,
-          eta_minutes: route.eta_minutes,
-          distance_km: route.distance_km,
-          source: route.source,
-        });
-        const coords = (route.path || []).map((p) => [p.lng, p.lat]);
-        if (coords.length < 2) return;
-        const data = {
-          type: "FeatureCollection",
-          features: [
-            {
-              type: "Feature",
-              properties: { source: route.source },
-              geometry: { type: "LineString", coordinates: coords },
-            },
-          ],
-        };
-        if (!map.getSource("osrm-route")) {
-          map.addSource("osrm-route", { type: "geojson", data });
-          map.addLayer({
-            id: "osrm-route-line",
-            type: "line",
-            source: "osrm-route",
-            layout: { visibility: layers.osrm ? "visible" : "none" },
-            paint: {
-              "line-color": "#0891b2",
-              "line-width": 4,
-              "line-opacity": 0.85,
-            },
-          });
-        } else {
-          map.getSource("osrm-route").setData(data);
-        }
-      } catch {
-        // OSRM layer is non-critical
-      }
-    }
-
     async function renderTpa() {
       const map = mapInstance;
       if (!map) return;
@@ -1362,7 +1408,6 @@ export function LiveFleetMap({
         window.setTimeout(renderWhenReady, 150);
         return;
       }
-      renderOsrm();
       renderTpa();
       renderUnlicensed();
     }
@@ -1381,8 +1426,49 @@ export function LiveFleetMap({
     };
     set("kelurahan-heatmap-fill", layers.heatmap);
     set("kelurahan-heatmap-outline", layers.heatmap);
-    set("osrm-route-line", layers.osrm);
   }, [layers, mapInstance, styleTick]);
+
+  // The decision route: drawn in the accent colour while its decision is selected,
+  // removed as soon as it is not (M3).
+  useEffect(() => {
+    const map = mapInstance;
+    if (!map) return;
+    let cancelled = false;
+    function render() {
+      if (cancelled) return;
+      if (!map.isStyleLoaded()) {
+        window.setTimeout(render, 150);
+        return;
+      }
+      const coords = (decisionRoute?.path || []).map((p) => [p.lng, p.lat]);
+      const data = {
+        type: "FeatureCollection",
+        features:
+          coords.length >= 2
+            ? [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords } }]
+            : [],
+      };
+      if (!map.getSource("osrm-route")) {
+        map.addSource("osrm-route", { type: "geojson", data });
+        map.addLayer({
+          id: "osrm-route-line",
+          type: "line",
+          source: "osrm-route",
+          paint: {
+            "line-color": tokenColor("--ui-accent", "#16613a"),
+            "line-width": 5,
+            "line-opacity": 0.9,
+          },
+        });
+      } else {
+        map.getSource("osrm-route").setData(data);
+      }
+    }
+    render();
+    return () => {
+      cancelled = true;
+    };
+  }, [mapInstance, decisionRoute, styleTick]);
 
   // Load & render real TPS and WR locations
   useEffect(() => {
@@ -1412,6 +1498,10 @@ export function LiveFleetMap({
               .filter(Boolean),
           );
           if (!map.getSource("tps-points")) {
+            const accent = tokenColor("--ui-accent", "#16613a");
+            const accentSoft = tokenColor("--ui-accent-soft", "#ddf3e4");
+            const accentDeep = tokenColor("--ui-accent-strong", "#0f3b23");
+            const before = referenceLayerBefore(map);
             map.addSource("tps-points", {
               type: "geojson",
               data: tpsData,
@@ -1420,72 +1510,84 @@ export function LiveFleetMap({
               clusterRadius: 50,
             });
 
-            map.addLayer({
-              id: "tps-clusters",
-              type: "circle",
-              source: "tps-points",
-              filter: ["has", "point_count"],
-              paint: {
-                "circle-color": ["step", ["get", "point_count"], "#bbf7d0", 50, "#86efac", 200, "#22c55e"],
-                "circle-radius": ["step", ["get", "point_count"], 13, 50, 18, 200, 24],
-                "circle-opacity": 0.75,
-                "circle-stroke-width": 1.5,
-                "circle-stroke-color": "#15803d",
+            map.addLayer(
+              {
+                id: "tps-clusters",
+                type: "circle",
+                source: "tps-points",
+                filter: ["has", "point_count"],
+                paint: {
+                  "circle-color": accentSoft,
+                  "circle-radius": ["step", ["get", "point_count"], 11, 50, 15, 200, 19],
+                  "circle-opacity": 0.9,
+                  "circle-stroke-width": 1.5,
+                  "circle-stroke-color": accent,
+                },
+                layout: { visibility: layers.tps ? "visible" : "none" },
               },
-              layout: { visibility: layers.tps ? "visible" : "none" },
-            });
+              before,
+            );
 
-            map.addLayer({
-              id: "tps-cluster-count",
-              type: "symbol",
-              source: "tps-points",
-              filter: ["has", "point_count"],
-              layout: {
-                "text-field": "{point_count}",
-                "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
-                "text-size": 11,
-                visibility: layers.tps ? "visible" : "none",
+            map.addLayer(
+              {
+                id: "tps-cluster-count",
+                type: "symbol",
+                source: "tps-points",
+                filter: ["has", "point_count"],
+                layout: {
+                  "text-field": "{point_count}",
+                  "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+                  "text-size": 11,
+                  visibility: layers.tps ? "visible" : "none",
+                },
+                paint: { "text-color": accentDeep },
               },
-              paint: { "text-color": "#14532d" },
-            });
+              before,
+            );
 
-            map.addLayer({
-              id: "tps-layer",
-              type: "circle",
-              source: "tps-points",
-              filter: ["!", ["has", "point_count"]],
-              paint: {
-                "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 5, 13, 8, 16, 10],
-                "circle-color": "#22c55e",
-                "circle-stroke-width": 2.5,
-                "circle-stroke-color": "#ffffff",
-                "circle-opacity": 0.9,
+            map.addLayer(
+              {
+                id: "tps-layer",
+                type: "circle",
+                source: "tps-points",
+                filter: ["!", ["has", "point_count"]],
+                paint: {
+                  "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 5, 13, 8, 16, 10],
+                  "circle-color": accent,
+                  "circle-stroke-width": 2,
+                  "circle-stroke-color": "#ffffff",
+                  "circle-opacity": 0.9,
+                },
+                layout: {
+                  visibility: layers.tps ? "visible" : "none",
+                },
               },
-              layout: {
-                visibility: layers.tps ? "visible" : "none",
-              },
-            });
+              before,
+            );
 
             // TPS text label at high zoom so points are identifiable on satellite
-            map.addLayer({
-              id: "tps-label",
-              type: "symbol",
-              source: "tps-points",
-              filter: ["!", ["has", "point_count"]],
-              minzoom: 13,
-              layout: {
-                "text-field": "TPS",
-                "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
-                "text-size": 10,
-                "text-offset": [0, 1.4],
-                visibility: layers.tps ? "visible" : "none",
+            map.addLayer(
+              {
+                id: "tps-label",
+                type: "symbol",
+                source: "tps-points",
+                filter: ["!", ["has", "point_count"]],
+                minzoom: 13,
+                layout: {
+                  "text-field": "TPS",
+                  "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+                  "text-size": 10,
+                  "text-offset": [0, 1.4],
+                  visibility: layers.tps ? "visible" : "none",
+                },
+                paint: {
+                  "text-color": accentDeep,
+                  "text-halo-color": "#ffffff",
+                  "text-halo-width": 1.5,
+                },
               },
-              paint: {
-                "text-color": "#14532d",
-                "text-halo-color": "#ffffff",
-                "text-halo-width": 1.5,
-              },
-            });
+              before,
+            );
 
             map.on("click", "tps-clusters", (e) => {
               const features = map.queryRenderedFeatures(e.point, { layers: ["tps-clusters"] });
@@ -1567,6 +1669,10 @@ export function LiveFleetMap({
               .filter(Boolean),
           );
           if (!map.getSource("wr-points")) {
+            // A reference registry, not a status: neutral ink so it never reads as an alert.
+            const ink = tokenColor("--ui-ink", "#1d2320");
+            const inkSoft = tokenColor("--ui-ink-soft", "#4a524e");
+            const before = referenceLayerBefore(map);
             map.addSource("wr-points", {
               type: "geojson",
               data: wrData,
@@ -1576,86 +1682,90 @@ export function LiveFleetMap({
             });
 
             // Layer cluster
-            map.addLayer({
-              id: "wr-clusters",
-              type: "circle",
-              source: "wr-points",
-              filter: ["has", "point_count"],
-              paint: {
-                "circle-color": [
-                  "step",
-                  ["get", "point_count"],
-                  "#fed7aa", // orange muda untuk count kecil
-                  100,
-                  "#fdba74", // sedang
-                  500,
-                  "#f97316", // pekat untuk area sangat padat
-                ],
-                "circle-radius": ["step", ["get", "point_count"], 15, 100, 22, 500, 30],
-                "circle-opacity": 0.75,
-                "circle-stroke-width": 1.5,
-                "circle-stroke-color": "#ea580c",
+            map.addLayer(
+              {
+                id: "wr-clusters",
+                type: "circle",
+                source: "wr-points",
+                filter: ["has", "point_count"],
+                paint: {
+                  "circle-color": "#ffffff",
+                  "circle-radius": ["step", ["get", "point_count"], 11, 100, 15, 500, 19],
+                  "circle-opacity": 0.92,
+                  "circle-stroke-width": 1.5,
+                  "circle-stroke-color": inkSoft,
+                },
+                layout: {
+                  visibility: layers.wr ? "visible" : "none",
+                },
               },
-              layout: {
-                visibility: layers.wr ? "visible" : "none",
-              },
-            });
+              before,
+            );
 
             // Text count
-            map.addLayer({
-              id: "wr-cluster-count",
-              type: "symbol",
-              source: "wr-points",
-              filter: ["has", "point_count"],
-              layout: {
-                "text-field": "{point_count}",
-                "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
-                "text-size": 12,
-                visibility: layers.wr ? "visible" : "none",
+            map.addLayer(
+              {
+                id: "wr-cluster-count",
+                type: "symbol",
+                source: "wr-points",
+                filter: ["has", "point_count"],
+                layout: {
+                  "text-field": "{point_count}",
+                  "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+                  "text-size": 12,
+                  visibility: layers.wr ? "visible" : "none",
+                },
+                paint: {
+                  "text-color": ink,
+                },
               },
-              paint: {
-                "text-color": "#431407",
-              },
-            });
+              before,
+            );
 
             // Single unclustered WR point
-            map.addLayer({
-              id: "wr-unclustered-point",
-              type: "circle",
-              source: "wr-points",
-              filter: ["!", ["has", "point_count"]],
-              paint: {
-                "circle-color": "#f97316",
-                "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 5, 13, 7, 16, 9],
-                "circle-stroke-width": 2.5,
-                "circle-stroke-color": "#ffffff",
-                "circle-opacity": 0.9,
+            map.addLayer(
+              {
+                id: "wr-unclustered-point",
+                type: "circle",
+                source: "wr-points",
+                filter: ["!", ["has", "point_count"]],
+                paint: {
+                  "circle-color": inkSoft,
+                  "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 4, 13, 6, 16, 8],
+                  "circle-stroke-width": 2,
+                  "circle-stroke-color": "#ffffff",
+                  "circle-opacity": 0.9,
+                },
+                layout: {
+                  visibility: layers.wr ? "visible" : "none",
+                },
               },
-              layout: {
-                visibility: layers.wr ? "visible" : "none",
-              },
-            });
+              before,
+            );
 
             // WR text label at high zoom
-            map.addLayer({
-              id: "wr-label",
-              type: "symbol",
-              source: "wr-points",
-              filter: ["!", ["has", "point_count"]],
-              minzoom: 13,
-              layout: {
-                "text-field": "WR",
-                "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
-                "text-size": 10,
-                "text-offset": [0, 1.4],
-                visibility: layers.wr ? "visible" : "none",
+            map.addLayer(
+              {
+                id: "wr-label",
+                type: "symbol",
+                source: "wr-points",
+                filter: ["!", ["has", "point_count"]],
+                minzoom: 13,
+                layout: {
+                  "text-field": translate(languageRef.current, "fmap_wr_short"),
+                  "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+                  "text-size": 10,
+                  "text-offset": [0, 1.4],
+                  visibility: layers.wr ? "visible" : "none",
+                },
+                paint: {
+                  "text-color": ink,
+                  "text-halo-color": "#ffffff",
+                  "text-halo-width": 1.5,
+                },
               },
-              paint: {
-                "text-color": "#7c2d12",
-                "text-halo-color": "#ffffff",
-                "text-halo-width": 1.5,
-              },
-            });
+              before,
+            );
 
             // Click cluster zoom
             map.on("click", "wr-clusters", (e) => {
@@ -1688,7 +1798,7 @@ export function LiveFleetMap({
                 .setHTML(
                   `
                   <div style="color: #0f172a; padding: 4px; font-size: 11px; max-width: 200px;">
-                    <strong style="display: block; font-weight: bold; margin-bottom: 2px;">WR: ${props.name}</strong>
+                    <strong style="display: block; font-weight: bold; margin-bottom: 2px;">${translate(languageRef.current, "fmap_wr")}: ${props.name}</strong>
                     <span style="display: block; margin-bottom: 2px;">${mapLabel("Jenis", "Type")}: ${props.type}</span>
                     <span style="display: block; color: #64748b; font-size: 10px;">${props.kecamatan || ""}</span>
                   </div>
@@ -1710,7 +1820,7 @@ export function LiveFleetMap({
               wrPopup.remove();
               const detailPopup = new maplibregl.Popup({ offset: 18 }).setHTML(`
                 <div class="map-popup">
-                  <h4>${mapLabel("Registri wajib retribusi", "Retribution registry")}</h4>
+                  <h4>${translate(languageRef.current, "fmap_wr")}</h4>
                   <p><b>${props.name || mapLabel("Lokasi terdaftar", "Registered point")}</b></p>
                   <small>${props.type || mapLabel("Lokasi registri", "Registry location")}</small>
                   <small>${props.kecamatan || ""}</small>
@@ -1765,25 +1875,25 @@ export function LiveFleetMap({
   }, [layers.tps, layers.wr, mapInstance, styleTick]);
 
   // Auto-fit the viewport to active fleet + TPonce positions are known.
-  const fittedRef = useRef(false);
+  // First view: every visible truck plus the TPA, padded clear of the map chrome. The
+  // offline sample (a few trucks) is shown before the live fleet answers, so the view is
+  // refitted once when the fleet grows, until the operator moves the map themselves.
+  const fittedCountRef = useRef(0);
+  const userMovedRef = useRef(false);
   useEffect(() => {
     const map = mapInstance;
-    if (!map || fittedRef.current) return;
-    const pts = (trucks || [])
-      .filter((t) => t.latest_position)
-      .map((t) => [t.latest_position.lng, t.latest_position.lat]);
-    pts.push([106.991, -6.331]); // TPA Bantargebang
-    if (pts.length < 2) return;
-    const lngs = pts.map((p) => p[0]);
-    const lats = pts.map((p) => p[1]);
-    map.fitBounds(
-      [
-        [Math.min(...lngs), Math.min(...lats)],
-        [Math.max(...lngs), Math.max(...lats)],
-      ],
-      { padding: 60, maxZoom: 12, duration: 600 },
-    );
-    fittedRef.current = true;
+    if (!map) return;
+    const moved = (e) => {
+      if (e.originalEvent) userMovedRef.current = true;
+    };
+    map.on("movestart", moved);
+    return () => map.off("movestart", moved);
+  }, [mapInstance]);
+  useEffect(() => {
+    const count = (trucks || []).length;
+    if (!mapInstance || userMovedRef.current || count <= fittedCountRef.current) return;
+    if (fitFleet(fittedCountRef.current ? 600 : 0)) fittedCountRef.current = count;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trucks, mapInstance]);
 
   // Trip playback: animate a marker along the selected truck's breadcrumb trail.
@@ -1886,7 +1996,7 @@ export function LiveFleetMap({
       push({ id: "tps-" + t.label, kind: "TPS", label: t.label, sub: t.sub, coords: t.coords }),
     );
     (wrSearch || []).forEach((w) =>
-      push({ id: "wr-" + w.label, kind: "WR", label: w.label, sub: w.sub, coords: w.coords }),
+      push({ id: "wr-" + w.label, kind: t("fmap_wr_short"), label: w.label, sub: w.sub, coords: w.coords }),
     );
     (heatSearch || []).forEach((h) =>
       push({
@@ -1907,7 +2017,7 @@ export function LiveFleetMap({
       }),
     );
     return items;
-  }, [trucks, mapTruth, tpsSearch, wrSearch, heatSearch, eventPermits, lang]);
+  }, [trucks, mapTruth, tpsSearch, wrSearch, heatSearch, eventPermits, lang, t]);
 
   const searchResults = (searchQuery || "").trim()
     ? searchIndex
@@ -1967,23 +2077,33 @@ export function LiveFleetMap({
     );
   }
 
-  function resetView() {
+  function fitFleet(duration) {
     const map = mapInstance;
-    if (!map) return;
+    if (!map) return false;
     const pts = (trucks || [])
-      .filter((t) => t.latest_position)
+      .filter((t, i) => t.latest_position && (showAllFleet || isDefaultVisibleTruck(t, i)))
       .map((t) => [t.latest_position.lng, t.latest_position.lat]);
-    pts.push([106.991, -6.331]);
-    if (pts.length < 2) return;
+    pts.push([106.991, -6.331]); // TPA Bantargebang
+    if (pts.length < 2) return false;
     const lngs = pts.map((p) => p[0]);
     const lats = pts.map((p) => p[1]);
+    // Clear of the notice + search row (top), layers/route pill (bottom), zoom controls (right).
+    const height = map.getContainer().clientHeight || 600;
+    const top = Math.min(124, Math.round(height * 0.26));
+    const bottom = Math.min(84, Math.round(height * 0.16));
     map.fitBounds(
       [
         [Math.min(...lngs), Math.min(...lats)],
         [Math.max(...lngs), Math.max(...lats)],
       ],
-      { padding: 60, maxZoom: 12, duration: 600 },
+      { padding: { top, bottom, left: 40, right: 72 }, maxZoom: 12, duration },
     );
+    return true;
+  }
+
+  function resetView() {
+    userMovedRef.current = false;
+    fitFleet(600);
   }
 
   useEffect(() => {
@@ -2019,82 +2139,144 @@ export function LiveFleetMap({
     map.easeTo({ center: coords, zoom: Math.max(map.getZoom(), 14), duration: 700 });
   }, [focusRequest, trucks, mapInstance]);
 
+  const defaultFleetCount = (trucks || []).filter(isDefaultVisibleTruck).length;
+  const fleetShown = showAllFleet ? (trucks || []).length : defaultFleetCount;
+  // Same denominator as the fleet table, Prediksi/Rencana and Sopir.
+  const activeFleetCount = (trucks || []).filter((truck) =>
+    ACTIVE_FLEET_STATUSES.includes(truck.status),
+  ).length;
+  // One row per layer that is actually drawn, so the legend never explains a hidden layer.
+  const legendGroups = [
+    {
+      key: "fmap_legend_vehicles",
+      rows: [
+        { key: "fmap_truck_ok", swatch: "truck-ok" },
+        { key: "fmap_truck_service", swatch: "truck-service" },
+        { key: "fmap_truck_off", swatch: "truck-off" },
+      ],
+    },
+    {
+      key: "fmap_legend_routes",
+      rows: [
+        { key: "fmap_spj_route", swatch: "spj-route" },
+        { key: "fmap_spj_stop", swatch: "spj-stop" },
+        { key: "fmap_corridor", swatch: "corridor", tag: "honesty_sim_badge" },
+        { key: "fmap_actual", swatch: "actual", tag: "honesty_sim_badge" },
+        { key: "fmap_violation", swatch: "violation", tag: "honesty_sim_badge" },
+        decisionRoute && {
+          key: "w10fleet_legend_route",
+          swatch: "osrm",
+          tag: `w10fleet_tag_${decisionRoute.source}`,
+        },
+        jamActive && { key: "fmap_jam", swatch: "jam", tag: "honesty_sim_badge" },
+      ],
+    },
+    {
+      key: "fmap_legend_places",
+      rows: [
+        { key: "fmap_tpa", swatch: "tpa", tag: "fmap_tag_model" },
+        { key: "fmap_spj_dest", swatch: "spj-dest" },
+        layers.tps && { key: "fmap_tps", swatch: "tps", tag: "fmap_tag_real" },
+        layers.wr && { key: "fmap_wr", swatch: "wr", tag: "fmap_tag_real" },
+        layers.heatmap && { key: "fmap_heatmap", swatch: "heatmap", tag: "fmap_tag_model" },
+        eventPermits.length > 0 && { key: "fmap_event", swatch: "event", tag: "honesty_sim_badge" },
+        unlicensed.length > 0 && { key: "fmap_unlicensed", swatch: "unlicensed", tag: "honesty_sim_badge" },
+      ],
+    },
+  ];
+
   return (
     <div className="maplibre-shell">
       <div ref={containerRef} className="maplibre-container" />
 
-      <div className="map-search" role="search">
-        <input
-          className="map-search-input"
-          value={searchQuery}
-          onChange={(e) => {
-            setSearchQuery(e.target.value);
-            setSearchOpen(true);
-          }}
-          onFocus={() => setSearchOpen(true)}
-          onBlur={() => window.setTimeout(() => setSearchOpen(false), 200)}
-          placeholder={
-            lang === "id" ? "Cari nomor truk, TPS, kecamatan..." : "Search trucks, TPS, districts..."
-          }
-          aria-label={lang === "id" ? "Cari pada peta" : "Search map"}
-        />
-        {searchOpen && searchResults.length > 0 && (
-          <ul className="map-search-results">
-            {searchResults.map((r) => (
-              <li key={r.id} onMouseDown={() => flyToResult(r)}>
-                <span className="map-search-kind">{r.kind}</span>
-                <span>
-                  <strong>{r.label}</strong>
-                  <small>{r.sub || ""}</small>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <div className="map-overlay-row">
+        <div className="map-search" role="search">
+          <input
+            className="map-search-input"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setSearchOpen(true);
+            }}
+            onFocus={() => setSearchOpen(true)}
+            onBlur={() => window.setTimeout(() => setSearchOpen(false), 200)}
+            placeholder={t("fmap_search_placeholder")}
+            aria-label={t("fmap_search_label")}
+          />
+          {searchOpen && searchResults.length > 0 && (
+            <ul className="map-search-results">
+              {searchResults.map((r) => (
+                <li key={r.id} onMouseDown={() => flyToResult(r)}>
+                  <span className="map-search-kind">{r.kind}</span>
+                  <span>
+                    <strong>{r.label}</strong>
+                    <small>{r.sub || ""}</small>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
-      <div
-        className="map-basemap"
-        role="group"
-        aria-label={lang === "id" ? "Gaya peta dasar" : "Basemap style"}
-      >
-        {streetsOffline && (
-          <span
-            className="basemap-offline-note"
-            title={lang === "id" ? "Ubin jalan jarak jauh tidak tersedia" : "Remote street tiles unreachable"}
-          >
-            {lang === "id" ? "peta offline" : "offline map"}
-          </span>
-        )}
-        <button
-          className={showAllFleet ? "active" : ""}
-          onClick={() => setShowAllFleet((v) => !v)}
-          title={
-            showAllFleet
-              ? lang === "id"
-                ? "Tampilkan lebih sedikit"
-                : "Show fewer trucks"
-              : lang === "id"
-                ? `Tampilkan semua ${trucks.length} truk`
-                : `Show all ${trucks.length} trucks`
-          }
-          style={{ marginLeft: 8 }}
+        <details
+          className="map-key"
+          data-testid="map-legend"
+          open={legendOpen}
+          onToggle={(e) => setLegendOpen(e.currentTarget.open)}
         >
-          {showAllFleet
-            ? `${lang === "id" ? "Armada" : "Fleet"}: ${trucks.length}`
-            : `${lang === "id" ? "Armada" : "Fleet"}: ${Math.min(trucks.length, 19)}`}
-        </button>
+          <summary aria-label={t("fmap_legend")} title={t("fmap_legend")}>
+            <Info size={16} aria-hidden="true" />
+            <span className="map-key-label">{t("fmap_legend_short")}</span>
+          </summary>
+          <div className="map-key-body">
+            {streetsOffline && <p className="basemap-offline-note">{t("fmap_offline")}</p>}
+            {legendGroups.map((group) => (
+              <section key={group.key} className="map-key-group">
+                <h3>{t(group.key)}</h3>
+                <ul>
+                  {group.rows.filter(Boolean).map((row) => (
+                    <li key={row.key} data-testid="map-legend-row" data-layer={row.swatch}>
+                      <i className={`map-key-swatch swatch-${row.swatch}`} aria-hidden="true">
+                        {row.swatch === "spj-stop" ? "1" : null}
+                      </i>
+                      <span>{t(row.key)}</span>
+                      {row.tag && <em className="legend-tag">{t(row.tag)}</em>}
+                    </li>
+                  ))}
+                </ul>
+                {group.key === "fmap_legend_vehicles" && (
+                  <p className="map-key-fleet">
+                    <span data-testid="map-fleet-denominator">
+                      {t("fmap_fleet_shown")
+                        .replace("{n}", fleetShown)
+                        .replace("{total}", (trucks || []).length)}{" "}
+                      · {fleetDenominator(t, { active: activeFleetCount, total: (trucks || []).length })}
+                    </span>
+                    {(showAllFleet || defaultFleetCount < (trucks || []).length) && (
+                      <button type="button" onClick={() => setShowAllFleet((v) => !v)}>
+                        {showAllFleet ? t("fmap_fleet_show_fewer") : t("fmap_fleet_show_all")}
+                      </button>
+                    )}
+                  </p>
+                )}
+              </section>
+            ))}
+          </div>
+        </details>
       </div>
 
-      {routeInfo && layers.osrm && (
-        <div className="map-route-pill">
+      {decisionRoute && (
+        <div className="map-route-pill" data-testid="map-route-card">
           <span>
-            <strong>{routeInfo.name}</strong>
+            <strong>{routeName(t, decisionRoute)}</strong>
             <small>
-              {routeInfo.distance_km} km · ~{routeInfo.eta_minutes} min · {routeInfo.source}
+              <span data-testid="map-route-eta">{routeMeta(t, decisionRoute, lang)}</span> ·{" "}
+              {routeSource(t, decisionRoute)}
             </small>
           </span>
-          <button onClick={fitRoute}>{lang === "id" ? "Paskan Rute" : "Fit"}</button>
+          <button type="button" onClick={fitRoute}>
+            {t("fmap_route_fit")}
+          </button>
         </div>
       )}
 
@@ -2106,14 +2288,19 @@ export function LiveFleetMap({
         </button>
       )}
 
-      <button
-        className="map-reset-btn"
-        onClick={resetView}
-        aria-label={lang === "id" ? "Reset tampilan" : "Reset view"}
-        title={lang === "id" ? "Reset tampilan" : "Reset view"}
-      >
-        <Compass size={15} />
-      </button>
+      {resetHost &&
+        createPortal(
+          <button
+            type="button"
+            className="map-reset-btn"
+            onClick={resetView}
+            aria-label={t("fmap_reset")}
+            title={t("fmap_reset")}
+          >
+            <Compass size={16} aria-hidden="true" />
+          </button>,
+          resetHost,
+        )}
     </div>
   );
 }
