@@ -67,7 +67,7 @@ class ReceiptWeightValidationTests(unittest.TestCase):
                 "driver_name": "W",
                 "truck_code": "T-RCPT57",
                 "destination": "TPST Bantargebang",
-                "weigh_on_site": True,
+                "weigh_on_site": False,  # the stop below sends no weighing
                 "priority": "normal",
                 "note": "57 test",
             },

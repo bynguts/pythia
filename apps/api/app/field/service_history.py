@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from app.core.env import local_today
 from app.core.storage import RecordStore
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,7 @@ class ServiceStore:
         return latest
 
     def due_soon(self, days: int = 30, today: str | None = None) -> list[dict]:
-        ref = date.fromisoformat(today) if today else date.today()
+        ref = date.fromisoformat(today) if today else local_today()
         due: list[dict] = []
         for truck_code, rec in self.latest_per_truck().items():
             if not rec.next_due_date:

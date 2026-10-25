@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 _SESSION_DIR = tempfile.mkdtemp(prefix="pythia-test-")
 os.environ.setdefault("PYTHIA_AI_ENGINE", "off")
+os.environ.setdefault("PYTHIA_SAFETY_GATE_TIMER", "off")
 os.environ["PYTHIA_SPJ_SEED"] = "off"
 os.environ["PYTHIA_DB_PATH"] = str(Path(_SESSION_DIR) / "pythia_history.db")
 
@@ -27,6 +28,10 @@ os.environ["PYTHIA_DB_PATH"] = str(Path(_SESSION_DIR) / "pythia_history.db")
 # CI never depends on an external routing service. Unit tests for the
 # road contract mock road_route directly.
 os.environ.setdefault("PYTHIA_SPJ_STRAIGHT_FALLBACK", "on")
+# A recording shell's pinned date or saved weather must not leak into the suite;
+# the tests that need them set them with monkeypatch.
+os.environ.pop("PYTHIA_DEMO_DATE", None)
+os.environ.pop("PYTHIA_WEATHER_SNAPSHOT", None)
 from app.main import app  # noqa: E402
 
 

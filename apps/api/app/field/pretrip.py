@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from app.core.env import local_today
 from app.core.storage import RecordStore
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,8 @@ def _utc_now() -> str:
 
 
 def _today() -> str:
-    return datetime.now(UTC).date().isoformat()
+    """The inspection day in Asia/Jakarta: a 06:00 WIB check is today's, not yesterday's (gap 10)."""
+    return local_today().isoformat()
 
 
 class PreTripStore:

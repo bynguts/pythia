@@ -5,14 +5,19 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import asdict as _asdict
-from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.deps import require_any_permission, require_permission
+from app.api.deps import (
+    ensure_truck_access,
+    require_any_permission,
+    require_any_principal,
+    require_permission,
+)
 from app.api.schemas import DamageReportBody, OcrBody, PretripBody, ServiceRecordBody
 from app.api.state import _compliance_cache, _compliance_lock, _refresh_fleet_caches, history_store
+from app.core.env import local_today
 from app.field.compliance import WINDOW_DAYS as COMPLIANCE_WINDOW_DAYS
 from app.field.compliance import compute_fleet_scores
 from app.field.damage_reports import DAMAGE_STORE
@@ -21,6 +26,28 @@ from app.field.service_history import SERVICE_STORE, due_date_for
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Gap 7: these reads name drivers, technicians and people in photos.
+OPERATOR_READ = ("dashboard:read", "dispatch:create", "history:read")
+# Every role holds one of these, so any signed-in session passes.
+ANY_SESSION = ("dispatch:confirm", "dispatch:create", "dashboard:read", "history:read")
+
+
+@router.get("/api/driver/session")
+def driver_session(principal: dict = Depends(require_any_principal(*ANY_SESSION))) -> dict[str, Any]:
+    """Who this token belongs to (gap 6).
+
+    ``truck_code`` is set for a personal driver account from PYTHIA_USERS_FILE: the
+    driver app then uses that truck instead of letting the driver pick one.
+    ``shared_account`` is true for the shared demo role logins.
+    """
+    return {
+        "username": principal["username"],
+        "role": principal["role"],
+        "truck_code": principal.get("truck_code"),
+        "display_name": principal.get("display_name"),
+        "shared_account": bool(principal.get("shared_account")),
+    }
 
 
 @router.post("/api/pretrip", status_code=201)
@@ -35,7 +62,12 @@ def submit_pretrip(
 
 
 @router.get("/api/pretrip/today/{truck_code}")
-def pretrip_today(truck_code: str) -> dict[str, Any]:
+def pretrip_today(
+    truck_code: str,
+    principal: dict = Depends(require_any_principal("dispatch:confirm", "dispatch:create", "dashboard:read")),
+) -> dict[str, Any]:
+    """Today's (Asia/Jakarta working day) pre-trip record for one truck."""
+    ensure_truck_access(principal, truck_code)
     rec = PRETRIP_STORE.today(truck_code)
     return {"record": _asdict(rec) if rec else None, "done": rec is not None}
 
@@ -73,7 +105,9 @@ def create_damage_report(
 
 
 @router.get("/api/damage-reports")
-def list_damage_reports(status: str | None = None) -> dict[str, Any]:
+def list_damage_reports(
+    status: str | None = None, _role: str = Depends(require_any_permission(*OPERATOR_READ))
+) -> dict[str, Any]:
     reports = DAMAGE_STORE.list(status=status)
     return {"reports": [_asdict(r) for r in reports], "count": len(reports)}
 
@@ -89,11 +123,11 @@ def resolve_damage_report(
     try:  # hook must never break resolve
         SERVICE_STORE.create(
             rep.truck_code,
-            service_date=date.today().isoformat(),
+            service_date=local_today().isoformat(),
             component=rep.component,
             description=f"Resolve laporan: {rep.note}",
             source="damage_resolve",
-            next_due_date=due_date_for(rep.component, date.today()),
+            next_due_date=due_date_for(rep.component, local_today()),
         )
     except Exception:  # noqa: BLE001
         logger.exception("service-record hook failed for report %s", report_id)
@@ -119,13 +153,17 @@ def create_service_record(
 
 
 @router.get("/api/service-records")
-def list_service_records(truck_code: str | None = None) -> dict[str, Any]:
+def list_service_records(
+    truck_code: str | None = None, _role: str = Depends(require_any_permission(*OPERATOR_READ))
+) -> dict[str, Any]:
     records = SERVICE_STORE.list(truck_code)
     return {"records": [_asdict(r) for r in records], "count": len(records)}
 
 
 @router.get("/api/service-records/due-soon")
-def service_records_due_soon(days: int = 30) -> dict[str, Any]:
+def service_records_due_soon(
+    days: int = 30, _role: str = Depends(require_any_permission(*OPERATOR_READ))
+) -> dict[str, Any]:
     due = SERVICE_STORE.due_soon(days=days)
     return {"due": due, "count": len(due)}
 
@@ -147,13 +185,16 @@ def _compliance_payload() -> dict[str, Any]:
     return cached["payload"]
 
 
+# Gap 7: a score about a named person is for supervisors and auditors only.
 @router.get("/api/compliance/drivers")
-def compliance_drivers() -> dict[str, Any]:
+def compliance_drivers(_role: str = Depends(require_permission("history:read"))) -> dict[str, Any]:
     return _compliance_payload()
 
 
 @router.get("/api/compliance/drivers/{driver_name}")
-def compliance_driver_detail(driver_name: str) -> dict[str, Any]:
+def compliance_driver_detail(
+    driver_name: str, _role: str = Depends(require_permission("history:read"))
+) -> dict[str, Any]:
     for entry in _compliance_payload()["drivers"]:
         if entry["driver_name"] == driver_name:
             return entry

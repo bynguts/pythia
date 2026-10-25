@@ -23,7 +23,7 @@ def test_normal_spj_completion_records_no_override_event(api_client, auth_header
     ):
         response = api_client.post("/api/spj/spj-x/complete", headers=auth_headers("supervisor"))
     assert response.status_code == 200
-    complete.assert_called_once_with("spj-x", None)
+    complete.assert_called_once_with("spj-x", None, "supervisor")  # the actor is recorded
     assert not any(call.args[0] == "spj_completed_by_override" for call in record_event.call_args_list)
 
 

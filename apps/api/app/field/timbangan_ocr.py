@@ -61,6 +61,11 @@ def _extract_weight(content: str) -> float | None:
     return None
 
 
+def is_configured() -> bool:
+    """Whether a vision key is set; without one every read returns ``failed`` at once."""
+    return bool(os.getenv("GUTS_API_KEY"))
+
+
 def read_weight_from_photo(photo_b64: str, http_post: Callable[..., dict] | None = None) -> dict[str, Any]:
     model = os.getenv("GUTS_VISION_MODEL") or "gemini-3.8-flash"
     source = f"gutsai-vision ({model})"

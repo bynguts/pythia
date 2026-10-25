@@ -395,7 +395,13 @@ class DamageEndpointTests(unittest.TestCase):
         listing = self.client.get("/api/spj")
         self.assertNotIn("base64", listing.text)
         detail = self.client.get(f"/api/spj/{spj_id}")
-        self.assertIn("base64", detail.text)  # detail keeps full evidence
+        # Gap 7/8: the detail carries photo references, never the bytes; the image
+        # itself is served by the authenticated evidence endpoint.
+        self.assertNotIn("base64", detail.text)
+        arrival = detail.json()["stops"][0]["evidence"]["arrival"]
+        photo = self.client.get(f"/api/spj/{spj_id}/evidence/{arrival['photo_ref']}")
+        self.assertEqual(photo.status_code, 200)
+        self.assertEqual(photo.headers["content-type"], "image/jpeg")
 
     def test_receipt_requires_photo(self):
         create = self.client.post(

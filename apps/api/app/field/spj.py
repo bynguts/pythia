@@ -13,6 +13,7 @@ audited.
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
@@ -24,7 +25,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from app.core.env import getenv
+from app.core.env import getenv, local_today
 from app.fleet.facilities import provenance_payload, route_ground_truth
 from app.fleet.osrm import road_route
 
@@ -47,6 +48,36 @@ JAKARTA_LNG_RANGE = (105.5, 107.5)
 DEMO_LOCATION_TYPE = "DEMO"
 WORLD_LAT_RANGE = (-90.0, 90.0)
 WORLD_LNG_RANGE = (-180.0, 180.0)
+
+# The weighbridge-ticket OCR runs on the reviewer's side: its reading is a
+# labelled suggestion beside the receipt and never becomes a recorded weight
+# until a dispatcher or supervisor confirms or corrects it.
+RECEIPT_OCR_CLASSIFICATION = "MODEL_OUTPUT"
+RECEIPT_OCR_LABEL = "MODEL OUTPUT: weighbridge-ticket OCR suggestion, not a recorded weight"
+RECEIPT_OCR_REVIEWED = ("confirmed", "corrected")
+
+
+def receipt_ocr_record(status: str, reason: str | None = None, result: dict | None = None) -> dict:
+    """The stored OCR block: status pending | unavailable | unreviewed (| confirmed | corrected).
+
+    ``result`` is the timbangan OCR answer. It reads the gross weight only, so
+    ``tare_kg`` and ``net_kg`` stay null rather than being guessed.
+    """
+    result = result or {}
+    return {
+        "gross_kg": result.get("weight_kg"),
+        "tare_kg": None,
+        "net_kg": None,
+        "confidence": result.get("confidence"),
+        "source": result.get("source"),
+        "classification": RECEIPT_OCR_CLASSIFICATION,
+        "label": RECEIPT_OCR_LABEL,
+        "status": status,
+        "reason": reason,
+        "read_at": _utc_now() if result else None,
+        "reviewed_by": None,
+        "reviewed_at": None,
+    }
 
 
 def demo_stop_name(name: str) -> str:
@@ -85,8 +116,64 @@ def _require_coord(value, field: str, rng: tuple[float, float]) -> None:
 
 TABLE = "pythia_spj"
 
+# Gap 3: an arrival geotag farther than this from its stop is flagged for review.
+GEOTAG_REVIEW_DISTANCE_M = 150.0
+APPROX_GEOTAG_LABEL = "Approximate, not GPS"
 
-def _validate_evidence(evidence: dict, demo: bool = False) -> None:
+
+def evidence_photo_slots(evidence: dict):
+    """(slot, record) for every photo-bearing record in stop evidence."""
+    arrival = evidence.get("arrival")
+    if isinstance(arrival, dict):
+        yield "arrival", arrival
+    for i, entry in enumerate(evidence.get("weighing") or []):
+        if isinstance(entry, dict):
+            yield f"weighing-{i}", entry
+    officer = evidence.get("officer")
+    if isinstance(officer, dict):
+        yield "officer", officer
+
+
+def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    from math import asin, cos, radians, sin, sqrt
+
+    dlat, dlng = radians(lat2 - lat1), radians(lng2 - lng1)
+    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlng / 2) ** 2
+    return 2 * 6_371_000.0 * asin(sqrt(a))
+
+
+def arrival_geotag(stop) -> dict | None:
+    """How trustworthy the arrival position is (gap 3, honesty label H1).
+
+    ``status`` is ``gps`` for a device fix, ``approx`` when the phone had no fix and
+    the app stored the stop's own coordinates (``approx: true``): such a position
+    proves nothing and carries the label "Approximate, not GPS". ``distance_to_stop_m``
+    is the straight-line distance from the stop; a GPS fix farther than
+    GEOTAG_REVIEW_DISTANCE_M is ``flagged``.
+    """
+    arrival = (stop.evidence or {}).get("arrival")
+    if not isinstance(arrival, dict):
+        return None
+    try:
+        lat, lng = float(arrival.get("lat")), float(arrival.get("lng"))
+    except (TypeError, ValueError):
+        return {"status": "missing", "label": "No position recorded", "flagged": True}
+    approx = bool(arrival.get("approx"))
+    distance = round(_haversine_m(lat, lng, stop.lat, stop.lng), 1)
+    accuracy = arrival.get("accuracy_m")
+    return {
+        "status": "approx" if approx else "gps",
+        "label": APPROX_GEOTAG_LABEL if approx else "GPS",
+        "lat": lat,
+        "lng": lng,
+        "accuracy_m": accuracy if isinstance(accuracy, (int, float)) else None,
+        "distance_to_stop_m": distance,
+        "source": arrival.get("source") or "camera",
+        "flagged": approx or distance > GEOTAG_REVIEW_DISTANCE_M,
+    }
+
+
+def _validate_evidence(evidence: dict, demo: bool = False, weigh_on_site: bool = False) -> None:
     """Server-side evidence contract for stop completion (#54).
 
     A filename alone is NOT evidence: the arrival record needs image data
@@ -111,6 +198,12 @@ def _validate_evidence(evidence: dict, demo: bool = False) -> None:
         weighing = []
     if not isinstance(weighing, list):
         raise ValueError("evidence.weighing must be a list")
+    # Weighing is part of a stop only when the SPJ orders on-site weighing.
+    if weigh_on_site and not weighing:
+        raise ValueError(
+            "evidence.weighing is required: this SPJ orders on-site weighing (weigh_on_site); "
+            "add at least one weighing entry"
+        )
     for i, entry in enumerate(weighing):
         if not isinstance(entry, dict):
             raise ValueError(f"evidence.weighing[{i}] must be an object")
@@ -140,7 +233,8 @@ def _utc_now() -> str:
 
 
 def _today() -> str:
-    return datetime.now(UTC).date().isoformat()
+    """The SPJ working day: Asia/Jakarta (or PYTHIA_DEMO_DATE), never the UTC date."""
+    return local_today().isoformat()
 
 
 def _validate_override(override: dict | None, actor: str | None) -> dict:
@@ -161,12 +255,14 @@ def _validate_override(override: dict | None, actor: str | None) -> dict:
 
 
 def spj_summary_payload(spj: Spj) -> dict:
-    """List projection: stop evidence and the receipt photo stay out.
+    """List projection: stop evidence, the receipt photo and the route geometry stay out.
 
-    Receipt metadata is small and drives the driver's pending-receipt task;
-    the image bytes are served only by the detail endpoint.
+    Receipt metadata is small and drives the driver's pending-receipt task.
+    The road geometry is hundreds of points per SPJ; clients that draw it read
+    /api/spj/active-path/{truck_code}. ``route_point_count`` says how many there are.
     """
-    payload = {key: value for key, value in vars(spj).items() if key != "stops"}
+    payload = {key: value for key, value in vars(spj).items() if key not in ("stops", "route_geometry")}
+    payload["route_point_count"] = len(spj.route_geometry or [])
     payload["stops"] = []
     for stop in spj.stops:
         item = {key: value for key, value in vars(stop).items() if key != "evidence"}
@@ -222,22 +318,13 @@ class Spj:
     receipt: dict | None = None
 
 
-def _utc_now() -> str:
-    return datetime.now(UTC).isoformat()
-
-
-def _today() -> str:
-    return datetime.now(UTC).date().isoformat()
-
-
 def next_spj_number(store: SpjStore) -> str:
     """Next daily sequence number, read from the database (not the cache).
 
     Reading from SQLite is what makes the number multi-process safe: every
     worker sees committed numbers from other workers.
     """
-    today = datetime.now(UTC)
-    prefix = today.strftime("DLH-DKI/SPJ/%d-%m-%Y/")
+    prefix = local_today().strftime("DLH-DKI/SPJ/%d-%m-%Y/")
     with closing(store._connect()) as connection:
         row = connection.execute(
             "SELECT MAX(CAST(SUBSTR(spj_number, ?) AS INTEGER)) AS max_seq FROM spj WHERE spj_number LIKE ?",
@@ -347,10 +434,30 @@ class SpjStore:
                         photo_name TEXT NOT NULL,
                         photo_b64 TEXT NOT NULL,
                         total_weight_kg REAL,
+                        gross_weight_kg REAL,
+                        tare_weight_kg REAL,
+                        net_weight_kg REAL,
                         weight_source TEXT NOT NULL,
                         submitted_by TEXT NOT NULL,
                         operation_id TEXT,
-                        recorded_at TEXT NOT NULL
+                        recorded_at TEXT NOT NULL,
+                        ocr TEXT
+                    )
+                    """
+                )
+                # Gap 8: evidence photos live in their own table, numbered per SPJ
+                # (n = 1, 2, ...), so the SPJ cache and every JSON read stay small.
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS spj_evidence_photos (
+                        spj_id TEXT NOT NULL REFERENCES spj(spj_id) ON DELETE CASCADE,
+                        n INTEGER NOT NULL,
+                        stop_idx INTEGER NOT NULL,
+                        slot TEXT NOT NULL,
+                        photo_name TEXT NOT NULL,
+                        photo_b64 TEXT NOT NULL,
+                        recorded_at TEXT NOT NULL,
+                        PRIMARY KEY (spj_id, n)
                     )
                     """
                 )
@@ -368,6 +475,7 @@ class SpjStore:
                     """
                 )
                 self._migrate_receipt_columns(connection)
+                self._migrate_inline_photos(connection)
 
     @staticmethod
     def _migrate_receipt_columns(connection: sqlite3.Connection) -> None:
@@ -375,6 +483,76 @@ class SpjStore:
         columns = {row["name"] for row in connection.execute("PRAGMA table_info(spj_receipts)")}
         if columns and "operation_id" not in columns:
             connection.execute("ALTER TABLE spj_receipts ADD COLUMN operation_id TEXT")
+        # H10: the weighbridge weighs the loaded truck (gross); net = gross - tare.
+        # ocr: the reviewer-side OCR suggestion (JSON), kept apart from the weights.
+        for col, kind in (
+            ("gross_weight_kg", "REAL"),
+            ("tare_weight_kg", "REAL"),
+            ("net_weight_kg", "REAL"),
+            ("ocr", "TEXT"),
+        ):
+            if columns and col not in columns:
+                try:
+                    connection.execute(f"ALTER TABLE spj_receipts ADD COLUMN {col} {kind}")
+                except sqlite3.OperationalError as exc:
+                    # Another worker opening the same old database added it first.
+                    if "duplicate column" not in str(exc):
+                        raise
+
+    @classmethod
+    def _migrate_inline_photos(cls, connection: sqlite3.Connection) -> None:
+        """Move base64 photos still embedded in stop evidence into spj_evidence_photos.
+
+        Databases written before gap 8 kept every photo inside spj_stops.evidence;
+        after this runs once, no evidence row carries photo bytes.
+        """
+        rows = connection.execute(
+            "SELECT spj_id, idx, evidence FROM spj_stops WHERE evidence LIKE '%photo_b64%' ORDER BY spj_id, idx"
+        ).fetchall()
+        for row in rows:
+            try:
+                evidence = json.loads(row["evidence"])
+            except (TypeError, ValueError):
+                continue
+            stored = cls._store_photos(connection, row["spj_id"], row["idx"], evidence)
+            connection.execute(
+                "UPDATE spj_stops SET evidence=? WHERE spj_id=? AND idx=?",
+                (json.dumps(stored), row["spj_id"], row["idx"]),
+            )
+
+    @staticmethod
+    def _store_photos(connection: sqlite3.Connection, spj_id: str, stop_idx: int, evidence: dict) -> dict:
+        """Insert each evidence photo into spj_evidence_photos; return the evidence without bytes.
+
+        Every photo record keeps its photo_name and gains ``photo_ref`` (the per-SPJ
+        number n served by GET /api/spj/{id}/evidence/{n}).
+        """
+        stored = copy.deepcopy(evidence)
+        next_n = connection.execute(
+            "SELECT COALESCE(MAX(n), 0) + 1 FROM spj_evidence_photos WHERE spj_id=?", (spj_id,)
+        ).fetchone()[0]
+        for slot, record in evidence_photo_slots(stored):
+            photo = record.pop("photo_b64", None)
+            if not isinstance(photo, str) or not photo.strip():
+                continue
+            connection.execute(
+                "INSERT INTO spj_evidence_photos (spj_id, n, stop_idx, slot, photo_name, photo_b64, "
+                "recorded_at) VALUES (?,?,?,?,?,?,?)",
+                (spj_id, next_n, stop_idx, slot, str(record.get("photo_name") or ""), photo, _utc_now()),
+            )
+            record["photo_ref"] = next_n
+            next_n += 1
+        return stored
+
+    def evidence_photo(self, spj_id: str, n: int) -> dict | None:
+        """One stored evidence photo (bytes as stored: a data URL or bare base64)."""
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT n, stop_idx, slot, photo_name, photo_b64 FROM spj_evidence_photos "
+                "WHERE spj_id=? AND n=?",
+                (spj_id, n),
+            ).fetchone()
+        return dict(row) if row else None
 
     @staticmethod
     def _audit(
@@ -456,12 +634,16 @@ class SpjStore:
                         for key in (
                             "photo_name",
                             "total_weight_kg",
+                            "gross_weight_kg",
+                            "tare_weight_kg",
+                            "net_weight_kg",
                             "weight_source",
                             "submitted_by",
                             "recorded_at",
                         )
                     },
                     "has_photo": bool(receipt_row["has_photo"]),
+                    "ocr": json.loads(receipt_row["ocr"]) if receipt_row["ocr"] else None,
                 }
                 if receipt_row is not None
                 else None
@@ -476,7 +658,8 @@ class SpjStore:
             "SELECT * FROM spj_stops WHERE spj_id=? ORDER BY idx", (spj_id,)
         ).fetchall()
         receipt = connection.execute(
-            "SELECT photo_name, total_weight_kg, weight_source, submitted_by, "
+            "SELECT photo_name, total_weight_kg, gross_weight_kg, tare_weight_kg, net_weight_kg, "
+            "weight_source, submitted_by, ocr, "
             "recorded_at, (photo_b64 IS NOT NULL AND photo_b64 != '') AS has_photo "
             "FROM spj_receipts WHERE spj_id=?",
             (spj_id,),
@@ -668,18 +851,23 @@ class SpjStore:
         with self._lock:
             return self._spj.get(spj_id)
 
-    def list(self, status: str | None = None) -> list[Spj]:
+    def list(
+        self, status: str | None = None, truck_code: str | None = None, limit: int | None = None
+    ) -> list[Spj]:
         """Newest first, so a client can rely on position instead of guessing.
 
         Ordering by created_at descending is part of the contract: the driver
-        app picks the newest receipt-pending SPJ from this response.
+        app picks the newest receipt-pending SPJ from this response. ``limit``
+        keeps the newest N after the status/truck filters.
         """
         with self._lock:
             items = list(self._spj.values())
         items.sort(key=lambda s: (s.created_at, s.spj_number), reverse=True)
-        if status is None:
-            return items
-        return [s for s in items if s.status == status]
+        if status is not None:
+            items = [s for s in items if s.status == status]
+        if truck_code is not None:
+            items = [s for s in items if s.truck_code == truck_code]
+        return items if limit is None else items[: max(0, limit)]
 
     def active_for_truck(self, truck_code: str) -> Spj | None:
         with self._lock:
@@ -746,7 +934,7 @@ class SpjStore:
 
         return self._mutate(spj_id, mutate)
 
-    def activate(self, spj_id: str) -> Spj:
+    def activate(self, spj_id: str, actor: str | None = None) -> Spj:
         """Activate after resolving road-following compliance geometry (#58).
 
         Every leg (stops in order + destination) is resolved via OSRM
@@ -801,25 +989,37 @@ class SpjStore:
             # gsc P0-3: a DEMO stop may sit where no road links it to the
             # Jakarta destination, so only legs touching a DEMO stop are exempt:
             # every other leg must still resolve on the road network.
-            demo_exempt = (
-                source == "FALLBACK_DEGRADED"
-                and any(demo_points)
-                and all(
-                    road_route([waypoints[i], waypoints[i + 1]]).get("source") != "FALLBACK_DEGRADED"
-                    for i in range(len(waypoints) - 1)
-                    if not (demo_points[i] or demo_points[i + 1])
-                )
+            legs = (
+                [road_route([waypoints[i], waypoints[i + 1]]) for i in range(len(waypoints) - 1)]
+                if source == "FALLBACK_DEGRADED" and any(demo_points)
+                else []
+            )
+            demo_exempt = bool(legs) and all(
+                leg.get("source") != "FALLBACK_DEGRADED"
+                for i, leg in enumerate(legs)
+                if not (demo_points[i] or demo_points[i + 1])
             )
             if demo_exempt:
-                # The straight line stays labelled FALLBACK_DEGRADED and the
-                # audit trail names the DEMO cause.
+                # gsc #6: stitch the geometry leg by leg, so a leg that does
+                # resolve (stop 1 → a DEMO stop near it) keeps its road
+                # geometry for the AR street path, and only the unresolved
+                # legs are straight stop-to-stop segments. The SPJ as a whole
+                # stays labelled FALLBACK_DEGRADED and the audit trail names
+                # the DEMO cause and how many legs follow roads.
+                stitched: list[dict] = []
+                for leg in legs:
+                    for point in leg.get("geometry", []):
+                        if not stitched or stitched[-1] != point:
+                            stitched.append(point)
+                route = {**route, "geometry": stitched}
+                road_legs = sum(1 for leg in legs if leg.get("source") != "FALLBACK_DEGRADED")
                 self._audit(
                     connection,
                     spj_id,
                     "demo_straight_fallback",
-                    row["created_by"],
+                    actor or row["created_by"],
                     reason="DEMO stop: activated with unresolved road geometry",
-                    payload={"source": source},
+                    payload={"source": source, "road_legs": road_legs, "legs": len(legs)},
                 )
             elif source == "FALLBACK_DEGRADED":
                 if getenv("SPJ_STRAIGHT_FALLBACK", "off").lower() != "on":
@@ -832,7 +1032,7 @@ class SpjStore:
                     connection,
                     spj_id,
                     "straight_fallback",
-                    row["created_by"],
+                    actor or row["created_by"],
                     reason="PYTHIA_SPJ_STRAIGHT_FALLBACK=on: activated with unresolved road geometry",
                     payload={"source": source},
                 )
@@ -847,7 +1047,7 @@ class SpjStore:
                 connection,
                 spj_id,
                 "activate",
-                row["created_by"],
+                actor or row["created_by"],
                 payload={"route_source": source, "route_points": len(geometry)},
             )
 
@@ -865,6 +1065,9 @@ class SpjStore:
             row = self._fetch_status(connection, spj_id)
             if row["status"] != "aktif":
                 raise ValueError("stops can only be completed on an active SPJ")
+            # Gap 6: the audit names who did it; legacy callers without an actor
+            # fall back to the SPJ's creator as before.
+            who = actor or row["created_by"]
             stops = connection.execute(
                 "SELECT idx, status, location_type FROM spj_stops WHERE spj_id=? ORDER BY idx", (spj_id,)
             ).fetchall()
@@ -885,7 +1088,7 @@ class SpjStore:
                     raise ValueError("stop completion requires field evidence (arrival, weighing, officer)")
                 # Audited supervisor override closing this stop without
                 # evidence (PR #90 #63): reason >= 10 chars, actor named.
-                checked = _validate_override(override, actor or row["created_by"])
+                checked = _validate_override(override, who)
                 connection.execute(
                     "UPDATE spj_stops SET status='completed', completed_at=?, "
                     "override=? WHERE spj_id=? AND idx=?",
@@ -900,15 +1103,18 @@ class SpjStore:
                     payload={"stop_index": index},
                 )
             else:
-                _validate_evidence(evidence, demo=stops[index]["location_type"] == DEMO_LOCATION_TYPE)
+                _validate_evidence(
+                    evidence,
+                    demo=stops[index]["location_type"] == DEMO_LOCATION_TYPE,
+                    weigh_on_site=bool(row["weigh_on_site"]),
+                )
+                stored = self._store_photos(connection, spj_id, index, evidence)
                 connection.execute(
                     "UPDATE spj_stops SET status='completed', completed_at=?, "
                     "evidence=? WHERE spj_id=? AND idx=?",
-                    (_utc_now(), json.dumps(evidence), spj_id, index),
+                    (_utc_now(), json.dumps(stored), spj_id, index),
                 )
-                self._audit(
-                    connection, spj_id, "complete_stop", row["created_by"], payload={"stop_index": index}
-                )
+                self._audit(connection, spj_id, "complete_stop", who, payload={"stop_index": index})
             pending = connection.execute(
                 "SELECT COUNT(*) FROM spj_stops WHERE spj_id=? AND status != 'completed'", (spj_id,)
             ).fetchone()[0]
@@ -928,8 +1134,18 @@ class SpjStore:
         weight_source: str,
         submitted_by: str = "driver",
         operation_id: str | None = None,
+        tare_weight_kg: float | None = None,
+        ocr: dict | None = None,
     ) -> Spj:
         """Attach the weighbridge receipt exactly once.
+
+        ``ocr`` is the initial reviewer-side OCR block (``receipt_ocr_record``);
+        it is stored beside the weights and never changes them.
+
+        ``total_weight_kg`` is what the weighbridge shows for the loaded truck: the
+        GROSS weight (H10). With ``tare_weight_kg`` the receipt also stores
+        ``net_weight_kg = gross - tare``, the waste actually delivered; without a
+        tare the net stays null rather than being guessed.
 
         The photo lives in its own table: the SPJ cache reloads every record
         on mutation, and a multi-megabyte image must not ride along.
@@ -951,6 +1167,13 @@ class SpjStore:
                 raise ValueError("receipt photo_name and photo_b64 are required")
             if total_weight_kg is not None and not (0 < total_weight_kg <= MAX_STOP_WEIGHT_KG):
                 raise ValueError(f"total_weight_kg must be 0 < w <= {MAX_STOP_WEIGHT_KG}")
+            net_weight_kg = None
+            if tare_weight_kg is not None:
+                if total_weight_kg is None:
+                    raise ValueError("tare_weight_kg needs the gross weight (total_weight_kg)")
+                if not (0 < tare_weight_kg < total_weight_kg):
+                    raise ValueError("tare_weight_kg must be 0 < tare < gross (total_weight_kg)")
+                net_weight_kg = round(total_weight_kg - tare_weight_kg, 1)
             existing = connection.execute("SELECT * FROM spj_receipts WHERE spj_id=?", (spj_id,)).fetchone()
             if existing is not None:
                 if operation_id and existing["operation_id"] == operation_id:
@@ -958,17 +1181,22 @@ class SpjStore:
                 raise ValueError("receipt already submitted")
             connection.execute(
                 "INSERT INTO spj_receipts (spj_id, photo_name, photo_b64, "
-                "total_weight_kg, weight_source, submitted_by, operation_id, "
-                "recorded_at) VALUES (?,?,?,?,?,?,?,?)",
+                "total_weight_kg, gross_weight_kg, tare_weight_kg, net_weight_kg, "
+                "weight_source, submitted_by, operation_id, "
+                "recorded_at, ocr) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     spj_id,
                     photo_name,
                     photo_b64,
                     total_weight_kg,
+                    total_weight_kg,
+                    tare_weight_kg,
+                    net_weight_kg,
                     weight_source,
                     submitted_by,
                     operation_id,
                     _utc_now(),
+                    json.dumps(ocr) if ocr is not None else None,
                 ),
             )
             self._audit(
@@ -978,6 +1206,8 @@ class SpjStore:
                 submitted_by,
                 payload={
                     "total_weight_kg": total_weight_kg,
+                    "tare_weight_kg": tare_weight_kg,
+                    "net_weight_kg": net_weight_kg,
                     "weight_source": weight_source,
                     "photo_name": photo_name,
                     "operation_id": operation_id,
@@ -993,6 +1223,112 @@ class SpjStore:
                 "SELECT photo_b64 FROM spj_receipts WHERE spj_id=?", (spj_id,)
             ).fetchone()
         return row["photo_b64"] if row else None
+
+    def set_receipt_ocr(self, spj_id: str, ocr: dict) -> Spj:
+        """Store the OCR outcome beside the receipt; the recorded weights stay untouched.
+
+        A reviewer may already have corrected the receipt while the OCR ran: the
+        suggestion is then filed for audit and the review status is kept.
+        """
+
+        def mutate(connection):
+            row = connection.execute("SELECT ocr FROM spj_receipts WHERE spj_id=?", (spj_id,)).fetchone()
+            if row is None:
+                raise ValueError("no receipt recorded for this SPJ")
+            current = json.loads(row["ocr"]) if row["ocr"] else {}
+            stored = dict(ocr)
+            if current.get("status") in RECEIPT_OCR_REVIEWED:
+                for key in ("status", "reviewed_by", "reviewed_at"):
+                    stored[key] = current.get(key)
+            connection.execute("UPDATE spj_receipts SET ocr=? WHERE spj_id=?", (json.dumps(stored), spj_id))
+            self._audit(
+                connection,
+                spj_id,
+                "receipt_ocr",
+                "system:ocr",
+                payload={
+                    key: stored.get(key) for key in ("status", "gross_kg", "confidence", "source", "reason")
+                },
+            )
+
+        return self._mutate(spj_id, mutate)
+
+    def review_receipt(
+        self,
+        spj_id: str,
+        action: str,
+        actor: str,
+        gross_weight_kg: float | None = None,
+        tare_weight_kg: float | None = None,
+    ) -> Spj:
+        """A reviewer confirms the OCR suggestion or corrects the recorded weights, once.
+
+        ``confirm`` copies the OCR gross into the recorded gross (the recorded tare
+        is kept); ``correct`` records the weights the reviewer typed. The OCR
+        suggestion stays on the receipt and the previous weights go to the audit.
+        """
+
+        def mutate(connection):
+            row = connection.execute("SELECT * FROM spj_receipts WHERE spj_id=?", (spj_id,)).fetchone()
+            if row is None:
+                raise ValueError("no receipt recorded for this SPJ")
+            ocr = (
+                json.loads(row["ocr"])
+                if row["ocr"]
+                else receipt_ocr_record("unavailable", "no OCR ran for this receipt")
+            )
+            if ocr.get("status") in RECEIPT_OCR_REVIEWED:
+                raise ValueError(f"receipt already reviewed ({ocr['status']})")
+            if action == "confirm":
+                gross = ocr.get("gross_kg")
+                if ocr.get("status") != "unreviewed" or gross is None:
+                    raise ValueError(
+                        "there is no OCR weight to confirm; correct it with the ticket's weights"
+                    )
+                tare = row["tare_weight_kg"]
+                source, status = "ocr_confirmed", "confirmed"
+            elif action == "correct":
+                gross, tare = gross_weight_kg, tare_weight_kg
+                if gross is None:
+                    raise ValueError("a correction needs gross_weight_kg")
+                source, status = "reviewer_corrected", "corrected"
+            else:
+                raise ValueError("action must be confirm or correct")
+            if not (0 < gross <= MAX_STOP_WEIGHT_KG):
+                raise ValueError(f"gross_weight_kg must be 0 < w <= {MAX_STOP_WEIGHT_KG}")
+            if tare is not None and not (0 < tare < gross):
+                raise ValueError("tare_weight_kg must be 0 < tare < gross")
+            net = round(gross - tare, 1) if tare is not None else None
+            reviewed = {**ocr, "status": status, "reviewed_by": actor, "reviewed_at": _utc_now()}
+            connection.execute(
+                "UPDATE spj_receipts SET total_weight_kg=?, gross_weight_kg=?, tare_weight_kg=?, "
+                "net_weight_kg=?, weight_source=?, ocr=? WHERE spj_id=?",
+                (gross, gross, tare, net, source, json.dumps(reviewed), spj_id),
+            )
+            self._audit(
+                connection,
+                spj_id,
+                "receipt_review",
+                actor,
+                payload={
+                    "action": action,
+                    "previous": {
+                        "gross_weight_kg": row["gross_weight_kg"],
+                        "tare_weight_kg": row["tare_weight_kg"],
+                        "net_weight_kg": row["net_weight_kg"],
+                        "weight_source": row["weight_source"],
+                    },
+                    "recorded": {
+                        "gross_weight_kg": gross,
+                        "tare_weight_kg": tare,
+                        "net_weight_kg": net,
+                        "weight_source": source,
+                    },
+                    "ocr_suggestion": {key: ocr.get(key) for key in ("gross_kg", "confidence", "source")},
+                },
+            )
+
+        return self._mutate(spj_id, mutate)
 
     def complete(self, spj_id: str, override: dict | None = None, actor: str | None = None) -> Spj:
         """Close an active SPJ.
@@ -1054,17 +1390,41 @@ class SpjStore:
                     payload={"forced_stops": unevidenced},
                 )
             else:
-                self._audit(connection, spj_id, "complete", row["created_by"])
+                self._audit(connection, spj_id, "complete", actor or row["created_by"])
 
         return self._mutate(spj_id, mutate)
 
-    def cancel(self, spj_id: str) -> Spj:
+    def cancel(self, spj_id: str, actor: str | None = None) -> Spj:
         def mutate(connection):
             row = self._fetch_status(connection, spj_id)
             if row["status"] not in ("draft", "aktif"):
                 raise ValueError(f"cannot cancel SPJ in status '{row['status']}'")
             connection.execute("UPDATE spj SET status='batal' WHERE spj_id=?", (spj_id,))
-            self._audit(connection, spj_id, "cancel", row["created_by"])
+            self._audit(connection, spj_id, "cancel", actor or row["created_by"])
+
+        return self._mutate(spj_id, mutate)
+
+    # -- driver safety: gate-arrival event (app.field.safety) -----------------
+
+    def record_gate_arrival(self, spj_id: str, actor: str, arrived_at: str) -> Spj:
+        """Record once that the truck reached the disposal gate (audit action ``gate_arrival``).
+
+        The gate wait runs from this event to the weighbridge receipt. A repeat is
+        a no-op, so an offline replay never moves the first arrival. ``arrived_at``
+        is an ISO timestamp already bounds-checked by the caller.
+        """
+
+        def mutate(connection):
+            row = self._fetch_status(connection, spj_id)
+            if row["status"] not in ("aktif", "selesai"):
+                raise ValueError(f"cannot record a gate arrival for SPJ in status '{row['status']}'")
+            if connection.execute(
+                "SELECT 1 FROM spj_audit WHERE spj_id=? AND action='gate_arrival'", (spj_id,)
+            ).fetchone():
+                return
+            if connection.execute("SELECT 1 FROM spj_receipts WHERE spj_id=?", (spj_id,)).fetchone():
+                raise ValueError("the weighbridge receipt is already recorded; the gate wait is closed")
+            self._audit(connection, spj_id, "gate_arrival", actor, payload={"arrived_at": arrived_at})
 
         return self._mutate(spj_id, mutate)
 

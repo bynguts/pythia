@@ -242,3 +242,54 @@ def test_demo_exemption_applies_when_only_demo_legs_are_unresolved():
     assert spj.status == "aktif"
     assert spj.route_source == "FALLBACK_DEGRADED"
     assert any(e["action"] == "demo_straight_fallback" for e in store.audit_log(spj_id))
+
+
+# ── gsc #6: a DEMO SPJ keeps the road geometry of every leg that resolves ──
+
+# A second DEMO fix 300 m north of the first, reachable by road.
+NEAR_LAT = FAR_LAT + 0.0027
+ROAD_CORNER = (FAR_LAT, FAR_LNG + 0.002)
+
+
+def _road_between_demo_fixes(coords):
+    # Only the leg between the two DEMO fixes resolves (via a corner); any
+    # call that reaches the Jakarta destination degrades to a straight line.
+    if len(coords) == 2 and all(lat > 30 for lat, _ in coords):
+        (a_lat, a_lng), (b_lat, b_lng) = coords
+        geometry = [(a_lat, a_lng), ROAD_CORNER, (b_lat, ROAD_CORNER[1]), (b_lat, b_lng)]
+        return {**_straight(geometry), "source": "LIVE_EXTERNAL"}
+    return _straight(coords)
+
+
+def test_demo_leg_from_stop_1_keeps_its_road_geometry_while_the_spj_stays_degraded():
+    store = SpjStore(persist_path=fresh_store_path("spj_demo_leg_road.db"))
+    spj_id = _draft(store, demo=True, truck="T-D9")
+    store.add_stop(spj_id, "Lokasi operator 2", "DEMO", "DEMO", NEAR_LAT, FAR_LNG, demo=True)
+    with (
+        mock.patch.dict(os.environ, {"PYTHIA_SPJ_STRAIGHT_FALLBACK": "off"}),
+        mock.patch("app.field.spj.road_route", side_effect=_road_between_demo_fixes),
+    ):
+        spj = store.activate(spj_id)
+    # Honest label: the SPJ as a whole is not road-resolved.
+    assert spj.route_source == "FALLBACK_DEGRADED"
+    geometry = [tuple(p) for p in spj.route_geometry]
+    # Stop 1 → stop 2 follows the road (the corner vertices are kept) ...
+    assert geometry[:4] == [(FAR_LAT, FAR_LNG), ROAD_CORNER, (NEAR_LAT, ROAD_CORNER[1]), (NEAR_LAT, FAR_LNG)]
+    # ... and only the unresolved hop to the destination is a straight segment.
+    assert len(geometry) == 5
+    assert geometry[-1] != geometry[-2]
+    audit = next(e for e in store.audit_log(spj_id) if e["action"] == "demo_straight_fallback")
+    assert audit["payload"]["road_legs"] == 1
+    assert audit["payload"]["legs"] == 2
+
+
+def test_demo_spj_with_no_resolvable_leg_stays_a_straight_line():
+    store = SpjStore(persist_path=fresh_store_path("spj_demo_leg_none.db"))
+    spj_id = _draft(store, demo=True, truck="T-D10")
+    with (
+        mock.patch.dict(os.environ, {"PYTHIA_SPJ_STRAIGHT_FALLBACK": "off"}),
+        mock.patch("app.field.spj.road_route", side_effect=_straight),
+    ):
+        spj = store.activate(spj_id)
+    assert spj.route_source == "FALLBACK_DEGRADED"
+    assert len(spj.route_geometry) == 2  # the DEMO fix and the destination, nothing else

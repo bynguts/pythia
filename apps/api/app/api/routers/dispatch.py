@@ -6,23 +6,44 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.deps import require_any_permission, require_permission
+from app.api.deps import (
+    ensure_truck_access,
+    require_any_permission,
+    require_any_principal,
+    require_permission,
+)
 from app.api.schemas import DispatchConfirmRequest, DispatchRequest
 from app.api.state import dispatch_center, history_store
+from app.field.privacy import mask_phones_in_text
 
 router = APIRouter()
 
 
+def _masked_event(event: dict) -> dict:
+    """Phone numbers / WhatsApp JIDs in event payloads leave the API masked (62812****7890).
+
+    Events written before masking existed (e.g. whatsapp_alert recipients) are
+    masked here on the way out, so no stored number is ever served in full.
+    """
+    payload = event.get("payload")
+    if isinstance(payload, dict):
+        payload = {k: mask_phones_in_text(v) if isinstance(v, str) else v for k, v in payload.items()}
+    return {**event, "payload": payload}
+
+
 @router.get("/api/history")
-def history() -> list[dict]:
-    return history_store.list_events()
+def history(_role: str = Depends(require_permission("history:read"))) -> list[dict]:
+    """The operational event log (gap 7: personal data, so history:read only)."""
+    return [_masked_event(event) for event in history_store.list_events()]
 
 
 FOLLOW_UP_STATUSES = {"OPEN", "DISPATCHED", "RESOLVED"}
 
 
 @router.get("/api/alert/follow-ups")
-def alert_follow_ups() -> list[dict]:
+def alert_follow_ups(
+    _role: str = Depends(require_any_permission("dashboard:read", "history:read")),
+) -> list[dict]:
     """Audit trail of alert follow-ups (OPEN -> DISPATCHED -> RESOLVED)."""
     return [
         event for event in history_store.list_events(limit=200) if event["event_type"] == "alert_followup"
@@ -61,7 +82,12 @@ def create_dispatch(
 
 
 @router.get("/api/dispatch/{truck_code}")
-def pending_dispatches(truck_code: str) -> list[dict]:
+def pending_dispatches(
+    truck_code: str,
+    principal: dict = Depends(require_any_principal("dispatch:confirm", "dispatch:create", "dashboard:read")),
+) -> list[dict]:
+    """Pending instructions for one truck; a truck-bound driver account reads only its own."""
+    ensure_truck_access(principal, truck_code)
     return history_store.pending_dispatches(truck_code)
 
 

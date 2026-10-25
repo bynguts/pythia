@@ -12,6 +12,7 @@ from app.api.deps import require_any_permission, require_permission
 from app.api.schemas import WhatsAppAlertRequest
 from app.api.state import history_store
 from app.core.paths import DRIVER_CONTACTS_EXAMPLE_FILE, DRIVER_CONTACTS_FILE
+from app.field.privacy import mask_phones_in_text
 from app.integrations.whatsapp import (
     OpenWAClient,
     build_alert_message,
@@ -21,6 +22,16 @@ from app.integrations.whatsapp import (
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# H6: what the gateway is. Shown with every status read so nobody mistakes the
+# prototype's transport for an official WhatsApp channel.
+GATEWAY_PROVENANCE = {
+    "classification": "UNOFFICIAL_CLIENT",
+    "label": (
+        "Baileys (unofficial WhatsApp Web client) — a government pilot would use the "
+        "WhatsApp Business Platform"
+    ),
+}
 
 
 # Module attributes so tests can point them at temporary files.
@@ -168,6 +179,7 @@ def whatsapp_status(
         "state": health.get("state"),
         "base_url": client.base_url,
         "session_id": client.session_id,
+        "provenance": GATEWAY_PROVENANCE,
     }
 
 
@@ -217,7 +229,8 @@ def whatsapp_alert(
         history_store.record_event(
             "whatsapp_alert",
             {
-                "recipient": f"Driver: {driver_name} ({driver_jid})",
+                # Gap 7: the history log never stores a full phone number.
+                "recipient": f"Driver: {driver_name} ({mask_phones_in_text(driver_jid)})",
                 "truck_code": payload.truck_code,
                 "sent": res_driver.get("sent", False),
                 "message": res_driver.get("message", ""),
@@ -240,7 +253,7 @@ def whatsapp_alert(
         history_store.record_event(
             "whatsapp_alert",
             {
-                "recipient": f"Group: {group_jid}",
+                "recipient": f"Group: {mask_phones_in_text(group_jid)}",
                 "truck_code": payload.truck_code,
                 "sent": res_group.get("sent", False),
                 "message": res_group.get("message", ""),

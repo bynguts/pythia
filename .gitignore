@@ -54,6 +54,10 @@ pythia_*.db*
 
 # Real driver WhatsApp numbers (template: apps/api/driver_contacts.example.json)
 driver_contacts.json
+# Real personal accounts and password hashes (template: apps/api/users.example.json)
+users.json
+# Recorded demo-day weather (python -m app.forecast.weather save); local per demo
+apps/api/data/weather_snapshot.json
 
 # --- Local-only material ---
 

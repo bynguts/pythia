@@ -133,3 +133,108 @@ def test_contacts_refuses_to_shrink(api_client, auth_headers):
         "/api/whatsapp/contacts", json={"drivers": {}}, headers=auth_headers("administrator")
     )
     assert res.status_code == 409
+
+
+# --- Gap 7: personal data is behind login ----------------------------------------
+
+PERSONAL_DATA_READS = [
+    "/api/spj",
+    "/api/spj/none",
+    "/api/spj/none/evidence-summary",
+    "/api/spj/none/evidence/1",
+    "/api/spj/none/evidence/1/thumb",
+    "/api/spj/none/audit",
+    "/api/history",
+    "/api/alert/follow-ups",
+    "/api/compliance/drivers",
+    "/api/compliance/drivers/Pengemudi%20Sim%2001",
+    "/api/dispatch/T-001",
+    "/api/pretrip/today/T-001",
+    "/api/damage-reports",
+    "/api/service-records",
+    "/api/service-records/due-soon",
+]
+
+
+@pytest.mark.parametrize("path", PERSONAL_DATA_READS)
+def test_personal_data_reads_need_a_session(api_client, path):
+    res = api_client.get(path)
+    assert res.status_code == 401, f"{path} expected 401, got {res.status_code}: {res.text[:200]}"
+
+
+@pytest.mark.parametrize("path", PERSONAL_DATA_READS)
+def test_personal_data_reads_pass_for_an_operator(api_client, auth_headers, path):
+    res = api_client.get(path, headers=auth_headers("administrator"))
+    assert res.status_code not in (401, 403), f"{path}: {res.status_code} {res.text[:200]}"
+
+
+@pytest.mark.parametrize(
+    "path", ["/api/history", "/api/compliance/drivers", "/api/damage-reports", "/api/service-records"]
+)
+def test_driver_token_cannot_read_other_peoples_records(api_client, auth_headers, path):
+    assert api_client.get(path, headers=auth_headers("driver")).status_code == 403
+
+
+def _active_spj(api_client, headers, truck_code: str) -> str:
+    created = api_client.post(
+        "/api/spj",
+        json={
+            "driver_name": "Pengemudi Sim 07",
+            "truck_code": truck_code,
+            "destination": "TPST Bantargebang",
+            "stops": [
+                {"name": "TPS A", "kecamatan": "Gambir", "address": "Jl. A", "lat": -6.17, "lng": 106.82},
+                {"name": "TPS B", "kecamatan": "Gambir", "address": "Jl. B", "lat": -6.18, "lng": 106.83},
+            ],
+        },
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    spj_id = created.json()["spj_id"]
+    activated = api_client.post(f"/api/spj/{spj_id}/activate", headers=headers)
+    assert activated.status_code == 200, activated.text
+    return spj_id
+
+
+def test_shared_driver_token_reads_an_spj_without_photo_bytes(api_client, auth_headers):
+    spj_id = _active_spj(api_client, auth_headers("dispatcher"), "T-AUTH-DRV")
+    res = api_client.get(f"/api/spj/{spj_id}", headers=auth_headers("driver"))
+    assert res.status_code == 200
+    assert "photo_b64" not in res.text
+    api_client.post(f"/api/spj/{spj_id}/cancel", headers=auth_headers("dispatcher"))
+
+
+# --- Gap 4: the per-stop override needs spj:override ---------------------------------
+
+
+@pytest.mark.parametrize("role", ["driver", "dispatcher"])
+def test_per_stop_override_is_forbidden_without_spj_override(api_client, auth_headers, role):
+    spj_id = _active_spj(api_client, auth_headers("dispatcher"), f"T-AUTH-OVR-{role[:3].upper()}")
+    res = api_client.post(
+        f"/api/spj/{spj_id}/stops/1/complete",
+        json={"override": {"reason": "Truk mogok, titik ditutup tanpa bukti"}},
+        headers=auth_headers(role),
+    )
+    assert res.status_code == 403, res.text
+    detail = api_client.get(f"/api/spj/{spj_id}", headers=auth_headers("dispatcher")).json()
+    assert [s["status"] for s in detail["stops"]] == ["pending", "pending"]
+    api_client.post(f"/api/spj/{spj_id}/cancel", headers=auth_headers("dispatcher"))
+
+
+def test_supervisor_per_stop_override_is_audited_with_the_actor(api_client, auth_headers):
+    spj_id = _active_spj(api_client, auth_headers("dispatcher"), "T-AUTH-OVR-SUP")
+    res = api_client.post(
+        f"/api/spj/{spj_id}/stops/0/complete",
+        json={"override": {"reason": "Akses jalan ditutup banjir, dicek pengawas"}},
+        headers=auth_headers("supervisor"),
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["stops"][0]["override"]["actor"] == "supervisor"
+    audit = api_client.get(f"/api/spj/{spj_id}/audit", headers=auth_headers("supervisor")).json()["audit"]
+    overrides = [entry for entry in audit if entry["action"] == "override"]
+    assert overrides and overrides[-1]["actor"] == "supervisor"
+    # Creation and activation are attributed to the dispatcher who did them, not "admin".
+    assert {entry["actor"] for entry in audit if entry["action"] in ("activate", "straight_fallback")} == {
+        "dispatcher"
+    }
+    api_client.post(f"/api/spj/{spj_id}/cancel", headers=auth_headers("dispatcher"))

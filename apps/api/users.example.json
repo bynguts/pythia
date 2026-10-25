@@ -1,0 +1,24 @@
+{
+  "_comment": "TEMPLATE with placeholder people only. Copy to users.json (git-ignored), replace every password_hash with `python -m app.core.auth hash <password>`, and point PYTHIA_USERS_FILE at it. Every example hash below is for the password 'ganti-password-ini' and must not be used.",
+  "users": [
+    {
+      "username": "sopir.contoh01",
+      "password_hash": "pbkdf2_sha256$260000$VZ3M0jVTcbcA5Y+JoQS4nA==$dqX1XA6kH+DmnScmh/gAYwKaOASv0SYGNWxsSxFPrjs=",
+      "role": "driver",
+      "truck_code": "T-088",
+      "display_name": "Pengemudi Contoh 01"
+    },
+    {
+      "username": "pengawas.contoh",
+      "password_hash": "pbkdf2_sha256$260000$ogwGuS/q8klUGGMdOndRdg==$Z5TrpaViuYzeWNfKiXMnJPwgvannmLEB3+zRrAM2W88=",
+      "role": "supervisor",
+      "display_name": "Pengawas Contoh"
+    },
+    {
+      "username": "dispatcher.contoh",
+      "password_hash": "pbkdf2_sha256$260000$+n6IKP+6hhBGt+T+hUEUbQ==$Mu7AXkc/lBMSE/bUf6OhjJwZTZp/KsMPx6hVmSUlAIg=",
+      "role": "dispatcher",
+      "display_name": "Dispatcher Contoh"
+    }
+  ]
+}

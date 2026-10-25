@@ -1,14 +1,15 @@
 """Evidence-based driver compliance scoring (Fase 3).
 
-Every deduction traces to real records: fleet deviation state, SPJ stop
-evidence, damage reports, and pre-trip records. classification="derived"
-per the provenance convention in app/impact.py.
+Every deduction traces to a record: fleet deviation state (SIMULATED fleet),
+SPJ stop evidence, damage reports, and pre-trip records. classification="derived"
+per the provenance convention in app/impact.py; `inputs` labels each term.
 """
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
+from app.core.env import local_now, local_today
 from app.field.damage_reports import DAMAGE_STORE
 from app.field.pretrip import PRETRIP_STORE
 from app.field.spj import SPJ_STORE
@@ -36,17 +37,26 @@ def _window_start(today: date) -> date:
     return today - timedelta(days=WINDOW_DAYS)
 
 
-def _in_window(iso_ts: str | None, start: date) -> bool:
+def _local_day(iso_ts: str | None) -> date | None:
+    """The Asia/Jakarta day of a stored timestamp (stored in UTC; a bare date is kept as is)."""
     if not iso_ts:
-        return False
+        return None
     try:
-        return date.fromisoformat(iso_ts[:10]) >= start
+        stamp = datetime.fromisoformat(iso_ts)
     except ValueError:
-        return False
+        return None
+    if stamp.tzinfo is None:
+        return stamp.date()
+    return stamp.astimezone(local_now().tzinfo).date()
+
+
+def _in_window(iso_ts: str | None, start: date) -> bool:
+    day = _local_day(iso_ts)
+    return day is not None and day >= start
 
 
 def compute_driver_score(driver_name: str, truck_codes: list[str], today: str | None = None) -> dict:
-    ref = date.fromisoformat(today) if today else date.today()
+    ref = date.fromisoformat(today) if today else local_today()
     start = _window_start(ref)
     codes = set(truck_codes)
 
@@ -63,11 +73,15 @@ def compute_driver_score(driver_name: str, truck_codes: list[str], today: str | 
     for spj in SPJ_STORE.list():
         if spj.truck_code not in codes:
             continue
-        spj_dates.add(spj.created_at[:10])
+        spj_dates.add(spj.date)
+        # Late = closed on a later WIB working day than the SPJ's own date (gap 10:
+        # an early-shift SPJ is not "late" just because UTC rolled over at 07:00 WIB).
+        completed_day = _local_day(spj.completed_at)
         if (
             spj.status == "selesai"
             and _in_window(spj.completed_at, start)
-            and (spj.completed_at or "")[:10] > spj.date
+            and completed_day is not None
+            and completed_day.isoformat() > spj.date
         ):
             late_completions += 1
         for stop in spj.stops:
@@ -124,6 +138,15 @@ def compute_driver_score(driver_name: str, truck_codes: list[str], today: str | 
         "computed_at": ref.isoformat(),
         "window_days": WINDOW_DAYS,
         "classification": "derived",
+        # H11: the deviation term reads the simulated fleet, so the score mixes
+        # simulated and recorded inputs; each input says which it is.
+        "inputs": {
+            "deviation": "SIMULATED",
+            "spj": "REAL_RECORD",
+            "damage_reports": "REAL_RECORD",
+            "pretrip": "REAL_RECORD",
+        },
+        "inputs_note": "Deviation counts come from the simulated fleet, not from truck GPS.",
     }
 
 

@@ -2,14 +2,25 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
+import io
 import logging
+import re
 from dataclasses import asdict as _asdict
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, Field
 
-from app.api.deps import require_any_permission, require_permission
+from app.api.deps import (
+    ensure_truck_access,
+    require_any_principal,
+    require_permission,
+)
+from app.api.routers.safety import enforce_duty_limit
 from app.api.schemas import (
+    MAX_RECEIPT_WEIGHT_KG,
     SpjCompleteBody,
     SpjCompleteOverrideBody,
     SpjCreateBody,
@@ -19,12 +30,60 @@ from app.api.schemas import (
 from app.api.state import _refresh_fleet_caches, history_store
 from app.core.auth import has_permission
 from app.core.storage import StorageError
-from app.field.spj import SPJ_STORE, destination_provenance, spj_summary_payload
+from app.field import timbangan_ocr
+from app.field.spj import (
+    SPJ_STORE,
+    arrival_geotag,
+    destination_provenance,
+    evidence_photo_slots,
+    receipt_ocr_record,
+    spj_summary_payload,
+)
 from app.field.spj import active_path_for as spj_active_path
 from app.fleet.facilities import DESTINATIONS
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Gap 7: SPJ records name drivers and TPS officers and hold their photos, so
+# every read needs a session. Drivers read through their field token; a
+# personal driver account (PYTHIA_USERS_FILE with a truck_code) sees only its truck.
+READ_PERMISSIONS = ("dashboard:read", "dispatch:create", "dispatch:confirm", "history:read")
+# Evidence photos show faces: operators, auditors and the driver who took them.
+EVIDENCE_PERMISSIONS = ("dispatch:confirm", "dispatch:create", "history:read")
+# Reviewing a receipt weight: dispatchers, supervisors and administrators. The
+# driver who submitted the receipt (dispatch:confirm only) cannot sign it off.
+RECEIPT_REVIEW_PERMISSION = "dispatch:create"
+
+# H10: what each receipt weight means. The weighbridge weighs the loaded truck.
+RECEIPT_WEIGHT_LABELS = {
+    "gross_weight_kg": "Gross: loaded truck on the weighbridge (includes the truck's tare)",
+    "tare_weight_kg": "Tare: the empty truck",
+    "net_weight_kg": "Net: gross minus tare, the waste actually delivered",
+}
+
+_SAFE_IMAGE_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
+_THUMB_SIZE = (320, 320)
+
+
+class SpjReceiptTareBody(SpjReceiptBody):
+    """Receipt body plus the optional tare, so the server can store the net weight."""
+
+    tare_weight_kg: float | None = Field(
+        default=None,
+        gt=0,
+        le=MAX_RECEIPT_WEIGHT_KG,
+        allow_inf_nan=False,
+        description="Empty-truck weight in kg; with it the receipt stores net = gross - tare.",
+    )
+
+
+class SpjReceiptReviewBody(BaseModel):
+    """confirm: record the OCR gross. correct: record the weights typed here."""
+
+    action: Literal["confirm", "correct"]
+    gross_weight_kg: float | None = Field(default=None, gt=0, le=MAX_RECEIPT_WEIGHT_KG, allow_inf_nan=False)
+    tare_weight_kg: float | None = Field(default=None, gt=0, le=MAX_RECEIPT_WEIGHT_KG, allow_inf_nan=False)
 
 
 def _receipt_payload(receipt) -> dict[str, Any] | None:
@@ -35,25 +94,55 @@ def _receipt_payload(receipt) -> dict[str, Any] | None:
     """
     if receipt is None:
         return None
+    gross = receipt.get("gross_weight_kg")
     return {
         "photo_name": receipt.get("photo_name"),
+        # Legacy name for the gross weight; kept so existing clients keep working.
         "total_weight_kg": receipt.get("total_weight_kg"),
+        "gross_weight_kg": gross if gross is not None else receipt.get("total_weight_kg"),
+        "tare_weight_kg": receipt.get("tare_weight_kg"),
+        "net_weight_kg": receipt.get("net_weight_kg"),
+        "weight_labels": RECEIPT_WEIGHT_LABELS,
         "weight_source": receipt.get("weight_source"),
         "submitted_by": receipt.get("submitted_by"),
         "recorded_at": receipt.get("recorded_at"),
         "has_photo": bool(receipt.get("has_photo")),
+        # MODEL OUTPUT suggestion (status pending | unavailable | unreviewed |
+        # confirmed | corrected); the weights above are only what was recorded.
+        "ocr": receipt.get("ocr"),
     }
 
 
 def _spj_payload(spj) -> dict[str, Any]:
-    """Detail projection: receipt metadata plus a media reference, no bytes.
+    """Detail projection: metadata and media references, never image bytes.
 
-    The receipt image is multi-megabyte; clients fetch it from the
-    receipt-photo endpoint only when they display it.
+    Evidence photos carry a ``photo_ref`` served by /api/spj/{id}/evidence/{n};
+    the receipt image by /api/spj/{id}/receipt/photo. Each stop gains ``geotag``
+    (GPS vs "Approximate, not GPS", accuracy, distance to the stop).
     """
     payload = _asdict(spj)
     payload["receipt"] = _receipt_payload(payload.get("receipt"))
+    for stop_payload, stop in zip(payload["stops"], spj.stops, strict=True):
+        for _slot, record in evidence_photo_slots(stop_payload.get("evidence") or {}):
+            record.pop("photo_b64", None)  # belt and braces: the store keeps none
+        stop_payload["geotag"] = arrival_geotag(stop)
     return payload
+
+
+def _readable_spj(spj_id: str, principal: dict):
+    spj = SPJ_STORE.get(spj_id)
+    if spj is None:
+        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
+    ensure_truck_access(principal, spj.truck_code)
+    return spj
+
+
+def _stop_photos(stop) -> list[dict[str, Any]]:
+    return [
+        {"n": record["photo_ref"], "slot": slot, "photo_name": record.get("photo_name")}
+        for slot, record in evidence_photo_slots(stop.evidence or {})
+        if isinstance(record.get("photo_ref"), int)
+    ]
 
 
 def _spj_or_409(fn, *args, **kwargs):
@@ -71,8 +160,23 @@ def _spj_or_409(fn, *args, **kwargs):
 
 
 @router.get("/api/spj")
-def list_spj(status: str | None = None) -> dict[str, Any]:
-    items = SPJ_STORE.list(status=status)
+def list_spj(
+    status: str | None = None,
+    truck_code: str | None = None,
+    limit: int | None = Query(default=None, ge=1, le=500),
+    principal: dict = Depends(require_any_principal(*READ_PERMISSIONS)),
+) -> dict[str, Any]:
+    """SPJ summaries, newest first, without evidence or route geometry.
+
+    ``truck_code`` and ``limit`` (newest N after filtering) keep a driver's poll
+    small: ``/api/spj?status=selesai&truck_code=T-088&limit=5``. A truck-bound
+    driver account is always filtered to its own truck.
+    """
+    bound = principal.get("truck_code") if principal["role"] == "driver" else None
+    if bound:
+        ensure_truck_access(principal, truck_code or bound)
+        truck_code = bound
+    items = SPJ_STORE.list(status=status, truck_code=truck_code, limit=limit)
     return {"spj": [spj_summary_payload(s) for s in items], "count": len(items)}
 
 
@@ -102,17 +206,17 @@ def spj_destinations() -> dict[str, Any]:
 
 
 @router.get("/api/spj/{spj_id}")
-def get_spj(spj_id: str) -> dict[str, Any]:
-    spj = SPJ_STORE.get(spj_id)
-    if spj is None:
-        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
-    return _spj_payload(spj)
+def get_spj(
+    spj_id: str, principal: dict = Depends(require_any_principal(*READ_PERMISSIONS))
+) -> dict[str, Any]:
+    return _spj_payload(_readable_spj(spj_id, principal))
 
 
 @router.post("/api/spj", status_code=201)
 def create_spj(
-    body: SpjCreateBody, _role: str = Depends(require_permission("dispatch:create"))
+    body: SpjCreateBody, principal: dict = Depends(require_any_principal("dispatch:create"))
 ) -> dict[str, Any]:
+    enforce_duty_limit(body.truck_code, "create")  # R6 driver duty-hour guard
     if body.stops is None:
         return _spj_or_409(
             SPJ_STORE.create,
@@ -122,6 +226,7 @@ def create_spj(
             body.weigh_on_site,
             body.priority,
             body.note,
+            created_by=principal["username"],
         )
     # #60: atomic composed create — SPJ + all stops in one transaction.
     return _spj_or_409(
@@ -133,6 +238,7 @@ def create_spj(
         body.priority,
         body.note,
         [s.model_dump() for s in body.stops],
+        created_by=principal["username"],
     )
 
 
@@ -168,8 +274,13 @@ def _override_payload(body: SpjCompleteBody | None, actor: str, required: bool =
 
 
 @router.post("/api/spj/{spj_id}/activate")
-def activate_spj(spj_id: str, _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
-    result = _spj_or_409(SPJ_STORE.activate, spj_id)
+def activate_spj(
+    spj_id: str, principal: dict = Depends(require_any_principal("dispatch:create"))
+) -> dict[str, Any]:
+    draft = SPJ_STORE.get(spj_id)
+    if draft is not None:
+        enforce_duty_limit(draft.truck_code, "activate")  # R6 driver duty-hour guard
+    result = _spj_or_409(SPJ_STORE.activate, spj_id, principal["username"])
     _refresh_fleet_caches()
     return result
 
@@ -179,12 +290,33 @@ def complete_spj_stop(
     spj_id: str,
     index: int,
     body: SpjCompleteBody | None = None,
-    _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create")),
+    principal: dict = Depends(require_any_principal("dispatch:confirm", "dispatch:create")),
 ) -> dict[str, Any]:
-    """Close one stop. Requires field evidence, or an explicit supervisor override."""
-    override = _override_payload(body, _role)
+    """Close one stop. Requires field evidence, or an explicit supervisor override.
+
+    Gap 4: the override closes a stop without evidence and skips the route order,
+    so it needs ``spj:override`` (supervisor, administrator), exactly like the
+    SPJ-level override; a driver or dispatcher gets 403.
+    """
+    if (
+        body is not None
+        and body.override is not None
+        and not has_permission(principal["role"], "spj:override")
+    ):
+        raise HTTPException(
+            status_code=403, detail=f"Role '{principal['role']}' lacks spj:override permission."
+        )
+    spj = SPJ_STORE.get(spj_id)
+    if spj is not None:
+        ensure_truck_access(principal, spj.truck_code)
+    override = _override_payload(body, principal["username"])
     result = _spj_or_409(
-        SPJ_STORE.complete_stop, spj_id, index, (body.evidence if body else None), override, _role
+        SPJ_STORE.complete_stop,
+        spj_id,
+        index,
+        (body.evidence if body else None),
+        override,
+        principal["username"],
     )
     _refresh_fleet_caches()
     return result
@@ -194,24 +326,25 @@ def complete_spj_stop(
 def complete_spj(
     spj_id: str,
     body: SpjCompleteOverrideBody | None = None,
-    _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create")),
+    principal: dict = Depends(require_any_principal("dispatch:confirm", "dispatch:create")),
 ) -> dict[str, Any]:
     """Close an SPJ. Normal completion needs full field evidence; an
     override requires the spj:override permission and a reason, and is
     written to the SPJ audit trail."""
     body = body or SpjCompleteOverrideBody()
+    role = principal["role"]
     override = None
     if body.override:
         # Re-gate the request: only supervisor/administrator may override.
-        if not has_permission(_role, "spj:override"):
-            raise HTTPException(status_code=403, detail=f"Role '{_role}' lacks spj:override permission.")
+        if not has_permission(role, "spj:override"):
+            raise HTTPException(status_code=403, detail=f"Role '{role}' lacks spj:override permission.")
         reason = body.reason.strip()
         if len(reason) < 10:
             raise HTTPException(
                 status_code=409, detail="override requires a reason of at least 10 characters"
             )
-        override = {"actor": _role, "reason": reason}
-    result = _spj_or_409(SPJ_STORE.complete, spj_id, override)
+        override = {"actor": principal["username"], "reason": reason}
+    result = _spj_or_409(SPJ_STORE.complete, spj_id, override, principal["username"])
     _refresh_fleet_caches()
     if override is not None:
         history_store.record_event(
@@ -228,27 +361,33 @@ def complete_spj(
 @router.get("/api/spj/{spj_id}/audit")
 def spj_audit(
     spj_id: str,
-    _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create", "history:read")),
+    principal: dict = Depends(require_any_principal("dispatch:confirm", "dispatch:create", "history:read")),
 ) -> dict[str, Any]:
     """Audit trail for one SPJ: lifecycle actions and supervisor overrides."""
-    spj = SPJ_STORE.get(spj_id)
-    if spj is None:
-        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
+    _readable_spj(spj_id, principal)
     return {"spj_id": spj_id, "audit": SPJ_STORE.audit_log(spj_id)}
 
 
 @router.post("/api/spj/{spj_id}/cancel")
-def cancel_spj(spj_id: str, _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
-    result = _spj_or_409(SPJ_STORE.cancel, spj_id)
+def cancel_spj(
+    spj_id: str, principal: dict = Depends(require_any_principal("dispatch:create"))
+) -> dict[str, Any]:
+    result = _spj_or_409(SPJ_STORE.cancel, spj_id, principal["username"])
     _refresh_fleet_caches()
     return result
 
 
 @router.get("/api/spj/{spj_id}/evidence-summary")
-def spj_evidence_summary(spj_id: str) -> dict[str, Any]:
-    spj = SPJ_STORE.get(spj_id)
-    if spj is None:
-        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
+def spj_evidence_summary(
+    spj_id: str, principal: dict = Depends(require_any_principal(*READ_PERMISSIONS))
+) -> dict[str, Any]:
+    """Per-stop evidence for review: counts, kg, officer, photo references and the geotag.
+
+    ``geotag.status`` is ``approx`` (label "Approximate, not GPS") when the phone had
+    no position fix and the stop's own coordinates were stored; ``flagged`` marks an
+    approximate geotag or a GPS fix more than 150 m from the stop.
+    """
+    spj = _readable_spj(spj_id, principal)
     stops = []
     for i, stop in enumerate(spj.stops):
         ev = stop.evidence or {}
@@ -269,21 +408,56 @@ def spj_evidence_summary(spj_id: str) -> dict[str, Any]:
                 "fractions": fractions,
                 "officer_name": (ev.get("officer") or {}).get("name"),
                 "override": stop.override,
+                "weighing_required": spj.weigh_on_site,
+                "photos": _stop_photos(stop),
+                "geotag": arrival_geotag(stop),
             }
         )
     return {
         "spj_id": spj_id,
+        "weigh_on_site": spj.weigh_on_site,
         "stops": stops,
         "receipt": _receipt_payload(spj.receipt) if spj.receipt else None,
         "complete": all(s["has_arrival"] for s in stops) and len(stops) > 0,
     }
 
 
+def _run_receipt_ocr(spj_id: str) -> None:
+    """Read the receipt photo after the POST has answered, and file the result.
+
+    The OCR is a remote vision call (up to 15 s), so it never runs inside the
+    request. Every failure is a normal outcome: ``status`` "unavailable" with a reason.
+    """
+    try:
+        photo = SPJ_STORE.receipt_photo(spj_id)
+        if not photo:
+            ocr = receipt_ocr_record("unavailable", "no receipt photo is stored")
+        else:
+            image = photo if photo.startswith("data:") else f"data:image/jpeg;base64,{photo}"
+            result = timbangan_ocr.read_weight_from_photo(image)
+            if result.get("weight_kg") is not None:
+                ocr = receipt_ocr_record("unreviewed", result=result)
+            elif result.get("confidence") == "failed":
+                ocr = receipt_ocr_record(
+                    "unavailable", result.get("raw_text") or "OCR request failed", result
+                )
+            else:
+                ocr = receipt_ocr_record("unavailable", "no legible weight on the ticket photo", result)
+        SPJ_STORE.set_receipt_ocr(spj_id, ocr)
+    except Exception:  # noqa: BLE001 - the receipt is recorded; only the suggestion is lost
+        logger.exception("receipt OCR failed for SPJ %s", spj_id)
+        try:
+            SPJ_STORE.set_receipt_ocr(spj_id, receipt_ocr_record("unavailable", "OCR failed on the server"))
+        except Exception:  # noqa: BLE001
+            logger.exception("could not file the receipt OCR outcome for SPJ %s", spj_id)
+
+
 @router.post("/api/spj/{spj_id}/receipt", status_code=201)
 def submit_spj_receipt(
     spj_id: str,
-    body: SpjReceiptBody,
-    _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create")),
+    body: SpjReceiptTareBody,
+    background_tasks: BackgroundTasks,
+    principal: dict = Depends(require_any_principal("dispatch:confirm", "dispatch:create")),
 ) -> dict[str, Any]:
     """Record the weighbridge receipt once (#52 + PR #90 #56).
 
@@ -291,22 +465,39 @@ def submit_spj_receipt(
     stored receipt is returned unchanged); a different submission for an
     SPJ that already has a receipt is a conflict, so a double tap or a
     second browser cannot silently replace handover evidence.
+
+    ``total_weight_kg`` is the GROSS weight the weighbridge shows; send
+    ``tare_weight_kg`` too and the receipt stores ``net_weight_kg`` (H10).
+
+    The weighbridge-ticket OCR then reads the photo in the background. Its
+    reading lands in ``receipt.ocr`` (MODEL OUTPUT, ``status`` "pending" until it
+    finishes, "unavailable" without an OCR engine) and never becomes a recorded
+    weight until a reviewer confirms it (POST .../receipt/review).
     """
-    spj = SPJ_STORE.get(spj_id)
-    if spj is None:
-        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
+    spj = _readable_spj(spj_id, principal)
+    actor = principal["username"]
     already_recorded = spj.receipt is not None
-    _spj_or_409(
+    ocr_ready = timbangan_ocr.is_configured()
+    ocr = (
+        receipt_ocr_record("pending")
+        if ocr_ready
+        else receipt_ocr_record("unavailable", "OCR engine not configured (GUTS_API_KEY is not set)")
+    )
+    recorded = _spj_or_409(
         SPJ_STORE.record_receipt,
         spj_id,
         body.photo_name,
         body.photo_b64,
         body.total_weight_kg,
         body.weight_source,
-        _role,
+        actor,
         body.operation_id,
+        body.tare_weight_kg,
+        ocr,
     )
     if not already_recorded:  # a replayed operation_id is not a second event
+        if ocr_ready:
+            background_tasks.add_task(_run_receipt_ocr, spj_id)
         history_store.record_event(
             "spj_receipt_submitted",
             {
@@ -314,23 +505,170 @@ def submit_spj_receipt(
                 "spj_number": spj.spj_number,
                 "photo_name": body.photo_name,
                 "total_weight_kg": body.total_weight_kg,
+                "tare_weight_kg": body.tare_weight_kg,
                 "weight_source": body.weight_source,
-                "submitted_by": _role,
+                "submitted_by": actor,
             },
         )
-    return {"status": "recorded", "spj_id": spj_id}
+    # The stored weights (gross, tare, net and their labels) come back so the
+    # driver's done screen shows what the server recorded, never a phone-side sum.
+    return {"status": "recorded", "spj_id": spj_id, "receipt": recorded["receipt"]}
 
 
 @router.get("/api/spj/{spj_id}/receipt/photo")
 def spj_receipt_photo(
     spj_id: str,
-    _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create", "history:read")),
+    principal: dict = Depends(require_any_principal(*EVIDENCE_PERMISSIONS)),
 ) -> dict[str, Any]:
     """Retrieval path for the stored receipt image (kept out of detail reads)."""
-    spj = SPJ_STORE.get(spj_id)
-    if spj is None:
-        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
+    _readable_spj(spj_id, principal)
     photo = SPJ_STORE.receipt_photo(spj_id)
     if not photo:
         raise HTTPException(status_code=404, detail="no receipt photo recorded")
     return {"spj_id": spj_id, "photo_b64": photo}
+
+
+@router.post("/api/spj/{spj_id}/receipt/review")
+def review_spj_receipt(
+    spj_id: str,
+    body: SpjReceiptReviewBody,
+    principal: dict = Depends(require_any_principal(RECEIPT_REVIEW_PERMISSION)),
+) -> dict[str, Any]:
+    """Sign off a receipt's weights once: ``confirm`` the OCR reading or ``correct`` it.
+
+    The OCR suggestion stays on the receipt for audit; the previous weights and
+    the reviewer are written to the SPJ audit trail and the history log.
+    """
+    spj = _readable_spj(spj_id, principal)
+    if spj.receipt is None:
+        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} has no receipt to review")
+    actor = principal["username"]
+    reviewed = _spj_or_409(
+        SPJ_STORE.review_receipt,
+        spj_id,
+        body.action,
+        actor,
+        body.gross_weight_kg,
+        body.tare_weight_kg,
+    )
+    receipt = reviewed["receipt"]
+    history_store.record_event(
+        "spj_receipt_reviewed",
+        {
+            "spj_id": spj_id,
+            "spj_number": spj.spj_number,
+            "action": body.action,
+            "reviewed_by": actor,
+            "gross_weight_kg": receipt["gross_weight_kg"],
+            "tare_weight_kg": receipt["tare_weight_kg"],
+            "net_weight_kg": receipt["net_weight_kg"],
+            "ocr_gross_kg": (receipt["ocr"] or {}).get("gross_kg"),
+        },
+    )
+    return {"status": receipt["ocr"]["status"], "spj_id": spj_id, "receipt": receipt}
+
+
+@router.get("/api/spj/{spj_id}/receipt/thumb")
+def spj_receipt_thumbnail(
+    spj_id: str, principal: dict = Depends(require_any_principal(*EVIDENCE_PERMISSIONS))
+) -> Response:
+    """The receipt photo as a 320 px JPEG for the review row; the original when it cannot be resized."""
+    _readable_spj(spj_id, principal)
+    photo = SPJ_STORE.receipt_photo(spj_id)
+    if not photo:
+        raise HTTPException(status_code=404, detail="no receipt photo recorded")
+    raw, media_type = _decode_image(photo)
+    small = _thumbnail(raw)
+    variant = "original"
+    if small is not None:
+        raw, media_type, variant = small, "image/jpeg", "thumbnail"
+    return Response(
+        content=raw,
+        media_type=media_type,
+        headers={
+            "Cache-Control": "private, max-age=3600",
+            "X-Content-Type-Options": "nosniff",
+            "X-Pythia-Image-Variant": variant,
+        },
+    )
+
+
+def _decode_image(stored: str) -> tuple[bytes, str]:
+    """Stored evidence (a data URL or bare base64) -> (bytes, a safe image media type)."""
+    header, sep, data = stored.partition(",")
+    if not sep:
+        header, data = "", stored
+    match = re.match(r"data:([\w/+.-]+)", header.strip())
+    declared = match.group(1).lower() if match else ""
+    try:
+        raw = base64.b64decode(data.strip() + "=" * (-len(data.strip()) % 4))
+    except (binascii.Error, ValueError):
+        raise HTTPException(status_code=422, detail="stored evidence is not decodable base64") from None
+    if declared in _SAFE_IMAGE_TYPES:
+        return raw, declared
+    # Never echo an arbitrary declared type (text/html would render on the API origin).
+    if raw.startswith(b"\xff\xd8"):
+        return raw, "image/jpeg"
+    if raw.startswith(b"\x89PNG"):
+        return raw, "image/png"
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return raw, "image/webp"
+    return raw, "application/octet-stream"
+
+
+def _thumbnail(raw: bytes) -> bytes | None:
+    """A JPEG thumbnail (long side 320 px) when Pillow is installed, else None."""
+    try:
+        from PIL import Image  # optional: not in requirements.txt
+    except ImportError:
+        return None
+    try:
+        with Image.open(io.BytesIO(raw)) as image:
+            image.thumbnail(_THUMB_SIZE)
+            out = io.BytesIO()
+            image.convert("RGB").save(out, format="JPEG", quality=70)
+            return out.getvalue()
+    except Exception:  # noqa: BLE001 - an undecodable image falls back to the original
+        return None
+
+
+def _evidence_response(spj_id: str, n: int, principal: dict, thumb: bool) -> Response:
+    _readable_spj(spj_id, principal)
+    photo = SPJ_STORE.evidence_photo(spj_id, n)
+    if photo is None:
+        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} has no evidence photo {n}")
+    raw, media_type = _decode_image(photo["photo_b64"])
+    variant = "original"
+    if thumb:
+        small = _thumbnail(raw)
+        if small is not None:
+            raw, media_type, variant = small, "image/jpeg", "thumbnail"
+    return Response(
+        content=raw,
+        media_type=media_type,
+        headers={
+            "Cache-Control": "private, max-age=3600",
+            "X-Content-Type-Options": "nosniff",
+            "X-Pythia-Evidence-Slot": f"stop-{photo['stop_idx']}/{photo['slot']}",
+            "X-Pythia-Image-Variant": variant,
+        },
+    )
+
+
+@router.get("/api/spj/{spj_id}/evidence/{n}")
+def spj_evidence_photo(
+    spj_id: str, n: int, principal: dict = Depends(require_any_principal(*EVIDENCE_PERMISSIONS))
+) -> Response:
+    """One evidence photo as an image (gap 8). ``n`` is the ``photo_ref`` on the stop evidence."""
+    return _evidence_response(spj_id, n, principal, thumb=False)
+
+
+@router.get("/api/spj/{spj_id}/evidence/{n}/thumb")
+def spj_evidence_thumbnail(
+    spj_id: str, n: int, principal: dict = Depends(require_any_principal(*EVIDENCE_PERMISSIONS))
+) -> Response:
+    """A JPEG thumbnail of one evidence photo; the original when it cannot be resized.
+
+    ``X-Pythia-Image-Variant`` says which one was served (``thumbnail`` | ``original``).
+    """
+    return _evidence_response(spj_id, n, principal, thumb=True)

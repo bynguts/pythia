@@ -3,21 +3,33 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+from app.assistant.pii import scrub_outgoing
 from app.assistant.rag import format_rag_context
 from app.assistant.scenario import (
     parse_scenario_question,
     question_language,
+    rain_without_amount,
+    rain_words_hint,
     scenario_answer,
     with_parse_step,
 )
 from app.assistant.tools import TOOL_SCHEMAS, ToolContext, execute_tool, run_tools_pass
 
+# Per-request gateway timeouts, and the budget for the whole multi-step tool loop.
 _GATEWAY_TIMEOUT = 18
 _IMAGE_GATEWAY_TIMEOUT = 30
+_AGENT_DEADLINE_SECONDS = 45
+# Model calls per question; the last call is offered no tools, so it must answer.
+_MAX_AGENT_STEPS = 4
+# Tool executions per model turn, and across the whole question.
 _MAX_TOOL_CALLS = 2
+_MAX_TOOL_CALLS_TOTAL = 5
 
 
 def _top_prediction(snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -52,11 +64,14 @@ SYSTEM_PROMPT = (
     "operasional terkini. Untuk angka/status terkini, prakiraan, atau klaim data, panggil tool yang "
     "sesuai jika tersedia. Jangan mengarang angka atau menyimpulkan status truk rusak sebagai deviasi "
     "rute. Bedakan kota, kecamatan, dan kelurahan; nyatakan keterbatasan sumber atau kegagalan tool.\n"
-    "Pilih paling banyak dua tool yang relevan jika pertanyaan memerlukan data; jangan panggil tool "
+    "Panggil tool yang relevan jika pertanyaan memerlukan data (paling banyak dua per langkah, "
+    "beberapa langkah bila hasil satu tool menentukan tool berikutnya); jangan panggil tool "
     "untuk sapaan atau penjelasan umum. Jika butuh prakiraan kecamatan, minta include_kecamatan=true "
     "pada get_predictions; untuk prakiraan kota saja, jangan minta itu. Untuk pertanyaan what-if "
     "(hujan mm, event/konser + jumlah pengunjung, venue, hari), panggil run_scenario dan sebutkan bahwa "
-    "angkanya MODEL OUTPUT, bukan pengamatan; jika scenario.snapped_to_twin_presets bernilai true, "
+    "angkanya MODEL OUTPUT, bukan pengamatan. Jika hujan disebut dengan kata (gerimis, hujan deras/lebat, "
+    "sangat lebat, ekstrem; light/heavy/very heavy/extreme rain) tanpa mm, isi rain_category, bukan "
+    "rainfall_mm, dan sebutkan nilai kategori BMKG yang dipakai; jika scenario.snapped_to_twin_presets bernilai true, "
     "katakan bahwa nilai diminta (scenario.requested) disesuaikan ke preset twin. Semua tool bersifat baca-saja: "
     "jangan klaim telah dispatch, approve, atau mengirim WhatsApp. Tolak permintaan di luar Pythia dengan "
     "sopan. Jangan tampilkan JSON mentah atau nama field teknis kecuali diminta."
@@ -159,12 +174,28 @@ def build_executive_summary(snapshot: dict[str, Any]) -> str:
     first_alert = (snapshot.get("alerts") or [{}])[0]
     return (
         f"Pythia detects {kpis.get('trucks_with_issues', 0)} operational issues across "
-        f"{kpis.get('active_trucks', 0)} active trucks. The highest predicted waste spike is "
-        f"{top.get('spike_percent', 0)}% in {top.get('district', 'the monitored district')}, requiring "
-        f"{top.get('recommended_extra_trucks', 0)} additional trucks. TPA delay is "
-        f"{kpis.get('tpa_wait_minutes', 0)} minutes. Immediate action: resolve "
+        f"{kpis.get('active_trucks', 0)} active trucks of the simulated fleet. The highest predicted "
+        f"waste spike (model output) is {top.get('spike_percent', 0)}% in "
+        f"{top.get('district', 'the monitored district')}, requiring "
+        f"{top.get('recommended_extra_trucks', 0)} additional trucks. The Bantargebang queue at the "
+        f"modelled peak hour (simulated) is {kpis.get('tpa_wait_minutes', 0)} minutes. "
+        "Immediate action: resolve "
         f"{first_alert.get('truck_code', 'priority truck')} via dispatch and stagger landfill arrivals."
     )
+
+
+def _local_prefix(language: str, fallback_reason: str | None) -> str:
+    """The first line of every local answer: it says no LLM produced it, and why."""
+    if fallback_reason:
+        if language == "en":
+            return (
+                f"The LLM provider failed ({fallback_reason}); this answer comes from the local parser, "
+                "not the LLM."
+            )
+        return f"Layanan LLM gagal ({fallback_reason}); jawaban ini dari parser lokal, bukan LLM."
+    if language == "en":
+        return "Local mode (no LLM assistant configured)."
+    return "Mode lokal aktif (asisten LLM tidak dikonfigurasi)."
 
 
 def _answer_locally(
@@ -173,28 +204,27 @@ def _answer_locally(
     tool_ctx: ToolContext | None = None,
     images: list[str] | None = None,
     language: str = "id",
+    fallback_reason: str | None = None,
 ) -> dict[str, Any]:
-    """No-key fallback: use only data from a tool matching the question."""
+    """No-LLM answer from the tool matching the question; also the fallback when the provider fails."""
+    lang = question_language(question, language)
+    prefix = _local_prefix(lang, fallback_reason)
+    base: dict[str, Any] = {"provider": "local", "mode": "fallback" if fallback_reason else "local"}
+    if fallback_reason:
+        base["fallback_reason"] = fallback_reason
     if images:
-        return {
-            "provider": "local",
-            "mode": "local",
-            "tools_used": [],
-            "answer": "Mode lokal aktif (asisten LLM tidak dikonfigurasi). Analisis foto/PDF memerlukan layanan AI.",
-        }
+        needs_ai = (
+            "Photo/PDF analysis needs the AI service."
+            if lang == "en"
+            else "Analisis foto/PDF memerlukan layanan AI."
+        )
+        return {**base, "tools_used": [], "answer": f"{prefix} {needs_ai}"}
     scenario = parse_scenario_question(question) if tool_ctx is not None else None
     if scenario:
         result = execute_tool("run_scenario", scenario, tool_ctx)
         if "error" not in result:
-            lang = question_language(question, language)
-            prefix = (
-                "Local mode (no LLM assistant configured)."
-                if lang == "en"
-                else "Mode lokal aktif (asisten LLM tidak dikonfigurasi)."
-            )
             return {
-                "provider": "local",
-                "mode": "local",
+                **base,
                 "answer": f"{prefix}\n\n{scenario_answer(result, lang)}",
                 "tools_used": ["run_scenario"],
                 "scenario": with_parse_step(result, "local_parser"),
@@ -268,18 +298,30 @@ def _answer_locally(
                         ]
                         figures = "; ".join(f"{p['district']}: {p['predicted_tons']} ton" for p in day)
                         answer = f"Prediksi Pythia {first_date} per kota: {figures}."
+    if answer is None and rain_without_amount(question):
+        answer = rain_words_hint(lang)
     if answer is None:
         rag = _knowledge_context(question).strip()
         if rag and rag.lower() != "no matching pythia knowledge found.":
-            answer = f"Informasi terkait dari basis pengetahuan Pythia:\n{rag}"
+            heading = (
+                "Related information from the Pythia knowledge base:"
+                if lang == "en"
+                else "Informasi terkait dari basis pengetahuan Pythia:"
+            )
+            answer = f"{heading}\n{rag}"
+        elif lang == "en":
+            answer = (
+                "Local mode has no data matching this question. It can answer what-if scenarios "
+                '(rain in mm or words like "heavy rain", a crowd, a venue, a day), fleet status, '
+                "the TPA queue and the forecast; other questions need the AI service."
+            )
         else:
-            answer = "Data yang sesuai pertanyaan belum tersedia dalam mode lokal. Layanan AI diperlukan untuk jawaban lebih rinci."
-    return {
-        "provider": "local",
-        "mode": "local",
-        "answer": f"Mode lokal aktif (asisten LLM tidak dikonfigurasi).\n\n{answer}",
-        "tools_used": used,
-    }
+            answer = (
+                "Data yang sesuai pertanyaan belum tersedia dalam mode lokal. Mode lokal dapat menjawab "
+                'skenario what-if (hujan dalam mm atau kata seperti "hujan deras", keramaian, venue, hari), '
+                "status armada, antrean TPA dan prakiraan; pertanyaan lain memerlukan layanan AI."
+            )
+    return {**base, "answer": f"{prefix}\n\n{answer}", "tools_used": used}
 
 
 def answer_with_openai_if_configured(
@@ -326,24 +368,52 @@ def answer_with_openai_if_configured(
         payload["tools"] = TOOL_SCHEMAS
         payload["tool_choice"] = "auto"
 
+    per_call_timeout = _IMAGE_GATEWAY_TIMEOUT if images else _GATEWAY_TIMEOUT
+    deadline = time.monotonic() + _AGENT_DEADLINE_SECONDS
+
     def call_gateway() -> dict[str, Any]:
+        remaining = deadline - time.monotonic()
+        if remaining <= 1:
+            raise TimeoutError("agent deadline reached")
+        # R9: names, phone numbers and plates are scrubbed before anything leaves the server.
         request = Request(
             url,
-            data=json.dumps(payload).encode("utf-8"),
+            data=json.dumps(scrub_outgoing(payload)).encode("utf-8"),
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             method="POST",
         )
-        with urlopen(request, timeout=_IMAGE_GATEWAY_TIMEOUT if images else _GATEWAY_TIMEOUT) as response:
-            return _parse_body(response.read().decode("utf-8"))
+        with urlopen(request, timeout=min(per_call_timeout, remaining)) as response:
+            body = _parse_body(response.read().decode("utf-8"))
+        if not isinstance(body, dict) or not body.get("choices"):
+            raise ValueError("response has no choices")
+        return body
 
+    # Multi-step tool loop: the model may call read-only tools over several turns
+    # (capped per turn, per question, in steps and in wall-clock time); the last
+    # turn is offered no tools, so it has to answer from what the tools returned.
+    tools_used: list[str] = []
+    scenario: dict[str, Any] | None = None
+    served_model = model
+    budget = _MAX_TOOL_CALLS_TOTAL if tool_ctx is not None else 0
+    steps = 0
     try:
-        message = call_gateway().get("choices", [{}])[0].get("message", {})
-        tool_calls = message.get("tool_calls") or []
-        tools_used: list[str] = []
-        scenario: dict[str, Any] | None = None
-        if tool_calls and tool_ctx is not None:
+        for step in range(_MAX_AGENT_STEPS):
+            final = step == _MAX_AGENT_STEPS - 1 or budget <= 0
+            if final:
+                payload.pop("tools", None)
+                payload.pop("tool_choice", None)
+            body = call_gateway()
+            steps += 1
+            # The badge names the model the provider says answered, not just the one configured.
+            served_model = str(body.get("model") or served_model)
+            message = body["choices"][0].get("message") or {}
+            tool_calls = message.get("tool_calls") or []
+            if final or not tool_calls:
+                break
             messages.append(message)
-            tool_messages = run_tools_pass(tool_calls, tool_ctx, max_calls=_MAX_TOOL_CALLS)
+            slots = min(_MAX_TOOL_CALLS, budget)
+            budget -= min(slots, len(tool_calls))
+            tool_messages = run_tools_pass(tool_calls, tool_ctx, max_calls=slots)
             messages.extend(tool_messages)
             for tool_message in tool_messages:
                 result = json.loads(tool_message["content"])
@@ -351,23 +421,57 @@ def answer_with_openai_if_configured(
                     name = tool_message["name"]
                     if name not in tools_used:
                         tools_used.append(name)
-                    if name == "run_scenario" and scenario is None:
-                        scenario = with_parse_step(result, "llm_tool_call", model)
+                    if name == "run_scenario":
+                        # The latest scenario is the one the final answer describes.
+                        scenario = with_parse_step(result, "llm_tool_call", served_model)
             payload["messages"] = messages
-            payload.pop("tools", None)
-            payload.pop("tool_choice", None)
-            message = call_gateway().get("choices", [{}])[0].get("message", {})
         answer = message.get("content") or ""
         if not isinstance(answer, str) or not answer.strip():
-            return {"provider": "error", "error": "empty model content", "answer": ""}
-        required = _required_live_tools(question)
-        if tool_ctx is not None and required and not required.intersection(tools_used):
-            answer = (
-                "Saya belum dapat memverifikasi data operasional yang sesuai pertanyaan dari tool Pythia."
-            )
-        response = {"provider": "openai", "model": model, "answer": answer, "tools_used": tools_used}
-        if scenario is not None:
-            response["scenario"] = scenario
-        return response
+            raise ValueError("empty model content")
     except Exception as error:
-        return {"provider": "error", "error": str(error), "answer": ""}
+        # Any provider failure answers locally, labelled as a fallback: never a dead end,
+        # and never an answer that claims an LLM ran.
+        result = _answer_locally(
+            question, snapshot, tool_ctx, images, language, fallback_reason=_provider_error_reason(error)
+        )
+        result["llm_model"] = model
+        return result
+    required = _required_live_tools(question)
+    if tool_ctx is not None and required and not required.intersection(tools_used):
+        if "run_scenario" in required:
+            # A what-if the model answered without running it: the local parser runs it instead.
+            result = _answer_locally(
+                question, snapshot, tool_ctx, images, language, fallback_reason="no scenario tool call"
+            )
+            result["llm_model"] = served_model
+            return result
+        answer = (
+            "I could not verify operational data matching this question from the Pythia tools."
+            if language == "en"
+            else "Saya belum dapat memverifikasi data operasional yang sesuai pertanyaan dari tool Pythia."
+        )
+    response = {
+        "provider": "openai",
+        "provider_name": urlparse(base_url).hostname or base_url,
+        "model": served_model,
+        "mode": "llm",
+        "steps": steps,
+        "answer": answer,
+        "tools_used": tools_used,
+    }
+    if scenario is not None:
+        response["scenario"] = scenario
+    return response
+
+
+def _provider_error_reason(error: Exception) -> str:
+    """A short, secret-free reason for the fallback label (no URLs, keys or bodies)."""
+    if isinstance(error, HTTPError):
+        return f"HTTP {error.code}"
+    if isinstance(error, TimeoutError) or "timed out" in str(error).lower():
+        return "timeout"
+    if isinstance(error, URLError):
+        return "provider unreachable"
+    if isinstance(error, (ValueError, KeyError, IndexError, TypeError)):
+        return "invalid provider response"
+    return type(error).__name__

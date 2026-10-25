@@ -46,7 +46,7 @@ def _make_spj(spj_store, driver, truck, complete_with_evidence=True, close_by="o
         driver_name=driver,
         truck_code=truck,
         destination="TPST Bantargebang",
-        weigh_on_site=True,
+        weigh_on_site=False,  # the evidence below has no weighing
         priority="normal",
         note="",
     )
