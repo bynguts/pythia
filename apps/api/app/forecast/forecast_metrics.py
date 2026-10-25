@@ -6,7 +6,9 @@ vacuum. suitability_labels() encodes what Pythia may claim per resolution:
 only the monthly landfill/city intake forecast is backtested on REAL data
 (its numbers are read from the training artifact, never hardcoded here);
 every daily or per-district resolution is calibrated-synthetic and carries
-no accuracy claim.
+no accuracy claim. suitability_details() also reports the TPA queue's daily
+gate-arrival input, backtested on the real Bantargebang trips (read from the
+queue calibration artifact); the simulated queue waits are not validated.
 """
 
 from __future__ import annotations
@@ -109,6 +111,18 @@ def load_forecast_evaluation() -> dict[str, Any] | None:
         return None
 
 
+def load_queue_calibration() -> dict[str, Any] | None:
+    """queue_calibration.json written by ml/scripts/calibrate_queue.py, or None if absent."""
+    path = paths.QUEUE_CALIBRATION
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        logging.getLogger(__name__).exception("queue calibration artifact failed to load")
+        return None
+
+
 def monthly_backtest_metrics() -> dict[str, dict[str, Any]]:
     """Real-data rolling-origin backtest per resolution, read from the artifact.
 
@@ -192,6 +206,7 @@ def suitability_details() -> dict[str, dict]:
             "evidence_of_skill": beats_naive(m),
             "metrics": m,
         }
+    details["tpa_gate_arrivals_day"] = _gate_arrivals_detail()
     details.update(
         {
             "hotspot_rank": {
@@ -236,3 +251,34 @@ def suitability_details() -> dict[str, dict]:
         }
     )
     return details
+
+
+def _gate_arrivals_detail() -> dict[str, Any]:
+    """The TPA queue's daily gate-arrival input, backtested on the real Bantargebang trips.
+
+    The runtime estimator (median trips/day of the latest 12 months) against the
+    last-month naive, one month ahead; read from the calibration artifact. The
+    simulated weighbridge waits themselves are not validated by any observed data.
+    """
+    calibration = load_queue_calibration()
+    if calibration is None:
+        return {
+            "validation_target": "real",
+            "sample": "Bantargebang monthly trips (queue calibration artifact missing)",
+            "period": "unavailable",
+            "baseline": "unavailable",
+            "evidence_of_skill": False,
+            "wait_validation": "not_observed",
+        }
+    m = calibration["backtest"]
+    return {
+        "validation_target": "real",
+        "sample": (
+            f"{m['target']}; {m['origins']} rolling origins, {m['horizon_months']}-month-ahead forecasts"
+        ),
+        "period": m["period"],
+        "baseline": f"{m['naive']} (last-month naive)",
+        "evidence_of_skill": beats_naive(m),
+        "metrics": m,
+        "wait_validation": calibration["wait_validation"],
+    }

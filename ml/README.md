@@ -48,6 +48,40 @@ Bantargebang series, which the API and the audit model card read);
 Bantargebang source rows are fixed only through `data/real/bantargebang_corrections.json`,
 and training stops when a source row falls outside the tonnes-per-trip bounds listed there.
 
+### TPA queue calibration
+
+```bash
+python ml/scripts/calibrate_queue.py     # writes apps/api/data/models/queue_calibration.json
+```
+
+It reads the Bantargebang weighing file through `train_models.load_bantargebang_rows`
+(the same `parse_tonase` parser and correction table) and writes trips/day per month,
+the overall tonnes per trip, and a one-month-ahead rolling-origin backtest of the queue
+model's daily-arrival input: the runtime estimator (median trips/day of the latest 12
+months) against the last-month naive, with MAE, MAPE, skill and a cluster-bootstrap
+90% interval. The output is deterministic, so two runs are byte-identical. The API adds
+it to `/api/tpa/queue-metric` as `calibration` and to `/api/ml/suitability` as
+`tpa_gate_arrivals_day`. The runtime arrival input does not apply
+`bantargebang_corrections.json`; the artifact reports the corrected and uncorrected values
+side by side. The file has no gate or weigh-in times, so the simulated waits stay
+unvalidated (`wait_validation: not_observed`).
+
+### Reproducing the forecast backtest
+
+Check that `forecast_evaluation.json` reproduces from the committed data without touching
+your working tree. Use a temporary worktree, never `git stash`:
+
+```bash
+git worktree add --detach <tmp>/retrain HEAD
+cd <tmp>/retrain && python ml/scripts/train_models.py --monthly-only
+```
+
+Then compare the metric fields per resolution (`mae_model`, `mae_naive`, `mape_*_pct`,
+`skill_pct`, `skill_ci90_pct`, `origins`, `first_origin`/`last_origin`, `n_forecasts`)
+in `<tmp>/retrain/apps/api/data/models/forecast_evaluation.json` against the repository
+copy, and remove the checkout with `git worktree remove --force <tmp>/retrain`. If the
+numbers drift, retrain and commit the regenerated artifact; never edit it by hand.
+
 Data acquisition helpers: `ml/scripts/acquire_data.py` (downloads and seed
 files), `scrape_research_sources.py` (Satu Data pages → `data/raw/*.txt`,
 git-ignored; needs `scrapling`) and `generate_research_assets.py`.

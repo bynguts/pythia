@@ -26,6 +26,9 @@ MODELS_DIR = API_DIR / "data" / "models"
 # (both written by ml/scripts/train_models.py).
 MONTHLY_CALENDAR_MODEL = MODELS_DIR / "monthly_calendar_model.json"
 FORECAST_EVALUATION = MODELS_DIR / "forecast_evaluation.json"
+# TPA queue-input calibration on the real Bantargebang weighing data and its
+# daily-arrival backtest (written by ml/scripts/calibrate_queue.py).
+QUEUE_CALIBRATION = MODELS_DIR / "queue_calibration.json"
 # Product/operations documents the assistant "Ana" retrieves from (RAG).
 KNOWLEDGE_DIR = API_DIR / "knowledge"
 # Non-code assets the service reads at runtime (cached road geometry, YOLO weights,

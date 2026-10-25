@@ -1,0 +1,311 @@
+{
+  "artifact": "queue_calibration",
+  "generated_by": "ml/scripts/calibrate_queue.py",
+  "source": "Bantargebang weighing data (data.go.id, bantargebang_hasil_penimbangan.csv): monthly trips (ritasi) and tonnes per source agency",
+  "data_classification": "real",
+  "granularity": "monthly totals per source agency; no per-truck, per-day or per-hour records",
+  "period": "2022-12..2026-04",
+  "gap_months": [
+    "2023-12"
+  ],
+  "corrections_applied": [
+    "202404_ritasi_tonase_swapped",
+    "202401_jakarta_timur_decimal"
+  ],
+  "arrivals_per_day_by_month": [
+    {
+      "month": "2022-12",
+      "trips": 41061,
+      "days": 31,
+      "arrivals_per_day": 1324.5
+    },
+    {
+      "month": "2023-01",
+      "trips": 40476,
+      "days": 31,
+      "arrivals_per_day": 1305.7
+    },
+    {
+      "month": "2023-02",
+      "trips": 36195,
+      "days": 28,
+      "arrivals_per_day": 1292.7
+    },
+    {
+      "month": "2023-03",
+      "trips": 40761,
+      "days": 31,
+      "arrivals_per_day": 1314.9
+    },
+    {
+      "month": "2023-04",
+      "trips": 36456,
+      "days": 30,
+      "arrivals_per_day": 1215.2
+    },
+    {
+      "month": "2023-05",
+      "trips": 40411,
+      "days": 31,
+      "arrivals_per_day": 1303.6
+    },
+    {
+      "month": "2023-06",
+      "trips": 38793,
+      "days": 30,
+      "arrivals_per_day": 1293.1
+    },
+    {
+      "month": "2023-07",
+      "trips": 40312,
+      "days": 31,
+      "arrivals_per_day": 1300.4
+    },
+    {
+      "month": "2023-08",
+      "trips": 40779,
+      "days": 31,
+      "arrivals_per_day": 1315.5
+    },
+    {
+      "month": "2023-09",
+      "trips": 39813,
+      "days": 30,
+      "arrivals_per_day": 1327.1
+    },
+    {
+      "month": "2023-10",
+      "trips": 41076,
+      "days": 31,
+      "arrivals_per_day": 1325.0
+    },
+    {
+      "month": "2023-11",
+      "trips": 40095,
+      "days": 30,
+      "arrivals_per_day": 1336.5
+    },
+    {
+      "month": "2023-12",
+      "trips": null,
+      "days": 31,
+      "arrivals_per_day": null
+    },
+    {
+      "month": "2024-01",
+      "trips": 40331,
+      "days": 31,
+      "arrivals_per_day": 1301.0
+    },
+    {
+      "month": "2024-02",
+      "trips": 37334,
+      "days": 29,
+      "arrivals_per_day": 1287.4
+    },
+    {
+      "month": "2024-03",
+      "trips": 39563,
+      "days": 31,
+      "arrivals_per_day": 1276.2
+    },
+    {
+      "month": "2024-04",
+      "trips": 35865,
+      "days": 30,
+      "arrivals_per_day": 1195.5
+    },
+    {
+      "month": "2024-05",
+      "trips": 40540,
+      "days": 31,
+      "arrivals_per_day": 1307.7
+    },
+    {
+      "month": "2024-06",
+      "trips": 38175,
+      "days": 30,
+      "arrivals_per_day": 1272.5
+    },
+    {
+      "month": "2024-07",
+      "trips": 41106,
+      "days": 31,
+      "arrivals_per_day": 1326.0
+    },
+    {
+      "month": "2024-08",
+      "trips": 39838,
+      "days": 31,
+      "arrivals_per_day": 1285.1
+    },
+    {
+      "month": "2024-09",
+      "trips": 36241,
+      "days": 30,
+      "arrivals_per_day": 1208.0
+    },
+    {
+      "month": "2024-10",
+      "trips": 38459,
+      "days": 31,
+      "arrivals_per_day": 1240.6
+    },
+    {
+      "month": "2024-11",
+      "trips": 36049,
+      "days": 30,
+      "arrivals_per_day": 1201.6
+    },
+    {
+      "month": "2024-12",
+      "trips": 40713,
+      "days": 31,
+      "arrivals_per_day": 1313.3
+    },
+    {
+      "month": "2025-01",
+      "trips": 39306,
+      "days": 31,
+      "arrivals_per_day": 1267.9
+    },
+    {
+      "month": "2025-02",
+      "trips": 34482,
+      "days": 28,
+      "arrivals_per_day": 1231.5
+    },
+    {
+      "month": "2025-03",
+      "trips": 38683,
+      "days": 31,
+      "arrivals_per_day": 1247.8
+    },
+    {
+      "month": "2025-04",
+      "trips": 34936,
+      "days": 30,
+      "arrivals_per_day": 1164.5
+    },
+    {
+      "month": "2025-05",
+      "trips": 38291,
+      "days": 31,
+      "arrivals_per_day": 1235.2
+    },
+    {
+      "month": "2025-06",
+      "trips": 36293,
+      "days": 30,
+      "arrivals_per_day": 1209.8
+    },
+    {
+      "month": "2025-07",
+      "trips": 39025,
+      "days": 31,
+      "arrivals_per_day": 1258.9
+    },
+    {
+      "month": "2025-08",
+      "trips": 38168,
+      "days": 31,
+      "arrivals_per_day": 1231.2
+    },
+    {
+      "month": "2025-09",
+      "trips": 36992,
+      "days": 30,
+      "arrivals_per_day": 1233.1
+    },
+    {
+      "month": "2025-10",
+      "trips": 37939,
+      "days": 31,
+      "arrivals_per_day": 1223.8
+    },
+    {
+      "month": "2025-11",
+      "trips": 37456,
+      "days": 30,
+      "arrivals_per_day": 1248.5
+    },
+    {
+      "month": "2025-12",
+      "trips": 38364,
+      "days": 31,
+      "arrivals_per_day": 1237.5
+    },
+    {
+      "month": "2026-01",
+      "trips": 36481,
+      "days": 31,
+      "arrivals_per_day": 1176.8
+    },
+    {
+      "month": "2026-02",
+      "trips": 34257,
+      "days": 28,
+      "arrivals_per_day": 1223.5
+    },
+    {
+      "month": "2026-03",
+      "trips": 28886,
+      "days": 31,
+      "arrivals_per_day": 931.8
+    },
+    {
+      "month": "2026-04",
+      "trips": 28808,
+      "days": 30,
+      "arrivals_per_day": 960.3
+    }
+  ],
+  "arrivals_per_day": {
+    "estimator": "median trips/day of the latest 12 months present, rounded",
+    "window": "2025-05..2026-04",
+    "corrected": 1228,
+    "uncorrected": 1228,
+    "difference": 0,
+    "corrections_applied_at_runtime": false,
+    "note": "the runtime arrival input (bantargebang_daily_arrivals) reads the raw CSV without bantargebang_corrections.json; the corrected value is reported here, not substituted",
+    "months_changed_by_corrections": [
+      {
+        "month": "2024-04",
+        "corrected_per_day": 1195.5,
+        "uncorrected_per_day": 7213.2
+      }
+    ]
+  },
+  "tons_per_rit_overall": {
+    "value": 5.95,
+    "tons": 9030800.5,
+    "trips": 1518809,
+    "period": "2022-12..2026-04 (gap months excluded)",
+    "basis": "sum of corrected tonnes / sum of trips over every month present"
+  },
+  "backtest": {
+    "target": "Bantargebang gate trips (ritasi) per day, monthly mean",
+    "unit": "trips/day",
+    "model": "median_latest_12_months",
+    "naive": "naive_last_month",
+    "horizon_months": 1,
+    "min_history_months": 12,
+    "origins": 27,
+    "first_origin": "2024-01",
+    "last_origin": "2026-03",
+    "period": "2024-02..2026-04",
+    "mae_model": 52.4,
+    "mae_naive": 53.2,
+    "mape_model_pct": 4.8,
+    "mape_naive_pct": 4.59,
+    "skill_pct": 1.4,
+    "skill_ci90_pct": [
+      -36.0,
+      32.0
+    ],
+    "ci_method": "cluster bootstrap over target months, 3000 resamples, seed 7",
+    "skipped": "origin/target pairs with a month missing from the source are not scored"
+  },
+  "wait_validation": "not_observed",
+  "wait_validation_note": "the source has no gate-arrival or weigh-start times, so the simulated weighbridge waits are not validated by it"
+}

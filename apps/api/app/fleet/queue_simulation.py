@@ -12,15 +12,19 @@ from __future__ import annotations
 import calendar
 import csv
 import heapq
+import json
+import logging
 import random
+import sqlite3
 import statistics
 from collections import defaultdict
+from contextlib import closing
 from functools import lru_cache
 from typing import Any
 
 import numpy as np
 
-from app.core.paths import REAL_DIR
+from app.core.paths import QUEUE_CALIBRATION, REAL_DIR
 from app.core.units import SHIFT_HOURS, TRUCK_CAPACITY_TONS, trucks_for_tons
 
 OPERATING_HOURS = 1.0  # peak arrival window (hours) where queueing forms
@@ -234,6 +238,70 @@ def bantargebang_daily_arrivals(months: int = 12) -> tuple[int, str] | None:
     )
 
 
+@lru_cache(maxsize=1)
+def _calibration_artifact() -> dict[str, Any] | None:
+    """queue_calibration.json written by ml/scripts/calibrate_queue.py, or None if absent."""
+    if not QUEUE_CALIBRATION.exists():
+        return None
+    try:
+        return json.loads(QUEUE_CALIBRATION.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        logging.getLogger(__name__).exception("queue calibration artifact failed to load")
+        return None
+
+
+def observed_gate_waits_in_app() -> int | None:
+    """Completed gate waits recorded in this app: SPJs with a gate arrival and a weighbridge receipt.
+
+    The demo seed SPJ is not counted. None when the SPJ store cannot be read.
+    """
+    from app.field.safety import SEED_CREATOR
+    from app.field.spj import SPJ_STORE
+
+    try:
+        with closing(SPJ_STORE._connect()) as connection:
+            row = connection.execute(
+                "SELECT COUNT(DISTINCT a.spj_id) FROM spj_audit a "
+                "JOIN spj_receipts r ON r.spj_id = a.spj_id JOIN spj s ON s.spj_id = a.spj_id "
+                "WHERE a.action = 'gate_arrival' AND s.created_by != ?",
+                (SEED_CREATOR,),
+            ).fetchone()
+    except sqlite3.Error:
+        logging.getLogger(__name__).exception("observed gate waits could not be counted")
+        return None
+    return int(row[0])
+
+
+def queue_calibration() -> dict[str, Any] | None:
+    """What the real Bantargebang weighing data calibrates in this model, or None without the artifact.
+
+    The file holds monthly trips and tonnes per source agency, so it checks the
+    arrival input (trips/day, with a rolling-origin backtest of the runtime
+    estimator) and tonnes per trip; it has no gate times, so the simulated waits
+    stay unvalidated. Nested values are shared with the cached artifact: do not mutate them.
+    """
+    artifact = _calibration_artifact()
+    if artifact is None:
+        return None
+    arrivals = artifact["arrivals_per_day"]
+    return {
+        "source": artifact["source"],
+        "data_classification": artifact["data_classification"],
+        "period": artifact["period"],
+        "arrivals_per_day": {
+            key: arrivals[key] for key in ("estimator", "window", "corrected", "uncorrected", "difference")
+        },
+        "tons_per_rit_overall": artifact["tons_per_rit_overall"]["value"],
+        "truck_capacity_tons_canonical": TRUCK_CAPACITY_TONS,
+        # bantargebang_daily_arrivals reads the raw CSV: the corrections are reported, not applied.
+        "corrections_applied_at_runtime": False,
+        "backtest": artifact["backtest"],
+        "wait_validation": "not_observed",
+        "observed_gate_waits_in_app": observed_gate_waits_in_app(),
+        "generated_by": artifact["generated_by"],
+    }
+
+
 def stagger_slot_count() -> int:
     """Departure slots per shift: the shift minus one collection round, in stagger steps."""
     return max(1, int((SHIFT_HOURS - COLLECTION_ROUND_MEAN_H) * 60 // STAGGER_SLOT_MINUTES))
@@ -402,6 +470,7 @@ def queue_minutes_per_truck(
             "Seeded discrete-event simulation of one operating day at the TPST Bantargebang "
             f"weighbridges; arrivals: {arrivals_source}. Not a field measurement."
         ),
+        "calibration": queue_calibration(),
     }
 
 

@@ -9,9 +9,12 @@ holdout evidence exists at that resolution.
 
 from __future__ import annotations
 
+import json
 import unittest
+from unittest import mock
 
-from app.forecast.forecast_metrics import suitability_details, suitability_labels
+from app.core import paths
+from app.forecast.forecast_metrics import beats_naive, suitability_details, suitability_labels
 
 
 class SuitabilityTaxonomyTests(unittest.TestCase):
@@ -73,6 +76,26 @@ class SuitabilityTaxonomyTests(unittest.TestCase):
     def test_labels_still_carry_daily_district_not_supported(self):
         self.assertEqual(suitability_labels()["district_day"], "not_supported")
 
+    def test_gate_arrivals_input_is_a_real_backtest_classed_by_beats_naive(self):
+        # The TPA queue's daily-arrival input, backtested on the real Bantargebang trips
+        # (queue_calibration.json); the simulated waits themselves stay unvalidated.
+        artifact = json.loads(paths.QUEUE_CALIBRATION.read_text(encoding="utf-8"))
+        detail = suitability_details()["tpa_gate_arrivals_day"]
+        self.assertEqual(detail["validation_target"], "real")
+        self.assertEqual(detail["metrics"], artifact["backtest"])
+        self.assertEqual(detail["period"], artifact["backtest"]["period"])
+        self.assertIs(detail["evidence_of_skill"], beats_naive(artifact["backtest"]))
+        self.assertEqual(detail["wait_validation"], "not_observed")
+
+    def test_gate_arrivals_detail_without_the_artifact_claims_nothing(self):
+        with mock.patch.object(
+            paths, "QUEUE_CALIBRATION", paths.MODELS_DIR / "missing_queue_calibration.json"
+        ):
+            detail = suitability_details()["tpa_gate_arrivals_day"]
+        self.assertFalse(detail["evidence_of_skill"])
+        self.assertEqual(detail["period"], "unavailable")
+        self.assertNotIn("metrics", detail)
+
     def test_suitability_endpoint_exposes_details(self):
         from fastapi.testclient import TestClient
 
@@ -86,6 +109,7 @@ class SuitabilityTaxonomyTests(unittest.TestCase):
         self.assertIsNotNone(details, "endpoint must expose target details")
         for detail in details.values():
             self.assertIn("validation_target", detail)
+        self.assertEqual(details["tpa_gate_arrivals_day"]["validation_target"], "real")
 
 
 if __name__ == "__main__":
