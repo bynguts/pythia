@@ -1530,7 +1530,6 @@ export const id = {
   hon_login_proof1_sub: "Armada, pengemudi, dan antrean TPA dalam satu tampilan (armada simulasi)",
   hon_login_proof2_title: "Prediksi berlabel",
   hon_login_proof2_sub: "Setiap angka menyebut asalnya: riil, model, atau simulasi",
-  hon_login_footer: "Prototipe untuk studi kasus DLH DKI Jakarta",
   hon_fc_title: "Prediksi timbulan sampah",
   hon_fc_sub: "Temukan wilayah yang membutuhkan tambahan armada sebelum beban layanan meningkat.",
   hon_mi_kicker: "Diuji mundur pada data riil",

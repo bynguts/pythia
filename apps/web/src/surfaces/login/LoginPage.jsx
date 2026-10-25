@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   ArrowRight,
-  Building2,
   CheckCircle2,
   Eye,
   EyeOff,
@@ -114,9 +113,6 @@ export function LoginPage({
                   <small>{t("login_proof3_sub")}</small>
                 </span>
               </div>
-            </div>
-            <div className="login-story-footer">
-              <Building2 size={16} /> {t("hon_login_footer")}
             </div>
           </aside>
         )}

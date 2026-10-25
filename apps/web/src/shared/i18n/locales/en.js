@@ -1517,7 +1517,6 @@ export const en = {
   hon_login_proof1_sub: "Fleet, drivers and TPA queue in one view (simulated fleet)",
   hon_login_proof2_title: "Labelled forecasts",
   hon_login_proof2_sub: "Every figure says whether it is real, modelled or simulated",
-  hon_login_footer: "Prototype built for the DLH DKI Jakarta case",
   hon_fc_title: "Waste generation forecast",
   hon_fc_sub: "Find districts that need more fleet capacity before service demand rises.",
   hon_mi_kicker: "Backtested on real data",

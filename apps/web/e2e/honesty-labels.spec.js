@@ -160,26 +160,24 @@ test("TPA arrival rate unit follows the language", async ({ page }) => {
 const LOGIN_COPY = {
   id: {
     proof: "Armada, pengemudi, dan antrean TPA dalam satu tampilan (armada simulasi)",
-    footer: "Prototipe untuk studi kasus DLH DKI Jakarta",
-    stale: /Operasi langsung|Prediksi terukur|Dinas Lingkungan Hidup Provinsi/,
+    stale: /Operasi langsung|Prediksi terukur|Dinas Lingkungan Hidup Provinsi|DLH DKI/,
   },
   en: {
     proof: "Fleet, drivers and TPA queue in one view (simulated fleet)",
-    footer: "Prototype built for the DLH DKI Jakarta case",
-    stale: /Live operations|Measured forecasts|Jakarta Environmental Agency/,
+    stale: /Live operations|Measured forecasts|Jakarta Environmental Agency|DLH DKI/,
   },
 };
 
 for (const lang of ["id", "en"]) {
-  test(`login proof strings say simulated and name the case, not a DLH product (${lang})`, async ({
-    page,
-  }) => {
+  // wave10 login: the product login names no client; the "prototype for the DLH case"
+  // footer is gone, and the story still never presents itself as a DLH product.
+  test(`login proof strings say simulated and present no client's product (${lang})`, async ({ page }) => {
     const copy = LOGIN_COPY[lang];
     await page.addInitScript((value) => localStorage.setItem("pythia_lang", value), lang);
     await page.goto("/");
     const proof = page.getByTestId("login-proof-list");
     await expect(proof).toContainText(copy.proof);
-    await expect(page.locator(".login-story-footer")).toHaveText(copy.footer);
+    await expect(page.locator(".login-story-footer")).toHaveCount(0);
     const story = await page.locator(".login-story").innerText();
     expect(story).not.toMatch(copy.stale);
     expect(story).not.toMatch(/\blive\b/i);

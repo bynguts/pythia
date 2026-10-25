@@ -18,7 +18,6 @@ test("login surface follows the selected locale end to end", async ({ page }) =>
   await expect(page.getByPlaceholder("e.g. dispatcher")).toBeVisible();
   await expect(page.getByRole("button", { name: "Show password" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
-  await expect(page.locator(".login-story-footer")).toContainText("built for the DLH DKI Jakarta case");
 
   // Switch to ID on the login surface itself.
   await page.locator(".login-language button", { hasText: "ID" }).click();
@@ -30,7 +29,6 @@ test("login surface follows the selected locale end to end", async ({ page }) =>
   );
   await expect(page.getByRole("button", { name: "Masuk", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Tampilkan kata sandi" })).toBeVisible();
-  await expect(page.locator(".login-story-footer")).toContainText("studi kasus DLH DKI Jakarta");
 
   // The ID choice must survive authentication into the shell.
   await page.locator('input[autocomplete="username"]').fill("dispatcher");

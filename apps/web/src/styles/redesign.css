@@ -2187,16 +2187,6 @@ button {
   font-size: 11px;
   line-height: 1.4;
 }
-.login-story-footer {
-  position: relative;
-  z-index: 1;
-  margin-top: 30px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--ui-on-dark-muted);
-  font-size: 11px;
-}
 .login-card {
   position: relative;
   padding: 56px 54px;
