@@ -12,6 +12,7 @@ export const id = {
   login_hide_password: "Sembunyikan kata sandi",
   // gsc P0-2 phone login gate
   role_gate_notice: "Masuk sebagai sopir untuk menyelesaikan titik dan menyinkronkan antrean.",
+  login_session_expired: "Sesi berakhir karena server dimulai ulang. Silakan masuk lagi.",
   // gsc F2 review fixes (M1 n16 n21 m8 m9 m10)
   role_gate_forbidden:
     "Akun ini tidak dapat menangani tugas lapangan. Masuk sebagai sopir atau petugas lapangan.",

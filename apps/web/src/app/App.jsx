@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation, useParams } from "react-router-dom";
 // The driver app comes first: its stylesheet precedes the global styles in
 // the cascade (main.jsx imports styles/index.css after this module). The lazy
@@ -12,6 +12,7 @@ import "../features/audit/audit.css";
 import "../features/forecast/monthlyIntake.css";
 import { LoginPage } from "../surfaces/login/LoginPage.jsx";
 import { RoleGate } from "../surfaces/login/RoleGate.jsx";
+import { apiFetch, COMMAND_TOKEN_KEY } from "../shared/api/client.js";
 import { useLanguage } from "../shared/i18n/index.jsx";
 import { isWorkspace, landingPath, movedWorkspacePath } from "./workspaces.js";
 
@@ -58,9 +59,40 @@ function XrRoute() {
 
 // Everything behind the login gate keeps its URL while signed out, so a deep
 // link reloads into the right place once the operator signs in.
-function LoginGate({ authenticated, onLogin }) {
-  if (!authenticated) return <LoginPage onLogin={onLogin} />;
+function LoginGate({ authenticated, expired, onLogin }) {
+  const { t } = useLanguage();
+  if (!authenticated)
+    return <LoginPage onLogin={onLogin} notice={expired ? t("login_session_expired") : ""} />;
   return <Outlet />;
+}
+
+// Tokens live in the backend's memory, so a restart invalidates every stored
+// session. Check the stored token when the app opens and whenever the tab comes
+// back into view; a 401 signs out instead of leaving every panel empty. A
+// network failure or a service-worker cache copy says nothing about the token.
+function useSessionCheck(authenticated, onExpired) {
+  const expiredRef = useRef(onExpired);
+  expiredRef.current = onExpired;
+  useEffect(() => {
+    if (!authenticated) return undefined;
+    let controller = null;
+    const check = () => {
+      if (document.visibilityState === "hidden" || !localStorage.getItem(COMMAND_TOKEN_KEY)) return;
+      controller?.abort();
+      controller = new AbortController();
+      apiFetch("/auth/session", { signal: controller.signal })
+        .then((res) => {
+          if (res.status === 401 && !res.headers.get("X-Pythia-Stale")) expiredRef.current();
+        })
+        .catch(() => {});
+    };
+    check();
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      controller?.abort();
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [authenticated]);
 }
 
 // wave10 L3: /field merged into /driver; its instructions are the Instruksi tab.
@@ -90,11 +122,20 @@ function WorkspaceRoute({ onLogout }) {
 
 export function App() {
   const [authenticated, setAuthenticated] = useState(() => localStorage.getItem("pythia_auth") === "true");
+  const [expired, setExpired] = useState(false);
   function logout() {
     localStorage.removeItem("pythia_auth");
     localStorage.removeItem("pythia_token");
     localStorage.removeItem("pythia_role");
     setAuthenticated(false);
+  }
+  useSessionCheck(authenticated, () => {
+    logout();
+    setExpired(true);
+  });
+  function login() {
+    setExpired(false);
+    setAuthenticated(true);
   }
   return (
     <Routes>
@@ -109,7 +150,7 @@ export function App() {
           </RoleGate>
         }
       />
-      <Route element={<LoginGate authenticated={authenticated} onLogin={() => setAuthenticated(true)} />}>
+      <Route element={<LoginGate authenticated={authenticated} expired={expired} onLogin={login} />}>
         <Route
           path="/pengawas/*"
           element={

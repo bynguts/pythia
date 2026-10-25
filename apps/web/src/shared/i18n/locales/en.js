@@ -12,6 +12,7 @@ export const en = {
   login_hide_password: "Hide password",
   // gsc P0-2 phone login gate
   role_gate_notice: "Sign in as the driver to complete stops and sync queued work.",
+  login_session_expired: "Your session ended because the server restarted. Sign in again.",
   // gsc F2 review fixes (M1 n16 n21 m8 m9 m10)
   role_gate_forbidden: "This account cannot act on field work. Sign in as a driver or field officer.",
   stagger_baseline_assumption:
