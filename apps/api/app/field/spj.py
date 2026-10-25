@@ -22,7 +22,7 @@ import tempfile
 import threading
 from contextlib import closing
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 from app.core.env import getenv, local_today
@@ -318,13 +318,14 @@ class Spj:
     receipt: dict | None = None
 
 
-def next_spj_number(store: SpjStore) -> str:
+def next_spj_number(store: SpjStore, day: str | None = None) -> str:
     """Next daily sequence number, read from the database (not the cache).
 
     Reading from SQLite is what makes the number multi-process safe: every
-    worker sees committed numbers from other workers.
+    worker sees committed numbers from other workers. ``day`` (ISO date) is the
+    SPJ's working day; it defaults to today (WIB).
     """
-    prefix = local_today().strftime("DLH-DKI/SPJ/%d-%m-%Y/")
+    prefix = (date.fromisoformat(day) if day else local_today()).strftime("DLH-DKI/SPJ/%d-%m-%Y/")
     with closing(store._connect()) as connection:
         row = connection.execute(
             "SELECT MAX(CAST(SUBSTR(spj_number, ?) AS INTEGER)) AS max_seq FROM spj WHERE spj_number LIKE ?",
@@ -708,12 +709,15 @@ class SpjStore:
         note: str,
         stops: list[dict],
         created_by: str = "admin",
+        date: str | None = None,
     ) -> Spj:
         """Create a draft SPJ and ALL of its stops in ONE transaction (#60).
 
         Either the SPJ exists with every stop in exact order, or nothing
-        is persisted — a failing stop rolls the whole draft back.
+        is persisted — a failing stop rolls the whole draft back. ``date``
+        (ISO) sets both the SPJ day and its number prefix; it defaults to today.
         """
+        day = date or _today()
         if destination not in DESTINATIONS:
             raise ValueError(f"destination must be one of {DESTINATIONS}")
         if priority not in ("normal", "vip"):
@@ -737,7 +741,7 @@ class SpjStore:
                 try:
                     with closing(connection):
                         connection.execute("BEGIN IMMEDIATE")
-                        number = next_spj_number(self)
+                        number = next_spj_number(self, day)
                         try:
                             connection.execute(
                                 "INSERT INTO spj (spj_id, spj_number, date, driver_name, "
@@ -746,7 +750,7 @@ class SpjStore:
                                 (
                                     spj_id,
                                     number,
-                                    _today(),
+                                    day,
                                     driver_name,
                                     truck_code,
                                     destination,
@@ -1391,6 +1395,37 @@ class SpjStore:
                 )
             else:
                 self._audit(connection, spj_id, "complete", actor or row["created_by"])
+
+        return self._mutate(spj_id, mutate)
+
+    def reassign_draft(self, spj_id: str, truck_code: str, driver_name: str, actor: str, reason: str) -> Spj:
+        """Move a draft SPJ to another truck and driver (audit action ``reassign``).
+
+        Only a draft moves: an active SPJ is already the reference path of the
+        truck on the road, so it must be cancelled and recreated instead.
+        """
+
+        def mutate(connection):
+            row = self._fetch_status(connection, spj_id)
+            if row["status"] != "draft":
+                raise ValueError(f"cannot reassign SPJ in status '{row['status']}'")
+            connection.execute(
+                "UPDATE spj SET truck_code=?, driver_name=? WHERE spj_id=?",
+                (truck_code, driver_name, spj_id),
+            )
+            self._audit(
+                connection,
+                spj_id,
+                "reassign",
+                actor,
+                reason,
+                {
+                    "from_truck": row["truck_code"],
+                    "to_truck": truck_code,
+                    "from_driver": row["driver_name"],
+                    "to_driver": driver_name,
+                },
+            )
 
         return self._mutate(spj_id, mutate)
 

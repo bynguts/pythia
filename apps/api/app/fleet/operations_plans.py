@@ -227,6 +227,115 @@ class OperationsPlanStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def _set_spj_link(self, plan_id: str, truck_code: str, spj_id: str | None, status: str, detail) -> None:
+        with closing(self._connect()) as connection:
+            with connection:
+                connection.execute(
+                    "UPDATE operations_plan_spj SET spj_id=?, status=?, detail=?, updated_at=? "
+                    "WHERE plan_id=? AND truck_code=?",
+                    (spj_id, status, detail, datetime.now(UTC).isoformat(), plan_id, truck_code),
+                )
+
+    def ensure_spj_links(
+        self, plan_id: str, trucks: list[tuple[str, str]], create_spj
+    ) -> list[dict[str, Any]]:
+        """Make sure every (truck_code, dispatch_id) of an approved plan has its draft SPJ.
+
+        Claim first: the link row is inserted (INSERT OR IGNORE) before the SPJ
+        exists, under the store lock, so a raced or retried approval never
+        creates a second SPJ. A row left without an SPJ (a failed earlier
+        attempt) is repaired: ``create_spj(truck_code) -> (spj_id, skipped)``
+        adopts an existing draft or creates one. A failure is recorded on the
+        row (status ``error``) and never raised: the approval stays committed.
+        """
+        with self._lock:
+            for truck_code, dispatch_id in trucks:
+                with closing(self._connect()) as connection:
+                    with connection:
+                        connection.execute(
+                            "INSERT OR IGNORE INTO operations_plan_spj "
+                            "(plan_id, truck_code, spj_id, dispatch_id, status, detail, updated_at) "
+                            "VALUES (?,?,NULL,?,'claimed',NULL,?)",
+                            (plan_id, truck_code, dispatch_id, datetime.now(UTC).isoformat()),
+                        )
+                        row = connection.execute(
+                            "SELECT spj_id, status FROM operations_plan_spj WHERE plan_id=? AND truck_code=?",
+                            (plan_id, truck_code),
+                        ).fetchone()
+                if row["spj_id"] or row["status"] == "skipped":
+                    continue
+                try:
+                    spj_id, skipped = create_spj(truck_code)
+                    status = "skipped" if skipped else "linked"
+                    self._set_spj_link(plan_id, truck_code, spj_id, status, skipped)
+                except Exception as exc:  # noqa: BLE001 - recorded on the row, approval stays
+                    logger.exception("draft SPJ for plan %s truck %s failed", plan_id, truck_code)
+                    try:
+                        self._set_spj_link(plan_id, truck_code, None, "error", str(exc) or type(exc).__name__)
+                    except sqlite3.Error:
+                        logger.exception("could not record the draft SPJ failure")
+        return self.spj_links(plan_id)
+
+    def reassign_truck(
+        self,
+        plan_id: str,
+        from_truck: str,
+        to_truck: str,
+        old_dispatch_id: str,
+        new_dispatch_id: str,
+        item: dict[str, Any],
+    ) -> None:
+        """Move one truck's share of an approved plan to another truck, in ONE transaction.
+
+        The plan payload (dispatch, assignments, dispatch id list), the
+        structured instruction row and the draft-SPJ link row all move together.
+        """
+        with self._lock:
+            connection = self._connect()
+            connection.isolation_level = None
+            with closing(connection):
+                connection.execute("BEGIN IMMEDIATE")
+                try:
+                    row = connection.execute(
+                        "SELECT * FROM operations_plans WHERE plan_id=?", (plan_id,)
+                    ).fetchone()
+                    if row is None:
+                        raise KeyError(f"Plan {plan_id} not found")
+                    payload = json.loads(row["payload"])
+                    payload["dispatches"] = [
+                        item if d.get("truck_code") == from_truck else d
+                        for d in payload.get("dispatches") or []
+                    ]
+                    for assignment in payload.get("assignments") or []:
+                        if assignment.get("truck_code") == from_truck:
+                            assignment["truck_code"] = to_truck
+                    dispatch_ids = [
+                        new_dispatch_id if d == old_dispatch_id else d
+                        for d in json.loads(row["dispatch_ids"] or "[]")
+                    ]
+                    now = datetime.now(UTC).isoformat()
+                    connection.execute(
+                        "UPDATE operations_plans SET payload=?, dispatch_ids=? WHERE plan_id=?",
+                        (json.dumps(payload), json.dumps(dispatch_ids), plan_id),
+                    )
+                    connection.execute(
+                        "DELETE FROM operations_dispatch_instructions WHERE dispatch_id=?", (old_dispatch_id,)
+                    )
+                    connection.execute(
+                        "INSERT OR REPLACE INTO operations_dispatch_instructions "
+                        "(dispatch_id, plan_id, truck_code, payload, created_at) VALUES (?,?,?,?,?)",
+                        (new_dispatch_id, plan_id, to_truck, json.dumps(item), now),
+                    )
+                    connection.execute(
+                        "UPDATE operations_plan_spj SET truck_code=?, dispatch_id=?, updated_at=? "
+                        "WHERE plan_id=? AND truck_code=?",
+                        (to_truck, new_dispatch_id, now, plan_id, from_truck),
+                    )
+                    connection.execute("COMMIT")
+                except Exception:
+                    connection.execute("ROLLBACK")
+                    raise
+
     def reload_cache(self) -> None:
         """Compatibility hook: durability comes from SQLite, nothing to do."""
 

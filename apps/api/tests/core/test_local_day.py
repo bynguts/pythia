@@ -57,6 +57,27 @@ def test_spj_number_and_date_use_the_wib_day(at_0600_wib):
     assert spj.spj_number.startswith("DLH-DKI/SPJ/15-09-2026/")
 
 
+def test_a_plan_draft_for_tomorrow_is_dated_and_numbered_tomorrow(at_0600_wib):
+    """An approved plan for the next day makes its draft SPJ on that day, not today."""
+    store = SpjStore(fresh_store_path("pythia_spj_local_day_plan.db"))
+    stop = {
+        "name": "Rencana · Kec. Gambir",
+        "kecamatan": "Gambir",
+        "address": "Titik tengah",
+        "lat": -6.17,
+        "lng": 106.82,
+    }
+    today_spj = store.create_with_stops(
+        "Pengemudi Sim 01", "T-WIBP", "TPST Bantargebang", False, "normal", "", [stop]
+    )
+    planned = store.create_with_stops(
+        "Pengemudi Sim 01", "T-WIBP", "TPST Bantargebang", False, "normal", "", [stop], date="2026-09-16"
+    )
+    assert today_spj.date == "2026-09-15"
+    assert planned.date == "2026-09-16"
+    assert planned.spj_number == "DLH-DKI/SPJ/16-09-2026/000001"
+
+
 def test_an_early_shift_spj_is_not_late_when_closed_after_0700_wib(at_0600_wib, monkeypatch):
     """Created 06:00 WIB, closed 08:00 WIB the same day: UTC dates differ, WIB days do not."""
     store = SpjStore(fresh_store_path("pythia_spj_local_day_late.db"))

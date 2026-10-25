@@ -48,6 +48,14 @@ class DispatchConfirmRequest(BaseModel):
     operation_id: str | None = Field(default=None, min_length=8, max_length=80)
 
 
+class PlanReassignRequest(BaseModel):
+    """Move one truck's share of an approved plan to another truck."""
+
+    from_truck: str = Field(min_length=1, max_length=20)
+    to_truck: str = Field(min_length=1, max_length=20)
+    reason: str = Field(min_length=1, max_length=200)
+
+
 class HybridPredictRequest(BaseModel):
     kelurahan: str = Field(min_length=1, max_length=50)
     precipitation_mm: float = Field(default=0.0, ge=0, le=1000)

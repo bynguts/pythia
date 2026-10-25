@@ -123,5 +123,9 @@ def confirm_dispatch(
         )
     except KeyError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        # A REASSIGNED instruction moved to another truck: a late or replayed
+        # READY from the old truck must not revive it.
+        raise HTTPException(status_code=409, detail=str(error)) from error
     history_store.record_event("dispatch_confirmed", {"dispatch_id": dispatch_id, "status": payload.status})
     return d

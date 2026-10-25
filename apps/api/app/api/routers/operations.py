@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import threading
 import time
 from datetime import date
 from typing import Any
@@ -10,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.deps import require_any_permission, require_permission
 from app.api.routers.forecast import predictions_kecamatan
-from app.api.schemas import EventPermitRequest
+from app.api.schemas import EventPermitRequest, PlanReassignRequest
 from app.api.state import _OPERATIONS_PLAN_STORE, _tpa_cache, dispatch_center, history_store
 from app.core.env import today
 from app.core.units import (
@@ -19,15 +21,18 @@ from app.core.units import (
     resource_basis,
     resource_requirements,
 )
+from app.field import safety
 from app.field.permits import PERMIT_STORE
 from app.field.spj import SPJ_STORE
 from app.fleet.data import TRUCKS, events_permits_payload, tpa_queue_status_payload
+from app.fleet.gate_slots import assign_gate_slots
 from app.fleet.operations_optimizer import Demand, Vehicle, build_operational_plan
 from app.fleet.operations_rules import PlanningRules, resolve_rules
 from app.fleet.queue_simulation import QUEUE_QUANTITIES, QUEUE_STAGE
 from app.forecast.engine import simulate_staggered_dispatch
 from app.forecast.real_data import load_kecamatan_map
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -113,7 +118,122 @@ def _dispatch_instructions(
                 },
             }
         )
+    # The modelled weighbridge slot of each truck's first gate arrival; trucks of
+    # plans already approved for the same day hold their slots.
+    occupied = [
+        d["fields"]["gate_slot"]
+        for plan in _OPERATIONS_PLAN_STORE.list_plans(status="approved", limit=100)
+        if plan.get("plan_date") == plan_date.isoformat()
+        for d in plan.get("dispatches") or []
+        if (d.get("fields") or {}).get("gate_slot")
+    ]
+    slots = assign_gate_slots(out, plan_date, occupied)
+    for dispatch in out:
+        slot = slots.get(dispatch["truck_code"]) or None
+        dispatch["fields"]["gate_slot"] = slot
+        if slot:
+            facility = facility_names.get(slot["facility"], slot["facility"])
+            day = (
+                ""
+                if slot["date"] == plan_date.isoformat()
+                else f" ({_id_date(date.fromisoformat(slot['date']))})"
+            )
+            dispatch["text"] += (
+                f"\nSlot gerbang {facility} {slot['start']}–{slot['end']}{day} (keluaran model)"
+            )
     return out
+
+
+# Plan facility -> SPJ destination. "RDF Rorotan" is the display name of the RDF
+# Plant Jakarta (fleet/facilities.py). An unknown facility is never defaulted.
+_SPJ_DESTINATIONS = {
+    "TPST Bantargebang": "TPST Bantargebang",
+    "RDF Rorotan": "RDF Plant Jakarta",
+    "RDF Plant Jakarta": "RDF Plant Jakarta",
+}
+PLAN_STOP_LOCATION_TYPE = "Titik Rencana (centroid kecamatan)"
+
+
+def _plan_spj_note_prefix(plan_id: str) -> str:
+    return f"Rencana {plan_id} (MODEL)"
+
+
+def _plan_spj(
+    plan: dict[str, Any], dispatch: dict[str, Any], approved_by: str
+) -> tuple[str | None, str | None]:
+    """Adopt or create the draft SPJ of one plan truck; returns (spj_id, skipped).
+
+    Draft creation skips `enforce_duty_limit` on purpose: a draft is not work,
+    and `POST /api/spj/{id}/activate` re-checks duty before the truck leaves.
+    Drafts stay `draft` until a human activates them. The stops are kecamatan
+    centroids from the plan, labelled as planning points, not TPS addresses.
+    """
+    fields = dispatch["fields"]
+    truck_code = dispatch["truck_code"]
+    trips = sorted(fields["stops"], key=lambda s: s["order"])
+    facility = trips[0]["facility"]
+    destination = _SPJ_DESTINATIONS.get(facility)
+    if destination is None:
+        return None, f"unknown_facility:{facility}"
+    prefix = _plan_spj_note_prefix(plan["plan_id"])
+    for spj in SPJ_STORE.list(truck_code=truck_code):
+        if spj.status == "draft" and spj.note.startswith(prefix):
+            return spj.spj_id, None  # orphan of an earlier, interrupted attempt
+    centroids = {k["slug"]: k for k in load_kecamatan_map()}
+    stops = []
+    for area in dict.fromkeys(t["area"] for t in trips):
+        label = next(t["kecamatan"] for t in trips if t["area"] == area)
+        centroid = centroids.get(area) or {}
+        if centroid.get("lat") is None or centroid.get("lng") is None:
+            raise ValueError(f"no centroid for kecamatan {area}")
+        stops.append(
+            {
+                "name": f"Rencana · Kec. {label}",
+                "kecamatan": label,
+                "address": f"Titik tengah Kec. {label} (perencanaan, bukan alamat TPS)",
+                "lat": centroid["lat"],
+                "lng": centroid["lng"],
+                "location_type": PLAN_STOP_LOCATION_TYPE,
+            }
+        )
+    facilities = ", ".join(dict.fromkeys(t.get("facility_display") or t["facility"] for t in trips))
+    note = f"{prefix} · fasilitas: {facilities}"
+    slot = fields.get("gate_slot")
+    if slot:
+        note += f" · slot gerbang {slot['start']}–{slot['end']}"
+    driver_name = next((t["driver_name"] for t in TRUCKS if t["truck_code"] == truck_code), "")
+    spj = SPJ_STORE.create_with_stops(
+        driver_name=driver_name,
+        truck_code=truck_code,
+        destination=destination,
+        weigh_on_site=False,
+        priority="normal",
+        note=note,
+        stops=stops,
+        created_by=approved_by,
+        date=plan["plan_date"],
+    )
+    return spj.spj_id, None
+
+
+def ensure_plan_spjs(plan: dict[str, Any], approved_by: str) -> None:
+    """One draft SPJ per truck of an approved day plan; safe to call on every approve.
+
+    Runs after the approval committed. Failures are recorded per truck in
+    `spj_drafts[i].error` and never undo the approval.
+    """
+    dispatches = [d for d in plan.get("dispatches") or [] if "fields" in d]
+    if plan.get("status") != "approved" or not dispatches:
+        return
+    by_truck = {d["truck_code"]: d for d in dispatches}
+    ids = dict(
+        zip((d["truck_code"] for d in plan["dispatches"]), plan.get("dispatch_ids") or [], strict=False)
+    )
+    _OPERATIONS_PLAN_STORE.ensure_spj_links(
+        plan["plan_id"],
+        [(code, ids.get(code)) for code in by_truck],
+        lambda code: _plan_spj(plan, by_truck[code], approved_by),
+    )
 
 
 @router.get("/api/operations/rules")
@@ -327,6 +447,8 @@ def approve_operations_plan(
     Approval is at-most-once (#17): the status transition and dispatch
     ids commit in one transaction; a retried or concurrent approval
     returns the already-committed result without creating new dispatches.
+    Every call then makes sure each truck has its draft SPJ (`spj_drafts`),
+    so a retry repairs a draft an earlier attempt failed to create.
     """
 
     def _create_dispatch(item):
@@ -349,6 +471,10 @@ def approve_operations_plan(
         )
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Plan {plan_id} not found.") from None
+    try:
+        ensure_plan_spjs(plan, approved_by=plan.get("approved_by") or _role)
+    except Exception:  # noqa: BLE001 - the approval is committed; drafts report per truck
+        logger.exception("draft SPJs for plan %s failed", plan_id)
     if created_now:
         # Mirror the durable dispatch rows into the in-memory dispatch
         # center only AFTER the approval transaction committed.
@@ -359,7 +485,124 @@ def approve_operations_plan(
         history_store.record_event(
             "operations_plan_approved", {"plan_id": plan_id, "dispatches": len(dispatch_ids)}
         )
-    return plan
+    return {**plan, "spj_drafts": _spj_drafts(plan)}
+
+
+_REASSIGN_LOCKS: dict[str, threading.Lock] = {}
+_REASSIGN_LOCKS_GUARD = threading.Lock()
+
+
+def _reassign_lock(plan_id: str) -> threading.Lock:
+    """One reassign at a time per plan: two moves onto the same truck cannot both pass the check."""
+    with _REASSIGN_LOCKS_GUARD:
+        return _REASSIGN_LOCKS.setdefault(plan_id, threading.Lock())
+
+
+@router.post("/api/operations/{plan_id}/reassign")
+def reassign_operations_truck(
+    plan_id: str,
+    payload: PlanReassignRequest,
+    _role: str = Depends(require_permission("dispatch:create")),
+) -> dict[str, Any]:
+    """Move one truck's share of an approved plan to another truck.
+
+    The old dispatch becomes REASSIGNED (a late READY from it gets 409), a new
+    dispatch with the same fields goes to `to_truck`, the instruction and
+    draft-SPJ link rows move in one plan-DB transaction, and the draft SPJ moves
+    through the audit-logged `reassign_draft`. An active SPJ never moves: the
+    dispatcher cancels it and creates a new one.
+    """
+    from_truck, to_truck = payload.from_truck, payload.to_truck
+    trucks = {t["truck_code"]: t for t in TRUCKS}
+    if _OPERATIONS_PLAN_STORE.get(plan_id) is None:
+        raise HTTPException(status_code=404, detail=f"Plan {plan_id} not found.")
+    if to_truck not in trucks:
+        raise HTTPException(status_code=404, detail=f"Truck {to_truck} not found.")
+    with _reassign_lock(plan_id):
+        plan = _OPERATIONS_PLAN_STORE.get(plan_id)
+        if plan["status"] != "approved":
+            raise HTTPException(status_code=409, detail="Rencana belum disetujui.")
+        dispatches = plan.get("dispatches") or []
+        index = next((i for i, d in enumerate(dispatches) if d.get("truck_code") == from_truck), None)
+        if index is None or "fields" not in dispatches[index]:
+            raise HTTPException(status_code=404, detail=f"Truck {from_truck} is not in plan {plan_id}.")
+        if any(d.get("truck_code") == to_truck for d in dispatches):
+            raise HTTPException(status_code=409, detail=f"Truk {to_truck} sudah ada di rencana ini.")
+        if trucks[to_truck].get("is_damaged"):
+            raise HTTPException(status_code=409, detail=f"Truk {to_truck} sedang rusak.")
+        duty = safety.duty_check(to_truck)
+        if duty["blocked"]:
+            raise HTTPException(status_code=409, detail=duty["reason"])
+        link = next(
+            (r for r in _OPERATIONS_PLAN_STORE.spj_links(plan_id) if r["truck_code"] == from_truck), None
+        )
+        spj = SPJ_STORE.get(link["spj_id"]) if link and link["spj_id"] else None
+        if spj is not None and spj.status != "draft":
+            raise HTTPException(status_code=409, detail="SPJ sudah aktif; batalkan dan buat ulang")
+
+        old = dispatches[index]
+        old_dispatch_id = (plan.get("dispatch_ids") or [])[index]
+        header, _, rest = old["text"].partition("\n")
+        text = (
+            header.replace(f"Truk {from_truck}", f"Truk {to_truck}") + f"\nDialihkan dari Truk {from_truck}."
+        )
+        if rest:
+            text += "\n" + rest
+        item = {
+            **old,
+            "truck_code": to_truck,
+            "text": text,
+            "fields": {**old["fields"], "truck_code": to_truck},
+        }
+        to_driver = trucks[to_truck].get("driver_name") or ""
+        if spj is not None:
+            try:
+                SPJ_STORE.reassign_draft(spj.spj_id, to_truck, to_driver, actor=_role, reason=payload.reason)
+            except ValueError:
+                raise HTTPException(
+                    status_code=409, detail="SPJ sudah aktif; batalkan dan buat ulang"
+                ) from None
+        try:
+            new_dispatch = history_store.reassign_dispatch(
+                old_dispatch_id,
+                to_truck,
+                text,
+                manager_id="operations_optimizer",
+                note=f"Dialihkan ke Truk {to_truck}: {payload.reason}",
+            )
+        except (KeyError, ValueError) as error:
+            if spj is not None:  # undo the SPJ move: nothing else changed
+                SPJ_STORE.reassign_draft(
+                    spj.spj_id, from_truck, spj.driver_name, actor=_role, reason="rollback"
+                )
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        _OPERATIONS_PLAN_STORE.reassign_truck(
+            plan_id, from_truck, to_truck, old_dispatch_id, new_dispatch["id"], item
+        )
+        dispatch_center._dispatches[:] = [
+            new_dispatch if d.get("id") == old_dispatch_id else d for d in dispatch_center._dispatches
+        ]
+        history_store.record_event(
+            "operations_plan_reassigned",
+            {
+                "plan_id": plan_id,
+                "from_truck": from_truck,
+                "to_truck": to_truck,
+                "reason": payload.reason,
+                "cancelled_dispatch_id": old_dispatch_id,
+                "dispatch_id": new_dispatch["id"],
+                "spj_id": spj.spj_id if spj else None,
+                "by": _role,
+            },
+        )
+    return {
+        "plan_id": plan_id,
+        "from_truck": from_truck,
+        "to_truck": to_truck,
+        "cancelled_dispatch_id": old_dispatch_id,
+        "dispatch_id": new_dispatch["id"],
+        "spj_id": spj.spj_id if spj else None,
+    }
 
 
 @router.post("/api/simulator/stagger")

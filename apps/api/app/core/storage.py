@@ -228,6 +228,10 @@ class RecordStore:
         return int(row["value"]) + 1 if row is not None else 1
 
 
+# Terminal field status of a plan dispatch moved to another truck.
+REASSIGNED = "REASSIGNED"
+
+
 class HistoryStore:
     # Necessary: the DB file must live OUTSIDE the backend cwd — uvicorn --reload
     # watches every file there, so each dispatch write to data/processed/*.db
@@ -329,23 +333,80 @@ class HistoryStore:
     def update_dispatch_status(
         self, dispatch_id: str, status: str, note: str = "", operation_id: str | None = None
     ) -> dict[str, Any]:
+        """Record a field status; a REASSIGNED dispatch is final (ValueError).
+
+        A reassigned instruction moved to another truck, so a late or replayed
+        confirmation from the old truck must not revive it.
+        """
         confirmed_at = datetime.now(UTC).isoformat()
         with closing(self._connect()) as connection:
             with connection:
                 self._ensure_confirm_operation_column(connection)
+                row = connection.execute(
+                    "SELECT field_status FROM dispatches WHERE id=?", (dispatch_id,)
+                ).fetchone()
+                if row is None:
+                    raise KeyError(f"Dispatch {dispatch_id} was not found.")
+                if row["field_status"] == REASSIGNED:
+                    raise ValueError(f"Dispatch {dispatch_id} was reassigned to another truck.")
                 cur = connection.execute(
                     "UPDATE dispatches SET field_status=?, confirmed_note=?, confirmed_at=?, "
-                    "confirm_operation_id=? WHERE id=?",
-                    (status, note, confirmed_at, operation_id, dispatch_id),
+                    "confirm_operation_id=? WHERE id=? AND field_status<>?",
+                    (status, note, confirmed_at, operation_id, dispatch_id, REASSIGNED),
                 )
                 if cur.rowcount == 0:
-                    raise KeyError(f"Dispatch {dispatch_id} was not found.")
+                    raise ValueError(f"Dispatch {dispatch_id} was reassigned to another truck.")
         return {
             "id": dispatch_id,
             "field_status": status,
             "confirmed_note": note,
             "confirmed_at": confirmed_at,
         }
+
+    def reassign_dispatch(
+        self, dispatch_id: str, truck_code: str, instruction: str, manager_id: str, note: str = ""
+    ) -> dict[str, Any]:
+        """Mark a dispatch REASSIGNED and save its replacement for another truck, in one transaction.
+
+        Raises KeyError for an unknown dispatch and ValueError when it was already reassigned.
+        """
+        new = {
+            "id": str(uuid4()),
+            "truck_code": truck_code,
+            "instruction": instruction,
+            "manager_id": manager_id,
+            "field_status": "PENDING",
+            "confirmed_note": "",
+            "created_at": datetime.now(UTC).isoformat(),
+            "confirmed_at": None,
+        }
+        connection = self._connect()
+        connection.isolation_level = None
+        with closing(connection):
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = connection.execute(
+                    "SELECT field_status FROM dispatches WHERE id=?", (dispatch_id,)
+                ).fetchone()
+                if row is None:
+                    raise KeyError(f"Dispatch {dispatch_id} was not found.")
+                if row["field_status"] == REASSIGNED:
+                    raise ValueError(f"Dispatch {dispatch_id} was already reassigned.")
+                connection.execute(
+                    "UPDATE dispatches SET field_status=?, confirmed_note=?, confirmed_at=? WHERE id=?",
+                    (REASSIGNED, note, new["created_at"], dispatch_id),
+                )
+                connection.execute(
+                    "INSERT INTO dispatches (id, truck_code, instruction, manager_id, "
+                    "field_status, confirmed_note, created_at, confirmed_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (new["id"], truck_code, instruction, manager_id, "PENDING", "", new["created_at"], None),
+                )
+                connection.execute("COMMIT")
+            except Exception:
+                connection.execute("ROLLBACK")
+                raise
+        return new
 
     def get_dispatch_operation(self, dispatch_id: str, operation_id: str) -> dict[str, Any] | None:
         """Return the stored confirmation for a replayed operation_id (#44)."""
