@@ -38,11 +38,15 @@ _ALLOWED_ORIGINS = getenv(
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     from app.api.routers.ai import _start_ai_engine
+    from app.api.routers.safety import start_gate_alert_timer
     from app.api.warmup import _warm_route_cache
 
     _warm_route_cache()
     _start_ai_engine()
+    gate_timer = start_gate_alert_timer()
     yield
+    if gate_timer is not None:
+        gate_timer.set()
 
 
 def create_app() -> FastAPI:
@@ -57,6 +61,7 @@ def create_app() -> FastAPI:
         forecast,
         health,
         operations,
+        safety,
         scentinel,
         spj,
         twin,
@@ -86,6 +91,7 @@ def create_app() -> FastAPI:
         scentinel,
         driver,
         xr_session,
+        safety,
     ):
         application.include_router(module.router)
     return application

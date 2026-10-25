@@ -27,6 +27,14 @@ CREW_SIZE_WORKERS = 4
 SHIFT_HOURS = 8.0
 EVENT_WASTE_KG_PER_PERSON = 1.2  # event crowd waste generation rate
 
+# Driver-safety thresholds (minutes). Duty counts from the first pre-trip or SPJ
+# activation of the local day: warn at 10 h, block new SPJs at 12 h (DPRD demand
+# for working-hour caps after the Dec 2025 deaths). Gate dwell alerts at 3 h,
+# DLH's own promised maximum at Bantargebang.
+DUTY_WARN_MIN = 600
+DUTY_BLOCK_MIN = 720
+GATE_ALERT_MIN = 180
+
 UNIT_GLOSSARY = {
     "trucks_required": "trucks",
     "crews_required": "crew teams (1 team operates 1 truck per shift)",

@@ -1,0 +1,255 @@
+/* Driver safety panel (R5/R6): flat rows, one bar per limit, token colours only. */
+.safety-panel {
+  min-width: 0;
+  gap: var(--space-3);
+}
+.safety-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.safety-head > div {
+  min-width: 0;
+  flex: 1 1 220px;
+}
+.safety-head h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 18px;
+}
+.safety-head h2 svg {
+  color: var(--ui-accent);
+}
+.safety-head p,
+.safety-basis,
+.safety-legend,
+.safety-status {
+  margin: 0;
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.pill.provenance-observed {
+  border-color: var(--ui-info);
+  color: var(--ui-info);
+  background: var(--ui-surface);
+  font-size: 11px;
+}
+.safety-stats {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: var(--space-2);
+}
+.safety-stats div {
+  min-width: 0;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--ui-border);
+}
+.safety-stats dt {
+  color: var(--ui-muted);
+  font-size: 11px;
+}
+.safety-stats dd {
+  margin: 0;
+  color: var(--ui-ink);
+  font-family: var(--mono);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.safety-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0;
+}
+.safety-row {
+  min-width: 0;
+  padding: var(--space-3) 0;
+  display: grid;
+  gap: var(--space-2);
+  border-top: 1px solid var(--ui-border);
+}
+.safety-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.safety-row-head strong {
+  font-family: var(--mono);
+  font-size: 15px;
+}
+.safety-chip {
+  padding: 2px 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-ink-soft);
+  font-size: 11px;
+  font-weight: 600;
+}
+.safety-chip.tone-warning {
+  border-color: var(--ui-warning-line);
+  color: var(--ui-ink);
+  background: var(--ui-warning-soft);
+}
+.safety-chip.tone-danger {
+  border-color: var(--ui-danger-line);
+  color: var(--ui-ink);
+  background: var(--ui-danger-soft);
+}
+.safety-metric {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.safety-metric-label {
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.safety-metric-label b {
+  color: var(--ui-ink);
+  font-family: var(--mono);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.safety-gauge-wrap {
+  min-width: 0;
+  padding-bottom: 14px;
+  position: relative;
+}
+.safety-gauge {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-surface-muted);
+}
+.safety-gauge-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--ui-success);
+}
+.safety-gauge-fill.tone-warning {
+  background: var(--ui-warning);
+}
+.safety-gauge-fill.tone-danger {
+  background: var(--ui-danger);
+}
+.safety-gauge-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ui-ink);
+}
+.safety-gauge-ticks span {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  color: var(--ui-muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.safety-override-note {
+  margin: 0;
+  color: var(--ui-ink-soft);
+  font-size: var(--fs-caption);
+  overflow-wrap: anywhere;
+}
+.safety-override-button,
+.safety-toggle,
+.safety-dialog-cancel,
+.safety-dialog-submit,
+.problem-chip.safety-chip-strip {
+  min-height: var(--tap-min);
+  min-width: var(--tap-min);
+}
+.safety-override-button,
+.safety-toggle,
+.safety-dialog-cancel {
+  justify-self: start;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-ink);
+  background: var(--ui-surface);
+  font-weight: 600;
+  cursor: pointer;
+}
+.safety-override-button:focus-visible,
+.safety-toggle:focus-visible,
+.safety-dialog-cancel:focus-visible,
+.safety-dialog textarea:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+.safety-dialog {
+  width: min(440px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  padding: var(--space-5);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-elevated);
+  color: var(--ui-ink);
+  background: var(--ui-surface);
+}
+.safety-dialog::backdrop {
+  background: var(--ui-scrim);
+}
+.safety-dialog form {
+  display: grid;
+  gap: var(--space-3);
+}
+.safety-dialog h3,
+.safety-dialog p {
+  margin: 0;
+}
+.safety-dialog p {
+  color: var(--ui-muted);
+  font-size: var(--fs-caption);
+}
+.safety-dialog label {
+  font-weight: 600;
+}
+.safety-dialog textarea {
+  width: 100%;
+  min-height: 88px;
+  box-sizing: border-box;
+  padding: var(--space-2);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-control);
+  font: inherit;
+  resize: vertical;
+}
+.safety-dialog .safety-form-error {
+  color: var(--ui-danger);
+}
+.safety-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.safety-dialog-submit {
+  padding: 0 var(--space-4);
+}
+.supervisor-view > .safety-panel {
+  width: min(520px, calc(100% - 32px));
+  margin: 14px auto 0;
+  box-sizing: border-box;
+}
+@media (max-width: 480px) {
+  .safety-panel {
+    padding: var(--space-4);
+  }
+}
+.problem-chip.safety-chip-strip em {
+  color: var(--ui-warning);
+}
