@@ -86,6 +86,16 @@ class ToolRegistryTests(unittest.TestCase):
         self.assertEqual(listed, sum(1 for t in full["trucks"] if not t["ready"]))
         self.assertNotIn("error", json.loads(sanitize_json_payload(result)))
 
+    def test_readiness_and_recap_tools_carry_no_person_names(self):
+        import json
+
+        from app.assistant.tools import _without_people
+
+        nested = {"a": [{"driver_name": "X", "truck_code": "T-1"}], "driver_name": "Y"}
+        self.assertEqual(_without_people(nested), {"a": [{"truck_code": "T-1"}]})
+        for name, args in (("get_readiness", {"scope": "fleet"}), ("get_daily_recap", {})):
+            self.assertNotIn("driver_name", json.dumps(execute_tool(name, args, _ctx())))
+
     def test_execute_unknown_tool_raises_keyerror(self):
         with self.assertRaises(KeyError):
             execute_tool("no_such_tool", {}, _ctx())

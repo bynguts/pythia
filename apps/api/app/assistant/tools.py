@@ -337,11 +337,23 @@ def _fleet_status_tool(args: dict) -> dict[str, Any]:
     }
 
 
+PERSON_KEYS = frozenset({"driver_name", "driver", "reported_by", "created_by", "approved_by"})
+
+
+def _without_people(value: Any) -> Any:
+    """Drop person-name keys: tool output reaches the external LLM gateway, which gets truck codes only."""
+    if isinstance(value, dict):
+        return {k: _without_people(v) for k, v in value.items() if k not in PERSON_KEYS}
+    if isinstance(value, list):
+        return [_without_people(v) for v in value]
+    return value
+
+
 READINESS_TOOL_TRUCKS = 25  # keeps the answer under the tool output size limit
 
 
 def _readiness_tool(args: dict) -> dict[str, Any]:
-    payload = readiness_payload(args.get("date") or None, args.get("scope") or "plan")
+    payload = _without_people(readiness_payload(args.get("date") or None, args.get("scope") or "plan"))
     pending = [t for t in payload["trucks"] if not t["ready"]]
     return {
         **{key: value for key, value in payload.items() if key != "trucks"},
@@ -396,7 +408,7 @@ _TOOLS_IMPL: dict[str, Any] = {
     },
     "run_scenario": lambda args, ctx: run_scenario(args),
     "get_readiness": lambda args, ctx: _readiness_tool(args),
-    "get_daily_recap": lambda args, ctx: daily_recap(args.get("date") or local_today()),
+    "get_daily_recap": lambda args, ctx: _without_people(daily_recap(args.get("date") or local_today())),
     "get_data_provenance": lambda args, ctx: {
         "provenance": data_provenance(),
         "records": build_provenance_records(),
