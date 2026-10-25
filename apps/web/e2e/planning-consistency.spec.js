@@ -5,7 +5,7 @@ const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 // #21: the planning review (stage 03 executive summary) must derive from the
 // ACTIVE outlook — changing the what-if inputs must change the review's numbers.
 // Teardown v4 R2: Rencana opens on today's baseline (/api/baseline/scenario without
-// rain or crowd, kind "baseline"); a manual what-if is opt-in and labelled "Skenario".
+// rain or crowd, kind "baseline"); a hand-off what-if is labelled "Skenario".
 // NOTE: ExecutiveSummary picks its headline kecamatan by the LARGEST ABSOLUTE ton
 // increase over its normal day among those at risk (high/critical) — mirror that here.
 async function signIn(page, lang = "id") {
@@ -69,17 +69,11 @@ test("planning review derives from the active outlook", async ({ page }) => {
     await expect(headline).toHaveText(/Tidak ada wilayah/, { timeout: 15000 });
   }
 
-  // Open the opt-in what-if and set a large crowd → the outlook reruns as a scenario
-  // and the review must re-derive from the NEW response.
+  // wave12: Rencana has no sliders; a large crowd arrives as a hand-off (?scenario=…) →
+  // the outlook reruns as a scenario and the review must re-derive from the NEW response.
+  await expect(page.getByTestId("manual-whatif")).toHaveCount(0);
   const scenarioPromise = page.waitForResponse(outlookResponse(200000), { timeout: 30000 });
-  await page.getByTestId("manual-whatif").locator("summary").click();
-  await page.getByTestId("scenario-attendance").evaluate((el) => {
-    // Programmatic value change fires React's onChange via the native setter.
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-    setter.call(el, "200000");
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  await page.goto("/planning?scenario=event&attendance=200000", { waitUntil: "domcontentloaded" });
   const scenario = await (await scenarioPromise).json();
   expect(scenario.kind).toBe("scenario");
   const scenarioPeak = peakKecamatan(scenario);
@@ -88,4 +82,10 @@ test("planning review derives from the active outlook", async ({ page }) => {
   await expect(page.getByTestId("plan-scenario-badge")).toBeVisible();
   await expect(headline).toContainText(scenarioPeak.kecamatan, { timeout: 15000 });
   await expect(page.locator(".planning-summary .exec-scenario-note")).toContainText("Skenario");
+
+  // One reset returns to the day's own forecast.
+  const resetPromise = page.waitForResponse(outlookResponse(0), { timeout: 30000 });
+  await page.getByTestId("plan-scenario-reset").click();
+  expect((await (await resetPromise).json()).kind).toBe("baseline");
+  await expect(page.getByTestId("plan-scenario-reset")).toHaveCount(0);
 });

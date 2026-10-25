@@ -64,6 +64,9 @@ test("a supervisor approves the dispatcher's plan from another browser", async (
     await approval.getByTestId("approve-plan").click();
     expect((await approved).status()).toBe(200);
     await expect(approval.getByTestId("approval-done")).toBeVisible();
+    // wave12: approval drafts the SPJs and says so, with who approved and when.
+    await expect(approval.getByTestId("approval-approved-by")).toContainText("Disetujui oleh Pengawas");
+    await expect(approval.getByTestId("approval-spj-drafts")).toContainText("draf SPJ");
     await expect(approval.getByTestId("approve-plan")).toHaveCount(0);
   } finally {
     await dispatcherContext.close();

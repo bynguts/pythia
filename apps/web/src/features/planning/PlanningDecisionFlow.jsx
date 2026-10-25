@@ -13,7 +13,7 @@ import { readPlanningScenario } from "./scenarioLink.js";
 import { Provenance } from "../../shared/ui/Provenance.jsx";
 import { WEIGHBRIDGE_LANES } from "../twin/twinLinks.js";
 import { ROLE_PERMISSIONS } from "../settings/roles.js";
-import { ArrowRight, SlidersHorizontal } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 const VENUES = ["gbk", "jis", "monas"];
 const MAX_PLAN_DAYS = 30; // /api/baseline/scenario serves up to 30 days ahead
@@ -27,8 +27,9 @@ function daysFromToday(iso) {
 }
 
 // Teardown v4 R2: Rencana opens on today's forecast (the same baseline as Prediksi
-// and the twin). A manual what-if is opt-in, and once set every figure carries a
-// "Skenario" label. A twin or event hand-off arrives as ?scenario=… (scenarioLink.js).
+// and the twin). wave12: its inputs fill themselves; a what-if arrives only as a twin,
+// Ana or event hand-off (?scenario=…, scenarioLink.js), and then every figure carries a
+// "Skenario" label.
 export function PlanningDecisionFlow({
   attendance,
   setAttendance,
@@ -98,6 +99,30 @@ export function PlanningDecisionFlow({
   }, [inboxOpen]);
   const reviewPlan = plan || inboxPlan;
 
+  // wave12: the proposer learns of the approval live. While this page's plan waits, read
+  // it by id every 15 s; the poll ends once it is approved, replaced or the page closes.
+  const waitingPlanId = plan?.status === "proposed" ? plan.plan_id : null;
+  useEffect(() => {
+    if (!waitingPlanId) return undefined;
+    let live = true;
+    const controller = new AbortController();
+    const id = setInterval(() => {
+      apiFetch(`/operations/plans/${encodeURIComponent(waitingPlanId)}`, { signal: controller.signal })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((latest) => {
+          if (!live || latest?.status !== "approved") return;
+          setPlan(latest);
+          setApproved(true);
+        })
+        .catch(() => {});
+    }, 15000);
+    return () => {
+      live = false;
+      controller.abort();
+      clearInterval(id);
+    };
+  }, [waitingPlanId]);
+
   const [aiOutlook, setAiOutlook] = useState([]);
 
   useEffect(() => {
@@ -136,6 +161,21 @@ export function PlanningDecisionFlow({
       .catch(() => {});
     return () => controller.abort();
   }, [handoff, lanesOpen]);
+
+  // wave12: the day's inputs fill themselves (Open-Meteo rain, official events, submitted
+  // permits, holidays) and /forecast/tomorrow explains each as a driver. Forecast week only.
+  const [dayDrivers, setDayDrivers] = useState(null);
+  useEffect(() => {
+    setDayDrivers(null);
+    const index = daysFromToday(planDate);
+    if (index < 0 || index >= 7) return undefined;
+    const controller = new AbortController();
+    apiFetch(`/forecast/tomorrow?date=${planDate}`, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then(setDayDrivers)
+      .catch(() => {});
+    return () => controller.abort();
+  }, [planDate]);
 
   // An agreement at the XR table on this scenario and day (a session note, never an approval).
   const [agreement, setAgreement] = useState(null);
@@ -292,6 +332,27 @@ export function PlanningDecisionFlow({
       );
     }
     return t("w10num_reason_other");
+  };
+  const effect = (tons) => (tons == null ? t("w12_effect_unknown") : `${signedNumber(tons)} t`);
+  const driverLine = (driver) => {
+    const detail = driver.detail || {};
+    if (driver.kind === "weather") {
+      return t(
+        driver.input_classification === "REAL_FORECAST_INPUT"
+          ? "w12_driver_weather"
+          : "w12_driver_weather_none",
+      )
+        .replace("{mm}", number(detail.rainfall_mm))
+        .replace("{effect}", effect(driver.effect_tons));
+    }
+    if (driver.kind === "event") {
+      return t(detail.data_class === "official" ? "w12_driver_event" : "w12_driver_event_permit")
+        .replace("{name}", detail.name || "—")
+        .replace("{n}", detail.attendance == null ? "—" : number(detail.attendance))
+        .replace("{effect}", effect(driver.effect_tons));
+    }
+    if (driver.kind === "holiday") return t("w12_driver_holiday").replace("{name}", detail.name);
+    return t(detail.weekend ? "w12_driver_weekend" : "w12_driver_weekday");
   };
   const errorKey = optimizerError
     ? { 401: "w10num_err_401", 403: "w10num_err_403", 404: "w10num_err_404", 422: "w10num_err_422" }[
@@ -462,6 +523,29 @@ export function PlanningDecisionFlow({
                       </div>
                     </dl>
                   )}
+                  {!isScenario && dayDrivers?.drivers?.length > 0 && (
+                    <div data-testid="plan-drivers" data-date={dayDrivers.date}>
+                      <p className="kec-note">
+                        <Provenance kind="model">{t("w10num_badge_model")}</Provenance>{" "}
+                        {t("w12_drivers_title")}
+                      </p>
+                      <ul>
+                        {dayDrivers.drivers.map((driver, i) => (
+                          <li key={i} data-testid="plan-driver" data-kind={driver.kind}>
+                            {driverLine(driver)}
+                          </li>
+                        ))}
+                        {dayDrivers.with_events_total_t !== dayDrivers.total_tonnage_t && (
+                          <li data-testid="plan-driver-with-events">
+                            {t("w12_driver_with_events").replace(
+                              "{t}",
+                              number(dayDrivers.with_events_total_t),
+                            )}
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -530,70 +614,17 @@ export function PlanningDecisionFlow({
               </div>
             </div>
 
-            <details
-              className="plan-disclosure manual-whatif"
-              open={scenarioActive}
-              data-testid="manual-whatif"
-            >
-              <summary>
-                <SlidersHorizontal size={16} aria-hidden="true" />
-                {t("w10num_scenario_open")}
-              </summary>
-              <p className="kec-note">{t("w10num_scenario_explain")}</p>
-              <div className="manual-whatif-grid">
-                <label>
-                  <span>{t("plan_att")}</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="200000"
-                    step="5000"
-                    value={attendance}
-                    data-testid="scenario-attendance"
-                    onChange={(event) => setAttendance(Number(event.target.value))}
-                  />
-                  <small>{t("w10num_people").replace("{n}", number(attendance))}</small>
-                </label>
-                <label>
-                  <span>{t("plan_rain")}</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={rainfall}
-                    data-testid="scenario-rain"
-                    onChange={(event) => setRainfall(Number(event.target.value))}
-                  />
-                  <small>
-                    {rainfall > 0
-                      ? t("w10num_mm_day").replace("{n}", number(rainfall))
-                      : t("w10num_scn_rain_forecast")}
-                  </small>
-                </label>
-                <label>
-                  <span>{t("w10num_scn_venue")}</span>
-                  <select value={venue} onChange={(event) => setVenue(event.target.value)}>
-                    {VENUES.map((id) => (
-                      <option key={id} value={id}>
-                        {t(`w10num_venue_${id}`)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              {/* The forecast reruns on every change; these only reset or force a rerun. */}
-              <div className="manual-whatif-actions">
-                {scenarioActive && (
-                  <button className="text-button" type="button" onClick={resetScenario}>
-                    {t("w10num_scn_reset")}
-                  </button>
-                )}
-                <button className="ghost-button" type="button" onClick={run} disabled={loading}>
-                  {loading ? t("w10num_calculating") : t("btn_run_scenario")}
-                </button>
-              </div>
-            </details>
+            {/* wave12: no manual sliders; a what-if arrives only as a hand-off (?scenario=…). */}
+            {scenarioActive && (
+              <button
+                className="text-button"
+                type="button"
+                data-testid="plan-scenario-reset"
+                onClick={resetScenario}
+              >
+                {t("w10num_scn_reset")}
+              </button>
+            )}
             {forecastError && (
               <p className="plan-note plan-note-danger optimizer-error" role="alert">
                 {t(dateInRange ? "w10num_forecast_error" : "w10num_date_out_of_range")}

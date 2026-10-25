@@ -36,6 +36,20 @@ export function PlanningApproval({ plan, planLoading, approved, approvePlan, rol
         minute: "2-digit",
       })
     : null;
+  const approver = ROLE_KEYS.includes(plan?.approved_by)
+    ? t(`pln6_profile_role_${plan.approved_by}`)
+    : t("pln6_profile_role_unknown");
+  const approvedAt = plan?.approved_at
+    ? new Date(plan.approved_at).toLocaleString(locale, {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "—";
+  const drafts = plan?.spj_drafts;
+  const drafted = (drafts || []).filter((d) => d.spj_id).length;
+  const missing = (drafts || []).filter((d) => !d.spj_id);
   const goToAllocation = () => {
     const stage = document.getElementById("planning-stage-02")?.closest("section");
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -125,6 +139,33 @@ export function PlanningApproval({ plan, planLoading, approved, approvePlan, rol
       {approved && (
         <p className="planning-approval-done" role="status" data-testid="approval-done">
           <Check size={16} aria-hidden="true" /> {t("pa_approved")}
+        </p>
+      )}
+      {approved && plan?.approved_at && (
+        <p className="planning-approval-note" data-testid="approval-approved-by">
+          {t("w12_approved_by").replace("{role}", approver).replace("{time}", approvedAt)}
+        </p>
+      )}
+      {/* wave12: approval drafts one SPJ per truck; a draft is model output until a person
+          activates it, and a truck without one is named, never silently dropped. */}
+      {approved && drafts && (
+        <p
+          className="planning-approval-note"
+          data-testid="approval-spj-drafts"
+          data-drafts={drafted}
+          data-missing={missing.length}
+        >
+          {t("w12_spj_drafts").replace("{n}", number(drafted))}
+          {missing.length > 0 && (
+            <>
+              {" "}
+              <b data-testid="approval-spj-missing">
+                {t("w12_spj_missing")
+                  .replace("{n}", number(missing.length))
+                  .replace("{trucks}", missing.map((d) => d.truck_code).join(", "))}
+              </b>
+            </>
+          )}
         </p>
       )}
     </div>

@@ -1,6 +1,6 @@
 // wave11 planning: Rencana reads as one flow (a stepper that follows the real state,
 // three full-width stages, input beside result, at most one primary action per stage,
-// a plain 7-day table and a quiet what-if), and Prediksi leads with district demand
+// a plain 7-day table and no manual what-if), and Prediksi leads with district demand
 // (no kickers, ranked flat rows, every headline number labelled with its source).
 import { expect, test } from "@playwright/test";
 
@@ -89,10 +89,14 @@ test("planning stages run full width with input beside result and one primary ea
   expect(await outlook.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
   await expect(outlook.getByTestId("prov")).toHaveText("HASIL MODEL");
 
-  // The manual what-if is a quiet disclosure, closed by default, with a 44 px summary.
-  const whatIf = page.getByTestId("manual-whatif");
-  await expect(whatIf).not.toHaveAttribute("open", "");
-  expect((await whatIf.locator("summary").boundingBox()).height).toBeGreaterThanOrEqual(44);
+  // wave12: the inputs fill themselves; Rencana has no manual what-if sliders.
+  await expect(page.getByTestId("manual-whatif")).toHaveCount(0);
+  await expect(page.locator('input[type="range"]')).toHaveCount(0);
+  // Instead the day's drivers are listed as model output, the weekday always among them.
+  const drivers = stage1.getByTestId("plan-drivers");
+  await expect(drivers.locator('[data-kind="weather"]')).toBeVisible({ timeout: 30000 });
+  await expect(drivers.locator('[data-kind="weekday"]')).toHaveText(/^(Hari kerja|Akhir pekan)$/);
+  await expect(drivers.getByTestId("prov")).toHaveText("HASIL MODEL");
 
   // One primary action per stage at most.
   const stage3 = page.locator(".planning-approval-stage");
