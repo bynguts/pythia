@@ -393,3 +393,70 @@ def test_ask_global_cap_holds_across_sessions(api_client, clock, monkeypatch):
 def test_ask_session_code_is_validated(api_client, clock):
     res = api_client.post("/api/xr/ask", json={"question": "hello", "session": "lower-case!"})
     assert res.status_code == 422
+
+
+# wave10 decision room: "Sepakati rencana" on a briefing scenario becomes a session note
+# Rencana can read, with the server-counted devices; never an official approval.
+@pytest.fixture()
+def no_agreements():
+    with xr_session.AGREEMENTS.transaction() as connection:
+        connection.execute(f"DELETE FROM {xr_session.AGREEMENTS.table}")
+    yield
+    with xr_session.AGREEMENTS.transaction() as connection:
+        connection.execute(f"DELETE FROM {xr_session.AGREEMENTS.table}")
+
+
+def test_agreeing_on_a_briefing_scenario_records_a_note_for_the_plan(
+    api_client, clock, no_agreements, auth_headers
+):
+    briefing = {**BODY, "rainfall_mm": 50, "event_preset": "none", "day": 0, "scenario_id": "heavy_rain"}
+    api_client.put("/api/xr/session/AGREE1", json=briefing)
+    _beat(api_client, "AGREE1", "deviceAAAA")
+    _beat(api_client, "AGREE1", "deviceBBBB")
+    assert api_client.put("/api/xr/session/AGREE1", json={**briefing, "agreed": True}).status_code == 200
+
+    res = api_client.get("/api/twin/agreements?scenario=heavy_rain", headers=auth_headers("dispatcher"))
+    assert res.status_code == 200
+    [note] = res.json()["agreements"]
+    assert note["scenario_id"] == "heavy_rain"
+    assert note["session_code"] == "AGREE1"
+    assert note["participants"] == 2
+    assert note["official"] is False
+    assert note["classification"] == "SESSION_NOTE"
+    assert note["date"] == api_client.get("/api/twin/scenarios").json()["date"]
+    # The same date filter Rencana uses; another scenario has no note.
+    dated = api_client.get(f"/api/twin/agreements?date={note['date']}", headers=auth_headers("dispatcher"))
+    assert [n["session_code"] for n in dated.json()["agreements"]] == ["AGREE1"]
+    other = api_client.get("/api/twin/agreements?scenario=gbk_event", headers=auth_headers("dispatcher"))
+    assert other.json()["agreements"] == []
+
+    # Re-sending the same agreed state does not re-stamp it; withdrawing removes it.
+    stamp = note["agreed_at"]
+    clock["t"] += 5
+    api_client.put("/api/xr/session/AGREE1", json={**briefing, "agreed": True})
+    again = api_client.get("/api/twin/agreements", headers=auth_headers("dispatcher")).json()["agreements"]
+    assert [n["agreed_at"] for n in again] == [stamp]
+    api_client.put("/api/xr/session/AGREE1", json={**briefing, "agreed": False})
+    assert (
+        api_client.get("/api/twin/agreements", headers=auth_headers("dispatcher")).json()["agreements"] == []
+    )
+
+
+def test_free_what_ifs_and_unknown_scenarios_leave_no_note(api_client, clock, no_agreements, auth_headers):
+    api_client.put("/api/xr/session/AGREE2", json={**BODY, "agreed": True})
+    api_client.put("/api/xr/session/AGREE3", json={**BODY, "agreed": True, "scenario_id": "not_a_scenario"})
+    api_client.put(
+        "/api/xr/session/AGREE4", json={**BODY, "city": "hcmc", "agreed": True, "scenario_id": "heavy_rain"}
+    )
+    assert (
+        api_client.get("/api/twin/agreements", headers=auth_headers("dispatcher")).json()["agreements"] == []
+    )
+    assert (
+        api_client.put("/api/xr/session/AGREE5", json={**BODY, "scenario_id": "Heavy Rain"}).status_code
+        == 422
+    )
+
+
+def test_agreement_notes_need_a_command_center_login(api_client, clock, no_agreements, auth_headers):
+    assert api_client.get("/api/twin/agreements").status_code == 401
+    assert api_client.get("/api/twin/agreements", headers=auth_headers("driver")).status_code == 403

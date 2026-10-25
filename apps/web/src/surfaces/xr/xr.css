@@ -346,6 +346,123 @@
   color: #ffffff;
 }
 
+/* ── Decision room (wave 10): back to the twin, three numbers, the method folded ── */
+.xr-back {
+  flex: none;
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  padding: 0 var(--space-2) 0 var(--space-1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-ink);
+  background: var(--ui-surface);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.xr-briefing-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ui-ink);
+}
+
+.xr-numbers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.xr-numbers div {
+  min-width: 0;
+  padding: 6px var(--space-2);
+}
+
+.xr-numbers div + div {
+  border-left: 1px solid var(--ui-border);
+}
+
+.xr-numbers dt {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ui-muted);
+}
+
+.xr-numbers dt small {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.xr-numbers dd {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-ink);
+  overflow-wrap: anywhere;
+}
+
+.xr-numbers dd.xr-number-before {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ui-muted);
+}
+
+.xr-numbers[aria-busy="true"] dd {
+  color: var(--ui-muted);
+}
+
+.xr-method {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.xr-method summary {
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-ink-soft);
+  cursor: pointer;
+}
+
+.xr-method[open] > * + * {
+  margin-top: var(--space-2);
+}
+
+/* Why AR is off and which mode runs: information, not an error. */
+.xr-capability {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ui-ink-soft);
+}
+
+.xr-capability svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--ui-accent);
+}
+
 /* ── Status & selection ── */
 
 .xr-status {
@@ -917,6 +1034,24 @@
     font-size: 17px;
   }
 
+  /* The back link keeps its 44 px target as an arrow; the word goes to its label. */
+  .xr-back span {
+    display: none;
+  }
+
+  /* The city keeps the screen: why AR is off and the mode stay, the orbit how-to goes. */
+  .xr-capability {
+    font-size: 12px;
+  }
+
+  .xr-capability .xr-cap-hint {
+    display: none;
+  }
+
+  .xr-numbers dd {
+    font-size: 16px;
+  }
+
   .xr-head-row .xr-prov {
     padding: 2px 6px;
     font-size: 10px;
@@ -948,6 +1083,19 @@
   .xr-overlay {
     padding-left: var(--space-2);
     padding-right: var(--space-2);
+  }
+
+  /* 320 px: the back arrow keeps its 44 px target over the panel padding and gap,
+     and the provenance chip wraps sooner, so the day's rain chip stays whole. */
+  .xr-back {
+    margin-left: calc(-1 * var(--space-3));
+    margin-right: calc(-1 * var(--space-2));
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .xr-head-row .xr-prov {
+    max-width: 32%;
   }
 
   .xr-ask-icon {

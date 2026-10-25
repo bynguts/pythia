@@ -40,6 +40,12 @@ function isLocalOrigin(origin) {
   }
 }
 
+// WebXR (and so "place on the table") needs a secure context: over plain http the
+// phone can only show the 3D table.
+function isInsecureOrigin(origin) {
+  return /^http:/i.test(origin || "");
+}
+
 function storedOrigin() {
   try {
     return localStorage.getItem(ORIGIN_KEY) || "";
@@ -57,8 +63,15 @@ export function TwinTableHandoff({ session, city, onClose, returnFocusRef }) {
   const dialogRef = useRef(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-  const defaultOrigin = normalizeOrigin(import.meta.env.VITE_PUBLIC_ORIGIN) || window.location.origin;
-  const [draft, setDraft] = useState(() => storedOrigin() || defaultOrigin);
+  const publicOrigin = normalizeOrigin(import.meta.env.VITE_PUBLIC_ORIGIN);
+  const defaultOrigin = publicOrigin || window.location.origin;
+  // A configured https origin (the demo tunnel) wins over an http address saved earlier.
+  const [draft, setDraft] = useState(() => {
+    const saved = storedOrigin();
+    return saved && !(publicOrigin && !isInsecureOrigin(publicOrigin) && isInsecureOrigin(saved))
+      ? saved
+      : defaultOrigin;
+  });
   const [copied, setCopied] = useState(false);
   const typed = normalizeOrigin(draft);
   const origin = typed || defaultOrigin;
@@ -266,6 +279,11 @@ export function TwinTableHandoff({ session, city, onClose, returnFocusRef }) {
             {isLocalOrigin(origin) && (
               <p className="twin-handoff-hint" role="note" data-testid="twin-handoff-local-hint">
                 {t("ho_local_hint")}
+              </p>
+            )}
+            {isInsecureOrigin(origin) && (
+              <p className="twin-handoff-hint" role="note" data-testid="twin-handoff-http-warning">
+                {t("dr_ho_http_warning")}
               </p>
             )}
           </div>

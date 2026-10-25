@@ -39,8 +39,14 @@ async function waitForTwin(page, predicate = "true") {
 /** Rewrite the scene's weather block: every non-scenario day gets `input`, its rain and carried rain. */
 async function pinWeather(page, { input = "forecast", rain = [], carried = [], cls, source }) {
   await page.route(/\/twin\/scene\?/, async (route) => {
+    // Without a forecast, the backend computes the scene dry too (weather=none), so
+    // values derived server-side (the queue's day basis) match the pinned week.
+    const url = new URL(route.request().url());
+    if (input !== "forecast") url.searchParams.set("weather", "none");
     // One retry: the proxied fetch can hit a reset keep-alive socket on a busy local server.
-    const response = await route.fetch().catch(() => route.fetch());
+    const response = await route
+      .fetch({ url: url.toString() })
+      .catch(() => route.fetch({ url: url.toString() }));
     const json = await response.json();
     json.weather = {
       ...json.weather,
@@ -206,6 +212,8 @@ test("the landfill beacon names its queue basis against the Fleet queue", async 
   await pinWeather(page, { input: "assumed_dry" });
   await page.goto("/twin");
   await waitForTwin(page);
+  // wave10 T2: the beacon's queue detail (and its basis) opens on tap.
+  await page.getByTestId("twin-landfill-tag").click();
   await expect(page.getByTestId("twin-landfill-tag")).toContainText(
     "Normal day (no rain, no event): same basis as the Fleet queue",
   );

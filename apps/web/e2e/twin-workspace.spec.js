@@ -40,18 +40,17 @@ async function waitForTwin(page, predicate = "true") {
 async function openTwin(page) {
   await page
     .getByTestId("workspace-navigation")
-    .getByRole("button", { name: "Digital Twin", exact: true })
+    .getByRole("button", { name: "3D City", exact: true })
     .click();
   await expect(page.getByTestId("twin-workspace")).toBeVisible();
 }
 
-test("twin is the first workspace and renders all 42 Jakarta districts with provenance", async ({ page }) => {
+// wave9 fleet composition: the twin ("3D City") is the last workspace before Settings.
+test("twin is in the rail and renders all 42 Jakarta districts with provenance", async ({ page }) => {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await signIn(page);
-  await expect(page.getByTestId("workspace-navigation").getByRole("button").first()).toHaveText(
-    "Digital Twin",
-  );
+  await expect(page.getByTestId("workspace-navigation").getByRole("button").nth(4)).toHaveText("3D City");
   await openTwin(page);
   await expect(page.getByRole("heading", { name: "City waste digital twin" })).toBeVisible();
 
@@ -206,7 +205,7 @@ test("twin stays touch-friendly with no horizontal overflow at 390 px", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, "id");
   const nav = page.locator(".command-mobile-nav");
-  await nav.getByRole("button", { name: "Kembaran" }).click();
+  await nav.getByRole("button", { name: "Kota 3D" }).click();
   await expect(page.getByTestId("twin-workspace")).toBeVisible();
   await waitForTwin(page);
 
@@ -253,7 +252,7 @@ for (const width of [360, 320])
   test(`day buttons keep 44 px targets at ${width} px without page overflow`, async ({ page }) => {
     await page.setViewportSize({ width, height: 780 });
     await signIn(page, "id");
-    await page.locator(".command-mobile-nav").getByRole("button", { name: "Kembaran" }).click();
+    await page.locator(".command-mobile-nav").getByRole("button", { name: "Kota 3D" }).click();
     await waitForTwin(page);
     const days = page.locator(".twin-day");
     await expect(days).toHaveCount(7);
@@ -286,7 +285,7 @@ test("twin controls meet text contrast requirements", async ({ page }) => {
   await signIn(page, "id");
   await page
     .getByTestId("workspace-navigation")
-    .getByRole("button", { name: "Kembaran Digital", exact: true })
+    .getByRole("button", { name: "Kota 3D", exact: true })
     .click();
   await waitForTwin(page);
   await page.getByTestId("twin-city-hcmc").click();

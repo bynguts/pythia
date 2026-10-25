@@ -22,6 +22,7 @@ import {
   Copy,
   Gauge,
   Glasses,
+  Info,
   LogOut,
   Mic,
   MicOff,
@@ -55,8 +56,12 @@ import { askToScenario, traceKeys } from "./xrAsk.js";
 import { LITE_RENDER, detectLite, storeLite } from "./xrLite.js";
 import {
   TWIN_EVENT_PRESETS,
+  TWIN_SCENARIOS,
   TWIN_VENUES,
+  WEIGHBRIDGE_LANES,
   dailyRisk,
+  twinHref,
+  twinScenario,
   carriedRainMm,
   rainHeldText,
   rainResponseText,
@@ -108,6 +113,19 @@ function readParams() {
   const session = (params.get("session") || "").toUpperCase();
   // The day a linked what-if applies to (the twin's `day`, or `scenario_day`).
   const linkedDay = finiteParam(params, "scenario_day") ?? finiteParam(params, "day");
+  // A decision-room briefing scenario (twinLinks TWIN_SCENARIOS) sets rain, crowd and venue on today.
+  const briefing = city === "jakarta" ? twinScenario(params.get("scenario")) : null;
+  if (briefing)
+    return {
+      city,
+      lang: params.get("lang"),
+      rain: briefing.rain,
+      eventPreset: briefing.event,
+      venue: TWIN_VENUES[city].find((v) => v.id === briefing.venue) || TWIN_VENUES[city][0],
+      session: SESSION_CODE.test(session) ? session : null,
+      day: 0,
+      scenarioId: briefing.id,
+    };
   return {
     city,
     lang: params.get("lang"),
@@ -117,6 +135,7 @@ function readParams() {
     venue: linkedVenue || TWIN_VENUES[city][0],
     session: SESSION_CODE.test(session) ? session : null,
     day: Number.isInteger(linkedDay) && linkedDay >= 0 && linkedDay <= 6 ? linkedDay : 0,
+    scenarioId: null,
   };
 }
 
@@ -764,6 +783,8 @@ export function XrTabletop() {
     selectedId: null,
     // An event venue set by Ask Pythia (a twin venue id); null keeps the linked/default venue.
     venueId: null,
+    // The decision room's briefing scenario on the table, or null for a free what-if.
+    scenarioId: params.scenarioId,
   }));
   const [mode, setMode] = useState("detecting");
   const [session, setSession] = useState(null);
@@ -882,6 +903,8 @@ export function XrTabletop() {
       if (!("agreed" in change) && moved) {
         next.agreed = false;
       }
+      // A hand-made what-if is no longer the briefing scenario.
+      if (!("scenarioId" in change) && moved) next.scenarioId = null;
       return next;
     });
   }, []);
@@ -907,6 +930,7 @@ export function XrTabletop() {
             selected_id: state.selectedId || null,
             venue_id: state.venueId || null,
             scenario_day: state.scenarioDay,
+            scenario_id: state.scenarioId || null,
           },
         });
         if (!res.ok) throw new Error(String(res.status));
@@ -1002,6 +1026,7 @@ export function XrTabletop() {
           selectedId: body.selected_id || null,
           venueId: body.venue_id || null,
           scenarioDay: Number.isInteger(body.scenario_day) ? body.scenario_day : 0,
+          scenarioId: body.scenario_id || null,
         });
       } catch {
         if (alive) setSessionErrorKey("xr_session_error");
@@ -1054,6 +1079,40 @@ export function XrTabletop() {
       });
     }
   };
+
+  // The decision room: a briefing scenario goes on the table for today (and to every
+  // joined device); choosing it again returns to the plain forecast.
+  const chooseScenario = (id) => {
+    const picked = scenario.scenarioId === id ? null : twinScenario(id);
+    changeScenario({
+      scenarioId: picked ? picked.id : null,
+      rain: picked ? picked.rain : 0,
+      eventPreset: picked ? picked.event : "none",
+      venueId: picked?.venue || null,
+      day: 0,
+      scenarioDay: 0,
+      selectedId: null,
+    });
+  };
+
+  // Today's canonical baseline beside the briefing scenario (/api/twin/briefing, the
+  // twin's own comparison), so the table prints the twin's numbers.
+  const [briefing, setBriefing] = useState(null);
+  useEffect(() => {
+    if (!scenario.scenarioId) {
+      setBriefing(null);
+      return undefined;
+    }
+    const controller = new AbortController();
+    apiFetch(`/twin/briefing?scenario=${encodeURIComponent(scenario.scenarioId)}`, {
+      auth: false,
+      signal: controller.signal,
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => setBriefing(body))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [scenario.scenarioId]);
 
   const stepDay = (delta) =>
     changeScenario((prev) => ({ day: Math.min(Math.max(0, dayCount - 1), Math.max(0, prev.day + delta)) }));
@@ -1497,6 +1556,97 @@ export function XrTabletop() {
     .join(" → ");
   const askLine = ask.status === "applied" && askTrace ? `${t("xr3_ask_title")}: ${askTrace}` : null;
 
+  // X4: three numbers on the table, the twin briefing's own (tonnes and trucks are the
+  // scene's model output for the selected day; the queue its simulated day mean).
+  // On today, a briefing scenario puts today's canonical baseline under each.
+  const sceneClass = cityScene?.provenance?.districts?.class || "MODEL_OUTPUT";
+  const beforeCol =
+    scenario.scenarioId && day === 0 && briefing?.scenario?.id === scenario.scenarioId
+      ? briefing.before
+      : null;
+  const numbers = [
+    {
+      key: "tons",
+      label: t("dr_row_tons"),
+      value: tonnes(totalToday),
+      before: beforeCol && finiteNumber(beforeCol.total_tonnage_t) ? tonnes(beforeCol.total_tonnage_t) : null,
+      cls: sceneClass,
+    },
+    {
+      key: "trucks",
+      label: t("dr_row_trucks"),
+      value: trucksNeeded.toLocaleString(locale),
+      before:
+        beforeCol && finiteNumber(beforeCol.trucks_needed)
+          ? beforeCol.trucks_needed.toLocaleString(locale)
+          : null,
+      cls: sceneClass,
+    },
+    {
+      key: "queue",
+      label: t("dr_row_queue"),
+      // A briefing scenario prints the briefing's own queue (a closed lane only exists there).
+      value:
+        beforeCol && finiteNumber(briefing.after?.queue_minutes_per_truck)
+          ? minutes(briefing.after.queue_minutes_per_truck)
+          : queue && finiteNumber(queue.baseline_mean)
+            ? minutes(queue.baseline_mean)
+            : "—",
+      before:
+        beforeCol && finiteNumber(beforeCol.queue_minutes_per_truck)
+          ? minutes(beforeCol.queue_minutes_per_truck)
+          : null,
+      // The queue metric describes the day the scene was computed for (gsc M5).
+      note:
+        beforeCol && twinScenario(scenario.scenarioId)?.lanes
+          ? t("dr_lanes_assumption")
+              .replace("{closed}", WEIGHBRIDGE_LANES - twinScenario(scenario.scenarioId).lanes)
+              .replace("{total}", WEIGHBRIDGE_LANES)
+          : queue && queueDay !== day
+            ? dateLabel(dates[queueDay])
+            : null,
+      cls: queue?.classification || "SIMULATED",
+    },
+  ];
+  // X1: why there is no "place on the table" button, and which mode runs instead.
+  const capability =
+    mode !== "orbit"
+      ? null
+      : window.isSecureContext === false
+        ? "insecure"
+        : IS_ANDROID
+          ? "no-arcore"
+          : "no-webxr";
+  const capabilityText = capability
+    ? {
+        why: t(
+          capability === "insecure"
+            ? "dr_xr_cap_insecure"
+            : capability === "no-arcore"
+              ? "xl_no_arcore"
+              : "dr_xr_cap_no_webxr",
+        ),
+        mode: t(lite ? "dr_xr_cap_mode_lite" : "dr_xr_cap_mode_3d"),
+        // The ARCore line already says how to turn the 3D table.
+        hint: capability !== "no-arcore" ? t("xr3_orbit_hint") : null,
+      }
+    : null;
+  // X1: back to the twin on the same city, day and scenario.
+  const venueKey =
+    scenario.venueId ||
+    TWIN_VENUES[params.city]?.find(
+      (v) => Math.abs(v.lat - venue.lat) < VENUE_MATCH_DEG && Math.abs(v.lng - venue.lng) < VENUE_MATCH_DEG,
+    )?.id;
+  const backHref = twinHref({
+    city: params.city,
+    day,
+    rain: scenario.rain,
+    event: scenario.eventPreset,
+    venue: venueKey,
+    scenarioDay: scenario.scenarioDay,
+    scenario: scenario.scenarioId,
+  });
+
   // In-scene panel content; redrawn only when its text changes.
   const panelSpec = cityScene
     ? {
@@ -1659,6 +1809,16 @@ export function XrTabletop() {
         <header className={`xr-panel xr-head${headOpen ? " open" : ""}`} ref={headRef} data-testid="xr-head">
           {/* One line on a phone: city · date · total · provenance, with a chevron for the rest. */}
           <div className="xr-head-row">
+            <a
+              className="xr-back"
+              href={backHref}
+              data-testid="xr-back"
+              aria-label={t("dr_xr_back_label")}
+              title={t("dr_xr_back_label")}
+            >
+              <ChevronLeft size={18} aria-hidden="true" />
+              <span>{t("dr_xr_back")}</span>
+            </a>
             <div className="xr-head-title">
               <h1>{cityName}</h1>
               {cityScene && (
@@ -1722,9 +1882,6 @@ export function XrTabletop() {
             </div>
             {cityScene && (
               <>
-                <p className="xr-prov-note" data-testid="xr-provenance-note">
-                  {provNote}
-                </p>
                 {sessionCode && participantsText && (
                   <p className="xr-presence" data-testid="xr-participants" data-count={participants}>
                     <Users size={14} aria-hidden="true" /> {participantsText}
@@ -1748,79 +1905,110 @@ export function XrTabletop() {
                     {weatherText}
                   </p>
                 )}
-                {rainResponse && (
-                  <p className="xr-weather" data-testid="xr-rain-response">
-                    {rainResponse}
+                {scenario.scenarioId && (
+                  <p className="xr-briefing-name" data-testid="xr-briefing-name">
+                    {t("dr_xr_on_table").replace("{name}", t(`dr_scn_${scenario.scenarioId}`))}
                   </p>
                 )}
-                <dl className="xr-metrics" data-testid="xr-readout" aria-busy={sceneLoading}>
-                  <div>
-                    <dt>{t("xr_metric_date")}</dt>
-                    <dd data-testid="xr-date">{dateLabel(dates[day])}</dd>
-                  </div>
-                  <div>
-                    <dt>{t("xr_metric_total")}</dt>
-                    <dd data-testid="xr-total">{tonnes(totalToday)}</dd>
-                  </div>
-                  <div>
-                    <dt>{t("xr_metric_risk")}</dt>
-                    <dd>{t("xr_risk_count").replace("{n}", atRisk).replace("{total}", districts.length)}</dd>
-                  </div>
-                  <div>
-                    <dt>{t("xr_metric_extra")}</dt>
-                    <dd data-testid="xr-extra">{extraLabel}</dd>
-                  </div>
-                  <div>
-                    <dt
-                      title={[cityScene.units?.trucks_required, crewsNeeded === null && t("xr_fleet_note")]
-                        .filter(Boolean)
-                        .join("; ")}
-                    >
-                      {crewsNeeded === null ? t("xr_metric_fleet") : t("xr_metric_trucks")}
-                    </dt>
-                    <dd data-testid="xr-fleet">{trucksNeeded.toLocaleString(locale)}</dd>
-                  </div>
-                  {crewsNeeded !== null && (
-                    <div>
-                      <dt title={cityScene.units?.crews_required || undefined}>{t("xr_metric_crews")}</dt>
-                      <dd data-testid="xr-crews">{crewsNeeded.toLocaleString(locale)}</dd>
-                      {crewRule && (
-                        <dd className="xr-metric-note" data-testid="xr-crew-rule">
-                          {crewRule}
-                        </dd>
-                      )}
-                    </div>
-                  )}
-                  {queueLabel && (
-                    <div className="xr-metric-wide xr-queue-cell">
-                      <dt title={t("xr_queue_note")}>
-                        {t("xr_metric_queue")} ·{" "}
-                        <span data-testid="xr-queue-day">{dateLabel(dates[queueDay])}</span>
+                <dl className="xr-numbers" data-testid="xr-numbers" aria-busy={sceneLoading}>
+                  {numbers.map((n) => (
+                    <div key={n.key} data-metric={n.key}>
+                      <dt>
+                        {n.label}
+                        <small>{t(`twin_class_${n.cls}`)}</small>
                       </dt>
-                      <dd data-testid="xr-queue">{queueLabel}</dd>
-                      {queuePeak && (
-                        <dd className="xr-metric-note" data-testid="xr-queue-peak">
-                          {queuePeak}
+                      <dd data-testid={`xr-num-${n.key}`}>{n.value}</dd>
+                      {n.before && (
+                        <dd className="xr-number-before" data-testid={`xr-num-${n.key}-before`}>
+                          {t("dr_xr_today").replace("{n}", n.before)}
                         </dd>
                       )}
-                      {queueBand && (
-                        <dd className="xr-metric-note" data-testid="xr-queue-band">
-                          {queueBand}
-                        </dd>
-                      )}
-                      {queueNormal && (
-                        <dd className="xr-metric-note" data-testid="xr-queue-normal">
-                          {queueNormal}
-                        </dd>
-                      )}
-                      {queueTrips && (
-                        <dd className="xr-metric-note" data-testid="xr-queue-trips">
-                          {queueTrips}
-                        </dd>
-                      )}
+                      {n.note && <dd className="xr-number-before">{n.note}</dd>}
                     </div>
-                  )}
+                  ))}
                 </dl>
+                {/* X4: everything behind the three numbers, one tap away. */}
+                <details className="xr-method" data-testid="xr-method">
+                  <summary>{t("dr_method")}</summary>
+                  <p className="xr-prov-note" data-testid="xr-provenance-note">
+                    {provNote}
+                  </p>
+                  {rainResponse && (
+                    <p className="xr-weather" data-testid="xr-rain-response">
+                      {rainResponse}
+                    </p>
+                  )}
+                  <dl className="xr-metrics" data-testid="xr-readout" aria-busy={sceneLoading}>
+                    <div>
+                      <dt>{t("xr_metric_date")}</dt>
+                      <dd data-testid="xr-date">{dateLabel(dates[day])}</dd>
+                    </div>
+                    <div>
+                      <dt>{t("xr_metric_total")}</dt>
+                      <dd data-testid="xr-total">{tonnes(totalToday)}</dd>
+                    </div>
+                    <div>
+                      <dt>{t("xr_metric_risk")}</dt>
+                      <dd>
+                        {t("xr_risk_count").replace("{n}", atRisk).replace("{total}", districts.length)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>{t("xr_metric_extra")}</dt>
+                      <dd data-testid="xr-extra">{extraLabel}</dd>
+                    </div>
+                    <div>
+                      <dt
+                        title={[cityScene.units?.trucks_required, crewsNeeded === null && t("xr_fleet_note")]
+                          .filter(Boolean)
+                          .join("; ")}
+                      >
+                        {crewsNeeded === null ? t("xr_metric_fleet") : t("xr_metric_trucks")}
+                      </dt>
+                      <dd data-testid="xr-fleet">{trucksNeeded.toLocaleString(locale)}</dd>
+                    </div>
+                    {crewsNeeded !== null && (
+                      <div>
+                        <dt title={cityScene.units?.crews_required || undefined}>{t("xr_metric_crews")}</dt>
+                        <dd data-testid="xr-crews">{crewsNeeded.toLocaleString(locale)}</dd>
+                        {crewRule && (
+                          <dd className="xr-metric-note" data-testid="xr-crew-rule">
+                            {crewRule}
+                          </dd>
+                        )}
+                      </div>
+                    )}
+                    {queueLabel && (
+                      <div className="xr-metric-wide xr-queue-cell">
+                        <dt title={t("xr_queue_note")}>
+                          {t("xr_metric_queue")} ·{" "}
+                          <span data-testid="xr-queue-day">{dateLabel(dates[queueDay])}</span>
+                        </dt>
+                        <dd data-testid="xr-queue">{queueLabel}</dd>
+                        {queuePeak && (
+                          <dd className="xr-metric-note" data-testid="xr-queue-peak">
+                            {queuePeak}
+                          </dd>
+                        )}
+                        {queueBand && (
+                          <dd className="xr-metric-note" data-testid="xr-queue-band">
+                            {queueBand}
+                          </dd>
+                        )}
+                        {queueNormal && (
+                          <dd className="xr-metric-note" data-testid="xr-queue-normal">
+                            {queueNormal}
+                          </dd>
+                        )}
+                        {queueTrips && (
+                          <dd className="xr-metric-note" data-testid="xr-queue-trips">
+                            {queueTrips}
+                          </dd>
+                        )}
+                      </div>
+                    )}
+                  </dl>
+                </details>
               </>
             )}
             <nav className="xr-cities" aria-label={t("xr_city_switch")}>
@@ -1981,13 +2169,20 @@ export function XrTabletop() {
                     <Glasses size={18} /> {t("xr_enter_vr")}
                   </button>
                 )}
-                {mode === "orbit" && (
+                {capabilityText && (
+                  // X1: a first-class 3D table, never a dead end: why AR is off and what runs.
                   <p
-                    className="xr-hint"
+                    className="xr-capability"
+                    role="note"
                     data-testid="xr-orbit-hint"
-                    data-reason={IS_ANDROID ? "no-arcore" : "no-webxr"}
+                    data-reason={capability}
+                    data-mode={lite ? "lite" : "3d"}
                   >
-                    {IS_ANDROID ? t("xl_no_arcore") : t("xr3_orbit_hint")}
+                    <Info size={16} aria-hidden="true" />
+                    <span>
+                      {capabilityText.why} {capabilityText.mode}
+                      {capabilityText.hint && <span className="xr-cap-hint"> {capabilityText.hint}</span>}
+                    </span>
                   </p>
                 )}
                 {lite && (
@@ -2176,7 +2371,9 @@ export function XrTabletop() {
               <SlidersHorizontal size={18} aria-hidden="true" />
               <span className="xr-toggle-title">{t("xr_scenario_toggle")}</span>
               <span className="xr-toggle-summary">
-                {scenario.rain.toLocaleString(locale)} mm · {t(`xr_event_${scenario.eventPreset}`)}
+                {scenario.scenarioId
+                  ? t(`dr_scn_${scenario.scenarioId}`)
+                  : `${scenario.rain.toLocaleString(locale)} mm · ${t(`xr_event_${scenario.eventPreset}`)}`}
                 {sessionCode ? ` · ${sessionCode}` : ""}
               </span>
               {scenarioOpen ? (
@@ -2193,6 +2390,27 @@ export function XrTabletop() {
             {scenarioOpen && (
               <div className="xr-scenario-panel" id="xr-scenario-panel">
                 <div className="xr-scenario-controls" data-testid="xr-scenario-controls">
+                  {params.city === "jakarta" && (
+                    <div className="xr-chip-group" role="group" aria-label={t("dr_title")}>
+                      <span className="xr-chip-label" aria-hidden="true">
+                        {t("dr_title")}
+                      </span>
+                      <div className="xr-chips">
+                        {TWIN_SCENARIOS.map(({ id }) => (
+                          <button
+                            key={id}
+                            type="button"
+                            className="xr-chip"
+                            data-testid={`xr-scenario-${id}`}
+                            aria-pressed={scenario.scenarioId === id}
+                            onClick={() => chooseScenario(id)}
+                          >
+                            {t(`dr_scn_${id}`)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="xr-chip-group" role="group" aria-label={t("xr_rain")}>
                     <span className="xr-chip-label" aria-hidden="true">
                       {t("xr_rain")}
@@ -2321,7 +2539,8 @@ export function XrTabletop() {
             )}
             {scenario.agreed && (
               <p className="xr-agreed" role="status" data-testid="xr-agreed">
-                {t("xr_agreed")}
+                {/* X3: on a briefing scenario the agreement reaches Rencana as a session note. */}
+                {t(scenario.scenarioId && params.city === "jakarta" ? "dr_xr_agreed_plan" : "xr_agreed")}
               </p>
             )}
             {sessionErrorKey && (

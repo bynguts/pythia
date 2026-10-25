@@ -27,12 +27,13 @@ from __future__ import annotations
 
 import ipaddress
 import time
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from pydantic import BaseModel, Field
 
+from app.api.deps import require_any_permission
 from app.api.state import _xr_sessions, _xr_sessions_lock
 from app.assistant.scenario import (
     parse_scenario_question,
@@ -42,8 +43,16 @@ from app.assistant.scenario import (
     with_parse_step,
 )
 from app.core.env import today
+from app.core.storage import RecordStore, StorageError
+from app.forecast.twin import BRIEFING_SCENARIOS
 
 router = APIRouter()
+
+# "Sepakati rencana" on a briefing scenario becomes a note Rencana can show: which
+# scenario, which day, and how many devices were at the table (the server's own
+# presence count, never a claim from the client). A session note, not an approval.
+AGREEMENTS = RecordStore("pythia_xr_agreements")
+AGREEMENT_LABEL = "Agreed at the XR table: a session note, not an official approval"
 
 SESSION_TTL_S = 12 * 3600
 # Bounds memory for a public endpoint: past this, the stalest sessions go first.
@@ -79,6 +88,8 @@ def _clock() -> float:
 
 class XrSessionState(BaseModel):
     city: Literal["jakarta", "hcmc"]
+    # The decision room's briefing scenario on the table (forecast/twin.BRIEFING_SCENARIOS), or none.
+    scenario_id: str | None = Field(None, pattern="^[a-z0-9_]{1,32}$")
     rainfall_mm: float = Field(0.0, ge=0, le=300)
     event_preset: Literal["none", "50k", "100k"] = "none"
     day: int = Field(0, ge=0, le=6)
@@ -199,7 +210,58 @@ def put_xr_session(
         participants = previous.get("participants", {}) if previous else {}
         record = {"state": body.model_dump(), "updated": updated, "participants": participants}
         _xr_sessions[code] = record
-        return _public(code, record, now)
+        public = _public(code, record, now)
+    note = _agreement_note(code, previous["state"] if previous else None, body, public["participants"], now)
+    if note is not None:
+        try:
+            AGREEMENTS.write(f"{note['date']}:{note['scenario_id']}:{code}", note)
+        except StorageError as exc:
+            # The table must not believe its agreement reached the plan when it did not.
+            raise HTTPException(status_code=503, detail="Could not record the table agreement") from exc
+    return public
+
+
+def _agreement_note(
+    code: str, before: dict[str, Any] | None, after: XrSessionState, present: int, now: float
+) -> dict[str, Any] | None:
+    """The agreement note this write starts or withdraws on a briefing scenario, else None."""
+    was = bool(before and before.get("agreed") and before.get("scenario_id") == after.scenario_id)
+    if after.scenario_id not in BRIEFING_SCENARIOS or after.city != "jakarta" or after.agreed == was:
+        return None
+    return {
+        "scenario_id": after.scenario_id,
+        "date": (today() + timedelta(days=after.scenario_day)).isoformat(),
+        "session_code": code,
+        "agreed": after.agreed,
+        # Devices with a live heartbeat at the moment of agreeing; a twin screen leading
+        # the table does not heartbeat, so at least the device that agreed counts.
+        "participants": max(1, present),
+        "agreed_at": _iso(now),
+        "official": False,
+        "classification": "SESSION_NOTE",
+        "label": AGREEMENT_LABEL,
+    }
+
+
+@router.get("/api/twin/agreements")
+def get_agreements(
+    scenario: str | None = Query(None, pattern="^[a-z0-9_]{1,32}$"),
+    on: date | None = Query(None, alias="date"),
+    _role: str = Depends(require_any_permission("dashboard:read", "operations:plan")),
+) -> dict[str, Any]:
+    """Standing table agreements (newest first), optionally for one scenario and day."""
+    try:
+        notes = AGREEMENTS.all()
+    except StorageError as exc:
+        raise HTTPException(status_code=503, detail="Agreement notes are unavailable") from exc
+    standing = [
+        n
+        for n in notes
+        if n.get("agreed")
+        and (scenario is None or n["scenario_id"] == scenario)
+        and (on is None or n["date"] == on.isoformat())
+    ]
+    return {"agreements": sorted(standing, key=lambda n: n["agreed_at"], reverse=True)}
 
 
 @router.post("/api/xr/session/{code}/presence")

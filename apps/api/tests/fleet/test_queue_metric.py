@@ -478,3 +478,47 @@ def test_tpa_wait_recommendation_names_the_stagger_slot():
     assert yellow["status"] == "yellow"
     assert f"by {queue_simulation.STAGGER_SLOT_MINUTES} minutes" in yellow["recommendation"]
     assert "20 minutes" not in yellow["recommendation"]
+
+
+# ── wave10 twin decision room: a weighbridge lane closed is a labelled what-if ──
+
+
+def test_default_lanes_keep_the_normal_day_and_its_cache_key():
+    _simulate_day.cache_clear()
+    default = queue_minutes_per_truck()
+    explicit = queue_minutes_per_truck(lanes=WEIGHBRIDGE_LANES)
+    assert explicit == default
+    assert _simulate_day.cache_info().currsize == 1
+    assert default["assumptions"]["weighbridge_lanes"] == WEIGHBRIDGE_LANES
+    assert default["assumptions"]["weighbridge_basis"] == WEIGHBRIDGE_ASSUMPTION
+
+
+def test_a_closed_lane_never_shares_a_cached_result_with_the_full_set():
+    _simulate_day.cache_clear()
+    full = queue_minutes_per_truck()
+    closed = queue_minutes_per_truck(lanes=WEIGHBRIDGE_LANES - 1)
+    full_again = queue_minutes_per_truck()
+    assert _simulate_day.cache_info().currsize == 2
+    assert full_again == full
+    assert closed["trucks_per_day"] == full["trucks_per_day"]
+    assert closed["baseline_mean"] > full["baseline_mean"]
+    assert closed["staggered_mean"] > full["staggered_mean"]
+    assert closed["assumptions"]["weighbridge_lanes"] == WEIGHBRIDGE_LANES - 1
+    assert closed["assumptions"]["weighbridge_basis"].startswith("what-if assumption:")
+    assert closed["classification"] == full["classification"]
+
+
+def test_scenario_metric_with_a_closed_lane_compares_against_the_full_normal_day():
+    normal = scenario_queue_metric()
+    closed = scenario_queue_metric(lanes=WEIGHBRIDGE_LANES - 1)
+    assert closed["scenario_scaled"] is False
+    assert closed["normal_day"] == normal["normal_day"]
+    assert closed["normal_day"]["baseline_mean"] == normal["baseline_mean"]
+    assert closed["baseline_mean"] > normal["baseline_mean"]
+    assert closed["assumptions"]["weighbridge_lanes"] == WEIGHBRIDGE_LANES - 1
+
+
+@pytest.mark.parametrize("lanes", [0, -1, WEIGHBRIDGE_LANES + 1])
+def test_lanes_outside_the_assumed_set_are_rejected(lanes):
+    with pytest.raises(ValueError):
+        queue_minutes_per_truck(1000, lanes=lanes)

@@ -77,6 +77,8 @@ test("asking a what-if applies rain, venue and day in place and shows the tool t
   );
   // The landfill beacon names the modelled peak hour of the selected day, never the wall clock,
   // and puts that day's average beside the peak-hour wait so the two never read as a contradiction.
+  // wave10 T2: its queue detail opens on tap.
+  await page.getByTestId("twin-landfill-tag").click();
   await expect(page.getByTestId("twin-landfill-tag")).toContainText(
     /Peak hour \d{2}:00 \(modelled\): [\d,]+ trucks queued · [\d,]+ min wait/,
   );

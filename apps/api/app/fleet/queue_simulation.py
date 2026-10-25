@@ -41,6 +41,16 @@ WEIGHBRIDGE_ASSUMPTION = (
 )
 
 
+def lanes_assumption(lanes: int) -> str:
+    """The weighbridge basis for `lanes` open lanes (a what-if when fewer than the assumed set)."""
+    if lanes == WEIGHBRIDGE_LANES:
+        return WEIGHBRIDGE_ASSUMPTION
+    return (
+        f"what-if assumption: {lanes} of {WEIGHBRIDGE_LANES} weighbridge lanes open x "
+        f"{WEIGHBRIDGE_TRUCKS_PER_HOUR:g} trucks/h ({WEIGH_CYCLE_MINUTES:g}-min weigh cycle); not a facility measurement"
+    )
+
+
 def _run_single(
     arrival_count: int, weighbridges: int, service_rate_per_hour: float, rng: random.Random
 ) -> tuple[float, float, int]:
@@ -343,6 +353,7 @@ def queue_minutes_per_truck(
     seed: int = QUEUE_METRIC_SEED,
     replications: int = QUEUE_METRIC_REPLICATIONS,
     arrivals_source: str = "caller-supplied daily truck arrivals",
+    lanes: int = WEIGHBRIDGE_LANES,
 ) -> dict[str, Any] | None:
     """TPA queue minutes per truck: current-practice baseline vs the recommended stagger.
 
@@ -361,8 +372,16 @@ def queue_minutes_per_truck(
         raise ValueError("trucks_per_day must be positive")
     if replications <= 0:
         raise ValueError("replications must be positive")
+    if not 0 < lanes <= WEIGHBRIDGE_LANES:
+        raise ValueError(f"lanes must be between 1 and {WEIGHBRIDGE_LANES}")
+    # The default set keeps its original cache key; a lane what-if is keyed by its lanes.
+    day = (
+        _simulate_day(int(trucks_per_day), seed, replications)
+        if lanes == WEIGHBRIDGE_LANES
+        else _simulate_day(int(trucks_per_day), seed, replications, int(lanes))
+    )
     return {
-        **_simulate_day(int(trucks_per_day), seed, replications),
+        **day,
         "source": (
             "Seeded discrete-event simulation of one operating day at the TPST Bantargebang "
             f"weighbridges; arrivals: {arrivals_source}. Not a field measurement."
@@ -396,8 +415,8 @@ class _HourlyTally:
             self.rep_means[hour].append(statistics.fmean(values))
             self.rep_max_queue[hour].append(hour_queue[hour])
 
-    def rows(self, replications: int) -> tuple[dict[str, Any], ...]:
-        capacity = WEIGHBRIDGE_LANES * WEIGHBRIDGE_TRUCKS_PER_HOUR
+    def rows(self, replications: int, lanes: int = WEIGHBRIDGE_LANES) -> tuple[dict[str, Any], ...]:
+        capacity = lanes * WEIGHBRIDGE_TRUCKS_PER_HOUR
         waits, rep_means, rep_max_queue, queued_ahead = (
             self.waits,
             self.rep_means,
@@ -459,7 +478,7 @@ class _StaggeredTally:
 
 @lru_cache(maxsize=16)
 def _seeded_day(
-    trucks_per_day: int, seed: int, replications: int
+    trucks_per_day: int, seed: int, replications: int, lanes: int = WEIGHBRIDGE_LANES
 ) -> tuple[dict[str, Any], tuple[dict[str, Any], ...], tuple[tuple[int, float, float, int], ...]]:
     """One pass over the seeded day: (daily metric, baseline hourly profile, staggered hours).
 
@@ -482,27 +501,32 @@ def _seeded_day(
         for arm in arms:
             offsets = None if arm is None else _baseline_offsets(z, arm)
             arrivals = _gate_arrivals(trucks_per_day, rounds, offsets)
-            waits, queued = _trace(arrivals, WEIGHBRIDGE_LANES, services)
+            waits, queued = _trace(arrivals, lanes, services)
             runs[arm].append((statistics.fmean(waits), _p95(waits), max(queued, default=0)))
             if arm is None:
                 staggered.add_day(arrivals, waits, queued)
             elif arm == BASELINE_DEPARTURE_SD_MINUTES:
                 hourly.add_day(arrivals, waits, queued)
     return (
-        _day_summary(runs, trucks_per_day, seed, replications),
-        hourly.rows(replications),
+        _day_summary(runs, trucks_per_day, seed, replications, lanes),
+        hourly.rows(replications, lanes),
         staggered.hours(replications),
     )
 
 
 @lru_cache(maxsize=64)
-def _simulate_day(trucks_per_day: int, seed: int, replications: int) -> dict[str, Any]:
+def _simulate_day(
+    trucks_per_day: int, seed: int, replications: int, lanes: int = WEIGHBRIDGE_LANES
+) -> dict[str, Any]:
     """The cached simulation behind `queue_minutes_per_truck` (no source text).
 
     Arms: the recommended stagger, and the current-practice baseline at every
     departure spread of the sensitivity band (the headline spread among them).
+    `lanes` is part of the cache key, so a lane what-if never serves the normal set.
     """
-    return _seeded_day(trucks_per_day, seed, replications)[0]
+    if lanes == WEIGHBRIDGE_LANES:  # same key as hourly_queue_profile, so one pass serves both
+        return _seeded_day(trucks_per_day, seed, replications)[0]
+    return _seeded_day(trucks_per_day, seed, replications, lanes)[0]
 
 
 def _day_summary(
@@ -510,6 +534,7 @@ def _day_summary(
     trucks_per_day: int,
     seed: int,
     replications: int,
+    lanes: int = WEIGHBRIDGE_LANES,
 ) -> dict[str, Any]:
     """The daily metric from each arm's per-replication (mean wait, p95 wait, max queue)."""
 
@@ -569,9 +594,9 @@ def _day_summary(
             "reduction_percent_band": [min(band_reductions), max(band_reductions)],
         },
         "assumptions": {
-            "weighbridge_lanes": WEIGHBRIDGE_LANES,
+            "weighbridge_lanes": lanes,
             "weigh_cycle_minutes": WEIGH_CYCLE_MINUTES,
-            "weighbridge_basis": WEIGHBRIDGE_ASSUMPTION,
+            "weighbridge_basis": lanes_assumption(lanes),
             "collection_round_hours_mean_sd": [COLLECTION_ROUND_MEAN_H, COLLECTION_ROUND_SD_H],
             "shifts_per_day": SHIFTS_PER_DAY,
             "shift_hours": SHIFT_HOURS,
@@ -601,13 +626,16 @@ SCENARIO_TRUCK_STEP = 25
 
 
 def scenario_queue_metric(
-    scenario_tons: float | None = None, normal_tons: float | None = None
+    scenario_tons: float | None = None,
+    normal_tons: float | None = None,
+    lanes: int = WEIGHBRIDGE_LANES,
 ) -> dict[str, Any] | None:
     """The queue metric for a scenario day; without tonnes, the normal day.
 
     Keeps every key of `queue_minutes_per_truck()` (now describing the scenario)
     and adds `scenario_scaled` and `normal_day`. Returns a new dict, so the
-    cached simulation results are never mutated.
+    cached simulation results are never mutated. `lanes` below the assumed set
+    is a what-if (a weighbridge lane closed); `normal_day` stays on the full set.
     """
     derived = bantargebang_daily_arrivals()
     if derived is None:
@@ -619,14 +647,21 @@ def scenario_queue_metric(
     unrounded = normal_trucks * ratio
     step = SCENARIO_TRUCK_STEP * round((unrounded - normal_trucks) / SCENARIO_TRUCK_STEP)
     trucks = max(1, normal_trucks + step)
-    if trucks == normal_trucks:
+    if trucks == normal_trucks and lanes == WEIGHBRIDGE_LANES:
         return {**normal, "scenario_scaled": False, "normal_day": normal_day}
+    if trucks == normal_trucks:
+        return {
+            **queue_minutes_per_truck(trucks, arrivals_source=arrivals_source, lanes=lanes),
+            "scenario_scaled": False,
+            "normal_day": normal_day,
+        }
     scaled = queue_minutes_per_truck(
         trucks,
         arrivals_source=(
             f"{arrivals_source}, scaled x{ratio:.3f} by scenario/normal-day tonnes "
             f"and rounded to {SCENARIO_TRUCK_STEP}-truck steps from the normal day"
         ),
+        lanes=lanes,
     )
     return {
         **scaled,

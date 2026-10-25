@@ -870,6 +870,92 @@
   line-height: 1.5;
 }
 
+/* ---- decision room: this week's scenario briefing ------------------------ */
+.twin-briefing {
+  min-width: 0;
+  padding: var(--space-4);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+.twin-briefing .twin-panel-title {
+  margin: 0;
+}
+.twin-briefing-choices {
+  grid-template-columns: repeat(auto-fit, minmax(min(128px, 100%), 1fr));
+}
+.twin-briefing-choices button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.twin-briefing-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: var(--fs-caption);
+}
+.twin-briefing-table th,
+.twin-briefing-table td {
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--twin-overlay-line);
+  text-align: right;
+  vertical-align: top;
+}
+.twin-briefing-table thead th {
+  padding-top: 0;
+  color: var(--twin-overlay-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.twin-briefing-table tbody th {
+  text-align: left;
+  font-weight: 600;
+}
+.twin-briefing-table tbody th small,
+.twin-briefing-table td small {
+  display: block;
+  color: var(--twin-overlay-muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+}
+.twin-briefing-table td {
+  padding-left: var(--space-2);
+  font-family: var(--mono);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.twin-briefing-table td:last-child {
+  font-weight: 600;
+}
+.twin-briefing .twin-note {
+  margin: 0;
+}
+.twin-briefing-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+  gap: var(--space-2);
+}
+.twin-side > .twin-ask {
+  border-top: 1px solid var(--ui-border);
+}
+/* The methodology behind the what-if: one tap away, under the controls. */
+.twin-method {
+  margin-top: var(--space-3);
+}
+.twin-method summary {
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  color: var(--ui-ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .twin-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1142,17 +1228,20 @@
   max-width: 264px;
   padding: 6px 10px 7px 11px;
   display: grid;
+  min-height: var(--tap-min);
   gap: 1px;
   visibility: hidden;
+  border: 0;
   border-left: 3px solid var(--ui-forest-500);
   border-radius: 4px var(--ui-radius-control) var(--ui-radius-control) 4px;
   color: var(--ui-on-dark);
   background: var(--ui-primary);
   box-shadow: var(--ui-shadow-float);
+  font-family: inherit;
   font-size: 11px;
   line-height: 1.35;
   text-align: left;
-  pointer-events: none;
+  cursor: pointer;
 }
 .twin-landfill-tag[data-side="left"] {
   padding: 6px 11px 7px 10px;
@@ -1454,8 +1543,9 @@
 
 /* ---- tablet + mobile: map window, timeline below, controls as a sheet ---- */
 @media (max-width: 920px) {
+  /* T4: the last card scrolls clear of the fixed bottom nav (62 px + 10 px inset). */
   .twin-workspace {
-    padding-bottom: 64px;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   }
   .twin-deck {
     height: auto;
@@ -1490,13 +1580,19 @@
   .twin-side {
     display: contents;
   }
-  .twin-workspace:not(.is-present) .twin-ask {
+  .twin-briefing {
     order: 3;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-card);
+    background: var(--ui-surface);
+  }
+  .twin-workspace:not(.is-present) .twin-ask {
+    order: 5;
     border: 1px solid var(--ui-border);
     border-radius: var(--ui-radius-card);
   }
   .twin-legend {
-    order: 5;
+    order: 6;
     display: grid;
     gap: var(--space-2);
   }
@@ -1536,8 +1632,10 @@
     top: 56px;
     bottom: auto;
   }
+  /* T4: the rain chip stops short of the map's credit button in the corner. */
   .twin-rain-label {
     bottom: var(--twin-edge);
+    right: calc(var(--tap-min) + var(--twin-edge));
   }
 
   /* The controls sheet sits in the page flow under the timeline: a fixed

@@ -9,9 +9,17 @@ from fastapi import APIRouter, Query
 
 from app.api.routers.fleet import command_center
 from app.core.env import today
+from app.core.units import TRUCK_CAPACITY_TONS
 from app.fleet.data import tpa_queue_status_payload
 from app.fleet.facilities import FACILITIES
-from app.fleet.queue_simulation import scenario_queue_metric, staggered_peak_hour
+from app.fleet.queue_simulation import (
+    SCENARIO_SCALING_ASSUMPTION,
+    WEIGHBRIDGE_LANES,
+    lanes_assumption,
+    scenario_queue_metric,
+    staggered_peak_hour,
+)
+from app.forecast.baseline import build_outlook
 from app.forecast.cities import (
     HCMC_LANDFILL,
     RAIN_UPLIFT_CAP,
@@ -29,8 +37,14 @@ from app.forecast.engine import (
     rolling_rain_3d,
 )
 from app.forecast.real_data import load_real_tps_coordinates
+from app.forecast.twin import (
+    BRIEFING_SCENARIOS,
+    briefing_scenario,
+    event_attendance_by_district,
+    event_block,
+    jakarta_week,
+)
 from app.forecast.twin import build_scene as build_twin_scene
-from app.forecast.twin import event_attendance_by_district, event_block, jakarta_week
 from app.forecast.weather import fetch_jakarta_weather_forecast, real_forecast_by_date
 
 router = APIRouter()
@@ -39,6 +53,7 @@ router = APIRouter()
 MAX_TWIN_DAYS = 14
 # Every venue preset id of every city (forecast/cities.py is the one source).
 VENUE_PATTERN = "^(" + "|".join(v.id for venues in VENUES.values() for v in venues) + ")$"
+BRIEFING_PATTERN = "^(" + "|".join(BRIEFING_SCENARIOS) + ")$"
 DEFAULT_TEMP_MAX_C = 31.0
 DEFAULT_WIND_MAX_KMH = 10.0
 
@@ -228,6 +243,77 @@ def _day_scoped(normal: list[dict[str, Any]], scenario: list[dict[str, Any]], da
         series = [what_if["series"][i] if i == day else row for i, row in enumerate(district["series"])]
         out.append({**what_if, "series": series})
     return out
+
+
+def _briefing_column(outlook: dict[str, Any], lanes: int | None = None) -> dict[str, Any]:
+    """The three briefing numbers of one outlook (forecast/baseline.py) plus its TPA queue.
+
+    The queue is the twin beacon's day-0 metric: trips scaled by this day's tonnes
+    against its normal day (queue_simulation.scenario_queue_metric), SIMULATED;
+    `lanes` below the assumed set is the lane-closed what-if.
+    """
+    queue = scenario_queue_metric(
+        outlook["total_tonnage_t"], outlook["normal_day_tonnage_t"], lanes=lanes or WEIGHBRIDGE_LANES
+    )
+    return {
+        "date": outlook["date"],
+        "total_tonnage_t": outlook["total_tonnage_t"],
+        "trucks_needed": outlook["trucks_needed"],
+        "kecamatan_at_risk": outlook["kecamatan_at_risk"],
+        "kecamatan_count": outlook["kecamatan_count"],
+        "queue_minutes_per_truck": queue["baseline_mean"] if queue else None,
+        "queue_trips_per_day": queue["trucks_per_day"] if queue else None,
+        "weighbridge_lanes": lanes or WEIGHBRIDGE_LANES,
+    }
+
+
+@router.get("/api/twin/scenarios")
+def twin_scenarios() -> dict[str, Any]:
+    """The decision room's briefing scenarios (at most three), by id, for Twin, XR and Rencana."""
+    return {
+        "date": today().isoformat(),
+        "scenarios": [briefing_scenario(scenario_id) for scenario_id in BRIEFING_SCENARIOS],
+    }
+
+
+@router.get("/api/twin/briefing")
+def twin_briefing(scenario: str | None = Query(None, pattern=BRIEFING_PATTERN)) -> dict[str, Any]:
+    """Today's baseline next to one briefing scenario on the same day (Jakarta).
+
+    `before` is the canonical "today" (forecast/baseline.build_outlook, the frame
+    Prediksi and Rencana print); `after` is the same call with the scenario's rain
+    or crowd, or null without a scenario. Tonnes and trucks are MODEL OUTPUT; the
+    queue is SIMULATED.
+    """
+    spec = briefing_scenario(scenario) if scenario else None
+    base = build_outlook(days=7)
+    what_if = (
+        build_outlook(
+            days=7,
+            rainfall_mm=spec["rainfall_mm"],
+            event_attendance=spec["event_attendance"],
+            venue=spec["venue"],
+        )
+        if spec
+        else None
+    )
+    return {
+        "date": base["date"],
+        "scenario": spec,
+        "before": _briefing_column(base),
+        "after": _briefing_column(what_if, spec["weighbridge_lanes"]) if what_if else None,
+        "classification": {"tonnage": "MODEL_OUTPUT", "trucks": "MODEL_OUTPUT", "queue": "SIMULATED"},
+        "basis": {
+            "before": base["label"],
+            "scenario": spec["basis"] if spec else None,
+            "trucks": f"{TRUCK_CAPACITY_TONS:g} t per truck per shift, summed per kecamatan",
+            "queue": (
+                f"{SCENARIO_SCALING_ASSUMPTION}; {lanes_assumption(spec['weighbridge_lanes'])}"
+                if spec and spec["weighbridge_lanes"]
+                else SCENARIO_SCALING_ASSUMPTION
+            ),
+        },
+    }
 
 
 @router.get("/api/twin/scene")

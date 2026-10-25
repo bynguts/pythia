@@ -1,5 +1,6 @@
 // Twin deep-link contract:
 // /twin?city=jakarta|hcmc&rain=<0..150 mm>&event=none|50k|100k&venue=<id>&day=<0..6>&scenario_day=<0..6>&present=1
+// &scenario=<briefing id> (a decision-room scenario: it sets rain, event and venue on today).
 // `day` is the selected day; `scenario_day` (written only when it differs) is the
 // day the what-if applies to, default `day`.
 // TwinWorkspace reads it on load (invalid values are ignored) and writes it back
@@ -23,6 +24,20 @@ export const TWIN_VENUES = {
   ],
   hcmc: [{ id: "d1", name: "District 1", lat: 10.7769, lng: 106.7009 }],
 };
+// The decision room's briefing scenarios: the same ids, rain and crowd as the backend
+// catalogue (forecast/twin.BRIEFING_SCENARIOS; a pytest keeps the two equal). Each
+// applies to today, the day the canonical baseline describes.
+export const TWIN_SCENARIOS = [
+  { id: "heavy_rain", rain: 50, event: "none", venue: null },
+  { id: "gbk_event", rain: 0, event: "50k", venue: "gbk" },
+  // Today's waste through one weighbridge lane fewer (an assumption, not a reported closure).
+  { id: "weighbridge_lane_down", rain: 0, event: "none", venue: null, lanes: 3 },
+];
+// The weighbridge lanes the queue model assumes (queue_simulation WEIGHBRIDGE_LANES).
+export const WEIGHBRIDGE_LANES = 4;
+export function twinScenario(id) {
+  return TWIN_SCENARIOS.find((s) => s.id === id) || null;
+}
 const TWIN_RAIN_MAX = 150;
 const TWIN_RAIN_STEP = 5;
 const TWIN_DAY_MAX = 6;
@@ -66,6 +81,18 @@ export function readTwinParams(search) {
   const city = TWIN_CITIES.includes(query.get("city")) ? query.get("city") : TWIN_DEFAULTS.city;
   const event = query.get("event");
   const day = parseDay(query.get("day")) ?? TWIN_DEFAULTS.day;
+  // A briefing scenario (Jakarta only) wins over loose rain / event values.
+  const scenario = city === "jakarta" ? twinScenario(query.get("scenario")) : null;
+  if (scenario)
+    return {
+      city,
+      rain: scenario.rain,
+      event: scenario.event,
+      venue: scenario.venue ?? TWIN_VENUES[city][0].id,
+      day,
+      scenarioDay: 0,
+      scenario: scenario.id,
+    };
   return {
     city,
     rain: parseRain(query.get("rain")) ?? TWIN_DEFAULTS.rain,
@@ -73,6 +100,7 @@ export function readTwinParams(search) {
     venue: venueId(city, query.get("venue")) ?? TWIN_VENUES[city][0].id,
     day,
     scenarioDay: parseDay(query.get("scenario_day")) ?? day,
+    scenario: null,
   };
 }
 
@@ -80,10 +108,12 @@ export function readTwinParams(search) {
  * Write a scenario into a query string, keeping unrelated params (present,
  * lang, basemap…). Default rain/event/venue/day are left out so links stay short.
  */
-export function withTwinParams(search, { city, rain, event, venue, day, scenarioDay }) {
+export function withTwinParams(search, { city, rain, event, venue, day, scenarioDay, scenario }) {
   const query = new URLSearchParams(search);
   const cityValue = TWIN_CITIES.includes(city) ? city : TWIN_DEFAULTS.city;
   query.set("city", cityValue);
+  if (cityValue === "jakarta" && twinScenario(scenario)) query.set("scenario", scenario);
+  else query.delete("scenario");
   const rainValue = parseRain(rain);
   if (rainValue) query.set("rain", String(rainValue));
   else query.delete("rain");
@@ -109,8 +139,8 @@ export function withTwinParams(search, { city, rain, event, venue, day, scenario
 }
 
 /** Shareable link into the twin, e.g. twinHref({ rain: 80, event: "50k", venue: "jis", day: 1, present: true }). */
-export function twinHref({ city, rain, event, venue, day, scenarioDay, present } = {}) {
-  const search = withTwinParams("", { city, rain, event, venue, day, scenarioDay });
+export function twinHref({ city, rain, event, venue, day, scenarioDay, scenario, present } = {}) {
+  const search = withTwinParams("", { city, rain, event, venue, day, scenarioDay, scenario });
   const query = new URLSearchParams(search);
   if (present) query.set("present", "1");
   return `/twin?${query}`;

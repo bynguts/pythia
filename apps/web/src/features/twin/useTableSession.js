@@ -52,11 +52,15 @@ function storeCode(code) {
 
 // What a table agreement was about; any change to it withdraws the agreement.
 const whatIfKey = (s) =>
-  s ? [s.city, Number(s.rainfall_mm), s.event_preset, s.venue_id, s.scenario_day].join("|") : "";
+  s
+    ? [s.city, Number(s.rainfall_mm), s.event_preset, s.venue_id, s.scenario_day, s.scenario_id || ""].join(
+        "|",
+      )
+    : "";
 
 /**
  * `state`: the twin's scenario in the session's shape
- * ({ city, rainfall_mm, event_preset, venue_id, day, scenario_day, selected_id }).
+ * ({ city, rainfall_mm, event_preset, venue_id, day, scenario_day, selected_id, scenario_id }).
  * Returns { code, status: "idle"|"starting"|"live"|"error", participants, start, stop }.
  */
 export function useTableSession(state) {
@@ -87,6 +91,8 @@ export function useTableSession(state) {
       venue_id: twin.venue_id || null,
       day: twin.day,
       scenario_day: twin.scenario_day,
+      // The briefing scenario on the table: an agreement on it reaches Rencana as a note.
+      scenario_id: twin.scenario_id || null,
       // An agreement at the table stands only for the what-if it was made on.
       agreed: Boolean(server?.agreed) && whatIfKey(server) === whatIfKey(twin),
       // The twin's pick wins when it changed; otherwise keep the one a phone made.

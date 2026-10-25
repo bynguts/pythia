@@ -20,6 +20,7 @@ from app.core.units import (
     TRUCK_CAPACITY_TONS,
     resource_requirements,
 )
+from app.fleet.queue_simulation import WEIGHBRIDGE_LANES
 from app.forecast.cities import VENUES, City
 from app.forecast.engine import (
     AT_RISK_LEVELS,
@@ -53,6 +54,52 @@ GENERATED_WASTE_QUANTITY = {
     "label": "Waste generated (timbulan) per kecamatan per day, model output over the SILIKA DLH 2023 baseline",
     "not": "landfill intake: the tonnage weighed in at TPST Bantargebang is a different quantity",
 }
+
+# The decision room's weekly briefing (gsc wave 10): at most three what-ifs, each one
+# the forecast and queue models really compute. Twin, the XR table and Rencana read
+# them by id, so all three show one scenario with one set of numbers.
+BRIEFING_SCENARIOS: dict[str, dict[str, Any]] = {
+    "heavy_rain": {
+        "rainfall_mm": 50.0,
+        "event_attendance": 0,
+        "venue": None,
+        "weighbridge_lanes": None,
+        "basis": "50 mm of rain on the day (BMKG 'hujan lebat' starts at 50 mm/day), within the training range",
+    },
+    "gbk_event": {
+        "rainfall_mm": 0.0,
+        "event_attendance": 50_000,
+        "venue": "gbk",
+        "weighbridge_lanes": None,
+        "basis": f"50,000 visitors at GBK; {EVENT_REACH_BASIS}",
+    },
+    # Same forecast day, one weighbridge lane closed: tonnes and trucks are today's,
+    # only the simulated queue changes (queue_simulation `lanes`), as an assumption.
+    "weighbridge_lane_down": {
+        "rainfall_mm": 0.0,
+        "event_attendance": 0,
+        "venue": None,
+        "weighbridge_lanes": WEIGHBRIDGE_LANES - 1,
+        "basis": (
+            f"assumption: 1 of {WEIGHBRIDGE_LANES} Bantargebang weighbridge lanes closed for the day "
+            "(e.g. maintenance); not a reported closure"
+        ),
+    },
+}
+
+
+def briefing_scenario(scenario_id: str) -> dict[str, Any]:
+    """One briefing scenario with its event coordinates resolved (KeyError when unknown)."""
+    spec = BRIEFING_SCENARIOS[scenario_id]
+    venue = next((v for v in VENUES["jakarta"] if v.id == spec["venue"]), None)
+    return {
+        "id": scenario_id,
+        **spec,
+        "event_lat": venue.lat if venue else None,
+        "event_lng": venue.lng if venue else None,
+        "classification": "MODEL_OUTPUT" if spec["weighbridge_lanes"] is None else "SIMULATED",
+    }
+
 
 PROVENANCE = {
     "jakarta": {

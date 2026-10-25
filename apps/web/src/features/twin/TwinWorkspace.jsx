@@ -40,6 +40,7 @@ import {
 } from "./twinLayers.js";
 import { buildTour, overviewCamera, runTour } from "./tour.js";
 import { TwinAskRail } from "./TwinAskRail.jsx";
+import { ScenarioBriefing } from "./ScenarioBriefing.jsx";
 import { TWIN_DAYS, useTwinScene } from "./useTwinScene.js";
 import { tablePresenceText, useTableSession } from "./useTableSession.js";
 import {
@@ -47,6 +48,7 @@ import {
   TWIN_EVENT_PRESETS,
   TWIN_VENUES,
   dailyRisk,
+  twinScenario,
   carriedRainMm,
   rainHeldText,
   rainResponseText,
@@ -250,6 +252,13 @@ export function TwinWorkspace({ onCityChange }) {
   // scenario was last edited. Stepping or playing the timeline never moves it.
   const [scenarioDay, setScenarioDay] = useState(initial.scenarioDay);
   const [playing, setPlaying] = useState(false);
+  // The decision room's briefing scenario on the map (twinLinks TWIN_SCENARIOS), or
+  // null once the what-if is edited by hand or asked of Pythia.
+  const [scenarioId, setScenarioId] = useState(initial.scenario);
+  // The briefing's last answer: today's canonical baseline, for the KPI strip's delta.
+  const [briefingBody, setBriefingBody] = useState(null);
+  // The TPA beacon's queue detail opens on tap only (footage mode keeps it open).
+  const [landfillOpen, setLandfillOpen] = useState(PRESENT);
   // The scene's queue metric follows the selected day, but not every step of
   // timeline playback (that would refetch the scene once per animation frame).
   const [queueDay, setQueueDay] = useState(initial.day);
@@ -308,9 +317,16 @@ export function TwinWorkspace({ onCityChange }) {
     day: Math.max(0, Math.min(TWIN_DAYS - 1, safeDay)),
     scenario_day: Math.max(0, Math.min(TWIN_DAYS - 1, scenarioDay)),
     selected_id: selectedId,
+    scenario_id: scenarioId,
   });
   const [tableOpen, setTableOpen] = useState(false);
   const tableTriggerRef = useRef(null);
+  // Focus returns to whichever control opened the table dialog.
+  const tableReturnRef = useRef(null);
+  const openTable = (event) => {
+    tableReturnRef.current = event.currentTarget;
+    setTableOpen(true);
+  };
   // Mark the event the scene was computed for, not the pending preset.
   const sceneEvent = useMemo(() => sceneVenue(scene), [scene]);
   // Data arrays for the layers, rebuilt only when the view changes — never
@@ -685,7 +701,7 @@ export function TwinWorkspace({ onCityChange }) {
   // A passive effect, so it runs after the frame effect above has stored `prepared`.
   useEffect(() => {
     placeOverlays();
-  }, [landfillLabel, prepared, view, mapReady, placeOverlays]);
+  }, [landfillLabel, landfillOpen, prepared, view, mapReady, placeOverlays]);
 
   // The district tooltip flips to the other side of the cursor near an edge.
   const tooltipRef = useRef(null);
@@ -732,9 +748,18 @@ export function TwinWorkspace({ onCityChange }) {
   const navigate = useNavigate();
   const urlScenarioRef = useRef(initial);
   useEffect(() => {
-    const scenario = { city, rain: rainfall, event: eventPreset, venue: venue.id, day, scenarioDay };
+    const scenario = {
+      city,
+      rain: rainfall,
+      event: eventPreset,
+      venue: venue.id,
+      day,
+      scenarioDay,
+      scenario: scenarioId,
+    };
     const last = urlScenarioRef.current;
     if (
+      last.scenario === scenarioId &&
       last.city === city &&
       last.rain === rainfall &&
       last.event === eventPreset &&
@@ -750,7 +775,39 @@ export function TwinWorkspace({ onCityChange }) {
         navigate({ pathname: window.location.pathname, search }, { replace: true });
     }, 300);
     return () => clearTimeout(timer);
-  }, [city, rainfall, eventPreset, venue.id, day, scenarioDay, navigate]);
+  }, [city, rainfall, eventPreset, venue.id, day, scenarioDay, scenarioId, navigate]);
+
+  // ---- decision room: a briefing scenario onto the map, then to Rencana ------
+  const chooseScenario = useCallback((id) => {
+    const picked = twinScenario(id);
+    tourRef.current?.abort();
+    setPlaying(false);
+    setSelectedId(null);
+    setScenarioId(picked ? picked.id : null);
+    if (picked) setCity("jakarta");
+    setRainfall(picked ? picked.rain : 0);
+    setEventPreset(picked ? picked.event : "none");
+    if (picked?.venue) setVenueId(picked.venue);
+    // A briefing scenario is about today, the day the canonical baseline describes.
+    setDay(0);
+    setScenarioDay(0);
+  }, []);
+  // Rencana's handoff contract: the scenario id plus the inputs it ran on, so the
+  // plan recomputes the same day (venue only with a crowd, lanes only when closed).
+  const applyToPlan = useCallback(
+    (id, date) => {
+      const picked = twinScenario(id);
+      if (!picked) return;
+      const attendance = EVENT_PRESETS.find((p) => p.id === picked.event)?.attendance || 0;
+      const params = new URLSearchParams({ scenario: id, rain_mm: String(picked.rain) });
+      params.set("attendance", String(attendance));
+      if (attendance && picked.venue) params.set("venue", picked.venue);
+      if (picked.lanes) params.set("lanes", String(picked.lanes));
+      params.set("date", date);
+      navigate(`/planning?${params}`);
+    },
+    [navigate],
+  );
 
   // ---- Ask Pythia: apply the scenario Ana ran, in place ----------------------
   const applyScenario = useCallback(
@@ -773,6 +830,7 @@ export function TwinWorkspace({ onCityChange }) {
       tourRef.current?.abort();
       setPlaying(false);
       setSelectedId(null);
+      setScenarioId(null);
       setCity(nextCity);
       setRainfall(Math.max(0, Math.min(RAIN_MAX_MM, rain)));
       setEventPreset(nextPreset.id);
@@ -913,39 +971,106 @@ export function TwinWorkspace({ onCityChange }) {
     (best, entry, day) => (!best || entry.count > best.count ? { ...entry, day } : best),
     null,
   );
+  // Data honesty: on the what-if's own day the strip shows scenario values, so every
+  // tile says "Scenario: <name>" with its change against today (the briefing's
+  // canonical baseline) or, for a hand-made what-if, against the normal day. The
+  // caption never calls a scenario value a forecast.
+  const kpiWhatIf = scene?.scenario?.rainfall_mm > 0 || scene?.scenario?.event_attendance > 0;
+  const kpiScenario = Boolean(scene) && kpiWhatIf && whatIfDay(scene.scenario) === safeDay;
+  const kpiName = scenarioId ? t(`dr_scn_${scenarioId}`) : t("dr_kpi_custom");
+  const kpiBase =
+    kpiScenario && scenarioId && safeDay === 0 && briefingBody?.scenario?.id === scenarioId
+      ? briefingBody.before
+      : null;
+  const signedPercent = (value, base) =>
+    Number.isFinite(value) && Number.isFinite(base) && base > 0
+      ? `${value >= base ? "+" : "−"}${minutesNumber.format(Math.abs(((value - base) / base) * 100))}%`
+      : null;
+  const signedCount = (value, base) =>
+    Number.isFinite(value) && Number.isFinite(base)
+      ? `${value >= base ? "+" : "−"}${number.format(Math.abs(value - base))}`
+      : null;
+  const vsToday = (delta, base) =>
+    delta ? t("dr_kpi_vs_today").replace("{delta}", delta).replace("{n}", base) : null;
+  const normalTons = kpiScenario
+    ? (scene.districts || []).reduce((sum, d) => sum + (dayRow(d, safeDay).normal_tons || 0), 0)
+    : null;
+  const scenarioHelper = (...parts) =>
+    [t("dr_kpi_scenario").replace("{name}", kpiName), ...parts].filter(Boolean).join(" · ");
+  const peakIsScenario = kpiWhatIf && scene?.summary?.peak_date === summary.date && kpiScenario;
   const metrics = [
     {
       label: t("twin_metric_total"),
       value: scene ? `${number.format(summary.tons)} t` : "—",
-      helper: t("twin_metric_total_helper").replace("{date}", formatDate(summary.date)),
+      helper: kpiScenario
+        ? scenarioHelper(
+            t("dr_kpi_not_forecast").replace("{date}", formatDate(summary.date)),
+            kpiBase
+              ? vsToday(
+                  signedPercent(summary.tons, kpiBase.total_tonnage_t),
+                  `${number.format(kpiBase.total_tonnage_t)} t`,
+                )
+              : normalTons > 0
+                ? t("dr_kpi_vs_normal")
+                    .replace("{delta}", signedPercent(summary.tons, normalTons))
+                    .replace("{n}", `${number.format(normalTons)} t`)
+                : null,
+          )
+        : t("twin_metric_total_helper").replace("{date}", formatDate(summary.date)),
+      tone: kpiScenario ? "info" : "neutral",
     },
     {
       label: t("twin_metric_peak"),
       value: scene ? formatDate(scene.summary.peak_date) : "—",
       helper: scene
-        ? t("twin_metric_peak_helper").replace("{n}", number.format(scene.summary.peak_total_tons))
+        ? [
+            t("twin_metric_peak_helper").replace("{n}", number.format(scene.summary.peak_total_tons)),
+            peakIsScenario ? t("dr_kpi_peak_scenario") : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")
         : "",
       tone: "warning",
     },
     {
       label: t("twin_metric_risk"),
       value: scene ? number.format(summary.atRisk) : "—",
-      helper: [
-        t("twin_metric_risk_helper").replace("{n}", number.format(scene?.districts?.length ?? 0)),
-        weekPeakRisk && weekPeakRisk.count > summary.atRisk
-          ? t("ufx_twin_risk_week_peak")
-              .replace("{n}", number.format(weekPeakRisk.count))
-              .replace("{date}", formatDate(scene?.horizon?.dates?.[weekPeakRisk.day]))
-          : null,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      tone: summary.atRisk > 0 ? "danger" : "neutral",
+      helper: kpiScenario
+        ? scenarioHelper(
+            kpiBase
+              ? vsToday(signedCount(summary.atRisk, kpiBase.kecamatan_at_risk), kpiBase.kecamatan_at_risk)
+              : t("twin_metric_risk_helper").replace("{n}", number.format(scene?.districts?.length ?? 0)),
+          )
+        : [
+            t("twin_metric_risk_helper").replace("{n}", number.format(scene?.districts?.length ?? 0)),
+            weekPeakRisk && weekPeakRisk.count > summary.atRisk
+              ? t("ufx_twin_risk_week_peak")
+                  .replace("{n}", number.format(weekPeakRisk.count))
+                  .replace("{date}", formatDate(scene?.horizon?.dates?.[weekPeakRisk.day]))
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+      tone: summary.atRisk > 0 ? "danger" : kpiScenario ? "info" : "neutral",
     },
     {
       label: t("twin_metric_trucks"),
       value: scene ? number.format(summary.trucks) : "—",
-      helper: truckCapacity ? trucksHelper : "",
+      helper: kpiScenario
+        ? scenarioHelper(
+            kpiBase
+              ? vsToday(
+                  signedCount(summary.trucks, kpiBase.trucks_needed),
+                  number.format(kpiBase.trucks_needed),
+                )
+              : truckCapacity
+                ? trucksHelper
+                : null,
+          )
+        : truckCapacity
+          ? trucksHelper
+          : "",
+      tone: kpiScenario ? "info" : "neutral",
     },
   ];
 
@@ -964,6 +1089,7 @@ export function TwinWorkspace({ onCityChange }) {
   // The XR tabletop opens on the same scenario the twin shows.
   const xrHref = (() => {
     const params = new URLSearchParams({ city });
+    if (scenarioId) params.set("scenario", scenarioId);
     if (rainfall > 0) params.set("rainfall_mm", String(rainfall));
     if (preset.attendance > 0) {
       params.set("event_attendance", String(preset.attendance));
@@ -1138,6 +1264,7 @@ export function TwinWorkspace({ onCityChange }) {
                 data-testid={`twin-city-${id}`}
                 aria-pressed={city === id}
                 onClick={() => {
+                  setScenarioId(null);
                   setCity(id);
                   setVenueId(TWIN_VENUES[id][0].id);
                   setScenarioDay(day);
@@ -1172,15 +1299,11 @@ export function TwinWorkspace({ onCityChange }) {
             value={rainfall}
             aria-valuetext={`${rainfall} mm`}
             onChange={(e) => {
+              setScenarioId(null);
               setRainfall(Number(e.target.value));
               setScenarioDay(day);
             }}
           />
-          {rainResponse && (
-            <p className="twin-note" data-testid="twin-rain-response">
-              {rainResponse}
-            </p>
-          )}
           <span className="twin-field-label" id="twin-event-label">
             <Users size={15} aria-hidden="true" /> {t("twin_event")}
           </span>
@@ -1192,6 +1315,7 @@ export function TwinWorkspace({ onCityChange }) {
                 data-testid={`twin-event-${p.id}`}
                 aria-pressed={eventPreset === p.id}
                 onClick={() => {
+                  setScenarioId(null);
                   setEventPreset(p.id);
                   setScenarioDay(day);
                 }}
@@ -1220,6 +1344,7 @@ export function TwinWorkspace({ onCityChange }) {
                 data-testid={`twin-venue-${v.id}`}
                 aria-pressed={venue.id === v.id}
                 onClick={() => {
+                  setScenarioId(null);
                   setVenueId(v.id);
                   setScenarioDay(day);
                 }}
@@ -1228,7 +1353,16 @@ export function TwinWorkspace({ onCityChange }) {
               </button>
             ))}
           </div>
-          <p className="twin-note">{t("twin_scenario_note")}</p>
+          {/* T3: the controls first, how the model forms the effect one tap away. */}
+          <details className="twin-method" data-testid="twin-method">
+            <summary>{t("dr_method")}</summary>
+            {rainResponse && (
+              <p className="twin-note" data-testid="twin-rain-response">
+                {rainResponse}
+              </p>
+            )}
+            <p className="twin-note">{t("twin_scenario_note")}</p>
+          </details>
         </section>
 
         <section className="twin-panel-section twin-actions">
@@ -1354,8 +1488,20 @@ export function TwinWorkspace({ onCityChange }) {
 
         <div className="twin-stage">
           {(askOpen || !PRESENT) && (
-            // One column beside the map: Ask Pythia first, the scenario controls under it.
+            // One column beside the map: the scenario briefing (the decision), the
+            // what-if controls, then Ask Pythia.
             <div className="twin-side">
+              {/* The briefing compares against Jakarta's baseline; the demo city has none. */}
+              {!PRESENT && city === "jakarta" && (
+                <ScenarioBriefing
+                  scenarioId={scenarioId}
+                  onSelect={chooseScenario}
+                  onApply={applyToPlan}
+                  onOpenTable={openTable}
+                  onBody={setBriefingBody}
+                />
+              )}
+              {!PRESENT && controlPanel}
               {askOpen && (
                 <TwinAskRail
                   onApply={applyScenario}
@@ -1365,7 +1511,6 @@ export function TwinWorkspace({ onCityChange }) {
                   onCollapse={() => setAskOpen(false)}
                 />
               )}
-              {!PRESENT && controlPanel}
             </div>
           )}
           <div className={`twin-viewport${sceneRain > 0 ? " is-raining" : ""}`}>
@@ -1435,13 +1580,21 @@ export function TwinWorkspace({ onCityChange }) {
             )}
 
             {landfillLabel && (
-              <div
+              // T2: the beacon's queue detail opens on tap only; folded, it keeps the
+              // landfill's name and the queue's class (Simulated).
+              <button
+                type="button"
                 ref={landfillTagRef}
-                className="twin-landfill-tag"
+                className={`twin-landfill-tag${landfillOpen ? " is-open" : ""}`}
                 data-testid="twin-landfill-tag"
-                aria-hidden="true"
+                aria-expanded={landfillOpen}
+                aria-label={t("dr_tpa_toggle").replace("{name}", landfillName)}
+                onClick={() => setLandfillOpen((open) => !open)}
               >
-                {landfillLines.map((line, index) => (
+                {(landfillOpen
+                  ? landfillLines
+                  : landfillLines.filter((line, i) => i === 0 || line === queueClassText)
+                ).map((line, index) => (
                   <span
                     key={line}
                     className={
@@ -1459,7 +1612,7 @@ export function TwinWorkspace({ onCityChange }) {
                     {line}
                   </span>
                 ))}
-              </div>
+              </button>
             )}
 
             {satelliteOn && (
@@ -1652,7 +1805,7 @@ export function TwinWorkspace({ onCityChange }) {
                 data-testid="twin-table-open"
                 aria-haspopup="dialog"
                 aria-expanded={tableOpen}
-                onClick={() => setTableOpen(true)}
+                onClick={openTable}
               >
                 <QrCode size={16} aria-hidden="true" />
                 {table.code ? (
@@ -1750,7 +1903,7 @@ export function TwinWorkspace({ onCityChange }) {
             session={table}
             city={city}
             onClose={() => setTableOpen(false)}
-            returnFocusRef={tableTriggerRef}
+            returnFocusRef={tableReturnRef}
           />
         </Suspense>
       )}
