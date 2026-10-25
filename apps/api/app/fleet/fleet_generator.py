@@ -2,7 +2,7 @@
 fleet_generator.py — scales the demo fleet from the 4 curated narrative trucks
 to a realistic operational fleet (60 units) grounded in real data:
 
-- Spatial distribution follows the REAL 2023 DKI truck census per wilayah
+- Spatial distribution follows the REAL DKI truck census (latest year, trucks only) per wilayah
   (data_truk_sampah_dki.csv via load_fleet_composition).
 - Vehicle types follow the same census mix.
 - Patrol areas anchor on REAL kelurahan centroids (267-polygon GeoJSON).

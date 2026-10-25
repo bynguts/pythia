@@ -59,10 +59,13 @@ _DATA_SOURCE_REGISTRY: list[dict[str, Any]] = [
     {
         "name": "data_truk_sampah_dki.csv",
         "source_url": "https://data.go.id/dataset/dataset/data-truk-sampah",
-        "as_of": "2023",
+        "as_of": "2025",
         "granularity": "fleet-census",
         "classification": "real",
-        "limitations": "Vehicle counts per wilayah/type; not live telematics.",
+        "limitations": (
+            "Yearly vehicle counts per wilayah/type, 2023-2025; the fleet size is the latest year's "
+            "trucks (motor carts listed in 2024 are not trucks); not live telematics."
+        ),
     },
     {
         "name": "dki_tps.csv",
@@ -139,6 +142,10 @@ _DATA_SOURCE_REGISTRY: list[dict[str, Any]] = [
         "limitations": "Official SILIKA Wajib Retribusi commercial waste generator coordinate layer; names, addresses and coordinators removed — category and area only.",
     },
 ]
+
+# The truck census counts trucks only; the 2024 release also lists motor carts.
+FLEET_NON_TRUCK_TYPES = frozenset({"Gerobak Motor"})
+FLEET_VEHICLE_CLASS = "waste trucks (arm roll, compactor, dump truck, tronton); motor carts excluded"
 
 # Maps the SIPSN "nama_kabkota" label to the district name used across Pythia.
 _CITY_LABEL_TO_DISTRICT = {
@@ -242,35 +249,52 @@ def load_official_events() -> list[dict[str, Any]]:
     return events
 
 
-def load_fleet_composition() -> dict[str, Any]:
-    """Real DKI waste-truck fleet census from data_truk_sampah_dki.csv.
+def _vehicle_type(raw: str) -> str:
+    """One name per vehicle class across census years ("TRUK DUMP TRUK BESAR" = "Dump Truck Besar")."""
+    name = " ".join(raw.split()).title()
+    if name.startswith("Truk "):
+        name = name[len("Truk ") :]
+    return name.replace("Dump Truk", "Dump Truck")
 
-    Returns totals, per-wilayah counts, and per-vehicle-type counts. Grounds the
-    Fleet Monitoring (Case 1) dashboard in the real 2023 DKI truck census instead
-    of invented numbers. Returns {} if the file is absent.
+
+def load_fleet_composition() -> dict[str, Any]:
+    """Real DKI waste-truck count from data_truk_sampah_dki.csv: the latest census year, trucks only.
+
+    The file holds one census per year (2023-2025) and the 2024 release also counts
+    motor carts (gerobak motor), which are not trucks. Summing every row gave a
+    "fleet" of about 7,000; the latest year's trucks are the real fleet size. Returns
+    per-wilayah and per-vehicle-type counts for that year, or {} if the file is absent.
     """
     path = REAL_DIR / "data_truk_sampah_dki.csv"
     if not path.exists():
         return {}
-    total = 0
-    by_wilayah: dict[str, int] = {}
-    by_type: dict[str, int] = {}
+    rows: list[tuple[int, str, str, int]] = []
     with path.open(encoding="utf-8-sig") as handle:
         for row in csv.DictReader(handle):
-            n = _to_float(row.get("jumlah_kendaraan", "")) or 0
-            n = int(n)
-            total += n
-            wil = (row.get("wilayah") or "").strip().title()
-            vt = (row.get("jenis_kendaraan") or "").strip().title()
-            if wil:
-                by_wilayah[wil] = by_wilayah.get(wil, 0) + n
-            if vt:
-                by_type[vt] = by_type.get(vt, 0) + n
+            year = str(row.get("periode_data") or "").strip()
+            vtype = _vehicle_type(row.get("jenis_kendaraan") or "")
+            if not year.isdigit() or not vtype or vtype in FLEET_NON_TRUCK_TYPES:
+                continue
+            n = int(_to_float(row.get("jumlah_kendaraan", "")) or 0)
+            rows.append((int(year), (row.get("wilayah") or "").strip().title(), vtype, n))
+    if not rows:
+        return {}
+    latest = max(year for year, *_ in rows)
+    by_wilayah: dict[str, int] = {}
+    by_type: dict[str, int] = {}
+    for year, wil, vtype, n in rows:
+        if year != latest or n <= 0:
+            continue
+        if wil:
+            by_wilayah[wil] = by_wilayah.get(wil, 0) + n
+        by_type[vtype] = by_type.get(vtype, 0) + n
     return {
-        "total_units": total,
+        "total_units": sum(by_type.values()),
+        "year": latest,
+        "vehicle_class": FLEET_VEHICLE_CLASS,
         "by_wilayah": dict(sorted(by_wilayah.items(), key=lambda kv: -kv[1])),
         "by_vehicle_type": dict(sorted(by_type.items(), key=lambda kv: -kv[1])),
-        "source": "DKI truck census 2023 (data.go.id)",
+        "source": f"DKI truck census {latest} (data.go.id)",
     }
 
 
@@ -582,6 +606,8 @@ def data_provenance() -> dict[str, Any]:
         "timbulan_source": "SIPSN KLHK (sampahnasional.kemenlh.go.id)",
         "official_events_loaded": len(events),
         "fleet_units_real": fleet.get("total_units"),
+        "fleet_units_year": fleet.get("year"),
+        "fleet_units_class": fleet.get("vehicle_class"),
         "using_real_baselines": bool(timbulan),
         "real_data_count": real_data_count,
     }

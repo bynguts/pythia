@@ -26,6 +26,7 @@ from app.core.units import (
 )
 from app.forecast.cities import VENUES, get_venue
 from app.forecast.engine import AT_RISK_LEVELS, NORMAL_DAY_BASIS, rolling_rain_3d
+from app.forecast.real_data import load_city_timbulan
 from app.forecast.twin import _with_risk, event_attendance_by_district, jakarta_week
 from app.forecast.weather import fetch_jakarta_weather_forecast, real_forecast_by_date
 
@@ -51,6 +52,51 @@ def fleet_counts() -> dict[str, Any]:
         "total": len(trucks),
         "classification": "SIMULATED",
         "basis": "pilot fleet, simulated telemetry; active = on duty (on route or off corridor)",
+    }
+
+
+def gate_trips() -> dict[str, Any] | None:
+    """TPA gate trips (rit) per normal day: the queue model's arrivals, a different count from trucks.
+
+    `trucks_needed` counts truck units (tonnes / truck capacity per shift); a
+    truck makes several gate trips a day, so the two are never the same number.
+    """
+    from app.fleet.queue_simulation import ARRIVALS_UNIT, bantargebang_daily_arrivals
+
+    derived = bantargebang_daily_arrivals()
+    if derived is None:
+        return None
+    trips, source = derived
+    return {
+        "trips_per_day": trips,
+        "unit": ARRIVALS_UNIT,
+        "day": "normal day (not scaled for rain or events)",
+        "source": source,
+        "classification": "REAL" if "ritasi" in source else "DERIVED",
+    }
+
+
+def tonnage_reference() -> dict[str, Any] | None:
+    """The real city-wide generation figure the model's daily tonnage is read against.
+
+    SIPSN's latest yearly daily average (timbulan, the same quantity the model
+    forecasts). One forecast day sits above or below it: rain and events lift a
+    day, and the landfill intake at Bantargebang is a different, lower quantity.
+    """
+    cities = load_city_timbulan()
+    if not cities:
+        return None
+    return {
+        "daily_tons": round(sum(info["daily_tons"] for info in cities.values()), 1),
+        "year": next(iter(cities.values()))["year"],
+        "quantity": "waste generated (timbulan), yearly average per day, all of DKI Jakarta",
+        "source": "SIPSN KLHK",
+        "classification": "REAL",
+        "basis": (
+            "the forecast is model output for one day: forecast rain or an event lifts it above "
+            "the yearly average; landfill intake (Bantargebang weighing data) is a different, "
+            "lower quantity"
+        ),
     }
 
 
@@ -197,6 +243,11 @@ def build_outlook(
         "kecamatan_at_risk": len(at_risk),
         # Per-kecamatan truckloads (a truck does not split across kecamatan), as the twin sums them.
         "trucks_needed": trucks,
+        "trucks_basis": (
+            f"truck units: each kecamatan's tonnes / {TRUCK_CAPACITY_TONS:g} t per truck per shift, "
+            "rounded up and summed; not TPA gate trips (see gate_trips)"
+        ),
+        "gate_trips": gate_trips(),
         "crews_needed": trucks,
         "workers_needed": workers_for_crews(trucks),
         "fleet": fleet,
@@ -245,6 +296,7 @@ def build_outlook(
             "crew_size_workers": CREW_SIZE_WORKERS,
             "tons": "waste generated (timbulan) per day, not landfill intake",
         },
+        "tonnage_reference": tonnage_reference(),
         "provenance": {
             "tonnage": "MODEL_OUTPUT",
             "weather": "REAL_FORECAST_INPUT" if forecast else "UNAVAILABLE",

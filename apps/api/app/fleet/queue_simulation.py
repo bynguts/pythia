@@ -41,6 +41,22 @@ WEIGHBRIDGE_ASSUMPTION = (
 )
 
 
+# What every queue number measures, so screens that show different ones name them apart
+# (wave11 numbers): the stage is the weighbridge only, and each figure is one of these
+# quantities. Arrivals are gate trips (ritasi): one truck can make several a day.
+QUEUE_STAGE = (
+    "weighbridge (gate) stage only: minutes from gate arrival to the start of weighing; "
+    "unloading at the active zone and the exit are not modelled"
+)
+QUEUE_QUANTITIES = {
+    "day_mean_per_truck": "mean weighbridge wait per truck arrival over the whole operating day",
+    "peak_hour_mean_per_truck": (
+        "mean weighbridge wait of the trucks arriving in the modelled peak clock hour"
+    ),
+}
+ARRIVALS_UNIT = "TPA gate trips (ritasi) per day; one truck can make several trips"
+
+
 def lanes_assumption(lanes: int) -> str:
     """The weighbridge basis for `lanes` open lanes (a what-if when fewer than the assumed set)."""
     if lanes == WEIGHBRIDGE_LANES:
@@ -577,6 +593,10 @@ def _day_summary(
         "trucks_per_day": trucks_per_day,
         "classification": "SIMULATED",
         "unit": "minutes of weighbridge queue per truck arrival",
+        "quantity": "day_mean_per_truck",
+        "quantity_label": QUEUE_QUANTITIES["day_mean_per_truck"],
+        "stage": QUEUE_STAGE,
+        "arrivals_unit": ARRIVALS_UNIT,
         "baseline_max_queue": b_queue,
         "staggered_max_queue": s_queue,
         "recommended_stagger_minutes": STAGGER_SLOT_MINUTES,
@@ -771,6 +791,8 @@ def staggered_peak_hour(trucks_per_day: int, hour: int) -> dict[str, Any]:
         "queue_trucks_max": queue_max,
         "stagger_minutes": STAGGER_SLOT_MINUTES,
         "trucks_per_day": trucks_per_day,
+        "quantity": "peak_hour_mean_per_truck",
+        "stage": QUEUE_STAGE,
         "classification": "SIMULATED",
         "basis": (
             "same seeded day and clock hour as the unstaggered beacon, departures spread over "

@@ -36,8 +36,10 @@ City waste operations are **reactive**: a city learns how much waste there is
 only after it has piled up, and the trucks, crews and landfill find out together.
 
 - On 8 March 2026 part of **TPST Bantargebang**, the landfill that takes Jakarta's
-  waste, slid after heavy rain *while trucks were queuing to unload*; at least
-  five people were killed ([Asia News Network](https://asianews.network/deadly-landfill-collapse-exposes-jakartas-decades-long-waste-mismanagement/)).
+  waste, slid after heavy rain *while trucks were queuing to unload*; seven people
+  were killed ([Katadata, Jun 2026](https://katadata.co.id/ekonomi-hijau/investasi-hijau/6a21b5bd1d019/bantargebang-dan-ujian-pengelolaan-sampah-jakarta)),
+  one victim reportedly a truck driver queueing to unload ([NU Online](https://nu.or.id/nasional/diduga-sopir-truk-1-korban-longsor-sampah-bantargebang-kembali-ditemukan-qU5V9);
+  identity unconfirmed at the time; see also [Asia News Network](https://asianews.network/deadly-landfill-collapse-exposes-jakartas-decades-long-waste-mismanagement/)).
 - Jakarta produces roughly **7,400–8,700 tonnes of waste a day**, almost all of it
   trucked to that one site (SIPSN data via [RRI](https://rri.co.id/en/archipelago/2248964/jakarta-targets-rorotan-rdf-to-process-1000-tons-daily)).
 - The same pattern repeats across Southeast Asia: Ho Chi Minh City's Da Phuoc

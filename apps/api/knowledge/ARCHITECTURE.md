@@ -28,7 +28,8 @@ and distance. The interface refreshes every 15 seconds, marks snapshots older
 than 30 seconds or failed refreshes as stale, and keeps the last snapshot visible
 on refresh failure. Rows and KPIs describe current assignments, **not**
 historical trips, fuel efficiency, or driver performance scores. Fleet telemetry
-and assignments are simulated; fleet composition uses the DKI 2023 truck census.
+and assignments are simulated; fleet composition uses the latest DKI truck census
+(2025: 1,700 trucks, motor carts excluded).
 
 ### Durable record storage
 

@@ -51,6 +51,18 @@ LABELS = {
     SIMULATED: "SIMULATED: seeded demo scenario over the simulated fleet; no driver's "
     "duty or gate wait was observed.",
 }
+# The simulated scenario's gate waits are example values per truck that exercise the
+# gate alert; they are not drawn from the weighbridge queue model (/api/tpa/queue-metric).
+SIM_GATE_WAIT_MIN = 15
+SIM_GATE_WAIT_MAX = 240
+GATE_WAIT_BASIS = {
+    OBSERVED: "observed per truck: gate arrival event to weighbridge receipt (or now while waiting)",
+    SIMULATED: (
+        f"example per simulated truck: a seeded gate dwell of {SIM_GATE_WAIT_MIN}-{SIM_GATE_WAIT_MAX} "
+        "min at the top of the hour, growing while it waits, to exercise the gate alert; not drawn "
+        "from the weighbridge queue model (/api/tpa/queue-metric)"
+    ),
+}
 OVERRIDE_REASON_MIN = 10
 SEED_CREATOR = "seed"  # the demo seed SPJ is not an observed app event
 FUTURE_SKEW = timedelta(minutes=5)
@@ -210,7 +222,8 @@ def simulated_activity(now: datetime, codes: list[str]) -> dict[str, dict[str, A
         shift = hour - timedelta(minutes=duty_offset)
         gate = None
         if (seed >> 12) % 100 < 35:
-            wait_offset = min(duty_offset, 15 + (seed >> 20) % 226)
+            spread = SIM_GATE_WAIT_MAX - SIM_GATE_WAIT_MIN + 1
+            wait_offset = min(duty_offset, SIM_GATE_WAIT_MIN + (seed >> 20) % spread)
             gate = {
                 "spj_id": None,
                 "destination": "TPST Bantargebang",
@@ -334,6 +347,7 @@ def overview(now: datetime | None = None) -> dict[str, Any]:
         "gate_wait_p50": percentile(waits, 0.5),
         "gate_wait_p90": percentile(waits, 0.9),
         "gate_wait_samples": len(waits),
+        "gate_wait_basis": GATE_WAIT_BASIS[classification],
         "counts": {
             "trucks": len(trucks),
             "duty_warn": sum(1 for t in trucks if t["duty_state"] == "warn"),

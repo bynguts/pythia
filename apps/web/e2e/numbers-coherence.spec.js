@@ -30,10 +30,11 @@ async function apiJson(page, path) {
 
 const numberOf = async (locator) => Number(await locator.getAttribute("data-value"));
 
-// "52 aktif / 59 unit" → { active: 52, total: 59 }
+// "52 aktif / 59 unit" → { active: 52, total: 59 }. wave11 fleet: the Fleet tile prints
+// "52 / 59 unit" under its "Truk aktif" label, so "aktif" is optional there.
 async function denominatorOf(locator) {
   const text = (await locator.textContent()) || "";
-  const match = text.match(/(\d+) aktif \/ (\d+) unit/);
+  const match = text.match(/(\d+)(?: aktif)? \/ (\d+) unit/);
   expect(match, text).toBeTruthy();
   return { active: Number(match[1]), total: Number(match[2]) };
 }
@@ -165,7 +166,7 @@ test("a closed weighbridge lane from the twin changes only the TPA queue in Renc
     const queue = page.getByTestId("plan-lanes-queue");
     await expect(queue).toHaveAttribute("data-before", String(briefing.before.queue_minutes_per_truck));
     await expect(queue).toHaveAttribute("data-after", String(briefing.after.queue_minutes_per_truck));
-    await expect(queue).toContainText("Antrean TPA (simulasi)");
+    await expect(queue).toContainText("Antre timbang TPA, rata-rata sehari (simulasi)");
   }
 });
 
@@ -206,4 +207,116 @@ test("an agreement at the XR table shows in Rencana as a session note, not an ap
   } finally {
     await agree(false);
   }
+});
+
+// wave11 numbers: a queue figure says which quantity it is. The modelled peak hour's wait
+// per truck and the whole day's average per truck are the weighbridge stage of one
+// simulated normal day, so they differ by definition. wave11 fleet: the Fleet tile headlines
+// the staggered day average and names the peak hour's wait in its meta line.
+test("the peak-hour wait and the day average name different quantities", async ({ page }) => {
+  const status = await apiJson(page, "/tpa/queue-status");
+  const metric = await apiJson(page, "/tpa/queue-metric");
+  expect(status.quantity).toBe("peak_hour_mean_per_truck");
+  expect(metric.quantity).toBe("day_mean_per_truck");
+  expect(status.stage).toMatch(/^weighbridge \(gate\) stage only/);
+  expect(metric.stage).toBe(status.stage);
+  expect(status.trucks_per_day).toBe(metric.trucks_per_day);
+
+  await signIn(page, "/fleet");
+  const tile = page.getByTestId("metric-strip").locator("[data-metric=queue]");
+  await expect(tile.locator(".metric-meta")).toContainText(
+    `±${Math.trunc(status.avg_wait_minutes)} mnt/truk`,
+    { timeout: 30000 },
+  );
+  await expect(tile.locator("strong")).toHaveText(/^\d+(,\d)? mnt\/truk$/);
+  await expect(tile).toContainText(/antre timbang, hari normal/i);
+
+  await page.getByRole("tab", { name: /Antrean TPA/ }).click();
+  const headline = page.getByTestId("tpa-queue-metric");
+  await expect(headline).toContainText("Antre timbang TPA: rata-rata sehari per truk", { timeout: 30000 });
+  await expect(headline.locator("strong")).toContainText(
+    `${metric.baseline_mean} → ${metric.staggered_mean}`,
+  );
+});
+
+// wave11 numbers: trucks are units (tonnes / truck capacity per shift), gate trips are rit
+// from the real weighing data, and the tonnage is modelled generation read against SIPSN.
+test("trucks, gate trips and tonnage each carry their own definition", async ({ page }) => {
+  const baseline = await apiJson(page, "/baseline/today?days=7");
+  const metric = await apiJson(page, "/tpa/queue-metric");
+  expect(baseline.trucks_basis).toContain("not TPA gate trips");
+  expect(baseline.gate_trips.trips_per_day).toBe(metric.normal_day.trucks_per_day);
+  expect(baseline.gate_trips.trips_per_day).not.toBe(baseline.trucks_needed);
+  expect(baseline.tonnage_reference.classification).toBe("REAL");
+  expect(baseline.provenance.tonnage).toBe("MODEL_OUTPUT");
+
+  await signIn(page, "/forecast");
+  const trucks = page.getByTestId("baseline-trucks");
+  await expect(trucks).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText("Kebutuhan truk (unit)").first()).toBeVisible();
+});
+
+// wave11 numbers: the safety panel's gate waits are example dwells per simulated truck,
+// never output of the weighbridge queue model, and the panel says so.
+test("simulated gate waits say they are examples, not the queue model", async ({ page }) => {
+  const token = await signIn(page, "/fleet");
+  const response = await page.request.get(`${API}/safety/overview`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const safety = await response.json();
+  test.skip(safety.classification === "OBSERVED_APP_EVENTS", "this server holds observed app events");
+  expect(safety.gate_wait_basis).toContain("not drawn from the weighbridge queue model");
+  await page.locator('[role="tab"][aria-controls="fleet-safety-surface"]').click();
+  await expect(page.getByTestId("safety-basis")).toContainText("bukan keluaran model antre timbang", {
+    timeout: 20000,
+  });
+});
+
+// wave11 numbers: "Open in XR" lands on the twin's selected day, so the tabletop and the
+// twin print the same date and the same city tonnage for one scenario (judge: XR said
+// Mon 26 / 9,505 t while the twin said Tue 27 / 9,548 t).
+test("the twin hands XR its selected day: same date and the same tonnes", async ({ page }) => {
+  await signIn(page, "/twin?scenario=gbk_event&day=1");
+  await page.waitForFunction(
+    () =>
+      window.__pythiaTwin?.ready &&
+      window.__pythiaTwin.selectedDay === 1 &&
+      window.__pythiaTwin.scenario?.event_attendance === 50000,
+    null,
+    { timeout: 45000 },
+  );
+  const twin = await page.evaluate(() => ({
+    date: window.__pythiaTwin.selectedDate,
+    tons: window.__pythiaTwin.totalTons,
+  }));
+  const href = await page.getByTestId("twin-xr-link").getAttribute("href");
+  expect(href).toContain("scenario=gbk_event");
+  expect(href).toMatch(/[?&]day=1(&|$)/);
+
+  await page.goto(href);
+  const dateText = await page.evaluate(
+    (iso) =>
+      new Date(`${iso}T00:00:00`).toLocaleDateString("id-ID", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+      }),
+    twin.date,
+  );
+  await expect(page.getByTestId("xr-date")).toHaveText(dateText, { timeout: 45000 });
+  await expect(page.getByTestId("xr-total")).toHaveText(`${Math.round(twin.tons).toLocaleString("id-ID")} t`);
+});
+
+// wave11 numbers: the decision-room briefing's "today" queue and the twin HUD's queue are
+// one simulation (scenario_queue_metric on today's forecast tonnes vs its normal day), so
+// the twin screen never shows two answers for today's weighbridge wait.
+test("the briefing's today queue is the twin HUD's queue", async ({ page }) => {
+  const briefing = await apiJson(page, "/twin/briefing");
+  const scene = await apiJson(page, "/twin/scene?city=jakarta&days=7&rainfall_mm=0");
+  const hud = scene.landfill_queue.minutes_per_truck;
+  expect(briefing.before.date).toBe(scene.horizon?.dates?.[0] ?? briefing.before.date);
+  expect(briefing.before.weighbridge_lanes).toBe(hud.assumptions.weighbridge_lanes);
+  expect(briefing.before.queue_trips_per_day).toBe(hud.trucks_per_day);
+  expect(briefing.before.queue_minutes_per_truck).toBe(hud.baseline_mean);
+  expect(briefing.before.queue_staggered_minutes_per_truck).toBe(hud.staggered_mean);
 });

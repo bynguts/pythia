@@ -81,8 +81,20 @@ for (const lang of ["id", "en"]) {
 // wave9 fleet composition: the landfill tile reads "Puncak 09.00: ±89 mnt" (never "89m"),
 // labelled simulated in its helper; the problem strip and fleet heading are gone.
 const FLEET_COPY = {
-  id: { simulated: "armada pilot simulasi", peak: "jam puncak model", tile: "Puncak", min: "mnt", sep: "." },
-  en: { simulated: "simulated pilot fleet", peak: "modelled peak hour", tile: "Peak", min: "min", sep: ":" },
+  id: {
+    simulated: "armada pilot simulasi",
+    peak: "jam puncak model",
+    tile: "Puncak",
+    min: "mnt/truk",
+    sep: ".",
+  },
+  en: {
+    simulated: "simulated pilot fleet",
+    peak: "modelled peak hour",
+    tile: "Peak",
+    min: "min/truck",
+    sep: ":",
+  },
 };
 
 for (const lang of ["id", "en"]) {
@@ -209,12 +221,13 @@ const FORECAST_COPY = {
   id: {
     empty: "Tidak ada wilayah yang diprakirakan ≥ 10% di atas hari normalnya minggu ini (hasil model).",
     sample: "CONTOH OFFLINE",
-    normalDayTile: "hari normal (simulasi)",
+    // wave11 numbers: the tile names its stage and day; the count sits between them.
+    normalDayTile: "antre timbang, hari normal",
   },
   en: {
     empty: "No district is forecast ≥ 10% above its normal day this week (model output).",
     sample: "OFFLINE SAMPLE",
-    normalDayTile: "normal day (simulated)",
+    normalDayTile: "weighbridge queue, normal day",
   },
 };
 
