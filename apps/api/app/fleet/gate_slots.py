@@ -16,6 +16,12 @@ Placement, per truck in truck-code order:
   (`stagger_slot_count()` slots, the same spread the staggered headline assumes), so
   a plan that carries most of the day's trips spreads the way the headline does.
 
+A later slot is a later departure, not a wait at the gate: each slot carries
+`depart_at`, the slot start minus `COLLECTION_ROUND_MEAN_H` (the metric's mean
+depot -> collection round -> gate leg), and `shift_from_unscheduled_minutes`, how far
+the stagger moved it from the unscheduled shift-start departure. Only the board's
+live recommendations carry `hold_minutes`, and those stay within an hour.
+
 Coherence with `queue_minutes_per_truck`: with no plan, the fluid model's mean wait
 over the background day is ~57.7 min against the simulation's 57.1 baseline; with a
 plan carrying all observed trips it is ~4.7 min against the 5.6 staggered figure.
@@ -259,11 +265,23 @@ def assign_gate_slots(dispatches: list[dict], plan_date: date, occupied: list[di
             "start": start,
             "end": end,
             "date": chosen.date().isoformat(),
-            "hold_minutes": int((chosen - natural).total_seconds() // 60),
+            "depart_at": _depart_at(chosen),
+            "depart_date": (chosen - timedelta(hours=COLLECTION_ROUND_MEAN_H)).date().isoformat(),
+            "shift_from_unscheduled_minutes": int((chosen - natural).total_seconds() // 60),
             "capacity_model": capacity_model,
             "classification": "MODEL_OUTPUT",
         }
     return out
+
+
+def _depart_at(slot_start: datetime) -> str:
+    """Depot departure for a gate slot: its start minus one mean collection round.
+
+    "HH:MM", prefixed with the date when it falls on another day than the slot.
+    """
+    leave = slot_start - timedelta(hours=COLLECTION_ROUND_MEAN_H)
+    clock = f"{leave.hour:02d}:{leave.minute:02d}"
+    return clock if leave.date() == slot_start.date() else f"{leave.date().isoformat()} {clock}"
 
 
 def _key(moment: datetime) -> tuple[str, int]:

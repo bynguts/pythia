@@ -1,6 +1,6 @@
 """Gate-slot assignment and hold recommendations at the Bantargebang weighbridge (wave 12 gap 3)."""
 
-from datetime import date
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -60,7 +60,8 @@ def test_first_gate_arrival_is_shift_start_plus_one_collection_round(background)
     assert slot["end"] == f"{int(start_hour):02d}:{int(start_hour % 1 * 60) + STAGGER_SLOT_MINUTES:02d}"
     assert slot["date"] == DAY.isoformat()
     assert slot["facility"] == BANTARGEBANG
-    assert slot["hold_minutes"] == 0
+    assert slot["shift_from_unscheduled_minutes"] == 0
+    assert "hold_minutes" not in slot  # a plan slot is a schedule, not a gate wait
     assert slot["classification"] == "MODEL_OUTPUT"
     assert slot["capacity_model"]["capacity_per_slot"] == CAPACITY_PER_SLOT
     assert slot["capacity_model"]["over_capacity"] is False
@@ -71,6 +72,24 @@ def test_night_shift_slot_is_dated_the_next_day(background):
     slots = assign_gate_slots([_dispatch("T-040", shift=MALAM)], DAY)
     assert slots["T-040"]["date"] == "2031-03-05"
     assert slots["T-040"]["start"] == "01:00"
+
+
+def test_departure_is_the_slot_start_minus_one_collection_round(background):
+    background[9] = (CAPACITY_PER_SLOT - 1) * 4
+    slots = assign_gate_slots([_dispatch("T-001"), _dispatch("T-002")], DAY)
+    for slot in slots.values():
+        start = datetime.combine(DAY, datetime.strptime(slot["start"], "%H:%M").time())
+        leave = start - timedelta(hours=COLLECTION_ROUND_MEAN_H)
+        assert slot["depart_at"] == leave.strftime("%H:%M")
+        assert slot["depart_date"] == DAY.isoformat()
+    assert slots["T-002"]["depart_at"] == "06:15"  # the stagger moved it one slot: a later departure
+
+
+def test_night_shift_departure_carries_its_date(background):
+    slot = assign_gate_slots([_dispatch("T-040", shift=MALAM)], DAY)["T-040"]
+    # Gate at 01:00 on the next day; the truck leaves the depot at 22:00 on the plan date.
+    assert slot["depart_at"] == f"{DAY.isoformat()} 22:00"
+    assert slot["depart_date"] == DAY.isoformat()
 
 
 def test_night_shift_capacity_is_checked_against_the_next_days_slots(background):
@@ -91,7 +110,7 @@ def test_full_slot_moves_the_truck_to_the_next_slot_with_room(background):
     slots = assign_gate_slots([_dispatch("T-002"), _dispatch("T-001")], DAY)
     assert slots["T-001"]["start"] == "09:00"  # truck-code order decides who goes first
     assert slots["T-002"]["start"] == "09:15"
-    assert slots["T-002"]["hold_minutes"] == STAGGER_SLOT_MINUTES
+    assert slots["T-002"]["shift_from_unscheduled_minutes"] == STAGGER_SLOT_MINUTES
 
 
 def test_queue_carried_from_a_busy_slot_counts_against_the_next(background):
@@ -129,7 +148,7 @@ def test_a_saturated_gate_gets_no_long_hold(background):
     slot = assign_gate_slots([_dispatch("T-001")], DAY)["T-001"]
     assert slot["capacity_model"]["saturated"] is True
     assert slot["capacity_model"]["over_capacity"] is True
-    assert slot["start"] == "09:00" and slot["hold_minutes"] == 0
+    assert slot["start"] == "09:00" and slot["shift_from_unscheduled_minutes"] == 0
 
     board = slot_board(DAY, [{"truck_code": "T-001", "gate_slot": slot}])
     assert board["recommendations"] == []
@@ -142,8 +161,8 @@ def test_a_plan_spreads_its_own_trucks_over_the_stagger_window(background):
     window = stagger_slot_count()
     trucks = int(CAPACITY_PER_SLOT) * window + 1
     slots = assign_gate_slots([_dispatch(f"T-{i:04d}") for i in range(trucks)], DAY)
-    holds = sorted(s["hold_minutes"] for s in slots.values())
-    assert holds[-1] == (window - 1) * STAGGER_SLOT_MINUTES
+    shifts = sorted(s["shift_from_unscheduled_minutes"] for s in slots.values())
+    assert shifts[-1] == (window - 1) * STAGGER_SLOT_MINUTES
     # One truck more than the window holds: it keeps the roomiest (first) slot, flagged.
     over = [s for s in slots.values() if s["capacity_model"]["over_capacity"]]
     assert len(over) == 1 and over[0]["start"] == "09:00" and over[0]["capacity_model"]["saturated"] is False
