@@ -1,4 +1,9 @@
-const { default: makeWASocket, useMultiFileAuthState, Browsers } = require('@whiskeysockets/baileys');
+const {
+  default: makeWASocket,
+  useMultiFileAuthState,
+  Browsers,
+  fetchLatestBaileysVersion,
+} = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const QRCode = require('qrcode');
 const fs = require('fs');
@@ -28,8 +33,14 @@ function maskJid(jid) {
 async function startWA() {
   console.log("Starting WhatsApp socket...");
   const { state, saveCreds } = await useMultiFileAuthState('baileys_auth_info');
-  
+  // WhatsApp refuses the web-client version pinned in the package ("Connection Failure"
+  // before any QR), so ask for the current one; keep the pinned one when offline.
+  const version = await fetchLatestBaileysVersion()
+    .then((latest) => latest.version)
+    .catch(() => undefined);
+
   sock = makeWASocket({
+    ...(version ? { version } : {}),
     auth: state,
     browser: Browsers.macOS('Desktop'),
     printQRInTerminal: false
@@ -53,7 +64,8 @@ async function startWA() {
       const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 401;
       console.log('Connection closed. Reconnecting...', shouldReconnect);
       if (shouldReconnect) {
-        startWA();
+        // A short pause stops a refused connection from hammering WhatsApp in a tight loop.
+        setTimeout(startWA, 3000);
       }
     } else if (connection === 'open') {
       connectionState = 'open';
