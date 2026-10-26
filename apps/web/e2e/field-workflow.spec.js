@@ -243,6 +243,55 @@ test("a new instruction from Operations persists one dispatch despite a double t
   }
 });
 
+// #w14-walk: the fleet snapshot can land seconds after Operations opens. Meanwhile the
+// drawer lists the fleet registry's trucks, says it is loading until then, and never sends
+// an instruction without a truck.
+test("the instruction drawer lists trucks before the fleet snapshot and never sends empty", async ({
+  page,
+}) => {
+  const { api, token } = await authenticatedApi();
+  const key = `e2e-early-instruction-${Date.now()}`;
+  let releaseRegistry;
+  const registryHeld = new Promise((resolve) => (releaseRegistry = resolve));
+  await page.route("**/api/command-center*", (route) => route.abort());
+  await page.route("**/api/fleet", async (route) => {
+    await registryHeld;
+    await route.continue();
+  });
+  await page.goto("/");
+  await page.evaluate((value) => {
+    localStorage.setItem("pythia_token", value);
+    localStorage.setItem("pythia_auth", "true");
+    localStorage.setItem("pythia_role", "dispatcher");
+    localStorage.setItem("pythia_lang", "id");
+  }, token);
+  await page.goto("/app/operations");
+  await page.getByTestId("ops-new-instruction").click();
+  const drawer = page.getByTestId("instruction-drawer");
+  const select = drawer.getByTestId("instruction-truck");
+  await expect(select).toBeDisabled();
+  await expect(select).toContainText("Memuat daftar truk");
+  await drawer.getByTestId("instruction-text").fill(`Follow up ${key}`);
+  await expect(drawer.getByTestId("instruction-send")).toBeDisabled();
+
+  releaseRegistry();
+  await expect(select).toHaveValue(/^T-\d+$/, { timeout: 5000 });
+  const truck = await select.inputValue();
+  await drawer.getByTestId("instruction-send").click();
+  await expect(drawer.getByRole("status")).toContainText(truck);
+  const response = await api.get(`${API}/dispatch/${truck}`);
+  const created = (await response.json()).find((dispatch) => dispatch.instruction.includes(key));
+  try {
+    expect(created?.truck_code).toBe(truck);
+  } finally {
+    if (created)
+      await api.post(`${API}/dispatch/${created.id}/confirm`, {
+        data: { status: "READY", note: "E2E cleanup" },
+      });
+    await api.dispose();
+  }
+});
+
 // The dispatcher sees the driver's answer: READY reads "ready", ISSUE reads "can't" with the
 // driver's own note, under the instruction just sent from Operations.
 test("the instruction drawer distinguishes the driver's READY from ISSUE and shows the field note", async ({

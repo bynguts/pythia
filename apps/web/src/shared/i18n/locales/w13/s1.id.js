@@ -17,6 +17,8 @@ export const s1Id = {
   s1_new_instruction: "Instruksi baru",
   s1_instruction_sub: "Dikirim ke aplikasi sopir satu truk.",
   s1_instruction_truck: "Truk",
+  s1_instruction_trucks_loading: "Memuat daftar truk…",
+  s1_instruction_no_trucks: "Tidak ada truk untuk dipilih",
   s1_instruction_text: "Instruksi",
   s1_instruction_placeholder: "Contoh: setelah titik ini, lanjut ke TPS Kalideres 2.",
   s1_instruction_send: "Kirim instruksi",

@@ -18,7 +18,31 @@ export function InstructionDrawer({ open, onClose, truckCodes, role }) {
   const [truck, setTruck] = useState("");
   const [text, setText] = useState("");
   const [status, setStatus] = useState({ busy: false, sent: null, error: null });
-  const chosen = truck || truckCodes[0] || "";
+  // The live fleet snapshot can take seconds after Operations opens: until it lands the
+  // truck list comes from the fleet registry (GET /fleet), and the send waits for a truck.
+  const [registry, setRegistry] = useState(null);
+  const needRegistry = open && truckCodes.length === 0 && registry === null;
+  useEffect(() => {
+    if (!needRegistry) return undefined;
+    const controller = new AbortController();
+    apiGet("/fleet", { signal: controller.signal })
+      .then((body) => {
+        const list = Array.isArray(body) ? body : body?.trucks || [];
+        setRegistry(
+          list
+            .map((item) => item?.truck_code)
+            .filter(Boolean)
+            .sort(),
+        );
+      })
+      .catch((error) => {
+        if (error?.name !== "AbortError") setRegistry([]);
+      });
+    return () => controller.abort();
+  }, [needRegistry]);
+  const codes = truckCodes.length > 0 ? truckCodes : registry || [];
+  const loadingTrucks = codes.length === 0 && registry === null;
+  const chosen = codes.includes(truck) ? truck : codes[0] || "";
   // A double tap lands before the busy state renders; the ref keeps it to one dispatch.
   const sending = useRef(false);
   // The last instruction sent from here and the driver's answer to it.
@@ -80,9 +104,16 @@ export function InstructionDrawer({ open, onClose, truckCodes, role }) {
             id="ops-instruction-truck"
             value={chosen}
             onChange={(event) => setTruck(event.target.value)}
+            disabled={codes.length === 0}
+            aria-busy={loadingTrucks || undefined}
             data-testid="instruction-truck"
           >
-            {truckCodes.map((code) => (
+            {codes.length === 0 && (
+              <option value="">
+                {t(loadingTrucks ? "s1_instruction_trucks_loading" : "s1_instruction_no_trucks")}
+              </option>
+            )}
+            {codes.map((code) => (
               <option key={code} value={code}>
                 {code}
               </option>

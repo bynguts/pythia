@@ -17,6 +17,8 @@ export const s1En = {
   s1_new_instruction: "New instruction",
   s1_instruction_sub: "Goes to the driver app of one truck.",
   s1_instruction_truck: "Truck",
+  s1_instruction_trucks_loading: "Loading trucks…",
+  s1_instruction_no_trucks: "No trucks to choose from",
   s1_instruction_text: "Instruction",
   s1_instruction_placeholder: "For example: after your current stop, go to TPS Kalideres 2.",
   s1_instruction_send: "Send instruction",
