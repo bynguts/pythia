@@ -34,8 +34,10 @@ def _forecast(day: str) -> dict[str, Any]:
         for p in _OPERATIONS_PLAN_STORE.list_plans(status="approved", limit=PLAN_LIMIT)
         if p.get("plan_date") == day
     ]
-    planned = round(sum(float(p.get("total_assigned_tons") or 0) for p in plans), 1) if plans else None
-    demand = round(sum(float(p.get("total_demand_tons") or 0) for p in plans), 1) if plans else None
+    assigned = [float(p["total_assigned_tons"]) for p in plans if p.get("total_assigned_tons") is not None]
+    needed = [float(p["total_demand_tons"]) for p in plans if p.get("total_demand_tons") is not None]
+    planned = round(sum(assigned), 1) if assigned else None
+    demand = round(sum(needed), 1) if needed else None
     return {
         "plan_ids": [p["plan_id"] for p in plans],
         "planned_tons": planned,
@@ -132,9 +134,8 @@ def daily_recap(date: str | date_type) -> dict[str, Any]:
     forecast = _forecast(day)
     receipt_tons = facts["receipt_tons"]
     planned = forecast["planned_tons"]
-    delta_tons = (
-        round(receipt_tons - planned, 2) if receipt_tons is not None and planned is not None else None
-    )
+    complete = facts["receipts"] > 0 and facts["receipts_with_net_weight"] == facts["receipts"]
+    delta_tons = round(receipt_tons - planned, 2) if complete and planned is not None else None
     delta_pct = round(delta_tons / planned * 100, 1) if delta_tons is not None and planned else None
     waits = facts["waits"]
     data = {
@@ -148,7 +149,11 @@ def daily_recap(date: str | date_type) -> dict[str, Any]:
             "spj": facts["spj"],
             "classification": ACTUAL_CLASSIFICATION,
         },
-        "delta": {"tons": delta_tons, "pct": delta_pct},
+        "delta": {
+            "tons": delta_tons,
+            "pct": delta_pct,
+            "delta_basis": "partial_receipts" if receipt_tons is not None and not complete else None,
+        },
         "gate_wait": {
             "observed_n": len(waits),
             "median_min": safety.percentile(waits, 0.5),

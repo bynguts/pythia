@@ -67,7 +67,7 @@ def test_empty_day_is_zeros_and_nulls(day):
     assert recap["actual"]["receipts"] == 0 and recap["actual"]["ritasi"] == 0
     assert recap["actual"]["spj"] == {"draft": 0, "aktif": 0, "selesai": 0, "batal": 0}
     assert recap["actual"]["classification"] == "OBSERVED_IN_APP"
-    assert recap["delta"] == {"tons": None, "pct": None}
+    assert recap["delta"] == {"tons": None, "pct": None, "delta_basis": None}
     assert recap["gate_wait"] == {"observed_n": 0, "median_min": None, "p90_min": None, "over_180": 0}
     assert recap["incidents"]["damage_reports"] == 0
     assert set(recap["incidents"]["exceptions"].values()) == {0}
@@ -118,13 +118,40 @@ def test_fixture_day_gives_exact_counts_and_tons(day):
     assert recap["actual"]["receipt_tons"] == 9.5  # (6.0 + 3.5) t net
     assert recap["forecast"]["plan_ids"] == [plan_id]
     assert recap["forecast"]["planned_tons"] == 10.0 and recap["forecast"]["forecast_tons"] == 12.0
-    assert recap["delta"] == {"tons": -0.5, "pct": -5.0}
+    assert recap["delta"] == {"tons": -0.5, "pct": -5.0, "delta_basis": None}
     assert recap["gate_wait"]["observed_n"] == 1
     assert 39 <= recap["gate_wait"]["median_min"] <= 42 and recap["gate_wait"]["over_180"] == 0
     assert recap["incidents"]["exceptions"]["road_closed"] == 1
     assert recap["evidence"]["overrides"] == 1
     assert recap["evidence"]["stops_missing_evidence"] == 0
     assert "9.5" in recap["summary"]["en"] and "9.5" in recap["summary"]["id"]
+
+
+def _approved_plan(day: str, **figures) -> str:
+    plan_id = f"PLN-{uuid4().hex[:8]}"
+    _OPERATIONS_PLAN_STORE.save_proposed(
+        plan_id, {"plan_id": plan_id, "plan_date": day, "assignments": [], **figures}
+    )
+    _OPERATIONS_PLAN_STORE.approve(plan_id, "supervisor", lambda item: {"id": "x"})
+    return plan_id
+
+
+def test_plan_without_tonnage_figures_stays_null_not_zero(day):
+    plan_id = _approved_plan(day)
+    forecast = daily_recap(day)["forecast"]
+    assert forecast["plan_ids"] == [plan_id]
+    assert forecast["planned_tons"] is None and forecast["forecast_tons"] is None
+
+
+def test_delta_withheld_when_a_receipt_has_no_net_weight(day):
+    _approved_plan(day, total_assigned_tons=10.0, total_demand_tons=12.0)
+    weighed, unweighed = _spj("RCP-011"), _spj("RCP-012")
+    _receipt(weighed.spj_id, 15_000.0, 9_000.0)
+    SPJ_STORE.record_receipt(unweighed.spj_id, "r.png", TINY_PNG, None, "manual")
+    recap = daily_recap(day)
+    assert recap["actual"]["receipts"] == 2 and recap["actual"]["receipts_with_net_weight"] == 1
+    assert recap["actual"]["receipt_tons"] == 6.0
+    assert recap["delta"] == {"tons": None, "pct": None, "delta_basis": "partial_receipts"}
 
 
 def test_damage_report_counts_on_its_local_day(day):
