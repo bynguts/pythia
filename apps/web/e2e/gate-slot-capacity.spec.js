@@ -120,3 +120,20 @@ test("the gate's tomorrow mean says it is the day mean", async ({ page }) => {
   await page.getByTestId("gate-day-tomorrow").click();
   await expect(page.getByTestId("gate-kpi-mean")).toContainText("day mean per truck", { timeout: 30000 });
 });
+
+// Without a slot board the gate KPI falls back to the queue model's peak hour: its truck count
+// is the most queued at that hour, never "now".
+test("the gate queue fallback names the modelled peak hour, not now", async ({ page }) => {
+  await page.route(/\/api\/gate\/slots(\?|$)/, (route) =>
+    route.fulfill({ json: { slots: [], recommendations: [], reason: "no_approved_plan" } }),
+  );
+  await page.route(/\/api\/tpa\/queue-status/, (route) =>
+    route.fulfill({
+      json: { avg_wait_minutes: 89, trucks_in_queue: 228, modelled_hour: 9, classification: "SIMULATED" },
+    }),
+  );
+  await signIn(page, { lang: "en", path: "/app/gate" });
+  const kpi = page.getByTestId("gate-kpi-queue");
+  await expect(kpi).toContainText("up to 228 trucks queued at the modelled peak hour", { timeout: 30000 });
+  await expect(kpi).not.toContainText("modelled queue now");
+});

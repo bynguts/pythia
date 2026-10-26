@@ -396,7 +396,11 @@ function Kpis({ day, board, safety, recap, queue, t, lang, nowMin }) {
         tag={modelTag}
         value={queueWait == null ? "—" : minutes(queueWait, lang)}
         unit={queueWait == null ? null : t("s4_min")}
-        sub={waiting == null ? t("s4_per_truck") : t("s4_per_truck_waiting").replace("{n}", waiting)}
+        sub={
+          waiting == null
+            ? t("s4_per_truck")
+            : t(useBoard ? "s4_per_truck_waiting" : "s4_per_truck_peak_queue").replace("{n}", waiting)
+        }
       />
       <Kpi
         testId="gate-kpi-arrived"

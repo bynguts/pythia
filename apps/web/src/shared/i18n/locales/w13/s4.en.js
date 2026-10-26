@@ -24,6 +24,7 @@ export const s4En = {
   s4_kpi_longest_planned: "Longest planned wait",
   s4_per_truck: "per truck",
   s4_per_truck_waiting: "per truck · {n} trucks in the modelled queue now",
+  s4_per_truck_peak_queue: "per truck · up to {n} trucks queued at the modelled peak hour",
   s4_per_truck_wait: "modelled peak, {n} min per truck",
   s4_day_mean: "day mean per truck",
   s4_of_planned: "of {n} planned trips",

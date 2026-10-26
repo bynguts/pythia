@@ -24,6 +24,7 @@ export const s4Id = {
   s4_kpi_longest_planned: "Tunggu terlama (rencana)",
   s4_per_truck: "per truk",
   s4_per_truck_waiting: "per truk · {n} truk dalam antrean model kini",
+  s4_per_truck_peak_queue: "per truk · hingga {n} truk antre pada jam puncak model",
   s4_per_truck_wait: "puncak model, {n} mnt per truk",
   s4_day_mean: "rata-rata sehari per truk",
   s4_of_planned: "dari {n} rit terencana",
