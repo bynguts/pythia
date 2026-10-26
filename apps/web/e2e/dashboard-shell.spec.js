@@ -28,31 +28,39 @@ async function expectMinimumTouchTarget(locator) {
 
 test.beforeEach(async ({ page }) => signIn(page));
 
-// wave9 settings: Audit left the rail; Settings (Pengaturan) closes it, set apart.
-// wave9 fleet composition: daily work first (Armada · Rencana · Prediksi · Sopir), the
-// 3D city ("Kota 3D") last before the separator, Settings pinned below it.
-test("command rail exposes six task workspaces and preserves active state", async ({ page }) => {
+// Wave 13: the console sidebar groups seven pages under Today and Plan; Settings sits below a
+// separator. A click marks the item current and the page renders its one h1 inside <main>.
+const PAGES = [
+  ["operations", "Operasi"],
+  ["readiness", "Kesiapan pagi"],
+  ["gate", "Gerbang TPA"],
+  ["work-orders", "Surat jalan"],
+  ["tomorrow", "Besok"],
+  ["fleet", "Armada & sopir"],
+  ["reports", "Laporan"],
+  ["settings", "Pengaturan"],
+];
+
+test("the sidebar exposes every console page and preserves active state", async ({ page }) => {
+  await page.goto("/app/operations");
   const nav = page.getByTestId("workspace-navigation");
   await expect(nav).toBeVisible();
-  const labels = ["Armada", "Rencana", "Prediksi", "Sopir", "Kota 3D", "Pengaturan"];
-  await expect(nav.getByRole("button")).toHaveCount(labels.length);
-  for (const label of labels) await expect(nav.getByRole("button", { name: label })).toBeVisible();
+  await expect(nav.getByRole("link")).toHaveCount(PAGES.length);
+  await expect(nav.getByTestId("nav-separator")).toHaveCount(1);
+  for (const [id, label] of PAGES) await expect(nav.getByTestId(`nav-${id}`)).toContainText(label);
 
-  for (const [label, heading] of [
-    ["Prediksi", "Prediksi timbulan sampah"],
-    ["Rencana", "Rencana operasi terpadu"],
-    ["Armada", "Operasi armada hari ini"],
-  ]) {
-    const button = nav.getByRole("button", { name: label });
-    await button.click();
-    await expect(button).toHaveAttribute("aria-current", "page");
-    await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+  for (const id of ["tomorrow", "work-orders", "operations"]) {
+    const link = nav.getByTestId(`nav-${id}`);
+    await link.click();
+    await expect(page).toHaveURL(new RegExp(`/app/${id}$`));
+    await expect(link).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("main").getByRole("heading", { level: 1 })).toBeVisible();
   }
 });
 
-// wave9 fleet composition: the SPJ register is a "Dokumen armada" tab, not a link button.
 test("desktop and mobile layouts never create document-level horizontal overflow", async ({ page }) => {
-  await page.getByRole("tab", { name: "Surat jalan (SPJ)" }).click();
+  await page.goto("/app/work-orders");
+  await expect(page.getByTestId("work-orders-page")).toBeVisible();
   for (const viewport of [
     { width: 1440, height: 900 },
     { width: 820, height: 1180 },
@@ -66,37 +74,44 @@ test("desktop and mobile layouts never create document-level horizontal overflow
   }
 });
 
-test("mobile bottom navigation stays reachable and switches workspaces", async ({ page }) => {
+test("on a phone the sidebar opens from the menu button and switches pages", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  const nav = page.locator(".command-mobile-nav");
-  await expect(nav).toBeVisible();
-  // wave9 fleet composition: five workspaces; Settings and logout moved to the profile menu.
-  await expect(nav.getByRole("button")).toHaveCount(5);
-  for (const button of await nav.getByRole("button").all()) await expectMinimumTouchTarget(button);
+  await page.goto("/app/operations");
+  const toggle = page.getByRole("button", { name: "Buka menu" });
+  await expectMinimumTouchTarget(toggle);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const nav = page.getByTestId("workspace-navigation");
+  for (const link of await nav.getByRole("link").all()) await expectMinimumTouchTarget(link);
 
-  const planning = nav.getByRole("button", { name: "Rencana" });
-  await planning.click();
-  await expect(planning).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("heading", { name: "Rencana operasi terpadu" })).toBeVisible();
+  const tomorrow = nav.getByTestId("nav-tomorrow");
+  await tomorrow.click();
+  await expect(page).toHaveURL(/\/app\/tomorrow$/);
+  await expect(tomorrow).toHaveAttribute("aria-current", "page");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
 });
 
-test("assistant opens as a modal and closes without leaving the workspace", async ({ page }) => {
-  await page.getByRole("button", { name: "Asisten operasi" }).click();
-  const dialog = page.getByRole("dialog", { name: "Asisten operasi" });
+test("Ana opens as a modal drawer and closes without leaving the page", async ({ page }) => {
+  await page.goto("/app/operations");
+  await page.getByTestId("ask-ana").click();
+  const dialog = page.getByRole("dialog", { name: "Ana" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator(".assistant-chat-shell")).toBeVisible();
-  await dialog.getByRole("button", { name: "Tutup asisten" }).click();
+  await expect(dialog).toHaveAttribute("aria-modal", "true");
+  await dialog.getByRole("button", { name: "Tutup" }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByTestId("fleet-workspace")).toBeVisible();
+  await expect(page).toHaveURL(/\/app\/operations$/);
+  await expect(page.getByTestId("ask-ana")).toBeFocused();
 });
 
 test("document language follows the stored locale across routes and reloads", async ({ page }) => {
+  await page.goto("/app/operations");
   await expect(page.locator("html")).toHaveAttribute("lang", "id");
-  await page.getByTestId("lang-switch-en").click();
+  await page.getByTestId("profile-button").click();
+  await page.getByTestId("profile-lang-en").click();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  for (const route of ["/field", "/driver", "/pengawas"]) {
+  for (const route of ["/driver", "/app/tomorrow"]) {
     await page.goto(route);
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
   }
@@ -105,15 +120,15 @@ test("document language follows the stored locale across routes and reloads", as
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
 });
 
-test("Forecast has one main landmark and named analysis regions", async ({ page }) => {
-  await page.getByTestId("workspace-navigation").getByRole("button", { name: "Prediksi" }).click();
-  await expect(page.getByRole("main")).toHaveCount(1);
-  await expect(page.getByRole("region", { name: "Peta kebutuhan layanan" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Rincian prediksi" })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Faktor pemicu prediksi" })).toBeVisible();
+test("every console page has one main landmark", async ({ page }) => {
+  for (const [id] of PAGES) {
+    await page.goto(`/app/${id}`);
+    await expect(page.getByRole("main").getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByRole("main")).toHaveCount(1);
+  }
 });
 
-test("core workspaces meet text contrast requirements", async ({ page }) => {
+test("core pages meet text contrast requirements", async ({ page }) => {
   test.setTimeout(120000);
   const scan = async (surface) => {
     const results = await new AxeBuilder({ page }).withRules(["color-contrast"]).analyze();
@@ -124,31 +139,27 @@ test("core workspaces meet text contrast requirements", async ({ page }) => {
   };
 
   await page.evaluate(() => localStorage.removeItem("pythia_auth"));
-  await page.reload();
+  await page.goto("/app/operations");
   await expect(page.getByRole("heading", { name: "Masuk ke Pythia" })).toBeVisible();
   await scan("login");
   await signIn(page);
-  for (const [workspace, heading] of [
-    [null, "Operasi armada hari ini"],
-    ["Prediksi", "Prediksi timbulan sampah"],
-    ["Rencana", "Rencana operasi terpadu"],
-    ["Pengaturan", "Pengaturan"],
-  ]) {
-    if (workspace)
-      await page.getByTestId("workspace-navigation").getByRole("button", { name: workspace }).click();
-    await expect(page.getByRole("heading", { name: heading }).first()).toBeVisible();
-    await scan(workspace || "Fleet");
+  for (const id of ["operations", "tomorrow", "work-orders", "settings"]) {
+    await page.goto(`/app/${id}`);
+    await expect(page.getByRole("main").getByRole("heading", { level: 1 })).toBeVisible();
+    await scan(id);
   }
 });
 
-test("workspace navigation emits no runtime errors", async ({ page }) => {
+test("console navigation emits no runtime errors", async ({ page }) => {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
   });
-  for (const label of ["Prediksi", "Rencana", "Sopir", "Pengaturan", "Armada"]) {
-    await page.getByTestId("workspace-navigation").getByRole("button", { name: label }).click();
+  await page.goto("/app/operations");
+  for (const id of ["tomorrow", "fleet", "reports", "settings", "operations"]) {
+    await page.getByTestId(`nav-${id}`).click();
+    await expect(page.getByRole("main").getByRole("heading", { level: 1 })).toBeVisible();
   }
   expect(errors).toEqual([]);
 });
@@ -158,7 +169,7 @@ test("login requires explicit credentials and exposes password visibility contro
     localStorage.removeItem("pythia_auth");
     localStorage.removeItem("pythia_token");
   });
-  await page.reload();
+  await page.goto("/app/operations");
   await expect(page.getByRole("heading", { name: "Masuk ke Pythia" })).toBeVisible();
   await expect(page.getByPlaceholder("contoh: dispatcher")).toHaveValue("");
   await expect(page.getByRole("button", { name: "Tampilkan kata sandi" })).toBeVisible();
