@@ -246,10 +246,32 @@
   border-radius: 14px;
   background: var(--f-paper);
 }
+/* Surface variant (Fleet, Gate): full-height cells divided by a whole-cell border, no bar. */
 .ui-kpi-strip.is-surface {
+  padding: 0;
+  overflow: hidden;
   border: 1px solid var(--f-border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--f-white);
+}
+.ui-kpi-strip.is-surface .ui-kpi {
+  min-height: 0;
+  padding: 16px 20px;
+  border-right-color: var(--f-line-3);
+}
+.ui-kpi-strip.is-surface .ui-kpi-label {
+  font-size: 14px;
+  font-weight: 400;
+}
+.ui-kpi-strip.is-surface .ui-kpi-value strong {
+  font-size: 30px;
+  letter-spacing: -0.9px;
+}
+.ui-kpi-strip.is-surface .ui-kpi-bar {
+  display: none;
+}
+.ui-kpi-strip.is-surface .ui-kpi-sub {
+  font-size: 13px;
 }
 .ui-kpi {
   display: flex;
@@ -313,6 +335,13 @@
 .ui-kpi-sub {
   color: var(--f-faint);
   font-size: 12px;
+}
+
+/* ── Codes ────────────────────────────────────────────────────────────── */
+/* Truck codes (T-228) inside tabular-number rows: Inter's tnum also widens the hyphen
+   (6 px to 9 px), which reads as "T- 228". Identifiers keep proportional figures. */
+.ui-code {
+  font-variant-numeric: normal;
 }
 
 /* ── Card ─────────────────────────────────────────────────────────────── */

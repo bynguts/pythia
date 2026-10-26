@@ -46,29 +46,7 @@
   display: none;
 }
 
-/* The strip is the shared surface variant; only the Fleet sizes differ. */
-.flt-kpis .ui-kpi {
-  gap: 6px;
-  min-height: 110px;
-  padding: 16px 20px;
-  border-right-color: var(--f-line-3);
-}
-.flt-kpis .ui-kpi-bar {
-  display: none;
-}
-.flt-kpis .ui-kpi-label {
-  color: var(--f-muted);
-  font-size: 14px;
-  font-weight: 400;
-}
-.flt-kpis .ui-kpi-value strong {
-  font-size: 30px;
-  letter-spacing: -0.9px;
-}
-.flt-kpis .ui-kpi-sub {
-  color: var(--f-faint);
-  font-size: 13px;
-}
+/* The strip is the shared surface variant (sizes live in ui.css). */
 .flt-kpis .ui-kpi.is-alert .ui-kpi-value strong {
   color: var(--f-red);
 }
@@ -238,6 +216,11 @@
   padding: 6px 20px;
   border-bottom: 1px solid var(--f-line-3);
   font-size: 14px;
+}
+.flt-due li.flt-empty {
+  display: block;
+  grid-column: 1 / -1;
+  padding: 20px;
 }
 .flt-due strong {
   font-weight: 600;

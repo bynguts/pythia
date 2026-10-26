@@ -1,6 +1,6 @@
 import { Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useLanguage } from "../../shared/i18n/index.jsx";
+import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { formatDriverName } from "../../shared/format/driverName.js";
 import { useConsole } from "../../app/console/useConsole.js";
 import {
@@ -30,7 +30,7 @@ import { useWorkOrders } from "./useWorkOrders.js";
 import "./workorders.css";
 
 export function WorkOrdersScreen() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { permissions, setSubtitle } = useConsole();
   const canCreate = permissions.includes("dispatch:create");
   const { items, waiting, loading, error, offline, since, reload } = useWorkOrders();
@@ -39,10 +39,17 @@ export function WorkOrdersScreen() {
   const [selectedId, setSelectedId] = useState(null);
   const [creating, setCreating] = useState(false);
 
+  // Top bar reads "SPJ · Mon 26 Oct": today's work orders, Jakarta date.
   useEffect(() => {
-    setSubtitle(t("s4_wo_crumb"));
+    const day = new Intl.DateTimeFormat(localeFor(lang), {
+      timeZone: "Asia/Jakarta",
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    }).format(new Date());
+    setSubtitle(`${t("s4_wo_crumb")} · ${day.replace(/,/g, "")}`);
     return () => setSubtitle(null);
-  }, [t, setSubtitle]);
+  }, [lang, t, setSubtitle]);
 
   const counts = useMemo(() => tabCounts(items), [items]);
   const visible = useMemo(

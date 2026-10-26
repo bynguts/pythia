@@ -471,7 +471,7 @@ export function ReadinessScreen() {
       width: "15%",
       render: (truck) => (
         <span className="rdy-truck">
-          <strong>{truck.truck_code}</strong>
+          <strong className="ui-code">{truck.truck_code}</strong>
           {truck.zone && (
             <small
               data-provenance={truck.zone_classification === "SIMULATED" ? "simulated" : undefined}

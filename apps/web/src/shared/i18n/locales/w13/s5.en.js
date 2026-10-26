@@ -85,6 +85,7 @@ export const s5En = {
   s5_set_tab_notifications: "Notifications",
   s5_set_tab_integrations: "Integrations",
   s5_set_tab_data: "Data and provenance",
+  s5_set_crumb_integrations: "Integrations and data",
   s5_set_tab_audit: "Audit log",
   s5_set_tab_language: "Language",
   s5_set_checking: "Checking",

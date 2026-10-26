@@ -358,11 +358,12 @@
   outline: 2px solid var(--f-green);
   outline-offset: 1px;
 }
+/* No overscroll-behavior here: with `contain`, Chrome left a stale 390 x 195 px patch of
+   the map's paper ground below the panel (seen over the map and behind the Ana drawer). */
 .ops-needs-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  overscroll-behavior: contain;
 }
 .ops-needs-list {
   margin: 0;

@@ -274,28 +274,21 @@
   }
 }
 
-/* The export draws these cells without the progress bar. */
+/* The strip is the shared surface variant; the unit reads as part of the figure here. */
 .gate-page .ui-kpi-top {
   justify-content: space-between;
-}
-.gate-page .ui-kpi-bar {
-  display: none;
 }
 .gate-page .ui-kpi-unit {
   padding-bottom: 0;
   color: var(--f-ink);
   font-family: var(--f-font-display);
-  font-size: 26px;
+  font-size: 30px;
   font-weight: 600;
-  letter-spacing: -0.4px;
+  letter-spacing: -0.9px;
   line-height: 1.15;
 }
 .gate-page .ui-kpi-value {
   align-items: baseline;
-}
-.gate-page .ui-kpi-sub {
-  color: var(--f-faint);
-  font-size: 13px;
 }
 .gate-page .ui-table td {
   height: 39px;

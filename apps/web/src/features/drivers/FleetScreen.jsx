@@ -142,7 +142,12 @@ export function FleetScreen() {
     return report.note || part;
   };
   const damageColumns = [
-    { key: "truck", label: t("s2_col_truck"), width: "12%", render: (r) => <strong>{r.truck_code}</strong> },
+    {
+      key: "truck",
+      label: t("s2_col_truck"),
+      width: "12%",
+      render: (r) => <strong className="ui-code">{r.truck_code}</strong>,
+    },
     {
       key: "issue",
       label: t("s2_col_issue"),

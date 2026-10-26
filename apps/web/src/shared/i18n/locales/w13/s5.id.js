@@ -86,6 +86,7 @@ export const s5Id = {
   s5_set_tab_notifications: "Notifikasi",
   s5_set_tab_integrations: "Integrasi",
   s5_set_tab_data: "Data dan asal data",
+  s5_set_crumb_integrations: "Integrasi dan data",
   s5_set_tab_audit: "Log audit",
   s5_set_tab_language: "Bahasa",
   s5_set_checking: "Memeriksa",

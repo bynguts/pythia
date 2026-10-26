@@ -316,7 +316,7 @@ function Arrivals({ safety, t, lang }) {
           {rows.map((truck) => (
             <li key={truck.truck_code}>
               <time className="gate-muted">{jakartaClock(truck.gate_arrived_at)}</time>
-              <strong>{truck.truck_code}</strong>
+              <strong className="ui-code">{truck.truck_code}</strong>
               <StatusDot tone={truck.gate_state === "alert" ? "warn" : "ok"}>
                 {t("s4_waited").replace("{n}", minutes(truck.gate_wait_minutes, lang))}
               </StatusDot>

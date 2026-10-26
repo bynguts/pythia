@@ -153,7 +153,7 @@ export function ConsoleSettings() {
   }, []);
 
   useEffect(() => {
-    setSubtitle(t(`s5_set_tab_${tab}`));
+    setSubtitle(t(tab === "integrations" ? "s5_set_crumb_integrations" : `s5_set_tab_${tab}`));
     return () => setSubtitle(null);
   }, [tab, t, setSubtitle]);
 
@@ -197,13 +197,17 @@ export function ConsoleSettings() {
           {tab === "notifications" && (
             <NotificationsPanel onOpenIntegrations={() => select("integrations")} />
           )}
+          {/* T6NMuR: the source table and the audit export continue on the same scroll. */}
           {tab === "integrations" && (
-            <IntegrationsPanel
-              canManage={canManage}
-              openWhatsApp={whatsappOpen}
-              onToggleWhatsApp={() => setWhatsappOpen((open) => !open)}
-              onOpenData={() => select("data")}
-            />
+            <>
+              <IntegrationsPanel
+                canManage={canManage}
+                openWhatsApp={whatsappOpen}
+                onToggleWhatsApp={() => setWhatsappOpen((open) => !open)}
+                onOpenData={() => select("data")}
+              />
+              <ProvenancePanel />
+            </>
           )}
           {tab === "data" && (
             <>

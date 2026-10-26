@@ -1,5 +1,5 @@
 import { Check, Lock, MessageCircle, TriangleAlert } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { ApiError, apiPost } from "../../shared/api/client.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { formatDriverName } from "../../shared/format/driverName.js";
@@ -225,7 +225,20 @@ export function WorkOrderDetail({ spj, state, onChanged }) {
     <section className="ui-card wo-detail" aria-labelledby="wo-detail-title" data-testid="wo-detail">
       <header className="wo-detail-head">
         <div className="wo-detail-title">
-          <h2 id="wo-detail-title">{spj.spj_number}</h2>
+          {/* A long number (DLH-DKI/SPJ/26-10-2026/000001) wraps only after a slash. */}
+          <h2 id="wo-detail-title">
+            {String(spj.spj_number || "")
+              .split("/")
+              .map((part, index, parts) => (
+                <Fragment key={index}>
+                  <span className="wo-nowrap">
+                    {part}
+                    {index < parts.length - 1 && "/"}
+                  </span>
+                  {index < parts.length - 1 && <wbr />}
+                </Fragment>
+              ))}
+          </h2>
           <Tag tone={stateTag[0]}>{stateTag[1]}</Tag>
           {proofMissing && <Tag tone="warn">{t("s4_wo_state_proof")}</Tag>}
         </div>
@@ -253,6 +266,8 @@ export function WorkOrderDetail({ spj, state, onChanged }) {
           {["draft", "aktif"].includes(spj.status) && canDispatch && (
             <Button
               variant="ghost"
+              size="sm"
+              className="wo-cancel"
               onClick={() => run(() => apiPost(`${base}/cancel`))}
               disabled={busy}
               data-testid="wo-cancel"
