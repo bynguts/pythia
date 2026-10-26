@@ -125,6 +125,10 @@ test("Reports shows the closed day with its provenance and honest limits", async
     }),
   );
 
+  // No alert group chosen: the gateway refuses and WhatsApp opens with the text instead.
+  await page.route(/\/api\/whatsapp\/summary/, (route) =>
+    route.fulfill({ status: 409, json: { detail: "Choose an alert group first." } }),
+  );
   await open(page, "/app/reports");
   await expect(page.getByTestId("reports-page")).toHaveAttribute("data-date", today(), { timeout: 30000 });
   await expect(page.getByTestId("recap-trips")).toContainText("152 of 156");
@@ -153,7 +157,7 @@ test("Reports shows the closed day with its provenance and honest limits", async
   await expect(carried).toContainText("1 stop without proof");
   await expect(carried).toContainText("approved");
 
-  // Sending hands the summary to WhatsApp; there is no gateway endpoint for free text.
+  // With no alert group the send falls back to WhatsApp with the text ready.
   await page.getByTestId("reports-send").click();
   const opened = await page.evaluate(() => window.__opened);
   expect(opened).toHaveLength(1);
@@ -192,4 +196,22 @@ test("Reports fits a 390 px phone without sideways scroll", async ({ page }) => 
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("Send summary posts to the alert group and says so", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__opened = [];
+    window.open = (url) => window.__opened.push(String(url));
+  });
+  let body = null;
+  await page.route(/\/api\/whatsapp\/summary/, (route) => {
+    body = route.request().postDataJSON();
+    return route.fulfill({ json: { sent: true, recipient: "Group: 6281****@g.us", chars: 10 } });
+  });
+  await open(page, "/app/reports");
+  await expect(page.getByTestId("reports-page")).toBeVisible({ timeout: 30000 });
+  await page.getByTestId("reports-send").click();
+  await expect(page.getByTestId("reports-sent")).toBeVisible();
+  expect(body.text).toContain("Pythia");
+  expect(await page.evaluate(() => window.__opened)).toHaveLength(0);
 });

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CalendarCheck, Camera, Download, Glasses, MessageCircle, Send, Wrench } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { apiPost } from "../../shared/api/client.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { Button } from "../../shared/ui/Button.jsx";
 import { Card } from "../../shared/ui/Card.jsx";
@@ -29,6 +30,7 @@ export function ReportsView() {
   const [data, setData] = useState(null);
   const [failed, setFailed] = useState(false);
   const [loadedAt, setLoadedAt] = useState(null);
+  const [sent, setSent] = useState(false);
 
   const load = useCallback(() => {
     loadReports()
@@ -111,10 +113,16 @@ export function ReportsView() {
     ...bullets.map((line) => `- ${line}`),
   ].join("\n");
 
-  // No endpoint sends a free-text summary through the gateway, so WhatsApp opens with the
-  // text ready and the operator picks the chat.
-  function shareWhatsApp() {
-    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer");
+  // The summary goes to the alert group through the gateway. When that cannot deliver (no
+  // group chosen, gateway down, a role without dispatch:create), WhatsApp opens with the text
+  // ready and the operator picks the chat.
+  async function shareWhatsApp() {
+    try {
+      await apiPost("/whatsapp/summary", { text: shareText, lang });
+      setSent(true);
+    } catch {
+      window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer");
+    }
   }
 
   async function downloadPdf() {
@@ -208,6 +216,11 @@ export function ReportsView() {
   return (
     <div className="rp" data-testid="reports-page" data-date={recap.date}>
       {failed && <OfflineBanner since={loadedAt} />}
+      {sent && (
+        <p className="rp-sent" role="status" data-testid="reports-sent">
+          {t("s5_rp_sent")}
+        </p>
+      )}
       <header className="rp-title">
         <div>
           <h1>{t("s5_rp_title")}</h1>

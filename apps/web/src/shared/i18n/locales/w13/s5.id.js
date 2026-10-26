@@ -62,7 +62,9 @@ export const s5Id = {
   s5_rp_sum_tomorrow_pending: "Besok: rencana belum disetujui.",
   s5_rp_share_head: "Pythia · tutup hari {date}",
   s5_rp_whatsapp: "WhatsApp",
-  s5_rp_wa_title: "Membuka WhatsApp dengan ringkasan siap kirim. Anda memilih chat-nya.",
+  s5_rp_wa_title:
+    "Mengirim ringkasan ke grup peringatan WhatsApp. Jika grup tidak terjangkau, WhatsApp terbuka dengan teks siap kirim.",
+  s5_rp_sent: "Ringkasan terkirim ke grup peringatan WhatsApp.",
   s5_rp_pdf: "PDF",
   s5_rp_carry_title: "Dibawa ke besok",
   s5_rp_carry_workshop: "{truck} ke bengkel",

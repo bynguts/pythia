@@ -61,7 +61,9 @@ export const s5En = {
   s5_rp_sum_tomorrow_pending: "Tomorrow: the plan is not approved yet.",
   s5_rp_share_head: "Pythia · day close {date}",
   s5_rp_whatsapp: "WhatsApp",
-  s5_rp_wa_title: "Opens WhatsApp with the summary ready. You choose the chat.",
+  s5_rp_wa_title:
+    "Sends the summary to the WhatsApp alert group. If the group cannot be reached, WhatsApp opens with the text ready.",
+  s5_rp_sent: "Summary sent to the WhatsApp alert group.",
   s5_rp_pdf: "PDF",
   s5_rp_carry_title: "Carried to tomorrow",
   s5_rp_carry_workshop: "{truck} to the workshop",

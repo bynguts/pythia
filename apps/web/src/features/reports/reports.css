@@ -351,3 +351,11 @@
     gap: 8px;
   }
 }
+
+.rp-sent {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--f-green-tint);
+  color: var(--f-green);
+  font-size: 13px;
+}
