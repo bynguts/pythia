@@ -27,6 +27,8 @@ export default [
       "react-hooks/exhaustive-deps": "warn",
       "react/prop-types": "off",
       "no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrors: "none" }],
+      // Same-scope reads before a const/let (a render-time TDZ crash); closures that run later are fine.
+      "no-use-before-define": ["error", { functions: false, classes: false, variables: false }],
     },
   },
   {
