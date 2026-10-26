@@ -1,5 +1,5 @@
 // #gap3: supervisors see per-stop evidence photos (fetched with the session token)
-// and an approximate geotag is labelled "Lokasi perkiraan, bukan GPS".
+// and an approximate geotag is labelled "Lokasi perkiraan, bukan GPS" on the Work orders detail.
 import { expect, test } from "@playwright/test";
 import { cancelSpjIndependently, disposeCleanupContext } from "./lib/spjCleanup.js";
 
@@ -20,7 +20,9 @@ async function login(request, role) {
   return res.json();
 }
 
-test("evidence thumbnails and the approximate-geotag label render in the SPJ panel", async ({ page }) => {
+test("evidence thumbnails and the approximate-geotag label render in the work order detail", async ({
+  page,
+}) => {
   const operator = await login(page.request, "dispatcher");
   const driver = await login(page.request, "driver");
   const headers = { Authorization: `Bearer ${operator.token}` };
@@ -68,15 +70,14 @@ test("evidence thumbnails and the approximate-geotag label render in the SPJ pan
       localStorage.setItem("pythia_token", token);
       localStorage.setItem("pythia_role", role);
     }, operator);
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await page.getByRole("tab", { name: "Surat jalan (SPJ)" }).click(); // wave9 fleet composition: records tab
-    const panel = page.locator(".spj-panel");
-    await panel.getByRole("button", { name: new RegExp(spj.spj_number.replace(/[/.]/g, "\\$&")) }).click();
+    await page.goto("/app/work-orders", { waitUntil: "domcontentloaded" });
+    await page.getByTestId("wo-search").fill(spj.spj_number);
+    await page.getByTestId("wo-row").filter({ hasText: spj.spj_number }).click();
 
-    await expect(panel.getByTestId("spj-geotag").first()).toContainText("Lokasi perkiraan, bukan GPS");
-    const photos = panel.getByRole("group", { name: /Foto bukti: TPS E2E 1/ });
-    await expect(photos.getByRole("img")).toHaveCount(2, { timeout: 15000 });
-    const thumb = photos.getByRole("button").first();
+    const detail = page.getByTestId("wo-detail");
+    await expect(detail.getByTestId("spj-geotag").first()).toContainText("Lokasi perkiraan, bukan GPS");
+    const thumb = detail.getByTestId("spj-evidence-photo-1");
+    await expect(thumb.getByRole("img")).toHaveCount(1, { timeout: 15000 });
     const box = await thumb.boundingBox();
     expect(box.width).toBeGreaterThanOrEqual(44);
     expect(box.height).toBeGreaterThanOrEqual(44);

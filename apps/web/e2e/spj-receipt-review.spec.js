@@ -100,7 +100,7 @@ async function stubSpj(page, state) {
   });
 }
 
-async function openPanel(page, request, role) {
+async function openDetail(page, request, role) {
   const res = await request.post(`${API}/auth/login`, {
     data: { username: role, password: `${role}-demo-pass` },
   });
@@ -113,12 +113,11 @@ async function openPanel(page, request, role) {
     localStorage.setItem("pythia_token", token);
     localStorage.setItem("pythia_role", signedIn);
   }, principal);
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await page.getByRole("tab", { name: "Surat jalan (SPJ)" }).click(); // wave9 fleet composition: records tab
-  const panel = page.locator(".spj-panel");
-  await expect(panel.getByTestId("spj-receipt-needs-review")).toHaveText("Struk perlu ditinjau");
-  await panel.getByRole("button", { name: new RegExp(SPJ_NUMBER.replace(/[/.]/g, "\\$&")) }).click();
-  return panel.getByTestId(`spj-receipt-review-${SPJ_ID}`);
+  await page.goto("/app/work-orders", { waitUntil: "domcontentloaded" });
+  await page.getByTestId("wo-tab-closed").click();
+  await expect(page.getByTestId("spj-receipt-needs-review")).toHaveText("Struk perlu ditinjau");
+  await page.getByTestId("wo-row").filter({ hasText: SPJ_NUMBER }).click();
+  return page.getByTestId("wo-detail").getByTestId(`spj-receipt-review-${SPJ_ID}`);
 }
 
 async function expectTapTarget(locator) {
@@ -130,7 +129,7 @@ async function expectTapTarget(locator) {
 test("a dispatcher confirms the OCR suggestion and the recorded gross follows it", async ({ page }) => {
   const state = { receipt: unreviewedReceipt, reviews: [], role: "dispatcher" };
   await stubSpj(page, state);
-  const review = await openPanel(page, page.request, "dispatcher");
+  const review = await openDetail(page, page.request, "dispatcher");
 
   await expect(review.getByTestId("spj-receipt-ocr-badge")).toHaveText("MODEL OUTPUT · belum dikonfirmasi");
   await expect(review.getByTestId("spj-receipt-ocr-suggestion")).toContainText("15.200 kg");
@@ -159,7 +158,7 @@ test("a dispatcher confirms the OCR suggestion and the recorded gross follows it
 test("a supervisor corrects the weights from the ticket photo", async ({ page }) => {
   const state = { receipt: unreviewedReceipt, reviews: [], role: "supervisor" };
   await stubSpj(page, state);
-  const review = await openPanel(page, page.request, "supervisor");
+  const review = await openDetail(page, page.request, "supervisor");
 
   await review.getByRole("button", { name: "Koreksi" }).click();
   const gross = review.getByTestId("spj-receipt-gross");
@@ -183,7 +182,7 @@ test("a supervisor corrects the weights from the ticket photo", async ({ page })
 test("a role without dispatch:create sees the suggestion but no review buttons", async ({ page }) => {
   const state = { receipt: unreviewedReceipt, reviews: [], role: "executive" };
   await stubSpj(page, state);
-  const review = await openPanel(page, page.request, "executive");
+  const review = await openDetail(page, page.request, "executive");
 
   await expect(review.getByTestId("spj-receipt-ocr-badge")).toHaveText("MODEL OUTPUT · belum dikonfirmasi");
   await expect(review.getByRole("button", { name: "Cocok" })).toHaveCount(0);

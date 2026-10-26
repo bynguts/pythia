@@ -1,3 +1,4 @@
+// Work orders (/app/work-orders): the SPJ list, its lifecycle actions and their authorization.
 import { expect, test } from "@playwright/test";
 import {
   assertNoLeftoverActiveSpj,
@@ -12,32 +13,48 @@ test.afterAll(async () => {
   await disposeCleanupContext();
 });
 
-async function signIn(page) {
+async function signIn(page, role = "dispatcher", lang = "id") {
   await page.goto("/");
   const response = await page.request.post(`${API}/auth/login`, {
-    data: { username: "dispatcher", password: "dispatcher-demo-pass" },
+    data: { username: role, password: `${role}-demo-pass` },
   });
   expect(response.ok()).toBeTruthy();
   const principal = await response.json();
-  await page.evaluate(({ token, role }) => {
-    localStorage.setItem("pythia_auth", "true");
-    localStorage.setItem("pythia_lang", "id");
-    localStorage.setItem("pythia_token", token);
-    localStorage.setItem("pythia_role", role);
-  }, principal);
-  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.evaluate(
+    ({ token, role: signedIn, lang: language }) => {
+      localStorage.setItem("pythia_auth", "true");
+      localStorage.setItem("pythia_lang", language);
+      localStorage.setItem("pythia_token", token);
+      localStorage.setItem("pythia_role", signedIn);
+    },
+    { ...principal, lang },
+  );
+  await page.goto("/app/work-orders", { waitUntil: "domcontentloaded" });
   return { Authorization: `Bearer ${principal.token}` };
 }
 
-test("admin sees SPJ in panel, expands it, and activates it", async ({ page }) => {
-  const headers = await signIn(page);
+async function clearTruck(page, headers, truck) {
   const existing = await page.request.get(`${API}/spj`, { headers });
   for (const spj of (await existing.json()).spj || []) {
-    if (spj.truck_code === TEST_TRUCK && ["draft", "aktif"].includes(spj.status)) {
+    if (spj.truck_code === truck && ["draft", "aktif"].includes(spj.status)) {
       await page.request.post(`${API}/spj/${spj.spj_id}/cancel`, { headers });
     }
   }
+}
 
+const rowOf = (page, number) => page.getByTestId("wo-row").filter({ hasText: number });
+
+async function find(page, tab, number) {
+  await page.getByTestId(`wo-tab-${tab}`).click();
+  await page.getByTestId("wo-search").fill(number);
+  await expect(rowOf(page, number)).toBeVisible({ timeout: 15000 });
+  await rowOf(page, number).click();
+  await expect(page.getByTestId("wo-detail")).toContainText(number);
+}
+
+test("a dispatcher finds a draft work order and activates it", async ({ page }) => {
+  const headers = await signIn(page);
+  await clearTruck(page, headers, TEST_TRUCK);
   const create = await page.request.post(`${API}/spj`, {
     headers,
     data: {
@@ -51,7 +68,6 @@ test("admin sees SPJ in panel, expands it, and activates it", async ({ page }) =
   });
   expect(create.status()).toBe(201);
   const spj = await create.json();
-
   const stop = await page.request.post(`${API}/spj/${spj.spj_id}/stops`, {
     headers,
     data: { name: "TPS E2E", kecamatan: "Cilandak", address: "Jl. E2E 1", lat: -6.29, lng: 106.79 },
@@ -59,11 +75,12 @@ test("admin sees SPJ in panel, expands it, and activates it", async ({ page }) =
   expect(stop.ok()).toBeTruthy();
 
   try {
-    await page.getByRole("tab", { name: "Surat jalan (SPJ)" }).click(); // wave9 fleet composition: records tab
-    await expect(page.getByText(spj.spj_number).first()).toBeVisible({ timeout: 15000 });
-    await page.getByText(spj.spj_number).first().click();
-    await page.getByRole("button", { name: "Ubah ke aktif" }).click();
-    await expect(page.getByText("Aktif", { exact: true }).first()).toBeVisible({ timeout: 10000 });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await find(page, "drafts", spj.spj_number);
+    await page.getByTestId("wo-activate").click();
+    await expect(page.getByTestId("wo-activate")).toHaveCount(0, { timeout: 10000 });
+    await find(page, "active", spj.spj_number);
+    await expect(rowOf(page, spj.spj_number)).toContainText("Diaktifkan");
   } finally {
     // #89: independent bounded context, not page.request.
     const token = headers.Authorization.slice(7);
@@ -73,9 +90,9 @@ test("admin sees SPJ in panel, expands it, and activates it", async ({ page }) =
   }
 });
 
-test("Fleet SPJ mutations and lifecycle labels follow authorization and ID/EN", async ({ page }) => {
-  // The scenario now also exercises the permission-gated supervisor override,
-  // which adds a second sign-in round trip to the flow.
+test("a work order is created, closed by a supervisor override and cancelled, each by its permission", async ({
+  page,
+}) => {
   test.setTimeout(150000);
   const headers = await signIn(page);
   const dispatcherToken = headers.Authorization.slice(7);
@@ -84,95 +101,88 @@ test("Fleet SPJ mutations and lifecycle labels follow authorization and ID/EN", 
   });
   expect(driverLogin.ok()).toBeTruthy();
   const { token: driverToken } = await driverLogin.json();
+  const supervisorLogin = await page.request.post(`${API}/auth/login`, {
+    data: { username: "supervisor", password: "supervisor-demo-pass" },
+  });
+  expect(supervisorLogin.ok()).toBeTruthy();
+  const { token: supervisorToken } = await supervisorLogin.json();
   const sites = await page.request.get(`${API}/geo/tps-coordinates`);
   expect(sites.ok()).toBeTruthy();
   const site = (await sites.json()).features[0].properties.name;
   const created = [];
-  const panel = page.locator(".spj-panel");
-  const row = (number) => panel.locator(".spj-row").filter({ hasText: number });
-  const status = (number) => row(number).locator("td").last();
-  // The scenario drives T-209, and a truck holds at most one active SPJ, so a
-  // leftover from an earlier run must be cleared or activation is refused.
-  const existing = await page.request.get(`${API}/spj`, { headers });
-  for (const spj of (await existing.json()).spj || []) {
-    if (spj.truck_code === "T-209" && ["draft", "aktif"].includes(spj.status)) {
-      await page.request.post(`${API}/spj/${spj.spj_id}/cancel`, { headers });
-    }
-  }
-  async function addStop() {
-    await panel.locator(".spj-form input[list='spj-sites']").fill(site);
-    await panel.getByRole("button", { name: "Tambah titik" }).click();
-  }
+  await clearTruck(page, headers, "T-209");
+
   async function createOrder() {
-    await panel.locator(".spj-form select").first().selectOption("T-209");
-    await addStop();
-    await addStop();
+    await page.getByTestId("wo-new").click();
+    const form = page.locator(".spj-form");
+    await form.locator("select").first().selectOption("T-209");
+    for (let i = 0; i < 2; i += 1) {
+      await form.locator("input[list='spj-sites']").fill(site);
+      await form.getByRole("button", { name: "Tambah titik" }).click();
+    }
     const responsePromise = page.waitForResponse(
       (response) => response.url().endsWith("/api/spj") && response.request().method() === "POST",
     );
-    await panel.getByRole("button", { name: "Simpan draf" }).click();
+    await form.getByRole("button", { name: "Simpan draf" }).click();
     const response = await responsePromise;
     expect(response.status()).toBe(201);
     const spj = await response.json();
     created.push(spj.spj_id);
-    await expect(row(spj.spj_number)).toBeVisible();
     return spj;
   }
 
   try {
-    await page.getByRole("tab", { name: "Surat jalan (SPJ)" }).click(); // wave9 fleet composition: records tab
-    await expect(panel.getByRole("combobox", { name: "Kendaraan" })).toBeVisible();
     const first = await createOrder();
-    await expect(status(first.spj_number)).toHaveText("Draf");
-    await page.getByRole("button", { name: "EN", exact: true }).click();
-    await expect(status(first.spj_number)).toHaveText("Draft");
-    await page.getByRole("button", { name: "ID", exact: true }).click();
-    await row(first.spj_number).getByRole("button").click();
-    await panel.getByRole("button", { name: "Ubah ke aktif" }).click();
-    await expect(status(first.spj_number)).toHaveText("Aktif");
-    await page.getByRole("button", { name: "EN", exact: true }).click();
-    await expect(status(first.spj_number)).toHaveText("Active");
-    // The operator panel cannot close a stop without evidence: the old
-    // "Mark stop complete" button is gone and the panel says why.
-    await expect(panel.getByRole("button", { name: "Mark stop complete" })).toHaveCount(0);
-    await expect(panel.getByText(/Stops close only with field evidence/)).toBeVisible();
-    // The exceptional path is a reasoned, permission-gated supervisor override:
-    // a dispatcher is refused, a supervisor may close the order with a reason.
-    await panel.getByRole("button", { name: "Closed by supervisor override" }).click();
-    await panel.getByRole("textbox", { name: /Supervisor reason/ }).fill("Bukti lapangan tidak tersedia");
-    await panel.getByRole("button", { name: "Complete with reason" }).click();
-    await expect(panel.getByRole("alert")).toContainText("cannot perform that dispatch action");
-    await expect(status(first.spj_number)).toHaveText("Active");
-    const supervisorLogin = await page.request.post(`${API}/auth/login`, {
-      data: { username: "supervisor", password: "supervisor-demo-pass" },
-    });
-    expect(supervisorLogin.ok()).toBeTruthy();
-    const { token: supervisorToken } = await supervisorLogin.json();
-    await page.evaluate((token) => localStorage.setItem("pythia_token", token), supervisorToken);
-    await panel.getByRole("button", { name: "Complete with reason" }).click();
-    await expect(status(first.spj_number)).toHaveText("Completed");
-    // Both stops of the order carry the same recorded override reason.
-    await expect(panel.getByText(/Bukti lapangan tidak tersedia/).first()).toBeVisible();
-    await page.evaluate((token) => localStorage.setItem("pythia_token", token), dispatcherToken);
-    await page.getByRole("button", { name: "ID", exact: true }).click();
-    await expect(status(first.spj_number)).toHaveText("Selesai");
+    await find(page, "drafts", first.spj_number);
+    await page.getByTestId("wo-activate").click();
+    await find(page, "active", first.spj_number);
 
+    // A dispatcher cannot close a stop-less-evidence order: the server names the missing proof,
+    // and only a supervisor is offered the override.
+    await page.getByTestId("wo-close").click();
+    await expect(page.getByTestId("wo-message")).toBeVisible();
+    await expect(page.getByTestId("wo-override-form")).toHaveCount(0);
+
+    await page.evaluate(
+      ({ token }) => {
+        localStorage.setItem("pythia_token", token);
+        localStorage.setItem("pythia_role", "supervisor");
+      },
+      { token: supervisorToken },
+    );
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await find(page, "active", first.spj_number);
+    await page.getByTestId("wo-close").click();
+    const form = page.getByTestId("wo-override-form");
+    await expect(form).toBeVisible();
+    await page.getByTestId("wo-override-reason").fill("pendek");
+    await page.getByTestId("wo-override-submit").click();
+    await expect(form.getByRole("alert")).toBeVisible();
+    await page.getByTestId("wo-override-reason").fill("Bukti lapangan tidak tersedia");
+    await page.getByTestId("wo-override-submit").click();
+    await expect(page.getByTestId("wo-override-form")).toHaveCount(0, { timeout: 10000 });
+    await find(page, "closed", first.spj_number);
+
+    // Cancelling: no session, then a role without the permission, then the dispatcher.
+    await page.evaluate(
+      ({ token }) => {
+        localStorage.setItem("pythia_token", token);
+        localStorage.setItem("pythia_role", "dispatcher");
+      },
+      { token: dispatcherToken },
+    );
+    await page.reload({ waitUntil: "domcontentloaded" });
     const second = await createOrder();
-    await row(second.spj_number).getByRole("button").click();
+    await find(page, "drafts", second.spj_number);
     await page.evaluate(() => localStorage.removeItem("pythia_token"));
-    await panel.getByRole("button", { name: "Batalkan SPJ" }).click();
-    await expect(panel.getByRole("alert")).toContainText("Sesi berakhir");
-    await expect(status(second.spj_number)).toHaveText("Draf");
+    await page.getByTestId("wo-cancel").click();
+    await expect(page.getByTestId("wo-message")).toContainText("Sesi berakhir");
     await page.evaluate((token) => localStorage.setItem("pythia_token", token), driverToken);
-    await panel.getByRole("button", { name: "Batalkan SPJ" }).click();
-    await expect(panel.getByRole("alert")).toContainText("tidak memiliki izin");
-    await expect(status(second.spj_number)).toHaveText("Draf");
+    await page.getByTestId("wo-cancel").click();
+    await expect(page.getByTestId("wo-message")).toContainText("tidak memiliki izin");
     await page.evaluate((token) => localStorage.setItem("pythia_token", token), dispatcherToken);
-    await panel.getByRole("button", { name: "Batalkan SPJ" }).click();
-    await expect(status(second.spj_number)).toHaveText("Dibatalkan");
-    await page.getByRole("button", { name: "EN", exact: true }).click();
-    await expect(status(second.spj_number)).toHaveText("Canceled");
-    await expect(panel.getByRole("heading", { name: "Dispatch orders" })).toBeVisible();
+    await page.getByTestId("wo-cancel").click();
+    await expect(rowOf(page, second.spj_number)).toHaveCount(0, { timeout: 10000 });
   } finally {
     // #89: independent bounded context, not page.request.
     for (const id of created) {

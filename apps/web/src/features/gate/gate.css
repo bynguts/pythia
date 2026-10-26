@@ -1,0 +1,309 @@
+/* Wave 13 lane S4: TPA gate (WDyPY). Every class is prefixed `gate-`; colours come from tokens.css. */
+.gate-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1376px;
+}
+.gate-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4, 16px);
+  flex-wrap: wrap;
+}
+.gate-head h1 {
+  margin: 0;
+  color: var(--f-ink);
+  font-family: var(--f-font-display);
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.8px;
+  line-height: 1.15;
+}
+.gate-sub {
+  margin: 6px 0 0;
+  color: var(--f-muted);
+  font-size: 15px;
+}
+.gate-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 20px;
+  align-items: stretch;
+}
+.gate-main > :last-child,
+.gate-side > :last-child {
+  flex: 1 1 auto;
+}
+.gate-main,
+.gate-side {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.gate-muted {
+  color: var(--f-faint);
+}
+.gate-empty-note {
+  margin: 0;
+  padding: 20px;
+  color: var(--f-muted);
+  font-size: 14px;
+}
+
+/* Predicted wait per slot */
+.gate-legend {
+  display: inline-flex;
+  gap: 14px;
+}
+.gate-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--f-ink-2);
+  font-size: 12px;
+}
+.gate-legend-item::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gate-tone);
+  content: "";
+}
+.gate-legend-item.is-normal,
+.gate-bar.is-normal {
+  --gate-tone: var(--f-green-live);
+}
+.gate-legend-item.is-peak,
+.gate-bar.is-peak {
+  --gate-tone: var(--f-amber-pixel);
+}
+.gate-legend-item.is-now,
+.gate-bar.is-now {
+  --gate-tone: var(--f-green);
+}
+.gate-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 128px;
+}
+.gate-bar {
+  flex: 1 1 0;
+  min-width: 3px;
+  border-radius: 2px 2px 0 0;
+  background: var(--gate-tone);
+}
+.gate-bar.is-normal {
+  background: var(--f-green-soft);
+}
+.gate-axis {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+  color: var(--f-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.gate-axis .is-end {
+  display: flex;
+  justify-content: flex-end;
+}
+.gate-axis span {
+  flex: 1 1 0;
+  min-width: 3px;
+  height: 14px;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+/* Slot board */
+.gate-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.gate-chip {
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: var(--f-hover);
+  color: var(--f-ink-2);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.gate-wait-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Recommendation */
+.gate-rec {
+  gap: 14px;
+  padding: 20px;
+  border-color: var(--f-green-soft);
+  background: var(--f-green-tint);
+}
+.gate-rec-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--f-green);
+}
+.gate-rec-head h2 {
+  flex: 1 1 auto;
+  margin: 0;
+  color: var(--f-green);
+  font-family: var(--f-font-body);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.gate-rec-title {
+  margin: 0;
+  color: var(--f-ink);
+  font-family: var(--f-font-display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  line-height: 1.3;
+}
+.gate-rec-quiet,
+.gate-rec-note {
+  margin: 0;
+  color: var(--f-ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.gate-impact {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 0;
+  border: 1px solid var(--f-green-soft);
+  border-radius: 8px;
+  background: var(--f-white);
+}
+.gate-impact > div {
+  padding: 10px 14px;
+}
+.gate-impact > div + div {
+  border-left: 1px solid var(--f-green-soft);
+}
+.gate-impact dt {
+  color: var(--f-muted);
+  font-size: 12px;
+}
+.gate-impact dd {
+  margin: 4px 0 0;
+  color: var(--f-ink-2);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.gate-impact dd strong {
+  color: var(--f-green);
+}
+.gate-rec-actions {
+  display: flex;
+  gap: 10px;
+}
+.gate-rec-actions .ui-btn-primary {
+  flex: 1 1 auto;
+}
+.gate-rec-sent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--f-green);
+  font-size: 13px;
+  font-weight: 600;
+}
+.gate-rec-error {
+  margin: 0;
+  color: var(--f-red-ink);
+  font-size: 13px;
+}
+
+/* Latest arrivals */
+.gate-arrivals .ui-card-title {
+  font-family: var(--f-font-display);
+  font-size: 17px;
+}
+.gate-arrival-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.gate-arrival-list li {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 35px;
+  padding: 0 20px;
+  border-top: 1px solid var(--f-line-3);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.gate-arrival-list li:first-child {
+  border-top: 0;
+}
+.gate-arrival-list time {
+  font-size: 13px;
+}
+
+@media (max-width: 1100px) {
+  .gate-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 720px) {
+  .gate-page .ui-kpi-strip {
+    flex-wrap: wrap;
+    row-gap: 16px;
+  }
+  .gate-page .ui-kpi {
+    flex: 1 1 45%;
+  }
+  .gate-head h1 {
+    font-size: 28px;
+  }
+}
+
+/* The export draws this strip as a white bordered card of plain cells, no progress bar. */
+.gate-page .ui-kpi-strip {
+  padding: 20px 0;
+  border: 1px solid var(--f-border);
+  border-radius: 10px;
+  background: var(--f-white);
+}
+.gate-page .ui-kpi-top {
+  justify-content: space-between;
+}
+.gate-page .ui-kpi-bar {
+  display: none;
+}
+.gate-page .ui-kpi-unit {
+  padding-bottom: 0;
+  color: var(--f-ink);
+  font-family: var(--f-font-display);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+  line-height: 1.15;
+}
+.gate-page .ui-kpi-value {
+  align-items: baseline;
+}
+.gate-page .ui-kpi-sub {
+  color: var(--f-faint);
+  font-size: 13px;
+}
+.gate-page .ui-table td {
+  height: 39px;
+  padding-block: 8px;
+}

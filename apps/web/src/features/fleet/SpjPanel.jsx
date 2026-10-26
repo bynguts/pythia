@@ -164,7 +164,7 @@ function errorMessage(error, label, words) {
 
 // Gap 3: evidence photos need the bearer token, so they are fetched as blobs
 // (an <img src> cannot send it) and shown from an object URL.
-function EvidencePhoto({ spjId, photo, stopName }) {
+export function EvidencePhoto({ spjId, photo, stopName, width = 96, height }) {
   const { t } = useLanguage();
   const [large, setLarge] = useState(false);
   const [src, setSrc] = useState(null);
@@ -209,7 +209,12 @@ function EvidencePhoto({ spjId, photo, stopName }) {
         <img
           src={src}
           alt={`${slot}, ${stopName}`}
-          style={{ display: "block", width: large ? "min(100%, 480px)" : "96px", height: "auto" }}
+          style={{
+            display: "block",
+            width: large ? "min(100%, 480px)" : `${width}px`,
+            height: height && !large ? `${height}px` : "auto",
+            objectFit: "cover",
+          }}
         />
       )}
     </button>
@@ -306,7 +311,7 @@ function ReceiptPhoto({ spjId }) {
   );
 }
 
-function ReceiptReview({ spj, act, pendingAction, words }) {
+export function ReceiptReview({ spj, act, pendingAction, words }) {
   const { lang, t } = useLanguage();
   const [correcting, setCorrecting] = useState(false);
   const [gross, setGross] = useState("");
