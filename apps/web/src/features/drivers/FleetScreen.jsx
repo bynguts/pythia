@@ -96,7 +96,11 @@ export function FleetScreen() {
 
   const total = overview.data?.total_trucks ?? null;
   const hold = overview.data?.by_activity?.maintenance_hold ?? null;
-  const stats = damageStats(damage.data?.reports || [], total);
+  const workshopCodes = useMemo(
+    () => (overview.data?.damaged_trucks || []).map((truck) => truck.truck_code),
+    [overview.data],
+  );
+  const stats = damageStats(damage.data?.reports || [], total, workshopCodes);
   const booked = useMemo(() => bookedByTruck(records.data?.records || []), [records.data]);
   const duty = useMemo(() => dutyRows(safety.data, driverByTruck), [safety.data, driverByTruck]);
   const counts = safety.data?.counts;
@@ -319,7 +323,14 @@ export function FleetScreen() {
             <Kpi
               label={t("s2_kpi_roadworthy")}
               value={stats.roadworthy == null ? "—" : `${stats.roadworthy} / ${total}`}
-              sub={damage.loaded ? fill(t("s2_kpi_roadworthy_sub"), { n: stats.openTruckCount }) : null}
+              sub={
+                damage.loaded
+                  ? fill(t(stats.workshopCount ? "s2_kpi_roadworthy_sub_ws" : "s2_kpi_roadworthy_sub"), {
+                      n: stats.openTruckCount,
+                      w: stats.workshopCount,
+                    })
+                  : null
+              }
               testId="fleet-kpi-roadworthy"
             />
             <Kpi

@@ -100,7 +100,7 @@ export function ReportsView() {
   const tomorrowName = shortDate(data.tomorrow, { weekday: "short" });
   const tomorrowLine = tomorrowPlan
     ? fill(t("s5_rp_sum_tomorrow"), {
-        t: tomorrowPlan.total_demand_tons == null ? "—" : number(tomorrowPlan.total_demand_tons),
+        t: data.tomorrowTons == null ? "—" : number(data.tomorrowTons),
         time: clockTime(tomorrowPlan.approved_at) || "—",
       })
     : t("s5_rp_sum_tomorrow_pending");

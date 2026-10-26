@@ -86,13 +86,15 @@ export async function loadReports() {
   const today = jakartaDate();
   const tomorrow = jakartaDate(1);
   const dates = Array.from({ length: DAYS }, (_, index) => jakartaDate(index - (DAYS - 1)));
-  const [recaps, exceptions, damage, events, plans, suitability] = await Promise.all([
+  const [recaps, exceptions, damage, events, plans, suitability, forecast] = await Promise.all([
     Promise.allSettled(dates.map((date) => apiGet(`/recap/daily?date=${date}`))),
     Promise.allSettled([apiGet("/driver/exceptions")]),
     Promise.allSettled([apiGet("/damage-reports")]),
     Promise.allSettled([apiGet("/alert/follow-ups")]),
     Promise.allSettled([apiGet("/operations/plans?status=approved&limit=100")]),
     Promise.allSettled([apiGet("/ml/suitability")]),
+    // Tomorrow's tonnes come from the same forecast the Tomorrow page prints, not the plan's demand.
+    Promise.allSettled([apiGet(`/forecast/tomorrow?date=${tomorrow}`)]),
   ]);
   const days = recaps.map((result, index) => ({ date: dates[index], recap: value(result) }));
   const recap = days[days.length - 1].recap;
@@ -107,5 +109,6 @@ export async function loadReports() {
     exceptions: exceptionRows(today, value(exceptions[0]), damageBody, value(events[0])),
     carried: carriedItems(damageBody, planList, tomorrow),
     backtest: value(suitability[0])?.monthly_backtest?.landfill_month || null,
+    tomorrowTons: value(forecast[0])?.total_tonnage_t ?? null,
   };
 }

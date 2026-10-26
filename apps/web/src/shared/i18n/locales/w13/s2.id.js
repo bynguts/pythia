@@ -119,6 +119,7 @@ export const s2Id = {
   s2_flt_kpis: "Armada sekilas",
   s2_kpi_roadworthy: "Laik jalan",
   s2_kpi_roadworthy_sub: "{n} dengan kerusakan terbuka",
+  s2_kpi_roadworthy_sub_ws: "{w} di bengkel · {n} dengan kerusakan terbuka",
   s2_kpi_major: "Kerusakan berat",
   s2_kpi_major_sub: "Tidak jalan sampai diperbaiki",
   s2_kpi_service: "Servis jatuh tempo",

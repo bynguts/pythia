@@ -143,6 +143,64 @@ test("the plan never uses more trucks than the pilot fleet has in service", asyn
   const used = await numberOf(kpi);
   await expect(kpi).toHaveText(`${used} dari ${inService}`);
   expect(used).toBeLessThanOrEqual(inService);
+  // #numbers: the denominator is the roadworthy fleet, and the tile says so.
+  await expect(page.locator(".tmr-kpi dt").first()).toHaveText("Truk laik jalan terpakai");
+});
+
+// #numbers: Fleet's roadworthy count leaves out the trucks in the workshop, so "N / 59"
+// agrees with the header's "7 in the workshop" and with Tomorrow's roadworthy denominator.
+test("Fleet's roadworthy count leaves out the trucks in the workshop", async ({ page }) => {
+  const token = await signIn(page, "/app/fleet");
+  const kpi = page.getByTestId("fleet-kpi-roadworthy");
+  await expect(kpi).toBeVisible({ timeout: 30000 });
+  await expect(async () => {
+    const overview = await apiJson(page, "/fleet/status-overview");
+    const damage = await page.request.get(`${API}/damage-reports`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(damage.ok()).toBeTruthy();
+    const { reports } = await damage.json();
+    const off = new Set([
+      ...overview.damaged_trucks.map((truck) => truck.truck_code),
+      ...reports.filter((r) => r.status === "baru" && r.severity === "berat").map((r) => r.truck_code),
+    ]);
+    const total = overview.total_trucks;
+    await expect(kpi).toContainText(`${total - off.size} / ${total}`, { timeout: 1000 });
+    if (overview.damaged_count) await expect(kpi).toContainText(`${overview.damaged_count} di bengkel`);
+    const hold = overview.by_activity.maintenance_hold || 0;
+    await expect(page.getByText(`${hold} di bengkel`).first()).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 20000 });
+});
+
+// #numbers: Reports' "Tomorrow" line prints the forecast the Tomorrow page prints, not the
+// approved plan's demand (a different, district-by-district sum).
+test("Reports' tomorrow tonnes are the Tomorrow page's forecast", async ({ page }) => {
+  const tomorrow = new Date(Date.now() + 864e5).toLocaleDateString("sv-SE", { timeZone: "Asia/Jakarta" });
+  await page.route(/\/api\/operations\/plans/, (route) =>
+    route.fulfill({
+      json: [
+        {
+          plan_id: "PLAN-NUM",
+          plan_date: tomorrow,
+          total_demand_tons: 1234,
+          approved_at: new Date().toISOString(),
+          status: "approved",
+        },
+      ],
+    }),
+  );
+  const token = await signIn(page, "/app/reports");
+  const response = await page.request.get(`${API}/forecast/tomorrow?date=${tomorrow}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(response.ok()).toBeTruthy();
+  const forecast = await response.json();
+  const summary = page.getByTestId("recap-summary");
+  await expect(summary).toContainText(
+    `Besok: prakiraan ${forecast.total_tonnage_t.toLocaleString("id-ID", { maximumFractionDigits: 0 })} t`,
+    { timeout: 30000 },
+  );
+  await expect(summary).not.toContainText("1.234");
 });
 
 // wave11 numbers: a queue figure says which quantity it is. The modelled peak hour's wait

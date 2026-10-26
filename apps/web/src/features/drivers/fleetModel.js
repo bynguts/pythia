@@ -11,7 +11,9 @@ export const ON_TIME_OK_PCT = 80;
 export const isOpen = (report) => report.status === "baru";
 export const isMajor = (report) => report.severity === "berat";
 
-export function damageStats(reports, totalTrucks) {
+// Roadworthy = the fleet less every truck off the road: open major damage or in the
+// workshop (the status overview's damaged trucks), so it agrees with "N in the workshop".
+export function damageStats(reports, totalTrucks, workshopCodes = []) {
   const open = reports.filter(isOpen);
   const openTrucks = new Set(open.map((r) => r.truck_code));
   const majorTrucks = new Set(open.filter(isMajor).map((r) => r.truck_code));
@@ -23,7 +25,11 @@ export function damageStats(reports, totalTrucks) {
     fixedThisWeek,
     openTruckCount: openTrucks.size,
     majorCount: majorTrucks.size,
-    roadworthy: totalTrucks == null ? null : Math.max(0, totalTrucks - majorTrucks.size),
+    workshopCount: workshopCodes.length,
+    roadworthy:
+      totalTrucks == null
+        ? null
+        : Math.max(0, totalTrucks - new Set([...majorTrucks, ...workshopCodes]).size),
   };
 }
 

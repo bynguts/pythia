@@ -185,6 +185,49 @@ test("an exception button queues offline, counts as waiting for signal, then syn
   expect(mine[0].reported_by).toBe("driver");
 });
 
+// #w14-walk: after the last stop the SPJ is closed (selesai) and waits for its weigh ticket;
+// the Rute tab says the route is finished and leads to the TPA instead of "no dispatch order".
+test("the Rute tab after the last stop shows a finished route, then the closed one", async ({
+  page,
+  request,
+}) => {
+  const { token } = await apiLogin(request, "driver");
+  const closed = {
+    spj_id: "SPJ-E2E-ROUTE-DONE",
+    spj_number: "DLH-DKI/SPJ/E2E-DONE",
+    truck_code: TRUCK,
+    driver_name: "E2E",
+    destination: "TPST Bantargebang",
+    status: "selesai",
+    created_at: "2026-10-27T01:00:00+00:00",
+    stops: [{ name: "TPS Satu", kecamatan: "Cilandak", status: "completed" }],
+    receipt: null,
+  };
+  const state = { selesai: [closed] };
+  await page.route(/\/api\/spj\?status=aktif(&|$)/, (route) =>
+    route.fulfill({ json: { spj: [], count: 0 } }),
+  );
+  await page.route(/\/api\/spj\?status=selesai(&|$)/, (route) =>
+    route.fulfill({ json: { spj: state.selesai, count: state.selesai.length } }),
+  );
+  await page.route(`**/api/dispatch/${TRUCK}`, (route) => route.fulfill({ json: [] }));
+  await openDriver(page, token, { path: "/driver?tab=rute" });
+
+  const finished = page.getByTestId("driver-route-finished");
+  await expect(finished).toContainText("Semua titik selesai", { timeout: 15000 });
+  await expect(finished).toContainText("TPST Bantargebang");
+  await expect(page.getByTestId("driver-no-spj")).toHaveCount(0);
+  await finished.getByTestId("driver-route-go-tpa").click();
+  await expect(page.getByTestId("driver-tab-tpa")).toHaveAttribute("aria-current", "page");
+
+  // Once its weigh ticket is in, the route reads as finished rather than never issued.
+  state.selesai = [{ ...closed, receipt: { gross_weight_kg: 14000 } }];
+  await page.getByTestId("driver-tab-rute").click();
+  await expect(page.getByTestId("driver-route-finished")).toContainText("Rute terakhir selesai", {
+    timeout: 15000,
+  });
+});
+
 test("the TPA gate screen shows the modelled wait and queue labelled as model output", async ({
   page,
   request,
@@ -258,6 +301,11 @@ test("the TPA gate screen shows the modelled wait and queue labelled as model ou
   await expect(guide.getByTestId("tpa-model-note")).toContainText("perkiraan model");
   const ahead = page.getByTestId("tpa-queue-ahead");
   await expect(ahead).toContainText(/Jam puncak model \d\d:00 · sekitar \d+ truk/);
+  // #numbers: the longest queue is the gate board's "waiting" figure (one queue model).
+  const status = await (await request.get(`${API}/tpa/queue-status`)).json();
+  await expect(ahead).toContainText(
+    `paling banyak ${Math.round(status.queue_trucks_max).toLocaleString("id-ID")}`,
+  );
   await expect(ahead).toHaveAttribute("data-provenance", "simulated");
 
   await page.getByTestId("gate-arrival").click();

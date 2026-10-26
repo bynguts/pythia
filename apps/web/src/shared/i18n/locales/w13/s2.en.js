@@ -121,6 +121,7 @@ export const s2En = {
   s2_flt_kpis: "Fleet at a glance",
   s2_kpi_roadworthy: "Roadworthy",
   s2_kpi_roadworthy_sub: "{n} with open damage",
+  s2_kpi_roadworthy_sub_ws: "{w} in the workshop · {n} with open damage",
   s2_kpi_major: "Major damage",
   s2_kpi_major_sub: "Off the road until fixed",
   s2_kpi_service: "Service due",

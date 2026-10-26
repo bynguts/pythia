@@ -98,7 +98,7 @@ export const s3En = {
   s3_view_truck: "By truck",
   s3_view_district: "By district",
   s3_view_gate: "Gate slots",
-  s3_kpi_trucks: "Trucks",
+  s3_kpi_trucks: "Roadworthy trucks used",
   s3_kpi_trucks_value: "{a} of {b}",
   s3_kpi_trucks_held: "{codes} in workshop",
   s3_kpi_trucks_held_many: "{n} held by field facts",

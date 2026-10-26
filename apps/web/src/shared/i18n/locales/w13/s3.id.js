@@ -99,7 +99,7 @@ export const s3Id = {
   s3_view_truck: "Per truk",
   s3_view_district: "Per kecamatan",
   s3_view_gate: "Slot gerbang",
-  s3_kpi_trucks: "Truk",
+  s3_kpi_trucks: "Truk laik jalan terpakai",
   s3_kpi_trucks_value: "{a} dari {b}",
   s3_kpi_trucks_held: "{codes} di bengkel",
   s3_kpi_trucks_held_many: "{n} ditahan fakta lapangan",
