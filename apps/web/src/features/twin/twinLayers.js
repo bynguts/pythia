@@ -117,7 +117,10 @@ export function daySummary(scene, day) {
     trucks += row.trucks_required;
     if (isAtRisk(row.risk)) atRisk += 1;
   }
-  return { tons, trucks, atRisk, date: scene?.horizon?.dates?.[day] || null };
+  // The API's day total is the one the twin HUD and the XR table print; summing the districts
+  // here can land on the other side of a .5 and show a tonne less.
+  const total = scene?.horizon?.daily_total_tons?.[day];
+  return { tons: total ?? tons, trucks, atRisk, date: scene?.horizon?.dates?.[day] || null };
 }
 
 /** District whose selected-day load spikes most against its normal day. */
