@@ -221,6 +221,9 @@ export function WorkOrderDetail({ spj, state, onChanged }) {
     selesai: ["neutral", t("s4_wo_tab_closed")],
   }[spj.status] || ["neutral", spj.status];
 
+  // A draft for a later day activates on that day (the API refuses it before).
+  const activatesLater = spj.status === "draft" && Boolean(spj.date) && spj.date > jakartaDay();
+
   return (
     <section className="ui-card wo-detail" aria-labelledby="wo-detail-title" data-testid="wo-detail">
       <header className="wo-detail-head">
@@ -257,7 +260,7 @@ export function WorkOrderDetail({ spj, state, onChanged }) {
             <Button
               variant="primary"
               onClick={() => run(() => apiPost(`${base}/activate`))}
-              disabled={busy}
+              disabled={busy || activatesLater}
               data-testid="wo-activate"
             >
               {t("s4_wo_activate")}
@@ -301,6 +304,17 @@ export function WorkOrderDetail({ spj, state, onChanged }) {
         </div>
       </dl>
 
+      {activatesLater && !(error || notice) && (
+        <p className="wo-message" data-testid="wo-activate-later">
+          {t("s4_wo_activate_later").replace(
+            "{date}",
+            new Date(`${spj.date}T00:00:00`).toLocaleDateString(localeFor(lang), {
+              day: "numeric",
+              month: "short",
+            }),
+          )}
+        </p>
+      )}
       {(error || notice) && (
         <p
           className={error ? "wo-message is-error" : "wo-message"}

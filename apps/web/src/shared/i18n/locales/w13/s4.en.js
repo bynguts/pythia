@@ -107,6 +107,7 @@ export const s4En = {
   s4_wo_proof_sent: "Request sent to the driver.",
   s4_wo_close: "Close SPJ",
   s4_wo_activate: "Activate",
+  s4_wo_activate_later: "Activates on {date}, its day.",
   s4_wo_cancel: "Cancel SPJ",
   s4_wo_err_session: "Session ended. Sign in again.",
   s4_wo_err_forbidden: "This role cannot perform that action.",

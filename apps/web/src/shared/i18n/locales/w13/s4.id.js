@@ -107,6 +107,7 @@ export const s4Id = {
   s4_wo_proof_sent: "Permintaan terkirim ke sopir.",
   s4_wo_close: "Tutup SPJ",
   s4_wo_activate: "Aktifkan",
+  s4_wo_activate_later: "Bisa diaktifkan pada {date}, sesuai tanggalnya.",
   s4_wo_cancel: "Batalkan SPJ",
   s4_wo_err_session: "Sesi berakhir. Masuk lagi.",
   s4_wo_err_forbidden: "Peran ini tidak memiliki izin untuk tindakan itu.",

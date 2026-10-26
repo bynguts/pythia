@@ -90,6 +90,30 @@ test("a dispatcher finds a draft work order and activates it", async ({ page }) 
   }
 });
 
+// #w14-walk: tomorrow's plan draft cannot be worked today; Activate says which day it opens.
+test("a draft for tomorrow cannot be activated today and says when it can", async ({ page }) => {
+  const headers = await signIn(page, "dispatcher", "en");
+  const supervisor = await page.request.post(`${API}/auth/login`, {
+    data: { username: "supervisor", password: "supervisor-demo-pass" },
+  });
+  const tomorrow = new Date(Date.now() + 864e5).toLocaleDateString("sv-SE", { timeZone: "Asia/Jakarta" });
+  const created = await page.request.post(`${API}/operations/plan?top_n=1&plan_date=${tomorrow}`, {
+    headers,
+  });
+  expect(created.ok()).toBeTruthy();
+  const plan = await created.json();
+  const approved = await page.request.post(`${API}/operations/${plan.plan_id}/approve`, {
+    headers: { Authorization: `Bearer ${(await supervisor.json()).token}` },
+  });
+  expect(approved.ok()).toBeTruthy();
+  const draft = (await approved.json()).spj_drafts.find((d) => d.spj_number);
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await find(page, "drafts", draft.spj_number);
+  await expect(page.getByTestId("wo-activate")).toBeDisabled();
+  await expect(page.getByTestId("wo-activate-later")).toHaveText(/^Activates on .+, its day\.$/);
+});
+
 test("a work order is created, closed by a supervisor override and cancelled, each by its permission", async ({
   page,
 }) => {
