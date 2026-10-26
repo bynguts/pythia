@@ -1,8 +1,9 @@
 import { createContext, useContext, useState } from "react";
 import { en } from "./locales/en.js";
 import { id } from "./locales/id.js";
+import { w13En, w13Id } from "./locales/w13/index.js";
 
-const translations = { en, id };
+const translations = { en: { ...en, ...w13En }, id: { ...id, ...w13Id } };
 
 // gsc n30: the one BCP-47 locale per UI language for numbers, dates and speech.
 export function localeFor(lang) {
@@ -15,13 +16,15 @@ export function translate(lang, key) {
 }
 
 const LanguageContext = createContext({
-  lang: "id",
+  lang: "en",
   setLang: () => {},
   t: (key) => key,
 });
 
+// Wave 13: English is the default; index.html sets <html lang="id"> only when the
+// operator chose Indonesian (pythia_lang or ?lang=id).
 export function LanguageProvider({ children }) {
-  const [lang, setLangState] = useState(() => (document.documentElement.lang === "en" ? "en" : "id"));
+  const [lang, setLangState] = useState(() => (document.documentElement.lang === "id" ? "id" : "en"));
 
   function setLang(newLang) {
     if (newLang !== "id" && newLang !== "en") return;

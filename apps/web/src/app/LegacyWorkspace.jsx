@@ -1,13 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, Check } from "lucide-react";
-import { AppShell } from "./AppShell.jsx";
-import { workspacePath } from "./workspaces.js";
 import { apiFetch } from "../shared/api/client.js";
 import { useSnapshot } from "../shared/hooks/useSnapshot.js";
 import { useLanguage } from "../shared/i18n/index.jsx";
 import { ErrorBoundary } from "../shared/ui/ErrorBoundary.jsx";
-import { AssistantPanel } from "../features/assistant/AssistantPanel.jsx";
 import { DriverAnalytics } from "../features/drivers/DriverAnalytics.jsx";
 import { DamageReportsPanel } from "../features/fleet/DamageReportsPanel.jsx";
 import { alertDetail, alertTitle, routeName } from "../features/fleet/decisionRoute.js";
@@ -22,10 +19,6 @@ import { SettingsWorkspace } from "../features/settings/SettingsWorkspace.jsx";
 
 const LiveFleetMap = lazy(() =>
   import("../features/fleet/LiveFleetMap.jsx").then((m) => ({ default: m.LiveFleetMap })),
-);
-// deck.gl + the twin stay in their own lazy chunk, off the startup path.
-const TwinWorkspace = lazy(() =>
-  import("../features/twin/TwinWorkspace.jsx").then((m) => ({ default: m.TwinWorkspace })),
 );
 
 function MapPanel({
@@ -74,24 +67,17 @@ const MAP_LAYER_KEYS = [
   ["wr", "fmap_wr"],
 ];
 
-// The active workspace comes from the URL (/fleet, /forecast, …); this component
-// stays mounted across workspace navigation, so scenario state handed from one
-// workspace to another (e.g. a crowd event into planning) survives the switch.
-export function CommandCenter({ workspace: activeWorkspace, onLogout }) {
+// Wave 13: the pre-redesign workspaces (fleet, forecast, planning, drivers,
+// settings) without their old shell. The console page stubs render one each until
+// their lane replaces it; scenario hand-offs between them travel in the URL.
+export function LegacyWorkspace({ workspace: activeWorkspace }) {
   const { t, lang } = useLanguage();
   const navigate = useNavigate();
-  const { snapshot, online, status: snapshotStatus, refresh } = useSnapshot();
+  const { snapshot, status: snapshotStatus } = useSnapshot();
   // Teardown v3 N1: the canned sample is only ever the offline sample, never live data.
   const forecastSource =
     snapshotStatus === "online" ? "live" : snapshotStatus === "offline" ? "sample" : "loading";
   const [toast, setToast] = useState("");
-  const setActiveWorkspace = useCallback(
-    (id) => {
-      if (id !== activeWorkspace) navigate(workspacePath(id));
-    },
-    [activeWorkspace, navigate],
-  );
-  const [twinCity, setTwinCity] = useState("jakarta");
   const [mapFocusRequest, setMapFocusRequest] = useState(null);
 
   // Teardown v4 R2: no what-if by default; Rencana starts from today's baseline.
@@ -196,17 +182,7 @@ export function CommandCenter({ workspace: activeWorkspace, onLogout }) {
   }
 
   return (
-    <AppShell
-      activeWorkspace={activeWorkspace}
-      onWorkspaceChange={setActiveWorkspace}
-      online={online}
-      onRefresh={refresh}
-      onLogout={onLogout}
-      assistant={<AssistantPanel />}
-      contextKey={
-        activeWorkspace === "twin" && twinCity === "hcmc" ? "shell_context_eyebrow_hcmc" : undefined
-      }
-    >
+    <>
       {activeWorkspace === "fleet" && (
         <ErrorBoundary name="fleet">
           <FleetOperations
@@ -264,21 +240,7 @@ export function CommandCenter({ workspace: activeWorkspace, onLogout }) {
         </ErrorBoundary>
       )}
 
-      {activeWorkspace === "twin" && (
-        <ErrorBoundary name="twin">
-          <Suspense
-            fallback={
-              <div className="map-loading-fallback" role="status">
-                {t("twin_loading")}
-              </div>
-            }
-          >
-            <TwinWorkspace onCityChange={setTwinCity} />
-          </Suspense>
-        </ErrorBoundary>
-      )}
-
-      {activeWorkspace !== "fleet" && activeWorkspace !== "twin" && (
+      {activeWorkspace !== "fleet" && (
         <section className="main-grid">
           {activeWorkspace === "forecast" && (
             <ErrorBoundary name="forecast">
@@ -341,6 +303,6 @@ export function CommandCenter({ workspace: activeWorkspace, onLogout }) {
           {toast.error ? <AlertTriangle size={16} /> : <Check size={16} />} {toast.message || toast}
         </div>
       )}
-    </AppShell>
+    </>
   );
 }

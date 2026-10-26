@@ -15,9 +15,9 @@ function showUpdateBanner(registration) {
   };
   const readLang = () => {
     try {
-      return localStorage.getItem("pythia_lang") || "id";
+      return localStorage.getItem("pythia_lang") === "id" ? "id" : "en";
     } catch {
-      return "id";
+      return "en";
     }
   };
   let banner = null;

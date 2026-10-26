@@ -1,0 +1,22 @@
+/* Wave 13 console frame (lane F). */
+
+/* The briefing room runs full screen, without the console's top bar. */
+.twin-route {
+  --ui-topbar-height: 0px;
+  min-height: 100dvh;
+}
+
+/* Lane L replaces the landing stub. */
+.landing-stub {
+  display: grid;
+  place-content: center;
+  gap: var(--space-4);
+  min-height: 100dvh;
+  text-align: center;
+}
+.landing-stub a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-min);
+}

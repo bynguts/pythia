@@ -14,13 +14,20 @@ import { LoginPage } from "../surfaces/login/LoginPage.jsx";
 import { RoleGate } from "../surfaces/login/RoleGate.jsx";
 import { apiFetch, COMMAND_TOKEN_KEY } from "../shared/api/client.js";
 import { useLanguage } from "../shared/i18n/index.jsx";
-import { isWorkspace, landingPath, movedWorkspacePath } from "./workspaces.js";
+import { ErrorBoundary } from "../shared/ui/ErrorBoundary.jsx";
+import { consoleHome, isWorkspace, MOVED_PATHS, movedPath, twinRedirect } from "./workspaces.js";
 
-// /driver must not download the command centre: everything else is a lazy chunk.
-const SupervisorView = lazy(() =>
-  import("../surfaces/supervisor/SupervisorView.jsx").then((m) => ({ default: m.SupervisorView })),
+// /driver must not download the console: everything else is a lazy chunk.
+const LandingPage = lazy(() =>
+  import("../surfaces/landing/LandingPage.jsx").then((m) => ({ default: m.LandingPage })),
 );
-const CommandCenter = lazy(() => import("./CommandCenter.jsx").then((m) => ({ default: m.CommandCenter })));
+const ConsoleShell = lazy(() =>
+  import("./console/ConsoleShell.jsx").then((m) => ({ default: m.ConsoleShell })),
+);
+// deck.gl + the twin stay in their own lazy chunk, off the startup path.
+const TwinWorkspace = lazy(() =>
+  import("../features/twin/TwinWorkspace.jsx").then((m) => ({ default: m.TwinWorkspace })),
+);
 
 function SurfaceBoot({ children }) {
   const { t } = useLanguage();
@@ -102,21 +109,56 @@ function FieldRedirect() {
   return <Navigate to={`/driver?${params}`} replace />;
 }
 
-function Landing() {
+// "/" is the public landing; ?present=1 / ?workspace=twin keep opening the twin.
+function Home() {
   const { search } = useLocation();
-  return <Navigate to={landingPath(search)} replace />;
-}
-
-function WorkspaceRoute({ onLogout }) {
-  const { workspace } = useParams();
-  const { search } = useLocation();
-  const moved = movedWorkspacePath(workspace, search);
-  if (moved) return <Navigate to={moved} replace />;
-  if (!isWorkspace(workspace)) return <Landing />;
+  const twin = twinRedirect(search);
+  if (twin) return <Navigate to={twin} replace />;
   return (
     <SurfaceBoot>
-      <CommandCenter workspace={workspace} onLogout={onLogout} />
+      <LandingPage />
     </SurfaceBoot>
+  );
+}
+
+// Wave 13: pre-console paths redirect to their /app home, query kept.
+function MovedRoute({ from }) {
+  const { search } = useLocation();
+  return <Navigate to={movedPath(from, search)} replace />;
+}
+
+function ConsoleHome() {
+  const { search } = useLocation();
+  return <Navigate to={consoleHome(search)} replace />;
+}
+
+function ConsoleRoute({ onLogout }) {
+  const { page } = useParams();
+  if (!isWorkspace(page)) return <ConsoleHome />;
+  return (
+    <SurfaceBoot>
+      <ConsoleShell page={page} onLogout={onLogout} />
+    </SurfaceBoot>
+  );
+}
+
+// The briefing room: the twin full screen, outside the console frame.
+function TwinRoute() {
+  const { t } = useLanguage();
+  return (
+    <main className="twin-route">
+      <ErrorBoundary name="twin">
+        <Suspense
+          fallback={
+            <div className="map-loading-fallback" role="status">
+              {t("twin_loading")}
+            </div>
+          }
+        >
+          <TwinWorkspace />
+        </Suspense>
+      </ErrorBoundary>
+    </main>
   );
 }
 
@@ -150,18 +192,16 @@ export function App() {
           </RoleGate>
         }
       />
+      <Route path="/" element={<Home />} />
+      {Object.keys(MOVED_PATHS).map((from) => (
+        <Route key={from} path={`/${from}/*`} element={<MovedRoute from={from} />} />
+      ))}
       <Route element={<LoginGate authenticated={authenticated} expired={expired} onLogin={login} />}>
-        <Route
-          path="/pengawas/*"
-          element={
-            <SurfaceBoot>
-              <SupervisorView />
-            </SurfaceBoot>
-          }
-        />
-        <Route path="/:workspace" element={<WorkspaceRoute onLogout={logout} />} />
-        <Route path="*" element={<Landing />} />
+        <Route path="/app" element={<ConsoleHome />} />
+        <Route path="/app/:page" element={<ConsoleRoute onLogout={logout} />} />
+        <Route path="/twin" element={<TwinRoute />} />
       </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

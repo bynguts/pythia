@@ -1,16 +1,16 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <script>
-      // #49/#85: install metadata follows the app language. ID is the
-      // default (matches documentElement.lang below), EN is opt-in via the
+      // #49/#85: install metadata follows the app language. Wave 13: EN is the
+      // default (matches documentElement.lang below), ID is opt-in via the
       // language switch persisted as pythia_lang. The href is built from a
       // fixed allowlist (no user input reaches the DOM write), and
       // document.createElement is used instead of document.write/innerHTML.
       // ?lang=en|id on any route wins and is persisted like the language switch.
       (function () {
-        var lang = "id";
+        var lang = "en";
         var param = null;
         try {
           param = new URLSearchParams(window.location.search).get("lang");
@@ -19,9 +19,9 @@
         }
         try {
           if (param === "en" || param === "id") localStorage.setItem("pythia_lang", param);
-          lang = localStorage.getItem("pythia_lang") === "en" ? "en" : "id";
+          lang = localStorage.getItem("pythia_lang") === "id" ? "id" : "en";
         } catch (e) {
-          lang = param === "en" ? "en" : "id";
+          lang = param === "id" ? "id" : "en";
         }
         document.documentElement.lang = lang;
         var link = document.createElement("link");
