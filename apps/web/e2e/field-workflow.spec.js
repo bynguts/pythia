@@ -293,3 +293,76 @@ test("the instruction drawer distinguishes the driver's READY from ISSUE and sho
     await api.dispose();
   }
 });
+
+// The morning readiness board carries the driver's answer to the day's plan instruction:
+// READY reads "confirmed" with its time, ISSUE reads "problem reported".
+test("the readiness board shows the driver's READY and ISSUE on the plan trucks", async ({ page }) => {
+  test.setTimeout(240000);
+  const { api, token } = await authenticatedApi();
+  try {
+    const pending = async () => {
+      const board = await (await api.get(`${API}/readiness?scope=plan`)).json();
+      const trucks =
+        board.scope_used === "plan"
+          ? board.trucks.filter(
+              (truck) => truck.instruction.status === "pending" && truck.instruction.dispatch_id,
+            )
+          : [];
+      return { day: board.date, trucks };
+    };
+    let { day, trucks } = await pending();
+    if (trucks.length < 2) {
+      // No approved plan for today with unanswered trucks: build one and approve it.
+      const built = await api.post(`${API}/operations/plan?plan_date=${day}&auto_inputs=true`, {
+        timeout: 180000,
+      });
+      expect(built.ok()).toBeTruthy();
+      const plan = await built.json();
+      const supervisor = await (
+        await api.post(`${API}/auth/login`, {
+          data: { username: "supervisor", password: "supervisor-demo-pass" },
+        })
+      ).json();
+      const approved = await api.post(`${API}/operations/${plan.plan_id}/approve`, {
+        headers: { Authorization: `Bearer ${supervisor.token}` },
+      });
+      expect(approved.ok()).toBeTruthy();
+      ({ trucks } = await pending());
+    }
+    expect(trucks.length).toBeGreaterThanOrEqual(2);
+    const [ready, issue] = trucks;
+    for (const [truck, status] of [
+      [ready, "READY"],
+      [issue, "ISSUE"],
+    ]) {
+      const confirm = await api.post(`${API}/dispatch/${truck.instruction.dispatch_id}/confirm`, {
+        data: { status, note: `E2E readiness ${status} ${Date.now()}` },
+      });
+      expect(confirm.ok()).toBeTruthy();
+    }
+
+    await page.goto("/");
+    await page.evaluate((value) => {
+      localStorage.setItem("pythia_token", value);
+      localStorage.setItem("pythia_auth", "true");
+      localStorage.setItem("pythia_role", "dispatcher");
+      localStorage.setItem("pythia_lang", "id");
+    }, token);
+    await page.goto("/app/readiness");
+    await expect(page.getByTestId("readiness-page")).toHaveAttribute("data-scope", "plan", {
+      timeout: 30000,
+    });
+    await page.getByTestId("readiness-tab-all").click();
+    const instructionCell = (code) =>
+      page
+        .getByTestId("readiness-list")
+        .locator("tbody tr:not(.ui-table-expanded)")
+        .filter({ has: page.locator("strong", { hasText: new RegExp(`^${code}$`) }) })
+        .locator("td")
+        .nth(4);
+    await expect(instructionCell(ready.truck_code)).toHaveText(/^Dikonfirmasi \d\d:\d\d$/);
+    await expect(instructionCell(issue.truck_code)).toHaveText("Ada masalah dilaporkan");
+  } finally {
+    await api.dispose();
+  }
+});
