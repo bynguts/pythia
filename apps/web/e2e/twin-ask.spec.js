@@ -100,6 +100,7 @@ test("asking a what-if applies rain, venue and day in place and shows the tool t
   await expect(card.getByTestId("assistant-trace-queue_simulation")).toContainText("SIMULATED");
   // Approval stays with the operator on Tomorrow (wave 13); XR opens on the same scenario.
   await expect(card.getByTestId("assistant-review-plan")).toHaveAttribute("href", "/app/tomorrow");
+  await expect(card.getByTestId("assistant-review-plan")).toHaveText("Review & approve in Tomorrow");
   await expect(card.getByTestId("assistant-open-xr")).toHaveAttribute("href", /rainfall_mm=120/);
   await expect(card.getByTestId("assistant-open-twin")).toHaveCount(0);
 });
