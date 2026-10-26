@@ -1,12 +1,16 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Send } from "lucide-react";
-import { apiPost } from "../../shared/api/client.js";
+import { apiGet, apiPost } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import { Button } from "../../shared/ui/Button.jsx";
 import { Drawer } from "../../shared/ui/Drawer.jsx";
+import { StatusDot } from "../../shared/ui/StatusDot.jsx";
+
+const ANSWER_POLL_MS = 5000;
 
 /**
  * "New instruction": one free-text instruction to a truck's driver app (POST /api/dispatch).
+ * After sending, the driver's answer (GET /api/dispatch/{id}/status) shows under the note.
  * @param {{ open: boolean, onClose: () => void, truckCodes: string[], role: string|null }} props
  */
 export function InstructionDrawer({ open, onClose, truckCodes, role }) {
@@ -17,6 +21,23 @@ export function InstructionDrawer({ open, onClose, truckCodes, role }) {
   const chosen = truck || truckCodes[0] || "";
   // A double tap lands before the busy state renders; the ref keeps it to one dispatch.
   const sending = useRef(false);
+  // The last instruction sent from here and the driver's answer to it.
+  const [answer, setAnswer] = useState(null);
+
+  useEffect(() => {
+    if (!open || !answer?.id || answer.status !== "PENDING") return undefined;
+    const poll = () =>
+      apiGet(`/dispatch/${encodeURIComponent(answer.id)}/status`)
+        .then((dispatch) => {
+          const fieldStatus = String(dispatch?.field_status || "PENDING").toUpperCase();
+          if (fieldStatus !== "PENDING")
+            setAnswer({ id: answer.id, status: fieldStatus, note: dispatch.confirmed_note || "" });
+        })
+        .catch(() => {}); // keep "no answer yet" until a poll reads one
+    poll();
+    const timer = setInterval(poll, ANSWER_POLL_MS);
+    return () => clearInterval(timer);
+  }, [open, answer]);
 
   async function submit(event) {
     event.preventDefault();
@@ -24,11 +45,12 @@ export function InstructionDrawer({ open, onClose, truckCodes, role }) {
     sending.current = true;
     setStatus({ busy: true, sent: null, error: null });
     try {
-      await apiPost("/dispatch", {
+      const dispatch = await apiPost("/dispatch", {
         truck_code: chosen,
         instruction: text.trim(),
         manager_id: role || "dispatcher",
       });
+      setAnswer(dispatch?.id ? { id: dispatch.id, status: "PENDING", note: "" } : null);
       setText("");
       setStatus({ busy: false, sent: chosen, error: null });
     } catch (error) {
@@ -91,6 +113,21 @@ export function InstructionDrawer({ open, onClose, truckCodes, role }) {
           <p className="ops-form-note" role="status">
             {t("s1_instruction_sent").replace("{truck}", status.sent)}
           </p>
+        )}
+        {status.sent && answer && (
+          <StatusDot
+            tone={answer.status === "READY" ? "ok" : answer.status === "PENDING" ? "idle" : "warn"}
+            data-testid="instruction-driver-answer"
+            data-status={answer.status}
+          >
+            {answer.status === "READY"
+              ? t("s1_instruction_driver_ready")
+              : answer.status === "PENDING"
+                ? t("s1_instruction_driver_waiting")
+                : answer.note
+                  ? t("s1_instruction_driver_issue").replace("{reason}", answer.note)
+                  : t("s1_instruction_driver_issue_plain")}
+          </StatusDot>
         )}
         {status.error && (
           <p className="ops-form-note is-error" role="alert">

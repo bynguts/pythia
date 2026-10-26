@@ -21,6 +21,10 @@ export const s1En = {
   s1_instruction_placeholder: "For example: after your current stop, go to TPS Kalideres 2.",
   s1_instruction_send: "Send instruction",
   s1_instruction_sent: "Sent to {truck}. The driver confirms it in the app.",
+  s1_instruction_driver_waiting: "Driver: no answer yet",
+  s1_instruction_driver_ready: "Driver: ready",
+  s1_instruction_driver_issue: "Driver: can't, {reason}",
+  s1_instruction_driver_issue_plain: "Driver: can't do this",
 
   // KPI strip
   s1_kpi_label: "Today at a glance",

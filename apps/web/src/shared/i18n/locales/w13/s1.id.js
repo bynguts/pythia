@@ -21,6 +21,10 @@ export const s1Id = {
   s1_instruction_placeholder: "Contoh: setelah titik ini, lanjut ke TPS Kalideres 2.",
   s1_instruction_send: "Kirim instruksi",
   s1_instruction_sent: "Terkirim ke {truck}. Sopir mengonfirmasi di aplikasi.",
+  s1_instruction_driver_waiting: "Sopir: belum menjawab",
+  s1_instruction_driver_ready: "Sopir: siap",
+  s1_instruction_driver_issue: "Sopir: tidak bisa, {reason}",
+  s1_instruction_driver_issue_plain: "Sopir: tidak bisa",
 
   // KPI strip
   s1_kpi_label: "Ringkasan hari ini",

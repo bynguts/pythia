@@ -194,8 +194,7 @@ for (const [width, height] of [
 }
 
 // Wave 13: Operations sends a free-text instruction from its drawer; a double tap still
-// persists one dispatch, signed by the operator's role. (The old fleet action card that showed
-// the driver's READY/ISSUE answer is gone with the fleet deck.)
+// persists one dispatch, signed by the operator's role.
 test("a new instruction from Operations persists one dispatch despite a double tap", async ({ page }) => {
   const { api, token } = await authenticatedApi();
   const key = `e2e-instruction-${Date.now()}`;
@@ -240,6 +239,57 @@ test("a new instruction from Operations persists one dispatch despite a double t
       await api.post(`${API}/dispatch/${created.id}/confirm`, {
         data: { status: "READY", note: "E2E cleanup" },
       });
+    await api.dispose();
+  }
+});
+
+// The dispatcher sees the driver's answer: READY reads "ready", ISSUE reads "can't" with the
+// driver's own note, under the instruction just sent from Operations.
+test("the instruction drawer distinguishes the driver's READY from ISSUE and shows the field note", async ({
+  page,
+}) => {
+  test.setTimeout(100000);
+  const { api, token } = await authenticatedApi();
+  await page.goto("/");
+  await page.evaluate((value) => {
+    localStorage.setItem("pythia_token", value);
+    localStorage.setItem("pythia_auth", "true");
+    localStorage.setItem("pythia_role", "dispatcher");
+    localStorage.setItem("pythia_lang", "id");
+  }, token);
+  await page.goto("/app/operations");
+  await page.getByTestId("ops-new-instruction").click();
+  const drawer = page.getByTestId("instruction-drawer");
+  await expect(drawer.getByTestId("instruction-truck")).toHaveValue(/^T-\d+$/, { timeout: 20000 });
+  const created = [];
+  try {
+    for (const status of ["READY", "ISSUE"]) {
+      const responsePromise = page.waitForResponse(
+        (response) => response.url().endsWith("/api/dispatch") && response.request().method() === "POST",
+      );
+      await drawer.getByTestId("instruction-text").fill(`E2E answer ${status} ${Date.now()}`);
+      await drawer.getByTestId("instruction-send").click();
+      const dispatch = await (await responsePromise).json();
+      created.push(dispatch.id);
+      const answer = drawer.getByTestId("instruction-driver-answer");
+      await expect(answer).toHaveText("Sopir: belum menjawab");
+      const note = `E2E field ${status} ${Date.now()}`;
+      const confirm = await api.post(`${API}/dispatch/${dispatch.id}/confirm`, { data: { status, note } });
+      expect(confirm.ok()).toBeTruthy();
+      if (status === "READY") {
+        await expect(answer).toHaveText("Sopir: siap", { timeout: 25000 });
+      } else {
+        await expect(answer).toHaveText(`Sopir: tidak bisa, ${note}`, { timeout: 25000 });
+      }
+      await expect(answer).toHaveAttribute("data-status", status);
+    }
+  } finally {
+    for (const id of created) {
+      const response = await api.get(`${API}/dispatch/${id}/status`);
+      if (response.ok() && (await response.json()).field_status === "PENDING") {
+        await api.post(`${API}/dispatch/${id}/confirm`, { data: { status: "READY", note: "E2E cleanup" } });
+      }
+    }
     await api.dispose();
   }
 });
