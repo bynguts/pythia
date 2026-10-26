@@ -18,6 +18,7 @@ import {
   isRemindable,
   legendCounts,
   planFor,
+  reminderSummary,
   reminderText,
   rowAction,
   sortTrucks,
@@ -122,23 +123,19 @@ export function ReadinessScreen() {
     return Boolean(result?.sent);
   }
 
+  // One message to the alert group for every truck, not one per truck (POST /api/whatsapp/summary).
   async function remindAll() {
     setBusy("remind");
-    let sent = 0;
-    for (const truck of remindable) {
-      try {
-        if (await sendReminder(truck)) sent += 1;
-      } catch {
-        // counted as not sent
-      }
+    let sent = false;
+    try {
+      const result = await apiPost("/whatsapp/summary", { text: reminderSummary(remindable), lang: "id" });
+      sent = Boolean(result?.sent);
+    } catch {
+      // reported as not sent
     }
     setBusy(null);
-    if (sent === 0) say("danger", t("s2_msg_none"));
-    else
-      say(
-        sent === remindable.length ? "ok" : "warn",
-        fill(t("s2_msg_sent"), { n: sent, m: remindable.length }),
-      );
+    if (!sent) say("danger", t("s2_msg_none"));
+    else say("ok", fill(t("s2_msg_sent"), { n: remindable.length, m: remindable.length }));
   }
 
   async function messageOne(truck) {

@@ -107,6 +107,7 @@ async function stub(page, posts) {
     "alert/follow-up",
     "safety/override",
     "whatsapp/alert",
+    "whatsapp/summary",
     "spj/*/activate",
   ]) {
     await page.route(`**/api/${path}`, async (route) => {
@@ -197,7 +198,11 @@ test("remind and activate act on the right trucks and say what was sent", async 
   await expect(page.getByTestId("readiness-remind")).toHaveText("Remind 1 driver");
   await page.getByTestId("readiness-remind").click();
   await expect(page.getByTestId("readiness-notice")).toContainText("WhatsApp sent for 1 of 1 trucks.");
-  expect(posts.filter((p) => p.path === "whatsapp/alert").map((p) => p.body.truck_code)).toEqual(["T-031"]);
+  // One message to the alert group for all reminded trucks, never one per truck.
+  expect(posts.filter((p) => p.path === "whatsapp/alert")).toEqual([]);
+  const summaries = posts.filter((p) => p.path === "whatsapp/summary");
+  expect(summaries).toHaveLength(1);
+  expect(summaries[0].body.text).toContain("T-031");
 
   await expect(page.getByTestId("readiness-activate")).toHaveText("Activate 2 work orders");
   await page.getByTestId("readiness-activate").click();

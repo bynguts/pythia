@@ -60,6 +60,20 @@ export function reminderText(truck) {
   };
 }
 
+// One alert-group message for "Remind N drivers": a line per issue listing its trucks (stays
+// well under the 2000-character summary limit), then the shared ask.
+export function reminderSummary(trucks) {
+  const byIssue = new Map();
+  for (const truck of trucks) {
+    const { issue } = reminderText(truck);
+    byIssue.set(issue, [...(byIssue.get(issue) || []), truck.truck_code]);
+  }
+  const lines = [...byIssue].map(([issue, codes]) => `${issue}: ${codes.join(", ")}`);
+  return ["Pengingat Pythia sebelum berangkat", ...lines, `${reminderText(trucks[0]).recommendation}.`].join(
+    "\n",
+  );
+}
+
 // The approved plan of the board's day that holds a truck, with that truck's stops and gate slot.
 export function planFor(plans, date, truckCode) {
   for (const plan of plans) {
