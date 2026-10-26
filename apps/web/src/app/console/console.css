@@ -255,6 +255,14 @@
 .cx-supervisor[aria-checked="true"] .cx-switch {
   background: var(--f-green);
 }
+/* On (x4toSC): the shield and the label turn green with the switch. */
+.cx-supervisor[aria-checked="true"] svg,
+.cx-supervisor[aria-checked="true"] .cx-supervisor-label {
+  color: var(--f-green);
+}
+.cx-supervisor[aria-checked="true"] .cx-supervisor-label {
+  font-weight: 600;
+}
 .cx-supervisor[aria-checked="true"] .cx-switch span {
   transform: translateX(14px);
 }

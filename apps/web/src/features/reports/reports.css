@@ -226,6 +226,10 @@
   border-bottom: 1px solid var(--f-line-3);
   background: var(--f-head);
 }
+.rp-summary-icon {
+  flex-shrink: 0;
+  color: var(--f-green);
+}
 .rp-summary h2 {
   flex: 1 1 auto;
   color: var(--f-ink);

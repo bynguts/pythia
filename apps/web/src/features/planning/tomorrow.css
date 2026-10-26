@@ -78,9 +78,11 @@
   justify-content: space-between;
   gap: 8px;
 }
+/* An h2 inherits the global Archivo heading face (loaded at 600 only); the design is Inter 400. */
 .tmr-fc-label {
   margin: 0;
   color: var(--f-muted);
+  font-family: var(--f-font-body);
   font-size: 13px;
   font-weight: 400;
 }

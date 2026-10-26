@@ -413,6 +413,13 @@
   text-align: left;
   cursor: pointer;
 }
+/* One line per suggestion (fgZyf); a longer question ends in an ellipsis, full text in title. */
+.ana-prompt-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .ana-prompt svg {
   flex-shrink: 0;
   color: var(--f-green);
@@ -480,6 +487,19 @@
   cursor: pointer;
 }
 .ana-icon:hover {
+  color: var(--f-ink);
+}
+/* fgZyf draws attach as a plain icon beside the mic: drop the legacy bordered upload box. */
+.ana-box .ana-icon.assistant-upload-button {
+  width: var(--tap-min);
+  min-width: var(--tap-min);
+  height: var(--tap-min);
+  min-height: var(--tap-min);
+  border: 0;
+  background: none;
+  color: var(--f-icon);
+}
+.ana-box .ana-icon.assistant-upload-button:hover {
   color: var(--f-ink);
 }
 .ana-icon[aria-pressed="true"] {

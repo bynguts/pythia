@@ -259,10 +259,11 @@ export function AssistantPanel() {
             className="ana-prompt"
             data-testid={key === "asst_prompt3_q" ? "assistant-prompt-scenario" : "assistant-prompt"}
             disabled={loading}
+            title={t(key)}
             onClick={() => askAssistant(t(key))}
           >
             <Sparkles size={14} aria-hidden="true" />
-            {t(key)}
+            <span className="ana-prompt-text">{t(key)}</span>
           </button>
         ))}
       </div>

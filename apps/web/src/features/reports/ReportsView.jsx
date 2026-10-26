@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { CalendarCheck, Camera, Download, Glasses, MessageCircle, Send, Wrench } from "lucide-react";
+import {
+  CalendarCheck,
+  Camera,
+  Download,
+  FileText,
+  Glasses,
+  MessageCircle,
+  Send,
+  Wrench,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { apiPost } from "../../shared/api/client.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
@@ -364,6 +373,7 @@ export function ReportsView() {
         <div className="rp-right">
           <section className="rp-summary" aria-labelledby="rp-sum-title" data-testid="recap-summary">
             <header>
+              <FileText size={15} className="rp-summary-icon" aria-hidden="true" />
               <h2 id="rp-sum-title">{t("s5_rp_sum_title")}</h2>
               <Tag>{t("s5_rp_sum_draft")}</Tag>
             </header>
