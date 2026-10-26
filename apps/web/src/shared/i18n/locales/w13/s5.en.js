@@ -90,6 +90,7 @@ export const s5En = {
   s5_set_connected: "Connected",
   s5_set_manage: "Manage",
   s5_set_details: "Details",
+  s5_set_join_pilot: "Join pilot",
   s5_set_soon: "Coming soon",
   s5_set_int_title: "Integrations",
   s5_set_int_sub: "Pythia reads these on its own. Nobody types forecasts, weather or holidays.",

@@ -91,6 +91,7 @@ export const s5Id = {
   s5_set_connected: "Terhubung",
   s5_set_manage: "Kelola",
   s5_set_details: "Detail",
+  s5_set_join_pilot: "Gabung pilot",
   s5_set_soon: "Segera hadir",
   s5_set_int_title: "Integrasi",
   s5_set_int_sub: "Pythia membaca ini sendiri. Tidak ada yang mengetik prakiraan, cuaca, atau hari libur.",

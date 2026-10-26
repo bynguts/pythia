@@ -7,6 +7,9 @@ import { StatusDot } from "../../shared/ui/StatusDot.jsx";
 import { Tag } from "../../shared/ui/Tag.jsx";
 import { WhatsAppIntegration } from "./WhatsAppIntegration.jsx";
 
+// Where a pilot request goes; without it the Join pilot button is not shown.
+const CONTACT_URL = import.meta.env.VITE_CONTACT_URL || "";
+
 function fill(template, values) {
   return Object.entries(values).reduce((text, [key, v]) => text.replaceAll(`{${key}}`, v), template);
 }
@@ -151,9 +154,16 @@ export function IntegrationsPanel({ canManage, openWhatsApp, onToggleWhatsApp, o
               <small>{row.desc}</small>
             </span>
             {row.soon ? (
-              <Tag tone="soon" className="st-soon">
-                {t("s5_set_soon")}
-              </Tag>
+              <>
+                <Tag tone="soon" className="st-soon">
+                  {t("s5_set_soon")}
+                </Tag>
+                {CONTACT_URL && (
+                  <Button size="sm" onClick={() => window.open(CONTACT_URL, "_blank", "noopener,noreferrer")}>
+                    {t("s5_set_join_pilot")}
+                  </Button>
+                )}
+              </>
             ) : (
               <>
                 <StatusDot tone={row.status.tone}>{row.status.text}</StatusDot>

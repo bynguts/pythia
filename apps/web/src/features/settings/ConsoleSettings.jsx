@@ -7,6 +7,7 @@ import { Segmented } from "../../shared/ui/Segmented.jsx";
 import { StatusDot } from "../../shared/ui/StatusDot.jsx";
 import { useConsole } from "../../app/console/useConsole.js";
 import { DataAuditWorkspace } from "../audit/DataAuditWorkspace.jsx";
+import { MonthlyIntakeStrip } from "../forecast/MonthlyIntakeStrip.jsx";
 import { AuditLogPanel } from "./AuditLogPanel.jsx";
 import { IntegrationsPanel } from "./IntegrationsPanel.jsx";
 import { ProvenancePanel } from "./ProvenancePanel.jsx";
@@ -207,6 +208,7 @@ export function ConsoleSettings() {
           {tab === "data" && (
             <>
               <ProvenancePanel />
+              <MonthlyIntakeStrip />
               <DataAuditWorkspace />
             </>
           )}
