@@ -225,7 +225,7 @@ export function ScenarioCard({ scenario, provider, model, source, inTwin = false
       <p className="assistant-scenario-note">{t("asst_scn_note")}</p>
       <div className="assistant-scenario-actions">
         {inTwin ? (
-          <Link to="/planning" data-testid="assistant-review-plan">
+          <Link to="/app/tomorrow" data-testid="assistant-review-plan">
             <ClipboardCheck size={16} aria-hidden="true" />
             {t("asst_scn_review_plan")}
           </Link>

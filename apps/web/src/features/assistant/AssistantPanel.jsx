@@ -1,23 +1,30 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { apiFetch } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
-import { Send, X, Bot, Paperclip, Mic, MicOff } from "lucide-react";
-import { ScenarioCard } from "./ScenarioCard.jsx";
+import { Button } from "../../shared/ui/Button.jsx";
+import { ArrowUp, Check, Copy, Lock, Mic, MicOff, Paperclip, Sparkles, X } from "lucide-react";
+import { ScenarioCard, providerLabel } from "./ScenarioCard.jsx";
 import { useSpeechInput } from "./useSpeechInput.js";
 import "./assistant.css";
+
+const PROMPTS = ["asst_prompt1_q", "asst_prompt2_q", "asst_prompt3_q"];
 
 // #76: every interface string rides the locale catalog, the file-only
 // fallback question is localized, and the chosen language is sent on the
 // wire so the answer language is requested explicitly and preserved for
 // the conversation.
+// wave13 (fgZyf): rendered inside the console's Ask Ana drawer, which owns the header.
+// An answer names the tools it ran and who produced it; nothing here invents options.
 export function AssistantPanel() {
   const { t, lang } = useLanguage();
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState(() => [{ role: "assistant", text: null }]);
   const [loading, setLoading] = useState(false);
   const [attachedFile, setAttachedFile] = useState(null);
+  const [copied, setCopied] = useState(null);
+  const logRef = useRef(null);
   const fileInputRef = useRef(null);
   const questionRef = useRef(null);
   const {
@@ -33,6 +40,26 @@ export function AssistantPanel() {
   const greeting =
     messages[0]?.role === "assistant" && messages[0].text === null ? t("asst_greeting") : messages[0]?.text;
   const visibleMessages = [{ ...messages[0], text: greeting }, ...messages.slice(1)];
+
+  useEffect(() => {
+    const log = logRef.current;
+    if (log) log.scrollTop = log.scrollHeight;
+  }, [messages.length, loading]);
+
+  function toolLabel(id) {
+    const label = t(`s5_ana_tool_${id}`);
+    return label === `s5_ana_tool_${id}` ? id.replace(/^get_/, "").replaceAll("_", " ") : label;
+  }
+
+  async function copyAnswer(index, text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(index);
+      setTimeout(() => setCopied((current) => (current === index ? null : current)), 2000);
+    } catch {
+      setCopied(null);
+    }
+  }
 
   function handleFileSelect(event) {
     const file = event.target.files[0];
@@ -143,45 +170,78 @@ export function AssistantPanel() {
   }
 
   return (
-    <section className="assistant-panel assistant-chat-shell">
-      <header className="assistant-chat-header">
-        <span className="assistant-chat-mark" aria-hidden="true">
-          <Bot size={16} />
-        </span>
-        <div>
-          <h2>Ana</h2>
-          <p>{t("asst_header_sub")}</p>
-        </div>
-      </header>
-
-      <div className="assistant-message-list" role="log" aria-live="polite">
-        {visibleMessages.map((message, index) => (
-          <article className={`assistant-message ${message.role}`} key={`${message.role}-${index}`}>
-            <span className="assistant-message-avatar" aria-hidden="true">
-              {message.role === "assistant" ? t("asst_avatar_ai") : t("asst_avatar_user")}
-            </span>
-            <div className="assistant-bubble">
-              <div
-                className="assistant-formatted-answer"
-                dangerouslySetInnerHTML={{ __html: renderAssistantText(message.text) }}
-              />
-              {message.scenario && (
-                <ScenarioCard
-                  scenario={message.scenario}
-                  provider={message.provider}
-                  model={message.model}
-                  source={message.source}
-                />
+    <section className="assistant-panel assistant-chat-shell ana" data-testid="assistant-panel">
+      <div className="ana-log" ref={logRef} role="log" aria-live="polite">
+        {visibleMessages.map((message, index) => {
+          const isUser = message.role === "user";
+          const answered =
+            !isUser && index > 0 && message.provider !== "error" && message.provider !== "offline";
+          const source = answered
+            ? providerLabel(message.provider, message.model, t, {
+                mode: message.source?.mode,
+                providerName: message.source?.providerName,
+                fallbackReason: message.source?.fallbackReason,
+              })
+            : null;
+          return (
+            <article
+              className={`ana-msg ${isUser ? "is-user" : "is-ana"}${message.provider === "error" ? " is-error" : ""}`}
+              data-testid="assistant-message"
+              data-role={message.role}
+              key={`${message.role}-${index}`}
+            >
+              {isUser ? (
+                <div className="ana-bubble">{message.text}</div>
+              ) : (
+                <>
+                  <div
+                    className="ana-text assistant-formatted-answer"
+                    dangerouslySetInnerHTML={{ __html: renderAssistantText(message.text) }}
+                  />
+                  {message.scenario && (
+                    <ScenarioCard
+                      scenario={message.scenario}
+                      provider={message.provider}
+                      model={message.model}
+                      source={message.source}
+                    />
+                  )}
+                  {answered && (
+                    <div className="ana-used" data-testid="assistant-used">
+                      <span className="ana-used-k">{t("s5_ana_used")}</span>
+                      {message.toolsUsed?.map((id) => (
+                        <span className="ana-chip" key={id}>
+                          {toolLabel(id)}
+                        </span>
+                      ))}
+                      {source && <span className="ana-chip is-source">{source}</span>}
+                    </div>
+                  )}
+                  {answered && (
+                    <div className="ana-actions">
+                      <Button
+                        size="sm"
+                        icon={copied === index ? Check : Copy}
+                        onClick={() => copyAnswer(index, message.text)}
+                      >
+                        {copied === index ? t("s5_ana_copied") : t("s5_ana_copy")}
+                      </Button>
+                    </div>
+                  )}
+                  {message.scenario && (
+                    <p className="ana-note">
+                      <Lock size={12} aria-hidden="true" />
+                      {t("s5_ana_note")}
+                    </p>
+                  )}
+                </>
               )}
-            </div>
-          </article>
-        ))}
+            </article>
+          );
+        })}
         {loading && (
-          <article className="assistant-message assistant">
-            <span className="assistant-message-avatar" aria-hidden="true">
-              {t("asst_avatar_ai")}
-            </span>
-            <div className="assistant-bubble assistant-thinking">
+          <article className="ana-msg is-ana" aria-label={t("s5_ana_thinking")}>
+            <div className="ana-thinking" aria-hidden="true">
               <span />
               <span />
               <span />
@@ -190,96 +250,96 @@ export function AssistantPanel() {
         )}
       </div>
 
-      <div className="assistant-quick-prompts" aria-label={t("asst_prompts_label")}>
-        <button type="button" disabled={loading} onClick={() => askAssistant(t("asst_prompt1_q"))}>
-          {t("asst_prompt1")}
-        </button>
-        <button type="button" disabled={loading} onClick={() => askAssistant(t("asst_prompt2_q"))}>
-          {t("asst_prompt2")}
-        </button>
-        <button
-          type="button"
-          className="assistant-quick-prompt-scenario"
-          data-testid="assistant-prompt-scenario"
-          disabled={loading}
-          onClick={() => askAssistant(t("asst_prompt3_q"))}
-        >
-          {t("asst_prompt3")}
-        </button>
+      <div className="ana-try" role="group" aria-label={t("asst_prompts_label")}>
+        <span className="ana-try-k">{t("s5_ana_try")}</span>
+        {PROMPTS.map((key) => (
+          <button
+            type="button"
+            key={key}
+            className="ana-prompt"
+            data-testid={key === "asst_prompt3_q" ? "assistant-prompt-scenario" : "assistant-prompt"}
+            disabled={loading}
+            onClick={() => askAssistant(t(key))}
+          >
+            <Sparkles size={14} aria-hidden="true" />
+            {t(key)}
+          </button>
+        ))}
       </div>
 
       <form
-        className={`assistant-chat-input${voiceSupported ? " has-voice" : ""}`}
+        className="ana-composer"
         onSubmit={(event) => {
           event.preventDefault();
           askAssistant();
         }}
       >
         {attachedFile && (
-          <div className="assistant-file-chip">
-            <Paperclip size={14} />
+          <div className="ana-file">
+            <Paperclip size={14} aria-hidden="true" />
             <span>{attachedFile.name}</span>
             <button type="button" aria-label={t("asst_remove_file")} onClick={() => setAttachedFile(null)}>
-              <X size={14} />
+              <X size={14} aria-hidden="true" />
             </button>
           </div>
         )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,application/pdf"
-          onChange={handleFileSelect}
-          style={{ display: "none" }}
-        />
-        <button
-          type="button"
-          className="assistant-upload-button"
-          title={t("asst_upload_label")}
-          onClick={() => fileInputRef.current?.click()}
-          aria-label={t("asst_upload_label")}
-        >
-          <Paperclip size={18} />
-        </button>
-        {/* The mic sits before the question box: the question stays the last enabled
-            control, so Shift+Tab from the close button wraps straight back to it. */}
-        {voiceSupported && (
+        <div className="ana-box">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,application/pdf"
+            onChange={handleFileSelect}
+            style={{ display: "none" }}
+          />
+          <label className="sr-only" htmlFor="assistant-question">
+            {t("asst_input_label")}
+          </label>
+          <input
+            ref={questionRef}
+            id="assistant-question"
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            placeholder={
+              listening
+                ? t("asst_voice_listening")
+                : attachedFile
+                  ? t("asst_placeholder_file")
+                  : t("asst_placeholder")
+            }
+            autoComplete="off"
+          />
           <button
             type="button"
-            className="assistant-voice-button"
-            data-testid="assistant-voice"
-            aria-pressed={listening}
-            aria-label={listening ? t("asst_voice_stop") : t("asst_voice_start")}
-            title={listening ? t("asst_voice_stop") : t("asst_voice_start")}
-            onClick={toggleVoice}
+            className="ana-icon assistant-upload-button"
+            title={t("asst_upload_label")}
+            aria-label={t("asst_upload_label")}
+            onClick={() => fileInputRef.current?.click()}
           >
-            {listening ? <MicOff size={18} /> : <Mic size={18} />}
+            <Paperclip size={16} aria-hidden="true" />
           </button>
-        )}
-        <label className="sr-only" htmlFor="assistant-question">
-          {t("asst_input_label")}
-        </label>
-        <input
-          ref={questionRef}
-          id="assistant-question"
-          value={question}
-          onChange={(event) => setQuestion(event.target.value)}
-          placeholder={
-            listening
-              ? t("asst_voice_listening")
-              : attachedFile
-                ? t("asst_placeholder_file")
-                : t("asst_placeholder")
-          }
-          autoComplete="off"
-        />
-        <button
-          className="primary-button"
-          type="submit"
-          aria-label={t("asst_send")}
-          disabled={loading || (!question.trim() && !attachedFile)}
-        >
-          <Send size={16} />
-        </button>
+          {voiceSupported && (
+            <button
+              type="button"
+              className="ana-icon"
+              data-testid="assistant-voice"
+              aria-pressed={listening}
+              aria-label={listening ? t("asst_voice_stop") : t("asst_voice_start")}
+              title={listening ? t("asst_voice_stop") : t("asst_voice_start")}
+              onClick={toggleVoice}
+            >
+              {listening ? <MicOff size={16} aria-hidden="true" /> : <Mic size={16} aria-hidden="true" />}
+            </button>
+          )}
+          <button
+            className="ana-send"
+            type="submit"
+            data-testid="assistant-send"
+            aria-label={t("asst_send")}
+            disabled={loading || (!question.trim() && !attachedFile)}
+          >
+            <ArrowUp size={16} aria-hidden="true" />
+          </button>
+        </div>
       </form>
     </section>
   );

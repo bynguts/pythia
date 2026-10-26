@@ -260,3 +260,269 @@
     overscroll-behavior: contain;
   }
 }
+
+/* ── Wave 13 Ask Ana drawer (lane S5): docs/design/export-handoff/html/ana_drawer.html ──
+   The drawer owns the header and the scroll frame; the panel fills it. Prefix: ana-. */
+.ana.assistant-chat-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  background: var(--f-white);
+  color: var(--f-ink);
+  font-family: var(--f-font-body);
+}
+.ana-log {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 120px;
+  padding: 20px 18px;
+  overflow-y: auto;
+}
+.ana-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.ana-msg.is-user {
+  align-items: flex-end;
+}
+.ana-bubble {
+  max-width: 300px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #e3f1e6;
+  color: var(--f-ink);
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.ana-text {
+  color: var(--f-ink-2);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.ana-text p {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.ana-msg.is-error .ana-text {
+  color: var(--f-red);
+}
+.ana-used {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.ana-used-k {
+  color: var(--f-faint);
+  font-size: 12px;
+}
+.ana-chip {
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--f-paper);
+  color: var(--f-ink-2);
+  font-size: 12px;
+}
+.ana-chip.is-source {
+  background: var(--f-blue-soft);
+  color: var(--f-blue);
+}
+.ana-actions {
+  display: flex;
+  gap: 8px;
+}
+.ana-prompt:focus-visible,
+.ana-icon:focus-visible,
+.ana-send:focus-visible {
+  outline: 2px solid var(--f-green);
+  outline-offset: 2px;
+}
+.ana-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--f-faint);
+  font-size: 12px;
+}
+.ana-thinking {
+  display: flex;
+  gap: 4px;
+  padding: 6px 0;
+}
+.ana-thinking span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--f-dot);
+  animation: anaPulse 1s ease-in-out infinite;
+}
+.ana-thinking span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.ana-thinking span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes anaPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ana-thinking span {
+    animation: none;
+  }
+}
+
+.ana-try {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0 18px 16px;
+}
+.ana-try-k {
+  color: var(--f-faint);
+  font-size: 12px;
+  font-weight: 500;
+}
+.ana-prompt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap-min);
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--f-line-2);
+  border-radius: 8px;
+  background: var(--f-white);
+  color: var(--f-ink-2);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.ana-prompt svg {
+  flex-shrink: 0;
+  color: var(--f-green);
+}
+.ana-prompt:hover:not(:disabled) {
+  background: var(--f-hover);
+}
+.ana-prompt:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ana-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 18px 18px;
+  border-top: 1px solid var(--f-line-3);
+}
+.ana-box {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 46px;
+  padding: 0 6px 0 14px;
+  border: 1px solid var(--f-line);
+  border-radius: 10px;
+  background: var(--f-white);
+}
+.ana-box:focus-within {
+  border-color: var(--f-green);
+}
+.ana-box input#assistant-question {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--tap-min);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--f-ink);
+  font: inherit;
+  font-size: 14px;
+}
+.ana-box input#assistant-question:focus {
+  outline: none;
+  box-shadow: none;
+}
+.ana-box input#assistant-question::placeholder {
+  color: var(--f-faint);
+}
+.ana-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--f-icon);
+  cursor: pointer;
+}
+.ana-icon:hover {
+  color: var(--f-ink);
+}
+.ana-icon[aria-pressed="true"] {
+  color: var(--f-green);
+}
+.ana-send {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: var(--f-ink);
+  color: var(--f-lime);
+  cursor: pointer;
+}
+.ana-send:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+.ana-file {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--f-paper);
+  color: var(--f-ink-2);
+  font-size: 12px;
+}
+.ana-file button {
+  display: inline-flex;
+  min-width: 28px;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}

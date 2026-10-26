@@ -60,9 +60,7 @@ test("scentinel evidence renders as external simulation with visible gates", asy
     localStorage.setItem("pythia_role", "dispatcher");
     localStorage.setItem("pythia_lang", "en");
   }, principal.token);
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await page.getByTestId("workspace-navigation").getByRole("button", { name: "Settings" }).click();
-  await page.getByTestId("settings-tab-data").click();
+  await page.goto("/app/settings?tab=data", { waitUntil: "domcontentloaded" });
   await page.getByTestId("source-registry-disclosure").locator("summary").click();
 
   const panel = page.getByTestId("scentinel-evidence-panel");

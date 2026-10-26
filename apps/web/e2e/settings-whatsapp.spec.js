@@ -58,25 +58,22 @@ test.beforeEach(async ({ page }) => {
   }
 });
 
-test("the rail ends with Settings and has no Audit workspace", async ({ page }) => {
+test("Settings opens on Integrations: live statuses and two Coming soon rows, no Audit workspace", async ({
+  page,
+}) => {
   await signIn(page, "dispatcher");
-  await page.goto("/fleet", { waitUntil: "domcontentloaded" });
-  const nav = page.getByTestId("workspace-navigation");
-  // wave9 fleet composition: daily work first, the 3D city last, Settings past the separator.
-  await expect(nav.getByRole("button")).toHaveText([
-    "Armada",
-    "Rencana",
-    "Prediksi",
-    "Sopir",
-    "Kota 3D",
-    "Pengaturan",
-  ]);
-  await expect(nav.getByTestId("nav-separator")).toHaveCount(1);
-  await expect(nav).not.toContainText("Audit");
-  await nav.getByRole("button", { name: "Pengaturan" }).click();
-  await expect(page).toHaveURL(/\/settings$/);
+  await page.goto("/app/settings", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { level: 1, name: "Pengaturan" })).toBeVisible();
-  await expect(page.getByTestId("settings-tab-whatsapp")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("settings-tab-integrations")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("integration-whatsapp")).toBeVisible();
+  for (const id of ["gps", "weighbridge"]) {
+    await expect(page.getByTestId(`integration-${id}`)).toContainText("Segera hadir");
+  }
+  await expect(page.getByTestId("settings-nav")).not.toContainText("Audit workspace");
+  // Manage opens the WhatsApp section in place.
+  await expect(page.getByTestId("settings-whatsapp")).toHaveCount(0);
+  await page.getByTestId("settings-whatsapp-manage").click();
+  await expect(page.getByTestId("settings-whatsapp")).toBeVisible();
 });
 
 test("old /audit links land on Settings → data sources, query kept", async ({ page }) => {
@@ -94,7 +91,7 @@ test("old /audit links land on Settings → data sources, query kept", async ({ 
 test("gateway offline shows a human state and the one command, never the raw error", async ({ page }) => {
   await signIn(page, "administrator");
   await stubStatus(page, status("offline"));
-  await page.goto("/settings", { waitUntil: "domcontentloaded" });
+  await page.goto("/settings?tab=whatsapp", { waitUntil: "domcontentloaded" });
   const state = page.getByTestId("settings-wa-status");
   await expect(state).toHaveAttribute("data-state", "offline");
   await expect(state).toHaveText("Gateway WhatsApp belum berjalan");
@@ -140,8 +137,8 @@ test("pairing shows the QR, polls while waiting and stops when hidden or left", 
   await expect.poll(() => calls.count).toBeGreaterThan(hidden);
 
   // Leaving Settings stops it too.
-  await page.getByTestId("workspace-navigation").getByRole("button", { name: "Armada" }).click();
-  await expect(page).toHaveURL(/\/fleet/);
+  await page.locator('.cx-sidebar a[href="/app/fleet"]').click();
+  await expect(page).toHaveURL(/\/app\/fleet/);
   const left = calls.count;
   await page.waitForTimeout(5000);
   expect(calls.count).toBe(left);
@@ -180,7 +177,7 @@ test("connected: masked number, group picker, test send and confirmed disconnect
   });
   await page.route("**/whatsapp/qr", (route) => route.fulfill({ json: { state: "qr", qr: PNG_1PX } }));
 
-  await page.goto("/settings", { waitUntil: "domcontentloaded" });
+  await page.goto("/settings?tab=whatsapp", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("settings-wa-status")).toHaveText("Terhubung");
   await expect(page.getByTestId("settings-wa-account")).toHaveText("+62812****7890");
   await expect(page.getByTestId("settings-wa-group")).toContainText("Belum dipilih");
@@ -216,7 +213,7 @@ test("a dispatcher sees WhatsApp read-only", async ({ page }) => {
     privileged += 1;
     return route.abort();
   });
-  await page.goto("/settings", { waitUntil: "domcontentloaded" });
+  await page.goto("/settings?tab=whatsapp", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("settings-wa-status")).toHaveText("Terhubung");
   await expect(page.getByTestId("settings-wa-readonly")).toContainText("hanya administrator");
   await expect(page.getByTestId("settings-wa-manage")).toHaveCount(0);
@@ -234,9 +231,9 @@ test("every Settings section fits a 390 px phone with 44 px targets", async ({ p
   await signIn(page, "administrator");
   await stubStatus(page, status("pairing", { state: "qr" }));
   await page.route("**/whatsapp/qr", (route) => route.fulfill({ json: { state: "qr", qr: PNG_1PX } }));
-  await page.goto("/settings", { waitUntil: "domcontentloaded" });
+  await page.goto("/settings?tab=whatsapp", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("settings-wa-qr")).toBeVisible();
-  for (const tab of ["whatsapp", "team", "data"]) {
+  for (const tab of ["integrations", "team", "data"]) {
     await page.getByTestId(`settings-tab-${tab}`).click();
     await expect(page.getByTestId(`settings-tab-${tab}`)).toHaveAttribute("aria-current", "page");
     if (tab === "data") {

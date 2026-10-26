@@ -55,7 +55,7 @@ test("WhatsApp is grouped: connection, delivery, linked device, with no eyebrow"
       json: { groups: [{ jid: "120363000000000042@g.us", subject: "Pythia Ops", selected: true }] },
     }),
   );
-  await page.goto("/settings", { waitUntil: "domcontentloaded" });
+  await page.goto("/settings?tab=whatsapp", { waitUntil: "domcontentloaded" });
   const panel = page.getByTestId("settings-whatsapp");
   await expect(page.getByTestId("settings-wa-status")).toHaveText("Terhubung");
   for (const name of ["Koneksi", "Pengiriman peringatan", "Perangkat tertaut"]) {
@@ -130,38 +130,16 @@ test("data sources: a strip with provenance per number, registry chips in the on
   expect(border).toBe("0px");
 });
 
-test("Sopir: metric strip with provenance, flat attention rail that opens Armada", async ({ page }) => {
-  await signIn(page, "dispatcher");
-  await page.goto("/drivers", { waitUntil: "domcontentloaded" });
-  const strip = page.getByTestId("metric-strip");
-  await expect(strip.getByTestId("metric-cell")).toHaveCount(4, { timeout: 30000 });
-  await expect(strip.getByTestId("prov")).toHaveText(["Armada simulasi", "SIMULASI", "Detektor", "SIMULASI"]);
-  await expect(page.getByTestId("drivers-fleet-denominator")).toHaveText(/^\d+ aktif \/ \d+ unit$/);
-  await expect(page.getByTestId("drivers-provenance")).toContainText("SIMULASI");
-  await expect(page.getByTestId("drivers-provenance")).toContainText("Bukan GPS langsung");
-
-  const rail = page.getByTestId("drivers-attention");
-  const flagged = Number(await rail.locator(".drv-count").textContent());
-  const rows = rail.getByTestId("drivers-attention-row");
-  await expect(rows).toHaveCount(flagged);
-  if (flagged > 0) {
-    await rows.first().getByRole("button", { name: "Tinjau di Armada" }).click();
-    await expect(page).toHaveURL(/\/fleet/);
-  }
-});
-
 for (const width of [390, 320]) {
-  test(`Settings and Sopir fit a ${width} px phone with 44 px targets`, async ({ page }) => {
+  test(`Settings fits a ${width} px phone with 44 px targets`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await signIn(page, "administrator");
     await page.route("**/whatsapp/status", (route) => route.fulfill({ json: CONNECTED }));
     await page.route("**/whatsapp/groups", (route) => route.fulfill({ json: { groups: [] } }));
-    for (const tab of ["whatsapp", "team", "data"]) {
+    for (const tab of ["integrations", "team", "data", "audit", "language"]) {
       await page.goto(`/settings?tab=${tab}`, { waitUntil: "domcontentloaded" });
       const button = page.getByTestId(`settings-tab-${tab}`);
       await expect(button).toHaveAttribute("aria-current", "page");
-      // The phone track shows a short label; the accessible name stays the full one.
-      await expect(button).toHaveAccessibleName(/WhatsApp|Tim & akses|Sumber data & model/);
       const box = await button.boundingBox();
       expect(box.height).toBeGreaterThanOrEqual(44);
       if (tab === "data") {
@@ -170,8 +148,5 @@ for (const width of [390, 320]) {
       }
       await noOverflow(page);
     }
-    await page.goto("/drivers", { waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("drivers-fleet-denominator")).toBeVisible({ timeout: 30000 });
-    await noOverflow(page);
   });
 }

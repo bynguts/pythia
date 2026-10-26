@@ -72,12 +72,12 @@ async function signIn(page, lang = "id") {
     },
     { ...principal, lang },
   );
-  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.goto("/app/reports", { waitUntil: "domcontentloaded" });
 }
 
 async function openAssistant(page) {
-  await page.locator(".command-assistant").click();
-  await expect(page.locator(".assistant-modal")).toBeVisible();
+  await page.getByTestId("ask-ana").click();
+  await expect(page.getByTestId("ana-drawer")).toBeVisible();
 }
 
 test("what-if answer shows plan, sources, provenance and opens the twin with the scenario", async ({
@@ -184,7 +184,7 @@ test("the real backend answers an Indonesian what-if with a labelled scenario", 
   await signIn(page, "id");
   await openAssistant(page);
   await page.locator("#assistant-question").fill(QUESTION_ID);
-  await page.locator(".assistant-chat-input .primary-button").click();
+  await page.getByTestId("assistant-send").click();
   const card = page.getByTestId("assistant-scenario-card");
   await expect(card).toBeVisible({ timeout: 90_000 });
   await expect(page.getByTestId("assistant-scenario-badge")).toHaveText("MODEL OUTPUT");

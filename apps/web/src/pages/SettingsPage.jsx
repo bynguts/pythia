@@ -1,7 +1,6 @@
-import { LegacyWorkspace } from "../app/LegacyWorkspace.jsx";
+import { ConsoleSettings } from "../features/settings/ConsoleSettings.jsx";
 
-// Wave 13 stub (lane F wiring): lane S5 replaces this with the Settings (T6NMuR) screen. Until
-// then it shows the closest pre-redesign workspace inside the console shell.
+// Settings (T6NMuR): accounts, messaging and where every number comes from. Lane S5.
 export function SettingsPage() {
-  return <LegacyWorkspace workspace="settings" />;
+  return <ConsoleSettings />;
 }
