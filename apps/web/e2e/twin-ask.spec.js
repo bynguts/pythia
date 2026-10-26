@@ -98,8 +98,8 @@ test("asking a what-if applies rain, venue and day in place and shows the tool t
   await expect(card.getByTestId("assistant-trace-forecast_model")).toContainText("Prophet + XGBoost");
   await expect(card.getByTestId("assistant-trace-resource_rule")).toContainText("PLANNING RULE");
   await expect(card.getByTestId("assistant-trace-queue_simulation")).toContainText("SIMULATED");
-  // Approval stays with the operator in Planning; XR opens on the same scenario.
-  await expect(card.getByTestId("assistant-review-plan")).toHaveAttribute("href", "/planning");
+  // Approval stays with the operator on Tomorrow (wave 13); XR opens on the same scenario.
+  await expect(card.getByTestId("assistant-review-plan")).toHaveAttribute("href", "/app/tomorrow");
   await expect(card.getByTestId("assistant-open-xr")).toHaveAttribute("href", /rainfall_mm=120/);
   await expect(card.getByTestId("assistant-open-twin")).toHaveCount(0);
 });

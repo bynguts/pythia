@@ -54,7 +54,7 @@ test.describe("XR tabletop — interactive scenario and shared session", () => {
     const fmt = (n) => Math.round(n).toLocaleString("en-GB");
     await expect(page.getByTestId("xr-total")).toHaveText(`${fmt(scene.horizon.daily_total_tons[0])} t`);
     const rows = scene.districts.map((d) => d.series[0]);
-    const extra = rows.reduce((sum, row) => sum + row.predicted_tons - row.normal_tons, 0);
+    const extra = rows.reduce((sum, row) => sum + (row.predicted_tons - row.normal_tons), 0);
     await expect(page.getByTestId("xr-extra")).toHaveText(
       `${extra >= 0 ? "+" : "−"}${fmt(Math.abs(extra))} t`,
     );

@@ -34,7 +34,7 @@ test.describe("XR tabletop twin", () => {
     ).json();
     expect(scene.districts).toHaveLength(42);
 
-    await page.goto("/xr?city=jakarta");
+    await page.goto("/xr?city=jakarta&lang=id");
     const state = await waitForXr(page);
     expect(state.mode).toBe("orbit"); // headless Chromium has no immersive session
     expect(state.bars).toBe(42);
@@ -154,7 +154,7 @@ test.describe("XR tabletop twin", () => {
   });
 
   test("the in-scene provenance label follows the language", async ({ page }) => {
-    await page.goto("/xr?city=jakarta");
+    await page.goto("/xr?city=jakarta&lang=id");
     await waitForXr(page);
     await expect
       .poll(() => page.evaluate(() => window.__pythiaXr.sceneLabel))
@@ -252,12 +252,13 @@ test.describe("XR tabletop twin", () => {
     expect(prevented).toEqual({ header: true, controls: true, credit: true, spacer: false });
   });
 
+  // Wave 13: English is the default, so the Indonesian checks pin ?lang=id.
   test("the boot fallback is localised", async ({ page }) => {
     await page.route(/\/assets\/XrTabletop-[^/]+\.js$/, async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 1500));
       await route.continue();
     });
-    await page.goto("/xr?city=jakarta");
+    await page.goto("/xr?city=jakarta&lang=id");
     await expect(page.locator(".xr-boot")).toHaveText("Memuat Pythia XR…");
     await waitForXr(page);
   });

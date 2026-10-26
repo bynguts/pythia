@@ -6,7 +6,8 @@
 import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
-const FOREST_900 = "rgb(15, 59, 35)";
+// --ui-forest-900 maps onto the wave 13 --f-green-deep (#174F33).
+const FOREST_900 = "rgb(23, 79, 51)";
 
 async function signIn(page, lang = "en") {
   await page.goto("/");
