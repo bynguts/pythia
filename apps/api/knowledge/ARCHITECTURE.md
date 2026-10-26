@@ -303,7 +303,10 @@ a value with no source is `null` with a `reason`.
 - `POST /api/operations/plan?auto_inputs=true`: rain, the largest located event and the
   holiday come from the forecast; field facts take trucks out. Plans carry `solve_seconds`.
 - `POST /api/operations/plans/{id}/return` (approver, with a note), `/withdraw` (planner),
-  `/swap` (exchange two trucks' work before approval; logged in `edits`).
+  `/swap` (exchange two trucks' work before approval; logged in `edits`). With `draft=true` a
+  plan stays out of the approver's inbox until `POST /api/operations/plans/{id}/submit`.
+- `POST /api/whatsapp/summary`: sends the day's summary text to the alert group only; the
+  event log keeps its length, not the text.
 - `GET /api/fleet/drivers-week`: trips, proof, gate punctuality and duty per driver from
   field records (history:read).
 - `GET /api/driver/trip/{truck}`: next stop and TPA drive time from the phone's position
