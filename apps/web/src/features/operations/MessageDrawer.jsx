@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Send } from "lucide-react";
 import { apiPost } from "../../shared/api/client.js";
@@ -16,10 +16,13 @@ export function MessageDrawer({ open, onClose }) {
   const navigate = useNavigate();
   const [text, setText] = useState("");
   const [status, setStatus] = useState({ busy: false, sent: false, error: null });
+  // A double tap lands before the busy state re-renders; the ref stops the second send.
+  const sending = useRef(false);
 
   async function submit(event) {
     event.preventDefault();
-    if (!text.trim() || status.busy) return;
+    if (!text.trim() || sending.current) return;
+    sending.current = true;
     setStatus({ busy: true, sent: false, error: null });
     try {
       await apiPost("/whatsapp/summary", { text: text.trim(), lang });
@@ -32,6 +35,8 @@ export function MessageDrawer({ open, onClose }) {
         sent: false,
         error: code === 409 ? "no_group" : code === 503 ? "offline" : code === 403 ? "denied" : "failed",
       });
+    } finally {
+      sending.current = false;
     }
   }
 

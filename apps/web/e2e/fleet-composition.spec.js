@@ -204,6 +204,27 @@ test("Message drivers posts to the WhatsApp group and names a failure honestly",
   await expect(page).toHaveURL(/\/app\/settings\?tab=whatsapp$/);
 });
 
+// A double tap on Send posts one WhatsApp message, not two.
+test("Message drivers sends one WhatsApp message despite a double tap", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  let posts = 0;
+  await page.route(/\/api\/whatsapp\/summary$/, async (route) => {
+    posts += 1;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await route.fulfill({ status: 200, json: { delivered: true } });
+  });
+  await signIn(page);
+  await page.getByTestId("ops-message-drivers").click();
+  await page.getByTestId("message-text").fill("Gerbang TPA padat, tahan 15 menit.");
+  await page.evaluate(() => {
+    const button = document.querySelector("[data-testid=message-send]");
+    button.click();
+    button.click();
+  });
+  await expect(page.getByTestId("message-text")).toHaveValue("");
+  expect(posts).toBe(1);
+});
+
 test("the Indonesian Operations screen shows no English backend prose or engineering jargon", async ({
   page,
 }) => {
