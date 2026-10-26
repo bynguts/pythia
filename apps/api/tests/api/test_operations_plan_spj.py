@@ -121,9 +121,9 @@ def test_approval_creates_one_labelled_draft_per_truck(api_client, auth_headers)
         assert spj.note.startswith(f"Rencana {plan['plan_id']} (MODEL) · fasilitas: ")
         assert spj.note.endswith("· slot gerbang 09:00–09:15")
         stop = spj.stops[0]
-        assert stop.location_type == "Titik Rencana (centroid kecamatan)"
-        assert "perencanaan, bukan alamat TPS" in stop.address
-        assert stop.name.startswith("Rencana · Kec. ")
+        assert stop.location_type == "TPS (koordinat SILIKA DLH 2023)"
+        assert "koordinat TPS SILIKA DLH 2023" in stop.address
+        assert not stop.name.startswith("Rencana")  # a SILIKA TPS name, not a placeholder
 
 
 def test_two_trips_to_the_same_area_give_one_stop_in_first_trip_order(api_client, auth_headers):
@@ -139,7 +139,7 @@ def test_two_trips_to_the_same_area_give_one_stop_in_first_trip_order(api_client
     )
     body = _approve(api_client, auth_headers, plan["plan_id"])
     spj = SPJ_STORE.get(body["spj_drafts"][0]["spj_id"])
-    assert [s.kecamatan for s in spj.stops] == ["Senen", "Gambir"]
+    assert list(dict.fromkeys(s.kecamatan for s in spj.stops)) == ["Senen", "Gambir"]
     assert spj.destination == "TPST Bantargebang"  # the first trip's facility
     assert "fasilitas: TPST Bantargebang, RDF Rorotan" in spj.note
     assert "slot gerbang" not in spj.note  # no slot assigned: none is claimed

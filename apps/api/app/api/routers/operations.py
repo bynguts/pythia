@@ -33,7 +33,7 @@ from app.fleet.operations_optimizer import Demand, Vehicle, build_operational_pl
 from app.fleet.operations_rules import PlanningRules, resolve_rules
 from app.fleet.queue_simulation import QUEUE_QUANTITIES, QUEUE_STAGE
 from app.forecast.engine import simulate_staggered_dispatch
-from app.forecast.real_data import load_kecamatan_map
+from app.forecast.real_data import load_kecamatan_map, load_real_tps_coordinates
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -158,10 +158,85 @@ _SPJ_DESTINATIONS = {
     "RDF Plant Jakarta": "RDF Plant Jakarta",
 }
 PLAN_STOP_LOCATION_TYPE = "Titik Rencana (centroid kecamatan)"
+TPS_STOP_LOCATION_TYPE = "TPS (koordinat SILIKA DLH 2023)"
+# TPS pickups per district a truck serves: trucks sharing a district take the next
+# TPS points nearest its centre, so two trucks are not sent to the same TPS.
+TPS_STOPS_PER_AREA = 3
 
 
 def _plan_spj_note_prefix(plan_id: str) -> str:
     return f"Rencana {plan_id} (MODEL)"
+
+
+def _tps_stops(
+    plan: dict[str, Any], truck_code: str, areas: list[str], labels: dict[str, str], destination: str
+) -> list[dict[str, Any]]:
+    """Real SILIKA TPS pickup points for the districts this truck serves.
+
+    Districts keep the plan's trip order. Within a district each truck takes its
+    own share of the TPS points nearest the district centre, visited nearest
+    first from the previous stop (the first district starts at the TPS farthest
+    from the destination). A district without a SILIKA TPS keeps its labelled
+    centroid planning point.
+    """
+    from app.fleet.facilities import route_ground_truth
+    from app.forecast.engine import _haversine_meters
+
+    by_area: dict[str, list[dict[str, Any]]] = {}
+    for tps in load_real_tps_coordinates():
+        by_area.setdefault(tps["kecamatan"].lower().replace(" ", "_"), []).append(tps)
+    centroids = {k["slug"]: k for k in load_kecamatan_map()}
+    sharing: dict[str, list[str]] = {}
+    for d in plan.get("dispatches") or []:
+        for area in dict.fromkeys(s["area"] for s in (d.get("fields") or {}).get("stops") or []):
+            sharing.setdefault(area, []).append(d["truck_code"])
+    dest = route_ground_truth(destination)
+    stops: list[dict[str, Any]] = []
+    for area in areas:
+        label = labels[area]
+        centroid = centroids.get(area) or {}
+        if centroid.get("lat") is None or centroid.get("lng") is None:
+            raise ValueError(f"no centroid for kecamatan {area}")
+        centre = (centroid["lat"], centroid["lng"])
+        pool = sorted(by_area.get(area, []), key=lambda t: _haversine_meters(centre, (t["lat"], t["lng"])))
+        if not pool:
+            stops.append(
+                {
+                    "name": f"Rencana · Kec. {label}",
+                    "kecamatan": label,
+                    "address": f"Titik tengah Kec. {label} (perencanaan, bukan alamat TPS)",
+                    "lat": centroid["lat"],
+                    "lng": centroid["lng"],
+                    "location_type": PLAN_STOP_LOCATION_TYPE,
+                }
+            )
+            continue
+        trucks = sorted(sharing.get(area) or [truck_code])
+        start = trucks.index(truck_code) * TPS_STOPS_PER_AREA if truck_code in trucks else 0
+        count = min(TPS_STOPS_PER_AREA, len(pool))
+        share = [pool[(start + i) % len(pool)] for i in range(count)]
+        if stops:
+            here = (stops[-1]["lat"], stops[-1]["lng"])
+        elif dest is not None:
+            here = max(((t["lat"], t["lng"]) for t in share), key=lambda p: _haversine_meters(p, dest))
+        else:
+            here = centre
+        while share:
+            nearest = min(share, key=lambda t: _haversine_meters(here, (t["lat"], t["lng"])))
+            share.remove(nearest)
+            here = (nearest["lat"], nearest["lng"])
+            kelurahan = f"Kel. {_kecamatan_label(nearest['kelurahan'])}, " if nearest["kelurahan"] else ""
+            stops.append(
+                {
+                    "name": nearest["name"],
+                    "kecamatan": label,
+                    "address": f"{kelurahan}Kec. {label} (koordinat TPS SILIKA DLH 2023)",
+                    "lat": nearest["lat"],
+                    "lng": nearest["lng"],
+                    "location_type": TPS_STOP_LOCATION_TYPE,
+                }
+            )
+    return stops
 
 
 def _plan_spj(
@@ -171,8 +246,8 @@ def _plan_spj(
 
     Draft creation skips `enforce_duty_limit` on purpose: a draft is not work,
     and `POST /api/spj/{id}/activate` re-checks duty before the truck leaves.
-    Drafts stay `draft` until a human activates them. The stops are kecamatan
-    centroids from the plan, labelled as planning points, not TPS addresses.
+    Drafts stay `draft` until a human activates them. The stops are real SILIKA
+    TPS points in the districts the plan gives this truck (see `_tps_stops`).
     """
     fields = dispatch["fields"]
     truck_code = dispatch["truck_code"]
@@ -185,23 +260,9 @@ def _plan_spj(
     for spj in SPJ_STORE.list(truck_code=truck_code):
         if spj.status == "draft" and spj.note.startswith(prefix):
             return spj.spj_id, None  # orphan of an earlier, interrupted attempt
-    centroids = {k["slug"]: k for k in load_kecamatan_map()}
-    stops = []
-    for area in dict.fromkeys(t["area"] for t in trips):
-        label = next(t["kecamatan"] for t in trips if t["area"] == area)
-        centroid = centroids.get(area) or {}
-        if centroid.get("lat") is None or centroid.get("lng") is None:
-            raise ValueError(f"no centroid for kecamatan {area}")
-        stops.append(
-            {
-                "name": f"Rencana · Kec. {label}",
-                "kecamatan": label,
-                "address": f"Titik tengah Kec. {label} (perencanaan, bukan alamat TPS)",
-                "lat": centroid["lat"],
-                "lng": centroid["lng"],
-                "location_type": PLAN_STOP_LOCATION_TYPE,
-            }
-        )
+    areas = list(dict.fromkeys(t["area"] for t in trips))
+    labels = {area: next(t["kecamatan"] for t in trips if t["area"] == area) for area in areas}
+    stops = _tps_stops(plan, truck_code, areas, labels, destination)
     facilities = ", ".join(dict.fromkeys(t.get("facility_display") or t["facility"] for t in trips))
     note = f"{prefix} · fasilitas: {facilities}"
     slot = fields.get("gate_slot")
