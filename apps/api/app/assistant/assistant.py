@@ -4,6 +4,7 @@ import json
 import os
 import re
 import time
+from datetime import timedelta
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
@@ -20,6 +21,7 @@ from app.assistant.scenario import (
     with_parse_step,
 )
 from app.assistant.tools import TOOL_SCHEMAS, ToolContext, execute_tool, run_tools_pass
+from app.core.env import today
 
 # Per-request gateway timeouts, and the budget for the whole multi-step tool loop.
 _GATEWAY_TIMEOUT = 18
@@ -150,6 +152,58 @@ def _wants_outlook(q: str) -> bool:
     return any(term in q for term in OUTLOOK_TERMS)
 
 
+# "How many tonnes tomorrow?" reads tomorrow's day from the same outlook.
+TOMORROW_TERMS = ("besok", "esok", "tomorrow")
+TONNAGE_TERMS = (
+    "ton",
+    "sampah",
+    "timbulan",
+    "volume",
+    "berapa",
+    "how much",
+    "waste",
+    "prakiraan",
+    "prediksi",
+)
+
+
+def _wants_tomorrow(q: str) -> bool:
+    return any(term in q for term in TOMORROW_TERMS) and any(term in q for term in TONNAGE_TERMS)
+
+
+def _tomorrow_answer(result: dict[str, Any], lang: str) -> str | None:
+    """Tomorrow's city-wide tonnage from the outlook tool (no LLM), or None without that day."""
+    en = lang == "en"
+    tomorrow = (today() + timedelta(days=1)).isoformat()
+    day = next((d for d in result["week"]["days"] if d["date"] == tomorrow), None)
+    if day is None:
+        return None
+    parts = [
+        f"Tomorrow ({day['date']}), city-wide waste (MODEL OUTPUT): {day['total_tons']:,.0f} t/day."
+        if en
+        else f"Besok ({day['date']}), sampah se-kota (MODEL OUTPUT): {day['total_tons']:,.0f} t/hari."
+    ]
+    if day.get("corrected_tons") is not None:
+        parts.append(
+            f"With the weighbridge-learned correction: {day['corrected_tons']:,.0f} t."
+            if en
+            else f"Dengan koreksi dari jembatan timbang: {day['corrected_tons']:,.0f} t."
+        )
+    if day.get("with_events_total_t") not in (None, day["total_tons"]):
+        parts.append(
+            f"Including the day's permitted events: {day['with_events_total_t']:,.0f} t."
+            if en
+            else f"Termasuk acara berizin hari itu: {day['with_events_total_t']:,.0f} t."
+        )
+    if day.get("beyond_weather_forecast"):
+        parts.append(
+            "No weather forecast covers that day; the model uses 0 mm rain."
+            if en
+            else "Belum ada prakiraan cuaca untuk hari itu; model memakai hujan 0 mm."
+        )
+    return " ".join(parts)
+
+
 def _outlook_answer(result: dict[str, Any], lang: str) -> str:
     """The outlook tool's figures as one local answer (no LLM)."""
     en = lang == "en"
@@ -235,7 +289,7 @@ def _required_live_tools(question: str) -> set[str]:
         return {"run_scenario"}
     if re.search(r"\b(apa itu|how does|bagaimana cara)\b", q) or "sumber data" in q:
         return set()
-    if _wants_outlook(q):
+    if _wants_outlook(q) or _wants_tomorrow(q):
         return {"get_forecast_outlook"}
     if any(term in q for term in ("prediksi", "forecast", "prakiraan ton", "timbulan")):
         return {"get_predictions"}
@@ -337,7 +391,7 @@ def _answer_locally(
     if tool_ctx is not None and not re.search(r"\b(apa itu|how does|bagaimana cara)\b", q):
         name = None
         args: dict[str, Any] = {}
-        if _wants_outlook(q):
+        if _wants_outlook(q) or _wants_tomorrow(q):
             name = "get_forecast_outlook"
         elif any(term in q for term in ("prediksi", "forecast", "prakiraan ton", "timbulan")):
             name = "get_predictions"
@@ -383,7 +437,8 @@ def _answer_locally(
                             codes = ", ".join(t["truck_code"] for t in affected[:5])
                             answer += f" Truk terkait: {codes}."
                 elif name == "get_forecast_outlook":
-                    answer = _outlook_answer(result, lang)
+                    tomorrow = None if _wants_outlook(q) else _tomorrow_answer(result, lang)
+                    answer = tomorrow or _outlook_answer(result, lang)
                 elif name == "get_tpa_queue":
                     answer = (
                         f"Simulasi antrean TPST Bantargebang: {result['trucks_in_queue']} truk, "

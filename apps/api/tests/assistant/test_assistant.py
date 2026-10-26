@@ -228,6 +228,95 @@ class AssistantTests(unittest.TestCase):
         self.assertIn("1 truk mengalami deviasi rute", result["answer"])
         self.assertNotIn("3 truk", result["answer"])
 
+    def _outlook_week(self):
+        from datetime import timedelta
+
+        from app.core.env import today
+
+        start = today()
+        days = []
+        for i in range(7):
+            days.append(
+                {
+                    "date": (start + timedelta(days=i)).isoformat(),
+                    "total_tons": 7000.0 + i * 100,
+                    "corrected_tons": None,
+                    "with_events_total_t": 7000.0 + i * 100,
+                    "beyond_weather_forecast": False,
+                    "drivers": [],
+                }
+            )
+        return {
+            "week": {"days": days},
+            "monthly_intake": {"available": False, "months": []},
+            "learned_correction": None,
+        }
+
+    def test_local_mode_answers_tomorrows_tonnes_in_indonesian_and_english(self):
+        from datetime import timedelta
+
+        from app.assistant.tools import ToolContext
+        from app.core.env import today
+
+        tomorrow = (today() + timedelta(days=1)).isoformat()
+        for question, lang, expected in (
+            ("berapa ton besok?", "id", f"Besok ({tomorrow}), sampah se-kota (MODEL OUTPUT): 7,100 t/hari."),
+            (
+                "how many tonnes tomorrow?",
+                "en",
+                f"Tomorrow ({tomorrow}), city-wide waste (MODEL OUTPUT): 7,100 t/day.",
+            ),
+        ):
+            with (
+                patch.dict("os.environ", {}, clear=True),
+                patch("app.assistant.assistant.execute_tool", return_value=self._outlook_week()) as tool,
+            ):
+                result = answer_with_openai_if_configured(
+                    question,
+                    {},
+                    tool_ctx=ToolContext(dispatch_center=None, history_store=None),
+                    language=lang,
+                )
+            # The same outlook tool as "next week", read for tomorrow's day only.
+            self.assertEqual(tool.call_args.args[0], "get_forecast_outlook")
+            self.assertEqual(result["tools_used"], ["get_forecast_outlook"])
+            self.assertIn(expected, result["answer"])
+            self.assertNotIn("mode lokal. Mode lokal dapat", result["answer"])
+            self.assertNotIn("no data matching", result["answer"])
+
+    def test_local_mode_tomorrow_says_when_no_weather_forecast_covers_it(self):
+        from app.assistant.tools import ToolContext
+
+        week = self._outlook_week()
+        tomorrow = week["week"]["days"][1]
+        tomorrow.update(corrected_tons=6900.0, with_events_total_t=7300.0, beyond_weather_forecast=True)
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch("app.assistant.assistant.execute_tool", return_value=week),
+        ):
+            result = answer_with_openai_if_configured(
+                "berapa ton sampah besok?",
+                {},
+                tool_ctx=ToolContext(dispatch_center=None, history_store=None),
+            )
+        self.assertIn("koreksi dari jembatan timbang: 6,900 t", result["answer"])
+        self.assertIn("acara berizin hari itu: 7,300 t", result["answer"])
+        self.assertIn("hujan 0 mm", result["answer"])
+
+    def test_local_mode_next_week_still_answers_the_whole_week(self):
+        from app.assistant.tools import ToolContext
+
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch("app.assistant.assistant.execute_tool", return_value=self._outlook_week()),
+        ):
+            result = answer_with_openai_if_configured(
+                "berapa ton besok dan minggu depan?",
+                {},
+                tool_ctx=ToolContext(dispatch_center=None, history_store=None),
+            )
+        self.assertIn("7 hari ke depan", result["answer"])
+
     def test_local_fallback_does_not_invent_metrics_when_tool_fails(self):
         from app.assistant.tools import ToolContext
 
