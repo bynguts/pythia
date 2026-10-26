@@ -17,6 +17,7 @@ import { Button, Card, EmptyState, ErrorState, Progress4, Tag, WaitingApproval }
 import { ROLE_PERMISSIONS } from "../features/settings/roles.js";
 import { FieldFactsCard, ForecastCard, ResourcesCard } from "../features/planning/TomorrowForecast.jsx";
 import { AllocationKpis, PlanFlags, useAllocationViews } from "../features/planning/PlanAllocation.jsx";
+import { OutlookSection } from "../features/planning/TomorrowOutlook.jsx";
 import {
   dayLabel,
   heldTrucks,
@@ -701,6 +702,8 @@ export function TomorrowPage() {
           {footer}
         </Card>
       </div>
+
+      <OutlookSection />
     </div>
   );
 }

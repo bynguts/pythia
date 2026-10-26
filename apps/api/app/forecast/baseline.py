@@ -291,6 +291,10 @@ def build_outlook(
             "daily_total_tons": [
                 round(sum(d["series"][i]["predicted_tons"] for d in districts), 1) for i in range(days)
             ],
+            "daily_normal_tons": [round(sum(n[i] for n in normal.values()), 1) for i in range(days)],
+            "daily_rainfall_mm": rain,
+            # "forecast" = Open-Meteo covers the day; "assumed_dry" = outside its window (0 mm used).
+            "daily_weather_input": inputs,
             "daily_kecamatan_at_risk": [
                 sum(1 for d in districts if d["series"][i]["risk"] in AT_RISK_LEVELS) for i in range(days)
             ],
@@ -379,14 +383,47 @@ def tomorrow_forecast(target_date: str | None = None) -> dict[str, Any]:
     iso = target_date or (today() + timedelta(days=1)).isoformat()
     base = build_outlook(target_date=iso)
     weather = base["weather"]
+    drivers, events_total = day_drivers(
+        iso,
+        days=len(base["horizon"]["dates"]),
+        total_t=base["total_tonnage_t"],
+        normal_t=base["normal_day_tonnage_t"],
+        rainfall_mm=weather["rainfall_mm"],
+        weather_class=weather["class"],
+        weather_source=weather["source"],
+    )
+    return {
+        **base,
+        "drivers": drivers,
+        "with_events_total_t": round(base["total_tonnage_t"] + events_total, 1),
+        "inputs_auto": True,
+        "forecast_classification": "MODEL_OUTPUT",
+    }
+
+
+def day_drivers(
+    iso: str,
+    *,
+    days: int,
+    total_t: float,
+    normal_t: float,
+    rainfall_mm: float,
+    weather_class: str,
+    weather_source: str,
+) -> tuple[list[dict[str, Any]], float]:
+    """The drivers of one forecast-week day and the summed effect of its located events.
+
+    Weather (its effect = the day's total against its dry normal day), the official
+    events and submitted permits running that day, a national holiday and the weekday.
+    """
     drivers: list[dict[str, Any]] = [
         {
             "kind": "weather",
-            "detail": {"rainfall_mm": weather["rainfall_mm"]},
-            "effect_tons": round(base["total_tonnage_t"] - base["normal_day_tonnage_t"], 1),
+            "detail": {"rainfall_mm": rainfall_mm},
+            "effect_tons": round(total_t - normal_t, 1),
             "effect_classification": "MODEL_OUTPUT",
-            "source": weather["source"],
-            "input_classification": weather["class"],
+            "source": weather_source,
+            "input_classification": weather_class,
         }
     ]
 
@@ -428,13 +465,13 @@ def tomorrow_forecast(target_date: str | None = None) -> dict[str, Any]:
             reason = "attendance_unknown"
         if reason is None:
             with_event = build_outlook(
-                days=len(base["horizon"]["dates"]),
+                days=days,
                 target_date=iso,
                 event_attendance=attendance,
                 event_lat=lat,
                 event_lng=lng,
             )
-            effect = round(with_event["total_tonnage_t"] - base["total_tonnage_t"], 1)
+            effect = round(with_event["total_tonnage_t"] - total_t, 1)
             events_total += effect
             kecamatan = (with_event["event"] or {}).get("kecamatan", [])
         drivers.append(
@@ -473,10 +510,4 @@ def tomorrow_forecast(target_date: str | None = None) -> dict[str, Any]:
             "effect_classification": "MODEL_OUTPUT",
         }
     )
-    return {
-        **base,
-        "drivers": drivers,
-        "with_events_total_t": round(base["total_tonnage_t"] + events_total, 1),
-        "inputs_auto": True,
-        "forecast_classification": "MODEL_OUTPUT",
-    }
+    return drivers, events_total

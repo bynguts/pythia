@@ -1,0 +1,101 @@
+/* Outlook on the Tomorrow page: the week ahead and the next three months. Same card,
+   type and colour tokens as tomorrow.css; the highlight is a green outline, never a fill. */
+
+.tmr-ol .ui-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tmr-ol-label {
+  margin: 0;
+  color: var(--f-muted);
+  font-family: var(--f-font-body);
+  font-size: 12px;
+  font-weight: 600;
+}
+.tmr-ol-days,
+.tmr-ol-months {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tmr-ol-months {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+.tmr-ol-day,
+.tmr-ol-month {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--f-line-3);
+  border-radius: 8px;
+  background: var(--f-white);
+}
+.tmr-ol-day.is-today,
+.tmr-ol-day.is-tomorrow {
+  border-color: var(--f-green);
+  background: var(--f-green-tint);
+}
+.tmr-ol-day-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  color: var(--f-ink-3);
+  font-size: 13px;
+  font-weight: 500;
+}
+.tmr-ol-day.is-today .tmr-ol-day-name,
+.tmr-ol-day.is-tomorrow .tmr-ol-day-name {
+  color: var(--f-green);
+  font-weight: 600;
+}
+.tmr-ol-day-name small {
+  color: var(--f-faint);
+  font-size: 11px;
+  font-weight: 400;
+}
+.tmr-ol-value {
+  color: var(--f-ink);
+  font-family: var(--f-font-display);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.tmr-ol-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.tmr-ol-chip {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--f-hover);
+  color: var(--f-ink-2);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.tmr-ol-chip.is-warn {
+  background: var(--f-amber-soft);
+  color: var(--f-amber-ink);
+}
+.tmr-ol-horizon {
+  color: var(--f-faint);
+  font-size: 11px;
+}
+.tmr-ol-note {
+  margin: 0;
+  color: var(--f-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}

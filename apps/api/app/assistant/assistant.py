@@ -129,12 +129,88 @@ def _knowledge_context(question: str, images: list[str] | None = None) -> str:
     return format_rag_context(question, top_k=2, max_chars=1600)
 
 
+# Questions about the days and months ahead go to the outlook (7 days + 3 months).
+OUTLOOK_TERMS = (
+    "minggu depan",
+    "pekan depan",
+    "seminggu",
+    "7 hari",
+    "bulan depan",
+    "3 bulan",
+    "tiga bulan",
+    "next week",
+    "next month",
+    "7 days",
+    "3 months",
+    "outlook",
+)
+
+
+def _wants_outlook(q: str) -> bool:
+    return any(term in q for term in OUTLOOK_TERMS)
+
+
+def _outlook_answer(result: dict[str, Any], lang: str) -> str:
+    """The outlook tool's figures as one local answer (no LLM)."""
+    en = lang == "en"
+    days = "; ".join(
+        f"{d['date']} {d['total_tons']:,.0f} t"
+        + (
+            (" (no weather forecast)" if en else " (tanpa prakiraan cuaca)")
+            if d["beyond_weather_forecast"]
+            else ""
+        )
+        for d in result["week"]["days"]
+    )
+    intake = result["monthly_intake"]
+    parts = [
+        (
+            f"City-wide waste per day, next 7 days (MODEL OUTPUT): {days}."
+            if en
+            else f"Sampah se-kota per hari, 7 hari ke depan (MODEL OUTPUT): {days}."
+        )
+    ]
+    if intake.get("available"):
+        within = "within" if en else "di dalam"
+        beyond = "beyond" if en else "di luar"
+        months = "; ".join(
+            f"{m['month']} {m['tons_per_day']:,.0f} t/"
+            + ("day" if en else "hari")
+            + f" ({within if m['within_backtested_horizon'] else beyond} "
+            + ("the 1-3 month backtest)" if en else "horizon backtest 1-3 bulan)")
+            for m in intake["months"]
+        )
+        mape = (intake.get("backtest") or {}).get("mape_model_pct")
+        error = (
+            (
+                f" Backtest error on real weighing data: {mape}% MAPE."
+                if en
+                else f" Galat backtest pada data timbangan nyata: MAPE {mape}%."
+            )
+            if mape is not None
+            else ""
+        )
+        parts.append(
+            (
+                f"Bantargebang intake, next months (MODEL OUTPUT, data through {intake['fitted_through']}): "
+                if en
+                else f"Asupan TPST Bantargebang bulan ke depan (MODEL OUTPUT, data s.d. {intake['fitted_through']}): "
+            )
+            + months
+            + "."
+            + error
+        )
+    return " ".join(parts)
+
+
 def _required_live_tools(question: str) -> set[str]:
     q = question.lower()
     if parse_scenario_question(question):
         return {"run_scenario"}
     if re.search(r"\b(apa itu|how does|bagaimana cara)\b", q) or "sumber data" in q:
         return set()
+    if _wants_outlook(q):
+        return {"get_forecast_outlook"}
     if any(term in q for term in ("prediksi", "forecast", "prakiraan ton", "timbulan")):
         return {"get_predictions"}
     if any(term in q for term in ("tpa", "antrean", "antrian")):
@@ -235,7 +311,9 @@ def _answer_locally(
     if tool_ctx is not None and not re.search(r"\b(apa itu|how does|bagaimana cara)\b", q):
         name = None
         args: dict[str, Any] = {}
-        if any(term in q for term in ("prediksi", "forecast", "prakiraan ton", "timbulan")):
+        if _wants_outlook(q):
+            name = "get_forecast_outlook"
+        elif any(term in q for term in ("prediksi", "forecast", "prakiraan ton", "timbulan")):
             name = "get_predictions"
         elif "tpa" in q or "antrean" in q or "antrian" in q:
             name = "get_tpa_queue"
@@ -278,6 +356,8 @@ def _answer_locally(
                         if affected and re.search(r"\b(mana|which|siapa)\b", q):
                             codes = ", ".join(t["truck_code"] for t in affected[:5])
                             answer += f" Truk terkait: {codes}."
+                elif name == "get_forecast_outlook":
+                    answer = _outlook_answer(result, lang)
                 elif name == "get_tpa_queue":
                     answer = (
                         f"Simulasi antrean TPST Bantargebang: {result['trucks_in_queue']} truk, "

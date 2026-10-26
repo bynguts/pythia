@@ -33,6 +33,7 @@ from app.forecast.forecast_metrics import (
     suitability_labels,
 )
 from app.forecast.impact import build_impact_report
+from app.forecast.outlook import outlook_payload
 from app.forecast.real_data import (
     load_kecamatan_map,
     load_kelurahan_heatmap,
@@ -209,6 +210,13 @@ def forecast_tomorrow(
         return tomorrow_forecast(target_date.isoformat() if target_date else None)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/api/forecast/outlook")
+def forecast_outlook(_role: str = Depends(require_permission("dashboard:read"))) -> dict[str, Any]:
+    """The week ahead (city-wide t/day, drivers filled automatically) and the next 3 months
+    of Bantargebang intake with its real-data backtest error. Takes no inputs."""
+    return outlook_payload()
 
 
 @router.get("/api/baseline/scenario")

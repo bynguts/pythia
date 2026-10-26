@@ -27,6 +27,9 @@ dispatch_center = DispatchCenter()
 _AI_ENGINE_STATE: dict[str, bool] = {"running": False}
 
 _kecamatan_cache: dict[str, Any] = {"key": None, "ts": 0.0, "payload": None}
+# /api/forecast/outlook: 7 days x 42 kecamatan series plus each day's event check; the
+# forecast is daily resolution, so one build per forecast date is shared for 5 minutes.
+_outlook_cache: dict[str, Any] = {"key": None, "ts": 0.0, "payload": None}
 
 # Necessary: the snapshot costs ~3.2s (42 models + per-truck OSRM reroutes), so
 # parallel dashboard clients (e.g. the 4 Playwright workers) would each recompute

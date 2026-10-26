@@ -10,6 +10,8 @@ import { fEn } from "./f.en.js";
 import { fId } from "./f.id.js";
 import { lEn } from "./l.en.js";
 import { lId } from "./l.id.js";
+import { olEn } from "./ol.en.js";
+import { olId } from "./ol.id.js";
 import { s1En } from "./s1.en.js";
 import { s1Id } from "./s1.id.js";
 import { s2En } from "./s2.en.js";
@@ -21,5 +23,27 @@ import { s4Id } from "./s4.id.js";
 import { s5En } from "./s5.en.js";
 import { s5Id } from "./s5.id.js";
 
-export const w13En = { ...fEn, ...lEn, ...d1En, ...d2En, ...s1En, ...s2En, ...s3En, ...s4En, ...s5En };
-export const w13Id = { ...fId, ...lId, ...d1Id, ...d2Id, ...s1Id, ...s2Id, ...s3Id, ...s4Id, ...s5Id };
+export const w13En = {
+  ...fEn,
+  ...lEn,
+  ...d1En,
+  ...d2En,
+  ...s1En,
+  ...s2En,
+  ...s3En,
+  ...s4En,
+  ...s5En,
+  ...olEn,
+};
+export const w13Id = {
+  ...fId,
+  ...lId,
+  ...d1Id,
+  ...d2Id,
+  ...s1Id,
+  ...s2Id,
+  ...s3Id,
+  ...s4Id,
+  ...s5Id,
+  ...olId,
+};

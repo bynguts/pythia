@@ -36,6 +36,7 @@ from app.forecast.engine import (
 )
 from app.forecast.forecast_metrics import suitability_labels
 from app.forecast.impact import build_impact_report
+from app.forecast.outlook import outlook_payload
 from app.forecast.real_data import (
     build_provenance_records,
     data_provenance,
@@ -267,6 +268,19 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "get_forecast_outlook",
+            "description": (
+                "Prakiraan ke depan tanpa input manual: ton/hari se-kota untuk 7 hari (hari ini + 6) dengan "
+                "pendorongnya (cuaca Open-Meteo, acara resmi, izin, libur), dan asupan TPST Bantargebang "
+                "3 bulan ke depan dari model data timbangan nyata beserta galat backtest (MAPE). Hanya baca. "
+                "Pakai untuk 'berapa ton minggu depan / bulan depan'. Semua angka MODEL OUTPUT."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_daily_recap",
             "description": (
                 "Rekap penutupan hari: rencana (MODEL) vs realisasi tercatat di aplikasi (SPJ, tanda terima, "
@@ -408,6 +422,7 @@ _TOOLS_IMPL: dict[str, Any] = {
     },
     "run_scenario": lambda args, ctx: run_scenario(args),
     "get_readiness": lambda args, ctx: _readiness_tool(args),
+    "get_forecast_outlook": lambda args, ctx: _outlook_tool(),
     "get_daily_recap": lambda args, ctx: _without_people(daily_recap(args.get("date") or local_today())),
     "get_data_provenance": lambda args, ctx: {
         "provenance": data_provenance(),
@@ -419,6 +434,28 @@ _TOOLS_IMPL: dict[str, Any] = {
         "impact_report": build_impact_report(),
     },
 }
+
+
+def _outlook_tool() -> dict[str, Any]:
+    """The outlook without per-event detail, so the answer stays under the tool output limit."""
+    outlook = outlook_payload()
+    week = outlook["week"]
+    return {
+        **outlook,
+        "week": {
+            **{k: v for k, v in week.items() if k != "days"},
+            "days": [
+                {
+                    **{k: v for k, v in day.items() if k != "drivers"},
+                    "drivers": [
+                        {"kind": d["kind"], "detail": d["detail"], "effect_tons": d["effect_tons"]}
+                        for d in day["drivers"]
+                    ],
+                }
+                for day in week["days"]
+            ],
+        },
+    }
 
 
 def _simulate_reroute(args: dict) -> dict[str, Any]:
