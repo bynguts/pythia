@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ClipboardList,
+  Cloud,
   CloudOff,
   Hourglass,
   MessageSquareWarning,
@@ -54,19 +55,29 @@ export function useDriverSafety(truckCode) {
 }
 
 export function SafetyBanner({ safety }) {
+  if (safetyNotices(safety).length === 0) return null;
+  return (
+    <section className="driver-card driver-safety" data-testid="driver-safety" role="alert">
+      <SafetyLines safety={safety} />
+    </section>
+  );
+}
+
+// The notice lines and their provenance badge, shared by the banner and the
+// route map's safety pop-over (wave 13).
+export function SafetyLines({ safety }) {
   const { t, lang } = useLanguage();
   const notices = safetyNotices(safety);
-  if (notices.length === 0) return null;
   // The backend label is a long English provenance note; the badge says the
   // same in the driver's language, falling back to the label as sent.
-  const classification = String(safety.classification || "");
+  const classification = String(safety?.classification || "");
   const label = classification.startsWith("SIMULATED")
     ? t("drv6_safety_class_simulated")
     : classification === "OBSERVED_APP_EVENTS"
       ? t("drv6_safety_class_observed")
-      : safety.label || classification;
+      : safety?.label || classification;
   return (
-    <section className="driver-card driver-safety" data-testid="driver-safety" role="alert">
+    <>
       {notices.map((notice) => (
         <p
           key={notice.kind}
@@ -93,7 +104,7 @@ export function SafetyBanner({ safety }) {
           {label}
         </span>
       )}
-    </section>
+    </>
   );
 }
 
@@ -374,6 +385,31 @@ export function SyncStatus({ lastSync, pending, flushing, online, onRetry }) {
         </button>
       )}
     </section>
+  );
+}
+
+// Wave 13: the header chip of the trip screens. "Synced" only when nothing is
+// waiting and the phone is online; otherwise it says what is held on the phone.
+export function SyncChip({ online, pending = 0, flushing = false }) {
+  const { t } = useLanguage();
+  const offline = !online;
+  const state = offline ? "offline" : flushing ? "sending" : pending > 0 ? "pending" : "synced";
+  const label = {
+    offline: pending > 0 ? t("d2_sync_offline_n").replace("{n}", pending) : t("d2_sync_offline"),
+    sending: t("drv_syncing"),
+    pending: t("d2_sync_pending_n").replace("{n}", pending),
+    synced: t("d2_sync_synced"),
+  }[state];
+  return (
+    <span
+      className={`drt-sync${offline ? " is-offline" : state === "synced" ? "" : " is-pending"}`}
+      data-testid="drt-sync"
+      data-sync={state}
+      role="status"
+    >
+      {offline ? <CloudOff size={14} aria-hidden="true" /> : <Cloud size={14} aria-hidden="true" />}
+      {label}
+    </span>
   );
 }
 
