@@ -160,3 +160,20 @@ def test_multi_day_official_event_counts_on_every_day_it_runs():
 def test_loader_keeps_the_end_date_of_the_scraped_fair():
     fair = next(e for e in real_data.load_official_events() if e["name"].startswith("Jakarta Fair Kemayoran"))
     assert fair["end_date_raw"] == "2026-7-12"
+
+
+def test_official_event_with_attendance_but_no_location_is_not_quantified(
+    api_client, auth_headers, quiet_inputs, monkeypatch
+):
+    scraped = {
+        "date_raw": TOMORROW.isoformat(),
+        "name": "Pesta Contoh",
+        "location": "OPEN SPACE",
+        "expected_attendance": 30_000,
+    }
+    monkeypatch.setattr(baseline_module, "load_official_events", lambda: [scraped])
+    body = _get(api_client, auth_headers).json()
+    (event,) = _driver(body, "event")
+    assert event["effect_tons"] is None and event["effect_reason"] == "location_unknown"
+    assert event["detail"]["kecamatan"] == [] and event["detail"]["attendance"] == 30_000
+    assert body["with_events_total_t"] == body["total_tonnage_t"]

@@ -416,10 +416,13 @@ def tomorrow_forecast(target_date: str | None = None) -> dict[str, Any]:
         attendance = int(event["attendance"] or 0)
         effect: float | None = None
         kecamatan: list[str] = []
-        if attendance > 0:
-            lat, lng = event["lat"], event["lng"]
-            if lat is None or lng is None:
-                lat, lng = VENUES["jakarta"][0].lat, VENUES["jakarta"][0].lng
+        lat, lng = event["lat"], event["lng"]
+        reason = None
+        if attendance > 0 and (lat is None or lng is None):
+            reason = "location_unknown"
+        elif attendance <= 0:
+            reason = "attendance_unknown"
+        if reason is None:
             with_event = build_outlook(
                 days=len(base["horizon"]["dates"]),
                 target_date=iso,
@@ -441,6 +444,7 @@ def tomorrow_forecast(target_date: str | None = None) -> dict[str, Any]:
                     "data_class": event["data_class"],
                 },
                 "effect_tons": effect,
+                "effect_reason": reason,
                 "effect_classification": "MODEL_OUTPUT",
                 "source": event["source"],
             }
