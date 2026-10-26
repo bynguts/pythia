@@ -217,7 +217,7 @@ export const s5Id = {
   s5_ana_tool_get_events: "Acara kota",
   s5_ana_tool_get_whatsapp_status: "Status WhatsApp",
   s5_ana_tool_get_data_provenance: "Sumber data",
-  s5_ana_tool_run_scenario: "Skenario bagaimana-jika",
+  s5_ana_tool_run_scenario: "Cek rencana",
   s5_ana_tool_get_readiness: "Kesiapan",
   s5_ana_tool_get_daily_recap: "Rekap harian",
 };

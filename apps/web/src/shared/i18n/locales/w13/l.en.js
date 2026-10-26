@@ -2,7 +2,7 @@
 export const lEn = {
   // Landing: announcement, nav, hero
   l_announce_new: "New",
-  l_announce_text: "Ana now answers what-if questions about tomorrow's plan, in English and Bahasa Indonesia",
+  l_announce_text: "Ana, Pythia's AI assistant, now reads tomorrow's forecast, trucks and gate slots for you",
   l_nav_label: "Main",
   l_nav_product: "Product",
   l_nav_how: "How it works",
@@ -131,7 +131,7 @@ export const lEn = {
   l_f7_t: "Driver app",
   l_f7_b: "Offline-first phone app with AR turn-by-turn and pre-trip checks.",
   l_f8_t: "Ana, the assistant",
-  l_f8_b: "Answers what-ifs from the same data, and says when it can't.",
+  l_f8_b: "Answers from the same data you see, using tools, and says when it can't.",
   l_day1_h: "What changes on day one",
   l_day1_a_v: "1,233",
   l_day1_a_t: "trucks a day into Bantargebang",

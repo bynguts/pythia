@@ -216,7 +216,7 @@ export const s5En = {
   s5_ana_tool_get_events: "City events",
   s5_ana_tool_get_whatsapp_status: "WhatsApp status",
   s5_ana_tool_get_data_provenance: "Data sources",
-  s5_ana_tool_run_scenario: "What-if scenario",
+  s5_ana_tool_run_scenario: "Plan check",
   s5_ana_tool_get_readiness: "Readiness",
   s5_ana_tool_get_daily_recap: "Daily recap",
 };
