@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { CalendarCheck, Camera, Download, FileText, MessageCircle, Send, Wrench } from "lucide-react";
+import { CalendarCheck, Camera, Download, FileText, Info, MessageCircle, Send, Wrench } from "lucide-react";
 import { apiPost } from "../../shared/api/client.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { Button } from "../../shared/ui/Button.jsx";
@@ -211,6 +211,35 @@ export function ReportsView() {
 
   const missing = recap.evidence.stops_missing_evidence;
 
+  // Value per 1,000 gate trips (SIMULATED x ASSUMPTION): every measure at low, base and high,
+  // so the least favourable case sits next to the central one.
+  const vm = data.valueModel;
+  const VM_LEVELS = ["low", "base", "high"];
+  const vmMeasures = [
+    ["wait_without", (s) => number(s.without.wait_minutes_per_truck, 1)],
+    ["wait_with", (s) => number(s.with.wait_minutes_per_truck, 1)],
+    ["truck_h", (s) => number(s.queue_truck_hours_returned)],
+    ["driver_h", (s) => number(s.driver_hours_returned)],
+    ["fuel", (s) => number(s.idle_fuel_litres_avoided)],
+    ["alert", (s) => `${number(s.without.trips_over_alert, 1)} → ${number(s.with.trips_over_alert, 1)}`],
+  ];
+  const vmRows = vm
+    ? vmMeasures.map(([key, cell]) => ({
+        key,
+        ...Object.fromEntries(VM_LEVELS.map((level) => [level, cell(vm.scenarios[level])])),
+      }))
+    : [];
+  const vmColumns = [
+    {
+      key: "measure",
+      label: t("s5_vm_col_measure"),
+      render: (row) => (
+        <span className="rp-strong">{fill(t(`s5_vm_row_${row.key}`), { m: vm?.gate_alert_minutes })}</span>
+      ),
+    },
+    ...VM_LEVELS.map((level) => ({ key: level, label: t(`s5_vm_${level}`), align: "right" })),
+  ];
+
   return (
     <div className="rp" data-testid="reports-page" data-date={recap.date}>
       {failed && <OfflineBanner since={loadedAt} />}
@@ -358,6 +387,85 @@ export function ReportsView() {
               empty={<p className="rp-empty">{t("s5_rp_ex_empty")}</p>}
             />
           </Card>
+
+          {vm && (
+            <section className="rp-value" aria-labelledby="rp-value-title" data-testid="value-model">
+              <header className="rp-value-head">
+                <div>
+                  <h2 id="rp-value-title">{t("s5_vm_title")}</h2>
+                  <p className="rp-note">{t("s5_vm_sub")}</p>
+                </div>
+                <Tag tone="model" title={t("s5_vm_tag_hint")} data-testid="value-model-tag">
+                  {t("s5_vm_tag")}
+                </Tag>
+              </header>
+              <div className="rp-stats is-three" role="group" aria-label={t("s5_vm_levels_label")}>
+                {VM_LEVELS.map((level) => (
+                  <div className="rp-stat" key={level} data-testid={`value-model-${level}`}>
+                    <span className="rp-stat-k">{t(`s5_vm_${level}`)}</span>
+                    <strong className="rp-stat-v" data-provenance="model">
+                      {number(vm.scenarios[level].queue_truck_hours_returned)}
+                    </strong>
+                    <span className="rp-stat-n">{t(`s5_vm_${level}_sub`)}</span>
+                  </div>
+                ))}
+              </div>
+              <Card
+                title={t("s5_vm_table_title")}
+                titleId="rp-value-table-title"
+                aside={t("s5_vm_table_aside")}
+                flush
+                data-testid="value-model-table"
+              >
+                <DataTable
+                  className="rp-table"
+                  caption={t("s5_vm_table_title")}
+                  columns={vmColumns}
+                  rows={vmRows}
+                  rowKey={(row) => row.key}
+                />
+              </Card>
+              <details className="metric-method" data-testid="value-model-params">
+                <summary>
+                  <Info size={14} aria-hidden="true" /> {t("s5_vm_params")}
+                </summary>
+                <ul className="rp-value-params">
+                  {vm.parameters.map((param) => (
+                    <li key={param.key} data-testid={`value-model-param-${param.key}`}>
+                      <span className="rp-stat-top">
+                        <strong>{lang === "id" ? param.label_id : param.label}</strong>
+                        {param.assumption ? (
+                          <Tag tone="warn">{t("s5_vm_assumption")}</Tag>
+                        ) : (
+                          <Tag tone="model">{t("s5_vm_simulated")}</Tag>
+                        )}
+                      </span>
+                      <small>
+                        {fill(t("s5_vm_range"), {
+                          l: number(param.low, 1),
+                          b: number(param.base, 1),
+                          h: number(param.high, 1),
+                          u: t(`s5_vm_unit_${param.unit.replace("/", "_")}`),
+                        })}
+                      </small>
+                      <small>{lang === "id" ? param.rationale_id : param.rationale}</small>
+                      {param.sources.length > 0 && (
+                        <small className="rp-dim">
+                          {fill(t("s5_vm_source"), { s: param.sources.join(", ") })}
+                        </small>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {vm.omitted.map((row) => (
+                  <small key={row.key}>
+                    {fill(t(`s5_vm_omit_${row.key}`), { m: vm.gate_alert_minutes })}
+                  </small>
+                ))}
+                <p className="rp-note">{lang === "id" ? vm.note_id : vm.note}</p>
+              </details>
+            </section>
+          )}
         </div>
 
         <div className="rp-right">

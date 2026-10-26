@@ -6,13 +6,14 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.deps import require_permission
+from app.api.deps import require_any_permission, require_permission
 from app.api.routers.fleet import fleet_status_overview
 from app.api.routers.forecast import predictions_kecamatan
 from app.api.schemas import AssistantRequest
 from app.api.state import dispatch_center, history_store
 from app.assistant.assistant import answer_with_openai_if_configured, build_executive_summary
 from app.fleet.data import command_center_snapshot
+from app.fleet.value_model import value_model_from_simulation
 from app.forecast.engine import simulate_staggered_dispatch
 from app.forecast.weather import fetch_jakarta_weather_forecast
 
@@ -51,6 +52,21 @@ def assistant_query(
         "assistant_query", {"question": payload.question, "provider": result["provider"]}
     )
     return result
+
+
+@router.get("/api/reports/value-model")
+def value_model_report(
+    _role: str = Depends(require_any_permission("dashboard:read", "reports:read")),
+) -> dict:
+    """Truck-hours, driver hours and idle litres per 1,000 gate trips, without vs with the stagger.
+
+    SIMULATED x ASSUMPTION: the waits come from the gate-queue simulation, the rest are
+    labelled assumptions; no rupiah figures (the gain is capacity and safety, not cash).
+    """
+    model = value_model_from_simulation()
+    if model is None:
+        raise HTTPException(status_code=503, detail="No daily arrival data to simulate the TPA queue.")
+    return model
 
 
 @router.get("/api/reports/executive-summary")

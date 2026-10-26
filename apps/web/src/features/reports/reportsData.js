@@ -86,7 +86,7 @@ export async function loadReports() {
   const today = jakartaDate();
   const tomorrow = jakartaDate(1);
   const dates = Array.from({ length: DAYS }, (_, index) => jakartaDate(index - (DAYS - 1)));
-  const [recaps, exceptions, damage, events, plans, suitability, forecast] = await Promise.all([
+  const [recaps, exceptions, damage, events, plans, suitability, forecast, valueModel] = await Promise.all([
     Promise.allSettled(dates.map((date) => apiGet(`/recap/daily?date=${date}`))),
     Promise.allSettled([apiGet("/driver/exceptions")]),
     Promise.allSettled([apiGet("/damage-reports")]),
@@ -95,6 +95,8 @@ export async function loadReports() {
     Promise.allSettled([apiGet("/ml/suitability")]),
     // Tomorrow's tonnes come from the same forecast the Tomorrow page prints, not the plan's demand.
     Promise.allSettled([apiGet(`/forecast/tomorrow?date=${tomorrow}`)]),
+    // Value per 1,000 gate trips: SIMULATED x ASSUMPTION, the same queue simulation as the TPA tab.
+    Promise.allSettled([apiGet("/reports/value-model")]),
   ]);
   const days = recaps.map((result, index) => ({ date: dates[index], recap: value(result) }));
   const recap = days[days.length - 1].recap;
@@ -110,5 +112,6 @@ export async function loadReports() {
     carried: carriedItems(damageBody, planList, tomorrow),
     backtest: value(suitability[0])?.monthly_backtest?.landfill_month || null,
     tomorrowTons: value(forecast[0])?.total_tonnage_t ?? null,
+    valueModel: value(valueModel[0]),
   };
 }
