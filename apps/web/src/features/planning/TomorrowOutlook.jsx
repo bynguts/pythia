@@ -53,9 +53,124 @@ function dayChips(day, t, number) {
   return chips.slice(0, MAX_CHIPS);
 }
 
-// The week ahead (city-wide t/day with what moved each day) and the next three months of
-// Bantargebang intake with the error the model scored on real weighing data. Every input
-// fills itself; every figure and its evidence come from /api/forecast/outlook.
+// Tick step for the backtest chart: the smallest of 500 / 1,000 / 2,000 t that gives at most
+// five gridline intervals over the data.
+function ticksFor(values) {
+  let step = 500;
+  const bounds = () => [
+    Math.floor(Math.min(...values) / step) * step,
+    Math.ceil(Math.max(...values) / step) * step,
+  ];
+  while ((bounds()[1] - bounds()[0]) / step > 5) step *= 2;
+  const [lo, hi] = bounds();
+  const ticks = [];
+  for (let v = lo; v <= hi; v += step) ticks.push(v);
+  return { lo, hi: hi > lo ? hi : lo + step, ticks };
+}
+
+// Actual weighed intake vs the model's one-month-ahead forecast for every backtested month,
+// Lebaran months shaded. The SVG stretches to the plot box (strokes do not scale); labels and
+// the hovered month's markers are HTML so they never distort. A hidden table carries the rows.
+function BacktestChart({ rows, t, number, monthLabel }) {
+  const n = rows.length;
+  const [active, setActive] = useState(n - 1);
+  const { lo, hi, ticks } = ticksFor(rows.flatMap((r) => [r.actual, r.model]));
+  const x = (i) => ((i + 0.5) / n) * 100;
+  const y = (v) => 100 - ((v - lo) / (hi - lo)) * 100;
+  const line = (key) => rows.map((r, i) => `${i ? "L" : "M"}${x(i)},${y(r[key])}`).join("");
+  const at = Math.min(active, n - 1);
+  const row = rows[at];
+  return (
+    <figure className="tmr-ol-bt" data-testid="tmr-outlook-backtest">
+      <div className="tmr-ol-bt-legend" aria-hidden="true">
+        <span className="tmr-ol-bt-key is-actual">{t("ol_bt_actual")}</span>
+        <span className="tmr-ol-bt-key is-model">{t("ol_bt_model")}</span>
+        <span className="tmr-ol-bt-key is-lebaran">{t("ol_bt_lebaran")}</span>
+      </div>
+      <div className="tmr-ol-bt-plot" aria-hidden="true" onPointerLeave={() => setActive(n - 1)}>
+        {ticks.map((v) => (
+          <span key={v} className="tmr-ol-bt-tick" style={{ top: `${y(v)}%` }}>
+            {number(v)}
+          </span>
+        ))}
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
+          {rows.map((r, i) =>
+            r.lebaran ? (
+              <rect
+                key={r.month}
+                className="tmr-ol-bt-band"
+                x={(i / n) * 100}
+                width={100 / n}
+                y="0"
+                height="100"
+              />
+            ) : null,
+          )}
+          {ticks.map((v) => (
+            <line key={v} className="tmr-ol-bt-grid" x1="0" x2="100" y1={y(v)} y2={y(v)} />
+          ))}
+          <line className="tmr-ol-bt-guide" x1={x(at)} x2={x(at)} y1="0" y2="100" />
+          <path className="tmr-ol-bt-actual" d={line("actual")} />
+          <path className="tmr-ol-bt-model" d={line("model")} />
+          {rows.map((r, i) => (
+            <rect
+              key={r.month}
+              className="tmr-ol-bt-hit"
+              x={(i / n) * 100}
+              width={100 / n}
+              y="0"
+              height="100"
+              onPointerEnter={() => setActive(i)}
+            />
+          ))}
+        </svg>
+        <span className="tmr-ol-bt-dot is-actual" style={{ left: `${x(at)}%`, top: `${y(row.actual)}%` }} />
+        <span className="tmr-ol-bt-dot is-model" style={{ left: `${x(at)}%`, top: `${y(row.model)}%` }} />
+      </div>
+      <div className="tmr-ol-bt-axis" aria-hidden="true">
+        <span>{monthLabel(rows[0].month)}</span>
+        <span>{monthLabel(rows[n - 1].month)}</span>
+      </div>
+      <p className="tmr-ol-bt-readout" data-testid="tmr-outlook-backtest-readout" aria-hidden="true">
+        {t("ol_bt_readout")
+          .replace("{month}", monthLabel(row.month))
+          .replace("{actual}", number(row.actual))
+          .replace("{model}", number(row.model))}
+        {row.lebaran ? ` · ${t("ol_bt_lebaran")}` : ""}
+      </p>
+      {/* A table ignores the 1px sr-only box, so the wrapper clips it. */}
+      <div className="sr-only">
+        <table>
+          <caption>{t("ol_months_label")}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{t("ol_bt_month")}</th>
+              <th scope="col">{t("ol_bt_actual")}</th>
+              <th scope="col">{t("ol_bt_model")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.month} data-testid="tmr-outlook-backtest-row" data-month={r.month}>
+                <th scope="row">
+                  {monthLabel(r.month)}
+                  {r.lebaran ? ` (${t("ol_bt_lebaran")})` : ""}
+                </th>
+                <td>{number(r.actual)}</td>
+                <td>{number(r.model)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </figure>
+  );
+}
+
+// The week ahead (city-wide t/day with what moved each day) and the Bantargebang intake model's
+// backtest on real weighing data: actual vs model per month, its error against the best simple
+// rule and where the gain comes from. Next months show a figure only inside the backtested
+// horizon. Every input fills itself; every figure comes from /api/forecast/outlook.
 export function OutlookSection() {
   const { t, lang } = useLanguage();
   const locale = localeFor(lang);
@@ -72,6 +187,11 @@ export function OutlookSection() {
 
   const number = (value, digits = 0) =>
     value == null ? "—" : Number(value).toLocaleString(locale, { maximumFractionDigits: digits });
+  // Percentages keep one decimal ("5.0%", not "5%") so model and rule read side by side.
+  const pct = (value) =>
+    value == null
+      ? "—"
+      : Number(value).toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const days = outlook?.week?.days || [];
   const intake = outlook?.monthly_intake;
   const months = intake?.available ? intake.months : [];
@@ -88,12 +208,24 @@ export function OutlookSection() {
   const monthLabel = (ym) =>
     isoDate(`${ym}-01`).toLocaleDateString(locale, { month: "short", year: "numeric" });
   const learned = outlook?.learned_correction;
+  // "Nov 2026–Jan 2027", or one value when the list holds one.
+  const span = (values) => (values.length > 1 ? `${values[0]}–${values.at(-1)}` : `${values[0]}`);
+  const within = months.filter((m) => m.within_backtested_horizon);
+  const beyond = months.filter((m) => !m.within_backtested_horizon);
+  const rows = backtest?.one_month_ahead || [];
   const evidence =
     backtest?.mape_model_pct != null
       ? t("ol_evidence")
-          .replace("{mape}", number(backtest.mape_model_pct, 1))
-          .replace("{period}", backtest.period || "—")
-          .replace("{naive}", number(backtest.mape_naive_pct, 1))
+          .replace("{n}", number(backtest.n_target_months))
+          .replace(
+            "{period}",
+            backtest.first_origin && backtest.last_origin
+              ? `${monthLabel(backtest.first_origin)}–${monthLabel(backtest.last_origin)}`
+              : backtest.period || "—",
+          )
+          .replace("{mape}", pct(backtest.mape_model_pct))
+          .replace("{naive}", pct(backtest.mape_naive_pct))
+          .replace("{max}", maxHorizon)
       : t("ol_evidence_none");
 
   return (
@@ -186,38 +318,53 @@ export function OutlookSection() {
           )}
 
           <h3 className="tmr-ol-label">{t("ol_months")}</h3>
-          {months.length ? (
-            <ol className="tmr-ol-months" aria-label={t("ol_months_label")} data-testid="tmr-outlook-months">
-              {months.map((month) => (
-                <li
-                  key={month.month}
-                  className="tmr-ol-month"
-                  data-testid="tmr-outlook-month"
-                  data-month={month.month}
-                  data-within={month.within_backtested_horizon ? "true" : "false"}
-                >
-                  <span className="tmr-ol-day-name">{monthLabel(month.month)}</span>
-                  <strong className="tmr-ol-value">
-                    {number(month.tons_per_day)} {t("hon_mi_unit")}
-                  </strong>
-                  <span className="tmr-ol-horizon">
-                    {(month.within_backtested_horizon ? t("ol_within") : t("ol_beyond"))
-                      .replace("{h}", month.horizon_months)
-                      .replace("{max}", maxHorizon)}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          ) : (
+          {rows.length > 0 && <BacktestChart rows={rows} t={t} number={number} monthLabel={monthLabel} />}
+          <p className="tmr-ol-note" data-testid="tmr-outlook-evidence">
+            {evidence}
+          </p>
+          {backtest?.lebaran_skill_pct != null && (
+            <p className="tmr-ol-note" data-testid="tmr-outlook-lebaran">
+              {t("ol_lebaran")
+                .replace("{lebaran}", pct(backtest.lebaran_skill_pct))
+                .replace("{normal}", pct(backtest.normal_skill_pct))}
+            </p>
+          )}
+          {within.length > 0 && (
+            <>
+              <h3 className="tmr-ol-label">{t("ol_next")}</h3>
+              <ol className="tmr-ol-months" aria-label={t("ol_next")} data-testid="tmr-outlook-months">
+                {within.map((month) => (
+                  <li
+                    key={month.month}
+                    className="tmr-ol-month"
+                    data-testid="tmr-outlook-month"
+                    data-month={month.month}
+                    data-within="true"
+                  >
+                    <span className="tmr-ol-day-name">{monthLabel(month.month)}</span>
+                    <strong className="tmr-ol-value">
+                      {number(month.tons_per_day)} {t("hon_mi_unit")}
+                    </strong>
+                    <span className="tmr-ol-horizon">{t("ol_within").replace("{max}", maxHorizon)}</span>
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+          {beyond.length > 0 && (
+            <p className="tmr-ol-note" data-testid="tmr-outlook-months-beyond">
+              {t("ol_beyond")
+                .replace("{months}", span(beyond.map((m) => monthLabel(m.month))))
+                .replace("{h}", span(beyond.map((m) => m.horizon_months)))
+                .replace("{through}", intake.fitted_through ? monthLabel(intake.fitted_through) : "—")
+                .replace("{max}", maxHorizon)}
+            </p>
+          )}
+          {!months.length && (
             <p className="tmr-ol-note" data-testid="tmr-outlook-months-unavailable">
               {t("ol_unavailable")}
             </p>
           )}
-          <p className="tmr-ol-note" data-testid="tmr-outlook-evidence">
-            {evidence}
-            {intake?.fitted_through &&
-              ` · ${t("ol_fitted").replace("{month}", monthLabel(intake.fitted_through))}`}
-          </p>
         </>
       )}
     </Card>

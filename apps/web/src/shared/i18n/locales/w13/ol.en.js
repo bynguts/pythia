@@ -1,4 +1,4 @@
-// Outlook on the Tomorrow page (en): the week ahead and the next three months. Keys are
+// Outlook on the Tomorrow page (en): the week ahead and the monthly model backtest. Keys are
 // prefixed "ol_"; only the outlook lane edits this file.
 export const olEn = {
   ol_title: "Outlook",
@@ -16,13 +16,22 @@ export const olEn = {
   ol_weekend: "Weekend",
   ol_event: "{name}",
   ol_event_title: "On the city calendar or a submitted permit",
-  ol_months: "Next 3 months · Bantargebang intake, t/day",
-  ol_months_label: "Bantargebang intake per day, next 3 months",
+  ol_months: "Bantargebang intake · weighed vs model, t/day",
+  ol_months_label: "Bantargebang intake per month: weighed vs the model one month ahead, t/day",
   ol_within: "Within the backtested 1–{max} months",
-  ol_beyond: "{h} months past the data · beyond the backtested 1–{max}",
-  ol_evidence: "Error {mape}% on real weighing data (backtest {period}) vs {naive}% for the best simple rule",
+  ol_beyond:
+    "No figure for {months}: {h} months past the latest weighing data ({through}), beyond the backtested 1–{max} months",
+  ol_evidence:
+    "Calendar-adjusted 12-month model, backtested on {n} months of real Bantargebang weighing data ({period}): error {mape}% vs {naive}% for the best simple rule, 1–{max} months ahead",
   ol_evidence_none: "Backtest error: —",
-  ol_fitted: "Data through {month}",
+  ol_lebaran:
+    "The gain comes from Lebaran months (Ramadan and mudik, shaded): {lebaran}% less error than the simple rule there, {normal}% in normal months",
+  ol_next: "Next months · within the backtested horizon, t/day",
+  ol_bt_actual: "Weighed",
+  ol_bt_model: "Model, 1 month ahead",
+  ol_bt_lebaran: "Lebaran",
+  ol_bt_month: "Month",
+  ol_bt_readout: "{month} · weighed {actual} · model {model} t/day",
   ol_loading: "Loading the outlook",
   ol_error: "The outlook couldn't load.",
   ol_unavailable: "—",

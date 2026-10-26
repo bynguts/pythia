@@ -272,7 +272,8 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "description": (
                 "Prakiraan ke depan tanpa input manual: ton/hari se-kota untuk 7 hari (hari ini + 6) dengan "
                 "pendorongnya (cuaca Open-Meteo, acara resmi, izin, libur), dan asupan TPST Bantargebang "
-                "3 bulan ke depan dari model data timbangan nyata beserta galat backtest (MAPE). Hanya baca. "
+                "3 bulan ke depan (model rata-rata 12 bulan yang disesuaikan kalender, diuji balik pada data timbangan "
+                "nyata; bulan di luar horizon backtest 1-3 bulan ditandai) beserta galat backtest (MAPE). Hanya baca. "
                 "Pakai untuk 'berapa ton minggu depan / bulan depan'. Semua angka MODEL OUTPUT."
             ),
             "parameters": {"type": "object", "properties": {}},
@@ -437,11 +438,18 @@ _TOOLS_IMPL: dict[str, Any] = {
 
 
 def _outlook_tool() -> dict[str, Any]:
-    """The outlook without per-event detail, so the answer stays under the tool output limit."""
+    """The outlook without per-event detail or the per-month backtest rows, so the answer stays
+    under the tool output limit (the pooled backtest error and its Lebaran split stay)."""
     outlook = outlook_payload()
     week = outlook["week"]
+    intake = outlook["monthly_intake"]
+    backtest = intake.get("backtest")
     return {
         **outlook,
+        "monthly_intake": {
+            **intake,
+            "backtest": {k: v for k, v in backtest.items() if k != "one_month_ahead"} if backtest else None,
+        },
         "week": {
             **{k: v for k, v in week.items() if k != "days"},
             "days": [

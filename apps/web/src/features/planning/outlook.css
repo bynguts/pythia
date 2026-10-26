@@ -103,3 +103,121 @@
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
+
+/* Monthly model backtest: weighed (ink-3) vs model (the one accent), Lebaran months as a
+   flat neutral band. Thin non-scaling strokes; tick and month labels are HTML. */
+.tmr-ol-bt {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+}
+.tmr-ol-bt-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  color: var(--f-ink-2);
+  font-size: 11px;
+}
+.tmr-ol-bt-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tmr-ol-bt-key::before {
+  content: "";
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--f-ink-3);
+}
+.tmr-ol-bt-key.is-model::before {
+  background: var(--f-green);
+}
+.tmr-ol-bt-key.is-lebaran::before {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--f-hover);
+  box-shadow: inset 0 0 0 1px var(--f-line-3);
+}
+.tmr-ol-bt-plot {
+  position: relative;
+  height: 128px;
+  margin: 6px 4px 0 44px;
+}
+.tmr-ol-bt-plot svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.tmr-ol-bt-plot svg * {
+  vector-effect: non-scaling-stroke;
+}
+.tmr-ol-bt-band {
+  fill: var(--f-hover);
+}
+.tmr-ol-bt-grid {
+  stroke: var(--f-line-3);
+  stroke-width: 1;
+}
+.tmr-ol-bt-guide {
+  stroke: var(--f-faint);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+.tmr-ol-bt-actual,
+.tmr-ol-bt-model {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.tmr-ol-bt-actual {
+  stroke: var(--f-ink-3);
+}
+.tmr-ol-bt-model {
+  stroke: var(--f-green);
+}
+.tmr-ol-bt-hit {
+  fill: transparent;
+}
+.tmr-ol-bt-tick {
+  position: absolute;
+  right: calc(100% + 6px);
+  transform: translateY(-50%);
+  color: var(--f-faint);
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.tmr-ol-bt-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--f-ink-3);
+  box-shadow: 0 0 0 2px var(--f-white);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.tmr-ol-bt-dot.is-model {
+  background: var(--f-green);
+}
+.tmr-ol-bt-axis {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 4px 0 44px;
+  color: var(--f-faint);
+  font-size: 10px;
+}
+.tmr-ol-bt-readout {
+  margin: 0;
+  color: var(--f-ink-2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}

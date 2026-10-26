@@ -1,7 +1,8 @@
 // Outlook on the Tomorrow page: the week ahead (city-wide t/day with what moved each day) and
-// the next three months of Bantargebang intake with its backtest error, all from
-// /api/forecast/outlook. The stubbed tests pin the data; the live test checks the real API
-// agrees with tomorrow's forecast card.
+// the Bantargebang intake model's backtest (weighed vs model per month, error vs the best simple
+// rule, the Lebaran split), all from /api/forecast/outlook. Next months carry a figure only
+// inside the backtested horizon. The stubbed tests pin the data; the live test checks the real
+// API agrees with tomorrow's forecast card.
 import { expect, test } from "@playwright/test";
 import { signIn } from "./lib/tomorrow.js";
 
@@ -41,7 +42,15 @@ function withCorrection(correction, days) {
   }));
 }
 
-function outlook({ backtest = true, learned = null } = {}) {
+const BACKTEST_ROWS = [
+  { month: "2025-01", actual: 7738, model: 7594, naive: 7611, lebaran: false },
+  { month: "2025-02", actual: 7704, model: 7587, naive: 7602, lebaran: false },
+  { month: "2025-03", actual: 7989, model: 7878, naive: 7588, lebaran: true },
+  { month: "2025-04", actual: 6857, model: 7334, naive: 7573, lebaran: true },
+  { month: "2025-05", actual: 7516, model: 7524, naive: 7543, lebaran: false },
+];
+
+function outlook({ backtest = true, learned = null, months = null } = {}) {
   const correction = learned ?? { active: false, factor: 1, pct: 0, n_days: 1, min_days: 3, clamp_pct: 25 };
   return {
     learned_correction: correction,
@@ -63,13 +72,25 @@ function outlook({ backtest = true, learned = null } = {}) {
       available: true,
       fitted_through: "2026-04",
       backtested_horizon_months: [1, 2, 3],
-      months: [
+      months: months ?? [
         { month: "2026-05", tons_per_day: 7311, horizon_months: 1, within_backtested_horizon: true },
         { month: "2026-06", tons_per_day: 7322, horizon_months: 2, within_backtested_horizon: true },
         { month: "2026-07", tons_per_day: 7333, horizon_months: 4, within_backtested_horizon: false },
       ],
       backtest: backtest
-        ? { mape_model_pct: 3.87, mape_naive_pct: 4.61, period: "2022-12..2026-04", target_class: "real" }
+        ? {
+            mape_model_pct: 3.87,
+            mape_naive_pct: 4.61,
+            period: "2022-12..2026-04",
+            first_origin: "2025-01",
+            last_origin: "2025-05",
+            n_target_months: 5,
+            target_class: "real",
+            lebaran_months: ["2025-03", "2025-04"],
+            lebaran_skill_pct: 38.5,
+            normal_skill_pct: 0.4,
+            one_month_ahead: BACKTEST_ROWS,
+          }
         : null,
     },
   };
@@ -101,15 +122,52 @@ test("the outlook shows seven model days with drivers, today and tomorrow marked
 test("the months carry the backtest evidence from the API, never a hardcoded figure", async ({ page }) => {
   await page.route(/\/api\/forecast\/outlook$/, (route) => route.fulfill({ json: outlook() }));
   await signIn(page, { lang: "id", path: "/app/tomorrow" });
-  const months = page.getByTestId("tmr-outlook-month");
-  await expect(months).toHaveCount(3);
-  await expect(months.nth(0)).toHaveAttribute("data-within", "true");
-  await expect(months.nth(0)).toContainText("7.311 t/hari");
-  await expect(months.nth(2)).toHaveAttribute("data-within", "false");
-  await expect(months.nth(2)).toContainText("4 bulan setelah data");
+  // Weighed vs model for every backtested month, Lebaran months marked.
+  const rows = page.getByTestId("tmr-outlook-backtest-row");
+  await expect(rows).toHaveCount(5);
+  await expect(rows.nth(3)).toContainText("Lebaran");
+  await expect(rows.nth(3)).toContainText("6.857");
+  await expect(rows.nth(3)).toContainText("7.334");
+  await expect(page.getByTestId("tmr-outlook-backtest-readout")).toContainText(
+    "tertimbang 7.516 · model 7.524 t/hari",
+  );
   const evidence = page.getByTestId("tmr-outlook-evidence");
-  await expect(evidence).toContainText("Galat 3,9% pada data timbangan nyata");
-  await expect(evidence).toContainText("4,6%");
+  await expect(evidence).toContainText(
+    "Model rata-rata 12 bulan yang disesuaikan kalender, diuji balik (backtest) pada 5 bulan data timbangan nyata TPST Bantargebang",
+  );
+  await expect(evidence).toContainText("galat 3,9% vs 4,6%");
+  await expect(page.getByTestId("tmr-outlook-lebaran")).toContainText(
+    "galat 38,5% lebih kecil dari aturan sederhana di sana, 0,4% di bulan biasa",
+  );
+  // Only months inside the backtested horizon get a figure; the one past it is named only.
+  const months = page.getByTestId("tmr-outlook-month");
+  await expect(months).toHaveCount(2);
+  await expect(months.nth(0)).toContainText("7.311 t/hari");
+  const beyond = page.getByTestId("tmr-outlook-months-beyond");
+  await expect(beyond).toContainText("4 bulan setelah data timbangan terakhir");
+  await expect(beyond).not.toContainText("7.333");
+});
+
+test("months past the backtested horizon get no figure at all", async ({ page }) => {
+  const months = [
+    ["2026-11", 7],
+    ["2026-12", 8],
+    ["2027-01", 9],
+  ].map(([month, h]) => ({
+    month,
+    tons_per_day: 7247,
+    horizon_months: h,
+    within_backtested_horizon: false,
+  }));
+  await page.route(/\/api\/forecast\/outlook$/, (route) => route.fulfill({ json: outlook({ months }) }));
+  await signIn(page, { lang: "en", path: "/app/tomorrow" });
+  await expect(page.getByTestId("tmr-outlook-backtest")).toBeVisible();
+  await expect(page.getByTestId("tmr-outlook-month")).toHaveCount(0);
+  const beyond = page.getByTestId("tmr-outlook-months-beyond");
+  await expect(beyond).toContainText(
+    "No figure for Nov 2026–Jan 2027: 7–9 months past the latest weighing data",
+  );
+  await expect(page.getByTestId("tmr-outlook")).not.toContainText("7,247");
 });
 
 test("without a backtest the evidence reads a dash", async ({ page }) => {
@@ -118,6 +176,7 @@ test("without a backtest the evidence reads a dash", async ({ page }) => {
   );
   await signIn(page, { lang: "en", path: "/app/tomorrow" });
   await expect(page.getByTestId("tmr-outlook-evidence")).toContainText("Backtest error: —");
+  await expect(page.getByTestId("tmr-outlook-backtest")).toHaveCount(0);
 });
 
 test("the live outlook agrees with tomorrow's forecast card", async ({ page }) => {
@@ -129,8 +188,11 @@ test("the live outlook agrees with tomorrow's forecast card", async ({ page }) =
   await expect(tomorrow).toBeVisible({ timeout: 60000 });
   expect(await tomorrow.getAttribute("data-value")).toBe(await total.getAttribute("data-value"));
   await expect(page.getByTestId("tmr-outlook-day")).toHaveCount(7);
-  await expect(page.getByTestId("tmr-outlook-month")).toHaveCount(3);
-  await expect(page.getByTestId("tmr-outlook-evidence")).toContainText(/Error [\d.]+% on real weighing data/);
+  await expect(page.getByTestId("tmr-outlook-backtest-row")).toHaveCount(23);
+  await expect(page.getByTestId("tmr-outlook-evidence")).toContainText(
+    "Calendar-adjusted 12-month model, backtested on 23 months of real Bantargebang weighing data",
+  );
+  await expect(page.getByTestId("tmr-outlook-lebaran")).toContainText("The gain comes from Lebaran months");
 });
 
 test("the outlook says when it starts learning from the weighbridge", async ({ page }) => {

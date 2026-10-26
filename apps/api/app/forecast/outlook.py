@@ -4,8 +4,10 @@ Week: the city-wide daily forecast for today and the six days after it, the same
 `build_outlook` frame the Tomorrow page reads (Open-Meteo weather, the official event
 calendar, submitted permits, national holidays). A day Open-Meteo does not cover is
 flagged `beyond_weather_forecast` (the model then uses 0 mm). Months: the Bantargebang
-intake model (`ma12_calendar`, fitted on real weighing data) with its rolling-origin
-backtest error and `within_backtested_horizon` per month. Nobody types an input.
+intake model (`ma12_calendar`, calendar-adjusted 12-month level fitted on real weighing
+data) with `within_backtested_horizon` per month, and its rolling-origin backtest: the
+pooled error against the strongest naive rule, split into Lebaran and normal months, and
+actual vs the one-month-ahead forecast per backtested month. Nobody types an input.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ from app.api.state import _outlook_cache
 from app.core.env import today
 from app.forecast.baseline import build_outlook, day_drivers
 from app.forecast.engine import forecast_monthly_intake
-from app.forecast.forecast_metrics import monthly_backtest_metrics
+from app.forecast.forecast_metrics import load_forecast_evaluation
 from app.forecast.learning import corrected, learned_correction
 
 OUTLOOK_DAYS = 7
@@ -81,25 +83,31 @@ def _months() -> dict[str, Any]:
     if any(m["horizon_months"] < 1 for m in result["months"]):
         # The clock is still inside the observed data: start after the last observed month.
         result = forecast_monthly_intake(OUTLOOK_MONTHS)
-    backtest = monthly_backtest_metrics().get("landfill_month") or {}
-    return {
-        **result,
-        "backtest": {
-            key: backtest.get(key)
+    landfill = ((load_forecast_evaluation() or {}).get("resolutions") or {}).get("landfill_month") or {}
+    backtest = None
+    if landfill:
+        backtest = {
+            key: landfill.get(key)
             for key in (
                 "mape_model_pct",
                 "mape_naive_pct",
                 "strongest_naive",
                 "period",
                 "origins",
+                "first_origin",
+                "last_origin",
+                "n_target_months",
                 "horizons_months",
                 "target_class",
             )
         }
-        if backtest
-        else None,
-        "provenance": PROVENANCE,
-    }
+        # Where the gain over the naive rule comes from: Ramadan/Lebaran months vs the rest.
+        lebaran = landfill.get("calendar_months") or {}
+        backtest["lebaran_months"] = lebaran.get("months", [])
+        backtest["lebaran_skill_pct"] = lebaran.get("skill_pct")
+        backtest["normal_skill_pct"] = (landfill.get("normal_months") or {}).get("skill_pct")
+        backtest["one_month_ahead"] = landfill.get("one_month_ahead") or []
+    return {**result, "backtest": backtest, "provenance": PROVENANCE}
 
 
 def forecast_outlook() -> dict[str, Any]:

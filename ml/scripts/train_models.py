@@ -532,6 +532,19 @@ def summarize_backtest(fc: pd.DataFrame, eid_dates, *, keys=("origin", "h", "mon
     }
 
 
+def one_month_ahead_rows(fc: pd.DataFrame, eid_dates, *, naive: str, window=MUDIK_WINDOW_DAYS,
+                         model: str = MONTHLY_MODEL_NAME) -> list[dict]:
+    """Actual vs the 1-month-ahead model and naive forecast per target month (shown by the API)."""
+    h1 = fc[fc["h"] == 1]
+    pred = h1.pivot_table(index="month", columns="model", values="pred")
+    actual = h1.groupby("month")["actual"].first()
+    cal = month_calendar_features(pd.DatetimeIndex([pd.Timestamp(m + "-01") for m in pred.index]),
+                                  eid_dates, window)
+    return [{"month": m, "actual": _r(actual[m], 1), "model": _r(pred.loc[m, model], 1),
+             "naive": _r(pred.loc[m, naive], 1), "lebaran": bool(r["ram"] > 0 or r["mud"] > 0)}
+            for m, (_, r) in zip(pred.index, cal.iterrows(), strict=True)]
+
+
 def sensitivity_analysis(y: pd.Series, eid_dates) -> list[dict]:
     """Robustness of the result to the mudik window and the first origin ((0, 0) = ablation)."""
     rows = []
@@ -591,7 +604,9 @@ def run_monthly_pipeline(include_previous_prophet: bool = True) -> tuple[dict, d
     eid = [r["date"] for r in eid_records]
     extra = {"prophet_previous_config": _prophet_previous_config} if include_previous_prophet else None
     print("[Monthly] rolling-origin backtest (landfill):")
-    landfill = summarize_backtest(rolling_origin_backtest(y, eid, extra_models=extra), eid)
+    landfill_fc = rolling_origin_backtest(y, eid, extra_models=extra)
+    landfill = summarize_backtest(landfill_fc, eid)
+    landfill["one_month_ahead"] = one_month_ahead_rows(landfill_fc, eid, naive=landfill["strongest_naive"])
     print(f"  {landfill['model']} MAE {landfill['mae_model']} vs {landfill['strongest_naive']} "
           f"{landfill['mae_naive']}: {landfill['skill_pct']:+.1f}% {landfill['skill_ci90_pct']}")
     print("[Monthly] rolling-origin backtest (5 cities):")

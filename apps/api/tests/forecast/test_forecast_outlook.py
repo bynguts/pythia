@@ -93,6 +93,39 @@ def test_months_come_from_the_real_data_model_with_its_backtest(api_client, auth
     assert months["backtest"]["target_class"] == "real"
 
 
+def test_months_carry_actual_vs_model_for_every_backtested_month(api_client, auth_headers, week_inputs):
+    backtest = _get(api_client, auth_headers).json()["monthly_intake"]["backtest"]
+    rows = backtest["one_month_ahead"]
+    assert len(rows) == backtest["n_target_months"] == 23
+    assert rows[0]["month"] == backtest["first_origin"] and rows[-1]["month"] == backtest["last_origin"]
+    for row in rows:
+        assert row["actual"] > 0 and row["model"] > 0 and row["naive"] > 0
+    assert [r["month"] for r in rows if r["lebaran"]] == backtest["lebaran_months"]
+    # The gain over the naive rule comes from the Lebaran months, not the normal ones.
+    assert backtest["mape_model_pct"] < backtest["mape_naive_pct"]
+    assert backtest["lebaran_skill_pct"] > 20 > backtest["normal_skill_pct"]
+
+
+def test_backtest_rows_reproduce_from_the_real_data_with_the_training_code():
+    from app.core import paths
+    from app.forecast.forecast_metrics import load_forecast_evaluation
+    from app.forecast.monthly_refit import _train_models
+
+    tm = _train_models(paths.TRAIN_MODELS_SCRIPT)
+    if tm is None:
+        pytest.skip("ml/scripts/train_models.py is not shipped here")
+    y = tm.bantargebang_series(tm.load_bantargebang_monthly())
+    eid = [r["date"] for r in tm.load_idul_fitri_dates()]
+    fc = tm.rolling_origin_backtest(y, eid)
+    landfill = load_forecast_evaluation()["resolutions"]["landfill_month"]
+    assert tm.one_month_ahead_rows(fc, eid, naive=landfill["strongest_naive"]) == landfill["one_month_ahead"]
+    summary = tm.summarize_backtest(fc, eid)
+    assert (summary["mape_model_pct"], summary["mape_naive_pct"]) == (
+        landfill["mape_model_pct"],
+        landfill["mape_naive_pct"],
+    )
+
+
 def test_outlook_takes_no_scenario_inputs_and_needs_a_login(api_client, auth_headers, week_inputs):
     assert api_client.get("/api/forecast/outlook").status_code == 401
     plain = _get(api_client, auth_headers).json()
@@ -119,6 +152,12 @@ def test_ana_answers_next_week_and_next_month_from_the_outlook(api_client, week_
     first = outlook["week"]["days"][0]
     assert first["date"] in result["answer"] and "MODEL OUTPUT" in result["answer"]
     assert f"MAPE {outlook['monthly_intake']['backtest']['mape_model_pct']}%" in result["answer"]
-    assert outlook["monthly_intake"]["months"][0]["month"] in result["answer"]
+    intake = outlook["monthly_intake"]
+    assert intake["months"][0]["month"] in result["answer"]
+    assert "diuji balik pada 23 bulan data timbangan nyata" in result["answer"]
+    for month in intake["months"]:
+        # A month past the backtested horizon is named, never given a figure.
+        figure = f"{month['month']} {month['tons_per_day']:,.0f} t/hari"
+        assert (figure in result["answer"]) == month["within_backtested_horizon"]
     learned = outlook["learned_correction"]
     assert learned["classification"] == "LEARNED_FROM_OBSERVED" and "hari tertimbang" in result["answer"]

@@ -171,35 +171,45 @@ def _outlook_answer(result: dict[str, Any], lang: str) -> str:
         )
     ]
     if intake.get("available"):
-        within = "within" if en else "di dalam"
-        beyond = "beyond" if en else "di luar"
-        months = "; ".join(
-            f"{m['month']} {m['tons_per_day']:,.0f} t/"
-            + ("day" if en else "hari")
-            + f" ({within if m['within_backtested_horizon'] else beyond} "
-            + ("the 1-3 month backtest)" if en else "horizon backtest 1-3 bulan)")
-            for m in intake["months"]
-        )
-        mape = (intake.get("backtest") or {}).get("mape_model_pct")
-        error = (
-            (
-                f" Backtest error on real weighing data: {mape}% MAPE."
-                if en
-                else f" Galat backtest pada data timbangan nyata: MAPE {mape}%."
+        through = intake["fitted_through"]
+        within = [m for m in intake["months"] if m["within_backtested_horizon"]]
+        beyond = [m for m in intake["months"] if not m["within_backtested_horizon"]]
+        if within:
+            months = "; ".join(
+                f"{m['month']} {m['tons_per_day']:,.0f} t/" + ("day" if en else "hari") for m in within
             )
-            if mape is not None
-            else ""
-        )
-        parts.append(
-            (
-                f"Bantargebang intake, next months (MODEL OUTPUT, data through {intake['fitted_through']}): "
+            parts.append(
+                f"Bantargebang intake, next months (MODEL OUTPUT, data through {through}, within the "
+                f"1-3 month backtest): {months}."
                 if en
-                else f"Asupan TPST Bantargebang bulan ke depan (MODEL OUTPUT, data s.d. {intake['fitted_through']}): "
+                else f"Asupan TPST Bantargebang bulan ke depan (MODEL OUTPUT, data s.d. {through}, di dalam "
+                f"horizon backtest 1-3 bulan): {months}."
             )
-            + months
-            + "."
-            + error
-        )
+        if beyond:
+            span = f"{beyond[0]['month']}..{beyond[-1]['month']}"
+            ahead = f"{beyond[0]['horizon_months']}-{beyond[-1]['horizon_months']}"
+            parts.append(
+                f"No Bantargebang figure for {span}: {ahead} months past the weighing data (through "
+                f"{through}), beyond the backtested 1-3 months."
+                if en
+                else f"Tidak ada angka TPST Bantargebang untuk {span}: {ahead} bulan setelah data timbangan "
+                f"(s.d. {through}), di luar horizon backtest 1-3 bulan."
+            )
+        backtest = intake.get("backtest") or {}
+        if backtest.get("mape_model_pct") is not None:
+            n = backtest.get("n_target_months")
+            parts.append(
+                f"Calendar-adjusted 12-month model, backtested on {n} months of real Bantargebang weighing "
+                f"data: {backtest['mape_model_pct']}% MAPE vs {backtest['mape_naive_pct']}% for the best simple "
+                f"rule; the gain comes from Lebaran months ({backtest.get('lebaran_skill_pct')}% lower error "
+                f"there, {backtest.get('normal_skill_pct')}% in normal months)."
+                if en
+                else f"Model rata-rata 12 bulan yang disesuaikan kalender, diuji balik pada {n} bulan data "
+                f"timbangan nyata TPST Bantargebang: MAPE {backtest['mape_model_pct']}% vs "
+                f"{backtest['mape_naive_pct']}% untuk aturan sederhana terbaik; keunggulannya dari bulan Lebaran "
+                f"(galat {backtest.get('lebaran_skill_pct')}% lebih kecil di sana, "
+                f"{backtest.get('normal_skill_pct')}% di bulan biasa)."
+            )
     learned = result.get("learned_correction")
     if learned:
         if learned["active"]:
