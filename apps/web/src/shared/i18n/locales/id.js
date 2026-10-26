@@ -816,7 +816,7 @@ export const id = {
   asst_scn_note: "Prakiraan skenario, bukan pengamatan. Ana merekomendasikan; operator yang memutuskan.",
   asst_scn_open_twin: "Buka di Twin",
   asst_scn_open_xr: "Buka di XR",
-  asst_scn_review_plan: "Tinjau & setujui di Perencanaan",
+  asst_scn_review_plan: "Tinjau & setujui di Besok",
   asst_scn_assumed_crowd: "Jumlah pengunjung tidak disebut: diasumsikan {n} (preset twin terkecil).",
   asst_provider_local: "Parser lokal",
   asst_trace_title: "Langkah yang dijalankan Ana",

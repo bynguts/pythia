@@ -855,7 +855,7 @@ export const en = {
   asst_scn_note: "Scenario forecast, not an observation. Ana recommends; the operator decides.",
   asst_scn_open_twin: "Open in Twin",
   asst_scn_open_xr: "Open in XR",
-  asst_scn_review_plan: "Review & approve in Planning",
+  asst_scn_review_plan: "Review & approve in Tomorrow",
   asst_scn_assumed_crowd: "Crowd size not given: assumed {n} (the twin's smallest preset).",
   asst_provider_local: "Local parser",
   asst_trace_title: "What Ana ran",
