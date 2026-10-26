@@ -32,11 +32,6 @@
 }
 
 /* One column, 16 px gutters, centred on wider screens. */
-.driver-shell > :not(.driver-header):not(.driver-tabs):not(.driver-toast):not(.drv-top):not(.drv-body) {
-  width: min(var(--drv-width), calc(100% - 32px));
-  margin-inline: auto;
-  box-sizing: border-box;
-}
 
 html:has(.driver-shell.has-tabs) {
   scroll-padding-top: 72px;
@@ -46,123 +41,6 @@ html:has(.driver-shell.has-tabs) {
 .driver-shell ::selection {
   color: var(--ui-ink);
   background: var(--ui-forest-100);
-}
-
-.driver-mono {
-  font-family: var(--mono);
-  font-size: 0.92em;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
-}
-
-.driver-mono-label {
-  margin: 0;
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: var(--ls-label, 0.08em);
-  text-transform: uppercase;
-  color: var(--ui-muted);
-}
-
-/* ── App bar ── */
-
-.driver-header {
-  position: sticky;
-  top: 0;
-  z-index: var(--z-sticky);
-  min-height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-2) max(16px, calc((100% - var(--drv-width)) / 2));
-  border-bottom: 1px solid var(--ui-border);
-  background: var(--ui-surface);
-  box-sizing: border-box;
-}
-
-.driver-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.driver-brand-mark {
-  flex: none;
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  border-radius: 10px;
-  color: var(--ui-on-dark);
-  background: var(--ui-forest-900);
-}
-
-.driver-brand strong {
-  display: block;
-  font-family: var(--font-head);
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.15;
-  letter-spacing: -0.01em;
-}
-
-.driver-brand small {
-  display: block;
-  margin-top: 1px;
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ui-muted);
-}
-
-.driver-header-right {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-2);
-}
-
-.driver-offline,
-.driver-queued {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  border: 1px solid var(--ui-warning-line);
-  border-radius: var(--ui-radius-pill);
-  color: var(--ui-warning);
-  background: var(--ui-warning-soft);
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-/* "Ganti": a quiet cream pill drawn at 36 px inside a 44 px hit box. */
-.driver-link {
-  min-height: var(--tap-min);
-  padding: 0 14px;
-  border: var(--tap-inset) solid transparent;
-  border-radius: var(--ui-radius-pill);
-  color: var(--ui-ink);
-  background: var(--ui-cream);
-  background-clip: padding-box;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.driver-link:hover {
-  background-color: var(--ui-border);
 }
 
 /* ── Status strip: last live contact and the outbox ── */
@@ -285,10 +163,6 @@ html:has(.driver-shell.has-tabs) {
   border-color: var(--ui-prov-sim-line, var(--ui-warning-line));
 }
 
-.driver-count {
-  font-variant-numeric: tabular-nums;
-}
-
 /* ── Controls ── */
 
 .driver-btn {
@@ -340,16 +214,6 @@ html:has(.driver-shell.has-tabs) {
 }
 
 /* The one action of a screen: 64 px, full width. */
-.driver-btn-hero {
-  min-height: var(--drv-hero);
-  font-size: 18px;
-}
-
-.driver-btn.is-icon {
-  flex: none;
-  width: var(--drv-tap);
-  padding: 0;
-}
 
 .driver-btn:disabled {
   opacity: 0.45;
@@ -357,13 +221,7 @@ html:has(.driver-shell.has-tabs) {
 }
 
 .driver-btn:focus-visible,
-.driver-link:focus-visible,
-.driver-file:focus-visible,
-.driver-tab:focus-visible,
-.driver-exception-btn:focus-visible,
-.pretrip-choice:focus-visible,
-.driver-pick:focus-visible,
-.weigh-confirm input:focus-visible {
+.driver-tab:focus-visible {
   outline: 3px solid var(--ui-forest-500);
   outline-offset: 2px;
 }
@@ -377,11 +235,6 @@ html:has(.driver-shell.has-tabs) {
 
 .driver-actions > .driver-btn {
   flex: 1 1 auto;
-}
-
-.driver-actions > .driver-btn-hero,
-.driver-actions > .driver-maps-link:not(.is-icon) {
-  flex: 1 1 100%;
 }
 
 .driver-label {
@@ -419,43 +272,7 @@ textarea.driver-input {
   box-shadow: var(--ui-focus);
 }
 
-/* Photo inputs: a cream drop tile with the camera button drawn inside. */
-.driver-file {
-  width: 100%;
-  min-height: var(--drv-hero);
-  box-sizing: border-box;
-  padding: 7px;
-  border: 2px dashed var(--ui-border-strong);
-  border-radius: var(--drv-radius-control);
-  color: var(--ui-ink-soft);
-  background: var(--ui-cream);
-  font: inherit;
-  font-size: 15px;
-}
-
-.driver-file::file-selector-button {
-  min-height: 46px;
-  margin-right: var(--space-3);
-  padding: 0 18px;
-  border: 0;
-  border-radius: var(--ui-radius-pill);
-  color: var(--ui-on-dark);
-  background: var(--ui-forest-900);
-  font: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.driver-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: end;
-  gap: var(--space-3);
-}
-
-.driver-held,
-.driver-error {
+.driver-held {
   margin: var(--space-3) 0 0;
   padding: var(--space-3) 14px;
   border: 1px solid var(--ui-danger-line);
@@ -465,29 +282,6 @@ textarea.driver-input {
   font-size: 15px;
   font-weight: 700;
   line-height: 1.4;
-}
-
-.driver-photo-size {
-  margin: var(--space-2) 0 0;
-  color: var(--ui-ink-soft);
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-
-.driver-geotag {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: var(--space-2) 0 0;
-  color: var(--ui-forest-700);
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.driver-geotag.approx {
-  color: var(--ui-warning);
 }
 
 /* ── Trip identity (flat on the canvas, not a card) ── */
@@ -506,576 +300,7 @@ textarea.driver-input {
   overflow-wrap: anywhere;
 }
 
-.driver-trip-meta {
-  margin: 6px 0 0;
-  color: var(--ui-ink-soft);
-  font-size: 15px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-
-/* ── Pre-trip ── */
-
-.driver-progress {
-  height: 4px;
-  margin-bottom: var(--space-2);
-  overflow: hidden;
-  border-radius: var(--ui-radius-pill);
-  background: var(--ui-cream);
-}
-
-.driver-progress-fill {
-  height: 100%;
-  background: var(--ui-forest-700);
-  transform-origin: left;
-  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.pretrip-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.pretrip-item {
-  min-height: var(--drv-hero);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-1) 0;
-  border-bottom: 1px solid var(--ui-border);
-  font-size: 17px;
-  font-weight: 500;
-}
-
-.pretrip-choices {
-  flex: none;
-  display: flex;
-  gap: var(--space-2);
-}
-
-.pretrip-choice {
-  min-width: 64px;
-  min-height: var(--drv-tap);
-  padding: 0 var(--space-3);
-  border: 2px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-pill);
-  color: var(--ui-ink);
-  background: var(--ui-surface);
-  font: inherit;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.pretrip-choice.ok.active {
-  border-color: var(--ui-forest-700);
-  color: var(--ui-on-dark);
-  background: var(--ui-forest-700);
-}
-
-.pretrip-choice.tidak.active {
-  border-color: var(--ui-danger);
-  color: var(--ui-on-dark);
-  background: var(--ui-danger);
-}
-
-/* Done: one quiet row. */
-.driver-check-row {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-3);
-  padding: 14px 16px;
-}
-
-.driver-check-icon {
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  color: var(--ui-forest-900);
-  background: var(--ui-forest-100);
-}
-
-.driver-card.driver-check-row h2 {
-  font-size: 17px;
-}
-
-/* ── The current stop: the one task on the route screen ── */
-
-.stop-hero {
-  padding: 22px 20px 20px;
-}
-
-.stop-hero-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: var(--space-4);
-}
-
-.driver-card.stop-hero h2 {
-  display: block;
-  margin-top: 6px;
-  font-size: 30px;
-  line-height: 1.08;
-  overflow-wrap: anywhere;
-}
-
-.stop-hero-meta {
-  margin: var(--space-2) 0 0;
-  color: var(--ui-ink-soft);
-  font-size: 16px;
-  line-height: 1.4;
-}
-
-.stop-hero-count {
-  margin: 0;
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.stop-hero-count strong {
-  font-size: 32px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-}
-
-.stop-hero-count span {
-  color: var(--ui-muted);
-  font-size: 18px;
-}
-
-.stop-form {
-  margin-top: var(--space-4);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--ui-border);
-}
-
-.step-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.step {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 34px;
-  padding: 0 12px 0 6px;
-  border-radius: var(--ui-radius-pill);
-  color: var(--ui-ink-soft);
-  background: var(--ui-cream);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.step.current {
-  color: var(--ui-on-dark);
-  background: var(--ui-forest-900);
-}
-
-.step.done {
-  color: var(--ui-forest-900);
-  background: var(--ui-forest-100);
-}
-
-.step.done svg {
-  margin-left: 4px;
-}
-
-.step-num {
-  width: 24px;
-  height: 24px;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--ui-surface);
-  color: var(--ui-ink);
-  font-family: var(--mono);
-  font-size: 12px;
-}
-
-.weigh-list {
-  margin: var(--space-3) 0 0;
-  padding: 0;
-  list-style: none;
-  font-family: var(--mono);
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ui-ink);
-}
-
-.weigh-list li {
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--ui-border);
-}
-
-.weigh-feedback {
-  margin: var(--space-3) 0 0;
-  padding: var(--space-3) 0;
-  border-top: 1px solid var(--ui-border);
-  color: var(--ui-ink);
-  font-size: 14px;
-  line-height: 1.5;
-  font-variant-numeric: tabular-nums;
-}
-
-.weigh-manual {
-  margin-top: var(--space-2);
-}
-
-.weigh-confirm {
-  min-height: var(--drv-tap);
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-top: var(--space-3);
-  color: var(--ui-ink);
-  font-size: 15px;
-  cursor: pointer;
-}
-
-.weigh-confirm input {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  accent-color: var(--ui-forest-700);
-}
-
-/* An AR-captured arrival frame inside the stop form. */
-.arrival-ar {
-  margin: var(--space-3) 0 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2);
-  border-radius: var(--drv-radius-control);
-  background: var(--ui-cream);
-}
-
-.arrival-ar img {
-  flex: none;
-  width: 96px;
-  height: 64px;
-  object-fit: cover;
-  border-radius: 8px;
-}
-
-.arrival-ar figcaption {
-  color: var(--ui-ink-soft);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-/* ── Today's route: progress, order sketch, then flat stop rows ── */
-
-.driver-route-sketch {
-  margin: 0 0 var(--space-2);
-}
-
-.driver-route-sketch svg {
-  width: 100%;
-  height: auto;
-  display: block;
-  border-radius: var(--drv-radius-control);
-  background: var(--ui-canvas);
-  box-shadow: inset 0 0 0 1px var(--ui-border);
-}
-
-.driver-route-sketch figcaption {
-  margin: var(--space-2) 0 0;
-  font-size: 13px;
-}
-
-.driver-route-line {
-  fill: none;
-  stroke: var(--ui-muted);
-  stroke-width: 2;
-  stroke-dasharray: 5 4;
-}
-
-.driver-route-node circle {
-  fill: var(--ui-surface);
-  stroke: var(--ui-ink-soft);
-  stroke-width: 2;
-}
-
-.driver-route-node text {
-  fill: var(--ui-ink);
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.driver-route-node.done circle {
-  fill: var(--ui-forest-100);
-  stroke: var(--ui-forest-700);
-}
-
-.driver-route-node.done text {
-  fill: var(--ui-forest-900);
-}
-
-.driver-route-node.next circle {
-  fill: var(--ui-forest-900);
-  stroke: var(--ui-forest-900);
-}
-
-.driver-route-node.next text,
-.driver-route-node.dest text {
-  fill: var(--ui-on-dark);
-}
-
-.driver-route-node.dest circle {
-  fill: var(--ui-ink);
-  stroke: var(--ui-ink);
-}
-
-.driver-stop-list {
-  margin: var(--space-2) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.stop-row {
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 64px;
-  padding: 10px 0;
-  border-top: 1px solid var(--ui-border);
-}
-
-.stop-row-num {
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  border: 2px solid var(--ui-border-strong);
-  border-radius: 50%;
-  box-sizing: border-box;
-  color: var(--ui-ink);
-  font-family: var(--mono);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.stop-row-body {
-  min-width: 0;
-}
-
-.stop-row h3,
-.stop-row-name {
-  display: block;
-  margin: 0;
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
-}
-
-.stop-row-meta {
-  margin: 2px 0 0;
-  color: var(--ui-ink-soft);
-  font-size: 14px;
-  overflow-wrap: anywhere;
-}
-
-.stop-row-note {
-  margin: var(--space-1) 0 0;
-  color: var(--ui-warning);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.stop-row.is-done .stop-row-num {
-  border-color: transparent;
-  color: var(--ui-forest-900);
-  background: var(--ui-forest-100);
-}
-
-.stop-row.is-done h3 {
-  color: var(--ui-ink-soft);
-}
-
-.stop-row.is-next .stop-row-num {
-  border-color: transparent;
-  color: var(--ui-on-dark);
-  background: var(--ui-forest-900);
-}
-
-.stop-row.is-next .stop-row-meta {
-  color: var(--ui-forest-700);
-  font-weight: 600;
-}
-
-.stop-row.is-dest .stop-row-num {
-  border-color: transparent;
-  color: var(--ui-on-dark);
-  background: var(--ui-ink);
-}
-
-/* ── Landfill (TPA) screen ── */
-
-.driver-destination h2 {
-  margin-top: 6px;
-  font-size: 26px;
-  overflow-wrap: anywhere;
-}
-
-.driver-tpa-guide .driver-card-head h3 {
-  margin: 0;
-  font-family: var(--font-head);
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.driver-tpa-steps {
-  margin: var(--space-4) 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.driver-tpa-steps li {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
-  gap: var(--space-3);
-}
-
-.driver-tpa-steps strong {
-  display: block;
-  padding-top: 8px;
-  font-size: 17px;
-}
-
-.driver-tpa-icon {
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  color: var(--ui-ink-soft);
-  background: var(--ui-cream);
-}
-
-.driver-tpa-steps li.current .driver-tpa-icon {
-  color: var(--ui-on-dark);
-  background: var(--ui-forest-900);
-}
-
-.driver-tpa-steps li.done .driver-tpa-icon {
-  color: var(--ui-forest-900);
-  background: var(--ui-forest-100);
-}
-
-/* The gate button and the queue strip use the full width under the step icon. */
-.driver-tpa-steps .driver-btn,
-.driver-tpa-facts {
-  width: calc(100% + 52px);
-  margin-left: -52px;
-}
-
-.driver-tpa-steps .driver-btn {
-  min-height: var(--drv-hero);
-  margin-top: var(--space-2);
-  font-size: 18px;
-}
-
-/* Queue facts: one joined strip, numbers large and tabular. */
-.driver-tpa-facts {
-  margin-top: var(--space-3);
-  margin-bottom: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
-  overflow: hidden;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--drv-radius-control);
-}
-
-.driver-tpa-facts div {
-  padding: 10px 12px;
-  box-shadow: -1px 0 0 var(--ui-border);
-}
-
-.driver-tpa-facts dt {
-  color: var(--ui-ink-soft);
-  font-size: 13px;
-}
-
-.driver-tpa-facts dd {
-  margin: 4px 0 0;
-  font-family: var(--mono);
-  /* Shrinks on a 320 px phone so "± 176 truk" stays on one line. */
-  font-size: clamp(16px, 5vw, 20px);
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-}
-
-.driver-receipt {
-  margin-top: var(--space-5);
-  padding-top: var(--space-5);
-  border-top: 1px solid var(--ui-border);
-}
-
-.driver-camera {
-  position: relative;
-}
-
-.driver-camera-input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.driver-camera:focus-within {
-  outline: 3px solid var(--ui-forest-500);
-  outline-offset: 2px;
-}
-
-.driver-camera.is-disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
 /* ── Done ── */
-
-.driver-done {
-  padding: var(--space-6) 20px var(--space-5);
-  text-align: center;
-}
-
-.driver-done-icon {
-  width: 72px;
-  height: 72px;
-  margin: 0 auto var(--space-4);
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  color: var(--ui-forest-900);
-  background: var(--ui-forest-100);
-}
 
 .receipt-weights {
   margin: var(--space-4) 0 0;
@@ -1083,51 +308,7 @@ textarea.driver-input {
   border-top: 1px solid var(--ui-border);
 }
 
-.receipt-weight {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2px var(--space-3);
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--ui-border);
-}
-
-.receipt-weight dt {
-  color: var(--ui-ink);
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.receipt-weight dd {
-  margin: 0;
-  color: var(--ui-ink);
-  font-family: var(--mono);
-  font-size: 18px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-.receipt-weight .receipt-weight-note {
-  grid-column: 1 / -1;
-  color: var(--ui-ink-soft);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 400;
-  text-align: left;
-}
-
 /* ── Empty states ── */
-
-.driver-empty-icon {
-  width: 48px;
-  height: 48px;
-  margin-bottom: var(--space-3);
-  display: grid;
-  place-items: center;
-  border-radius: 14px;
-  color: var(--ui-ink-soft);
-  background: var(--ui-cream);
-}
 
 .driver-instruction-empty {
   margin: 0;
@@ -1141,35 +322,6 @@ textarea.driver-input {
   font-size: 19px;
   font-weight: 600;
   letter-spacing: -0.01em;
-}
-
-.history-list {
-  margin: var(--space-3) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.history-list li {
-  min-height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-2) 0;
-  border-top: 1px solid var(--ui-border);
-  font-size: 15px;
-}
-
-.history-list strong,
-.history-list small {
-  display: block;
-  overflow-wrap: anywhere;
-}
-
-.history-list small {
-  margin-top: 2px;
-  color: var(--ui-ink-soft);
-  font-size: 14px;
 }
 
 /* ── Alerts: safety, rejected work, expired session ── */
@@ -1217,15 +369,6 @@ textarea.driver-input {
   color: var(--ui-danger);
 }
 
-.driver-card.driver-session {
-  border-color: var(--ui-warning-line);
-  background: var(--ui-warning-soft);
-}
-
-.driver-card.driver-session h2 svg {
-  color: var(--ui-warning);
-}
-
 .driver-instruction-list,
 .driver-rejected-list {
   margin: 0;
@@ -1269,166 +412,6 @@ textarea.driver-input {
   margin-top: var(--space-1);
   color: var(--ui-danger);
   font-size: 14px;
-}
-
-/* ── Report a problem: glove-sized tiles with tinted icon squares ── */
-
-.driver-exception-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: var(--space-3);
-}
-
-.driver-exception-btn {
-  min-height: 112px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: 14px;
-  border: 2px solid var(--ui-border);
-  border-radius: 16px;
-  color: var(--ui-ink);
-  background: var(--ui-surface);
-  font: inherit;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.25;
-  text-align: left;
-  overflow-wrap: anywhere;
-  cursor: pointer;
-  transition: border-color 0.15s ease;
-}
-
-.driver-exception-btn svg {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  padding: 10px;
-  box-sizing: border-box;
-  border-radius: 12px;
-  color: var(--ui-ink);
-  background: var(--ui-cream);
-}
-
-.driver-exception-btn:hover {
-  border-color: var(--ui-border-strong);
-}
-
-.driver-exception-btn[aria-pressed="true"] {
-  border-color: var(--ui-forest-900);
-}
-
-.driver-exception-btn.is-danger {
-  color: var(--ui-danger);
-}
-
-.driver-exception-btn.is-danger svg {
-  color: var(--ui-danger);
-  background: var(--ui-danger-soft);
-}
-
-.driver-exception-sheet {
-  margin-top: var(--space-4);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--ui-border);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.driver-exception-kind {
-  margin: 0;
-  font-size: 18px;
-}
-
-.driver-exception-sheet .driver-camera {
-  width: 100%;
-}
-
-.driver-exception-log {
-  margin-top: var(--space-5);
-}
-
-/* ── Sign-in gate: truck search ── */
-
-.driver-search {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.driver-search svg {
-  position: absolute;
-  left: 16px;
-  color: var(--ui-ink-soft);
-  pointer-events: none;
-}
-
-.driver-search .driver-input::-webkit-search-cancel-button {
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.driver-search .driver-input {
-  min-height: var(--drv-hero);
-  padding-left: 48px;
-  font-family: var(--mono);
-  font-size: 20px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-}
-
-.driver-pick-list {
-  margin: var(--space-3) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.driver-pick-list li {
-  border-top: 1px solid var(--ui-border);
-}
-
-.driver-pick {
-  width: 100%;
-  min-height: var(--drv-hero);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: 10px 4px;
-  border: 0;
-  color: var(--ui-ink);
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.driver-pick:hover {
-  background: var(--ui-canvas);
-}
-
-.driver-pick strong {
-  display: block;
-  font-family: var(--mono);
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.driver-pick small {
-  display: block;
-  margin-top: 2px;
-  color: var(--ui-ink-soft);
-  font-size: 14px;
-}
-
-.driver-pick svg {
-  flex: none;
-  color: var(--ui-forest-700);
 }
 
 /* ── Bottom tab bar: four sections (drv "Tab Bar": white, hairline top,
@@ -1524,17 +507,8 @@ textarea.driver-input {
 }
 
 @media (max-width: 360px) {
-  .driver-card,
-  .stop-hero {
+  .driver-card {
     padding: 16px;
-  }
-
-  .driver-card.stop-hero h2 {
-    font-size: 26px;
-  }
-
-  .driver-row {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .driver-tab {
@@ -1543,10 +517,8 @@ textarea.driver-input {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .driver-progress-fill,
   .driver-btn,
-  .driver-tab,
-  .driver-exception-btn {
+  .driver-tab {
     transition: none;
   }
 }
@@ -2218,10 +1190,6 @@ button.drv-chip:hover {
 .drv-notice-line svg {
   flex: none;
   margin-top: 2px;
-}
-
-.drv-notice-line.is-override {
-  color: var(--f-green, #1f6b45);
 }
 
 .drv-held {

@@ -1,27 +1,6 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import {
-  ArrowLeft,
-  Camera,
-  Check,
-  CheckCircle2,
-  ClipboardCheck,
-  ClipboardList,
-  MapPin,
-  MessageSquareWarning,
-  Navigation,
-  PackageCheck,
-  Route,
-  Scale,
-  ShieldCheck,
-  Truck,
-  User,
-  Warehouse,
-  WifiOff,
-  ExternalLink,
-  Flag,
-  LogIn,
-} from "lucide-react";
+import { Check } from "lucide-react";
 import {
   adoptFieldOutbox,
   dismissRejectedOperation,
@@ -37,202 +16,45 @@ import {
 } from "./DriverOutbox.js";
 import {
   announceSessionExpired,
-  InstructionCard,
-  NeedsActionList,
-  SafetyBanner,
   SESSION_EXPIRED_EVENT,
   openInstructionCount,
-  SyncStatus,
   useDispatchInstructions,
   useDriverSafety,
 } from "./DriverPanels.jsx";
+import {
+  BERAT_COMPONENTS,
+  DriverTabBar,
+  DriverTopBar,
+  InstructionsScreen,
+  PRETRIP_ITEMS,
+  PretripCheck,
+  QueuePanel,
+  RejectedList,
+  SafetyGate,
+  SafetyNotice,
+  SignInAgain,
+  SyncPill,
+  TruckPickScreen,
+  useStructuredInstructions,
+} from "./DriverScreens.jsx";
+import { FIELD_EPHEMERAL_KEY, FIELD_SESSION_MARK } from "./DriverLogin.jsx";
 import { ExceptionPanel } from "./ExceptionPanel.jsx";
-import { RouteOverview } from "./RouteOverview.jsx";
-import { TpaGuide } from "./TpaGuide.jsx";
-import { rememberRecentTruck, TruckPicker } from "./TruckPicker.jsx";
+import { RouteScreen } from "./RouteOverview.jsx";
+import { postQueueable } from "./tripApi.js";
+import { TpaScreen } from "./TpaGuide.jsx";
+import { rememberRecentTruck } from "./TruckPicker.jsx";
+import { recordedReceipt } from "./WeighTicket.jsx";
 import {
   arCapable,
   boundDriverOf,
-  clockTime,
-  mapsDirectionsUrl,
-  pretripQueuedFor,
-  receiptWeightRows,
-  receiptWeights,
   safetyBlocksNewWork,
   spjListPath,
   withQueuedStops,
 } from "./driverHelpers.js";
-import { formatBytes, shrinkPhoto } from "./photo.js";
 import "./driver.css";
 import { apiFetch, FIELD_ROLE_KEY, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
-import { localeFor, translate, useLanguage } from "../../shared/i18n/index.jsx";
-
-// the AR navigator is its own chunk; drivers who never open it
-// do not download it.
-const ArNavigator = lazy(() => import("./ArNavigator.jsx").then((m) => ({ default: m.ArNavigator })));
-
-// iOS Safari only exposes compass events after a permission prompt, and the
-// prompt must come from the tap that opens AR. Other browsers need none.
-async function requestOrientationPermission() {
-  const Orientation = typeof window !== "undefined" ? window.DeviceOrientationEvent : undefined;
-  if (!Orientation || typeof Orientation.requestPermission !== "function") return "not-required";
-  try {
-    return await Orientation.requestPermission();
-  } catch {
-    return "denied";
-  }
-}
-
-const PRETRIP_ITEMS = ["rem", "mesin", "ban", "bbm", "oli", "bak_compactor", "lampu"];
-const FRACTIONS = ["Residu", "Organik", "Anorganik"];
-const BERAT_COMPONENTS = new Set(["rem", "mesin", "ban"]);
-
-const PHOTO_ERROR_KEYS = {
-  photo_too_big: "drv6_photo_too_big",
-  photo_unreadable: "drv6_photo_unreadable",
-  photo_read_failed: "drv_photo_read_failed",
-};
-
-function currentLang() {
-  try {
-    return localStorage.getItem("pythia_lang") === "en" ? "en" : "id";
-  } catch {
-    return "id";
-  }
-}
-
-// Audit gap 1: every evidence photo is shrunk on the phone (longest side
-// 1280 px, JPEG 0.7) before it is queued or uploaded; the size is shown.
-async function readPhoto(file) {
-  try {
-    return await shrinkPhoto(file);
-  } catch (err) {
-    throw new Error(translate(currentLang(), PHOTO_ERROR_KEYS[err?.code] || "drv_photo_read_failed"));
-  }
-}
-
-function PhotoSize({ photo }) {
-  const { t, lang } = useLanguage();
-  if (!photo?.bytes) return null;
-  const size = formatBytes(photo.bytes, lang);
-  return (
-    <p className="driver-photo-size" data-testid="photo-size">
-      {photo.resized && photo.originalBytes > photo.bytes
-        ? t("drv6_photo_size_from")
-            .replace("{size}", size)
-            .replace("{orig}", formatBytes(photo.originalBytes, lang))
-        : t("drv6_photo_size").replace("{size}", size)}
-    </p>
-  );
-}
-
-// H1: a failed or missing GPS fix falls back to the stop's own coordinates,
-// flagged approx, and the screen says so; it is never shown as GPS.
-function getPosition(stop) {
-  return new Promise((resolve) => {
-    if (!navigator.geolocation) {
-      resolve({ lat: stop.lat, lng: stop.lng, approx: true });
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) =>
-        resolve({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy_m: Number.isFinite(pos.coords.accuracy) ? Math.round(pos.coords.accuracy) : null,
-        }),
-      () => resolve({ lat: stop.lat, lng: stop.lng, approx: true }),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
-    );
-  });
-}
-
-function GeotagLabel({ fix }) {
-  const { t } = useLanguage();
-  if (!fix) {
-    return (
-      <p className="driver-geotag" data-testid="arrival-geotag" data-geotag="pending">
-        <MapPin size={16} /> {t("drv6_geo_locating")}
-      </p>
-    );
-  }
-  if (fix.approx) {
-    return (
-      <p className="driver-geotag approx" data-testid="arrival-geotag" data-geotag="approx">
-        <MapPin size={16} /> {t("drv6_geo_approx")}
-      </p>
-    );
-  }
-  return (
-    <p className="driver-geotag" data-testid="arrival-geotag" data-geotag="gps">
-      <MapPin size={16} /> {t("drv6_geo_gps").replace("{n}", fix.accuracy_m ?? "?")}
-    </p>
-  );
-}
-
-// `compact`: an icon-only round button for the route list rows; the accessible
-// name is the same full sentence.
-function MapsLink({ target, name, testId, compact = false }) {
-  const { t } = useLanguage();
-  const href = mapsDirectionsUrl(target);
-  if (!href) return null;
-  return (
-    <a
-      className={`driver-btn ghost driver-maps-link${compact ? " is-icon" : ""}`}
-      data-testid={testId}
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={t("drv6_maps_open_aria").replace("{name}", name)}
-    >
-      <ExternalLink size={compact ? 20 : 18} aria-hidden="true" />
-      {!compact && t("drv6_maps_open")}
-    </a>
-  );
-}
-
-// #45: a network-level failure (fetch rejected / no response) is queueable;
-// an HTTP error response is a permanent failure the driver must act on. The
-// message is Indonesian (or English) from the catalog, never the raw server
-// detail alone; a 401 means the backend no longer knows this session.
-async function post(path, data) {
-  const res = await apiFetch(path, { method: "POST", body: data, tokenKey: FIELD_TOKEN_KEY });
-  if (!res.ok) {
-    const lang = currentLang();
-    if (res.status === 401) {
-      announceSessionExpired();
-      const expired = new Error(translate(lang, "drv6_session_expired"));
-      expired.status = 401;
-      throw expired;
-    }
-    const body = await res.json().catch(() => ({}));
-    const base = translate(lang, "drv6_request_failed").replace("{code}", res.status);
-    const error = new Error(
-      typeof body.detail === "string" && body.detail ? `${base}: ${body.detail}` : base,
-    );
-    error.status = res.status;
-    throw error;
-  }
-  markDriverSynced();
-  return res.json();
-}
-
-// #45: post() variant whose failures carry a `network` flag so callers can
-// route them to the durable outbox instead of surfacing a dead error.
-async function postQueueable(path, data) {
-  try {
-    return await post(path, data);
-  } catch (err) {
-    // post() only throws with a parsed message for HTTP responses; a raw
-    // TypeError comes from fetch itself (offline / unreachable backend).
-    if (err instanceof TypeError || !err.message) {
-      const wrapped = new Error(err.message || "network");
-      wrapped.network = true;
-      throw wrapped;
-    }
-    throw err;
-  }
-}
+import { useLanguage } from "../../shared/i18n/index.jsx";
+import { Mascot } from "../../shared/ui/Mascot.jsx";
 
 function receiptDoneFor(spj) {
   // The server is the source of truth: a receipt recorded on another device (or
@@ -255,948 +77,57 @@ function Toast({ message }) {
   );
 }
 
-// ── Pre-trip inspection ───────────────────────────────────────────────────────
+// ── Pre-trip check ────────────────────────────────────────────────────────────
 
-function PreTripForm({ driver, done, onDone, say }) {
-  const { t } = useLanguage();
-  const [items, setItems] = useState({});
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const answered = Object.keys(items).length;
+// Posts today's check (or queues it offline); every NO files a damage report
+// with its own note, brakes, engine and tyres as serious. A damage report that
+// cannot reach the server queues behind the check, so dispatch is still told.
+// Returns "saved", "queued" or "partial" (check saved, a report failed).
+async function submitPretrip(driver, items, notes, t) {
   const failures = PRETRIP_ITEMS.filter((key) => items[key] === false);
-  const canSubmit = answered === PRETRIP_ITEMS.length && (failures.length === 0 || note.trim().length > 0);
-
-  const markRestOk = () => {
-    setItems((prev) => {
-      const next = { ...prev };
-      PRETRIP_ITEMS.forEach((key) => {
-        if (!(key in next)) next[key] = true;
-      });
-      return next;
-    });
+  const noteFor = (key) =>
+    (notes[key] || "").trim() || t("drv_pretrip_no_reason").replace("{label}", t(`d1_item_${key}`));
+  const pretrip = {
+    truck_code: driver.truck_code,
+    driver_name: driver.driver_name,
+    items,
+    note: failures.map((key) => `${t(`d1_item_${key}`)}: ${noteFor(key)}`).join("\n"),
   };
-
-  const submit = async () => {
-    setBusy(true);
-    let pretripSaved = false;
-    try {
-      await postQueueable("/pretrip", {
-        truck_code: driver.truck_code,
-        driver_name: driver.driver_name,
-        items,
-        note,
-      });
-      pretripSaved = true;
-      // A TIDAK item auto-creates a damage report (source: pretrip).
-      for (const key of failures) {
-        await post("/damage-reports", {
-          truck_code: driver.truck_code,
-          driver_name: driver.driver_name,
-          component: key,
-          severity: BERAT_COMPONENTS.has(key) ? "berat" : "ringan",
-          note:
-            note.trim() ||
-            t("drv_pretrip_no_reason").replace(
-              "{label}",
-              t(`drv_pretrip_item_${key === "bak_compactor" ? "bak" : key}`),
-            ),
-          source: "pretrip",
-        });
-      }
-      onDone();
-    } catch (err) {
-      if (pretripSaved) {
-        onDone();
-        say(t("drv_pretrip_damage_failed"));
-      } else if (err?.network) {
-        // #45: keep the inspection durably; it replays on reconnect.
-        try {
-          await enqueueDriverOperation({
-            path: "/pretrip",
-            data: { truck_code: driver.truck_code, driver_name: driver.driver_name, items, note },
-            label: t("drv_pretrip_title"),
-          });
-          onDone();
-          say(t("drv_queued_offline"));
-        } catch (queueErr) {
-          say(
-            queueErr instanceof OutboxStorageFullError
-              ? t("drv6_storage_full")
-              : t("drv_pretrip_save_failed"),
-            8000,
-          );
-        }
-      } else {
-        say(err.message || t("drv_pretrip_save_failed"));
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (done === null) {
-    return (
-      <section className="driver-card" data-testid="pretrip-loading" aria-busy="true">
-        <p className="driver-muted" role="status">
-          {t("drv_pretrip_checking")}
-        </p>
-      </section>
-    );
-  }
-
-  // Done: one quiet row, so the current stop is the task on screen.
-  if (done) {
-    return (
-      <section className="driver-card driver-check-row" data-testid="pretrip-done">
-        <span className="driver-check-icon" aria-hidden="true">
-          <ClipboardCheck size={20} />
-        </span>
-        <h2 title={t("drv_pretrip_done_desc")}>{t("drv_pretrip_title")}</h2>
-        <span className="driver-badge done">{t("drv_pretrip_done_badge")}</span>
-      </section>
-    );
-  }
-
-  return (
-    <section className="driver-card" data-testid="pretrip-form">
-      <div className="driver-card-head">
-        <h2>
-          <ClipboardCheck size={20} aria-hidden="true" /> {t("drv_pretrip_title")}
-        </h2>
-        <span className="driver-badge driver-count">
-          {answered}/{PRETRIP_ITEMS.length}
-        </span>
-      </div>
-      <div className="driver-progress" aria-hidden="true">
-        <div
-          className="driver-progress-fill"
-          style={{ transform: `scaleX(${answered / PRETRIP_ITEMS.length})` }}
-        />
-      </div>
-      <ul className="pretrip-list">
-        {PRETRIP_ITEMS.map((key) => (
-          <li key={key} className="pretrip-item">
-            <span>{t(`drv_pretrip_item_${key === "bak_compactor" ? "bak" : key}`)}</span>
-            <div className="pretrip-choices">
-              <button
-                type="button"
-                data-testid={`ok-${key}`}
-                className={`pretrip-choice ok ${items[key] === true ? "active" : ""}`}
-                onClick={() => setItems((p) => ({ ...p, [key]: true }))}
-              >
-                OK
-              </button>
-              <button
-                type="button"
-                data-testid={`tidak-${key}`}
-                className={`pretrip-choice tidak ${items[key] === false ? "active" : ""}`}
-                onClick={() => setItems((p) => ({ ...p, [key]: false }))}
-              >
-                {t("drv_no")}
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
-      {failures.length > 0 && (
-        <>
-          <label className="driver-label" htmlFor="pretrip-note">
-            {t("drv_pretrip_note_label")}
-          </label>
-          <textarea
-            id="pretrip-note"
-            className="driver-input"
-            rows={2}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder={t("drv_pretrip_note_placeholder")}
-          />
-        </>
-      )}
-      <div className="driver-actions">
-        <button
-          type="button"
-          className="driver-btn ghost"
-          onClick={markRestOk}
-          disabled={answered === PRETRIP_ITEMS.length}
-        >
-          {t("drv_pretrip_rest_ok")}
-        </button>
-        <button type="button" className="driver-btn primary" onClick={submit} disabled={!canSubmit || busy}>
-          <Check size={16} /> {t("drv_pretrip_save")}
-        </button>
-      </div>
-    </section>
-  );
-}
-
-// ── Stop evidence (arrival → weighing → officer) ──────────────────────────────
-
-function officerKey(stop) {
-  return `pythia_officer_${stop.name}`;
-}
-
-function StopCard({ spj, stop, index, current, locked, blocked, arEnabled, onCompleted, say }) {
-  const { t } = useLanguage();
-  const [open, setOpen] = useState(false);
-  const [arrival, setArrival] = useState(null);
-  // H1: the arrival geotag is taken when the photo is attached and shown as
-  // GPS (with accuracy) or as approximate; null while locating.
-  const [arrivalFix, setArrivalFix] = useState(null);
-  const [weighPhoto, setWeighPhoto] = useState(null);
-  const [weighing, setWeighing] = useState([]);
-  const [fraction, setFraction] = useState(FRACTIONS[0]);
-  const [weight, setWeight] = useState("");
-  const [officerPhoto, setOfficerPhoto] = useState(null);
-  // R4: the officer at a TPS rarely changes; the last name used at this stop
-  // is pre-filled on this phone so the critical path needs no typing.
-  const [officerName, setOfficerName] = useState(() => {
-    try {
-      return localStorage.getItem(officerKey(stop)) || "";
-    } catch {
-      return "";
-    }
+  const damage = (key) => ({
+    truck_code: driver.truck_code,
+    driver_name: driver.driver_name,
+    component: key,
+    severity: BERAT_COMPONENTS.has(key) ? "berat" : "ringan",
+    note: noteFor(key),
+    source: "pretrip",
   });
-  const [busy, setBusy] = useState(false);
-  const [ar, setAr] = useState(null);
-  const [storageError, setStorageError] = useState(false);
-
-  const completed = stop.status === "completed";
-  // The server requires weighing only when the SPJ orders it (weigh_on_site),
-  // so the step is asked only then; an SPJ without the flag skips it.
-  const needsWeighing = spj.weigh_on_site === true;
-  const stepLabels = needsWeighing
-    ? [t("drv_step_arrival"), t("drv_step_weigh"), t("drv_step_officer")]
-    : [t("drv_step_arrival"), t("drv_step_officer")];
-
-  const step = useMemo(() => {
-    if (!arrival) return 1;
-    if (needsWeighing && weighing.length === 0) return 2;
-    return needsWeighing ? 3 : 2;
-  }, [arrival, weighing, needsWeighing]);
-  const officerStep = needsWeighing ? 3 : 2;
-
-  const handlePhoto = async (file, setter) => {
-    if (!file) return;
-    try {
-      setter(await readPhoto(file));
-    } catch (err) {
-      say(err.message);
-    }
-  };
-
-  const handleArrivalPhoto = async (file) => {
-    if (!file) return;
-    try {
-      const photo = await readPhoto(file);
-      setArrival(photo);
-      setArrivalFix(null);
-      setArrivalFix(await getPosition(stop));
-    } catch (err) {
-      say(err.message);
-    }
-  };
-
-  // The AR dialog hands focus back to the button that opened it.
-  const arOpenerRef = useRef(null);
-  const openAr = async (event) => {
-    arOpenerRef.current = event?.currentTarget || null;
-    const orientationPermission = await requestOrientationPermission();
-    setAr({ orientationPermission });
-  };
-
-  const closeAr = useCallback(() => setAr(null), []);
-
-  useEffect(() => {
-    if (ar || !arOpenerRef.current) return;
-    const opener = arOpenerRef.current;
-    arOpenerRef.current = null;
-    if (opener.isConnected) opener.focus();
-  }, [ar]);
-
-  // an AR capture enters the same arrival step as a picked
-  // photo (same size check via readPhoto); its GPS fix rides along so the
-  // evidence records where the frame was actually taken.
-  const captureFromAr = async (file, fix) => {
-    setAr(null);
-    setOpen(true);
-    try {
-      const photo = await readPhoto(file);
-      setArrival({ ...photo, fix });
-      if (Number.isFinite(fix?.lat) && Number.isFinite(fix?.lng)) {
-        setArrivalFix({ lat: fix.lat, lng: fix.lng, accuracy_m: fix.accuracy_m });
-      } else {
-        setArrivalFix(await getPosition(stop));
-      }
-      say(t("drv_ar_captured"));
-    } catch (err) {
-      say(err.message);
-    }
-  };
-
-  const openFormFromAr = () => {
-    setAr(null);
-    setOpen(true);
-  };
-
-  const addWeighing = () => {
-    const kg = parseFloat(weight);
-    if (!weighPhoto) {
-      say(t("drv_weigh_missing"));
-      return;
-    }
-    if (!Number.isFinite(kg) || kg <= 0) {
-      say(t("drv_weigh_enter_weight"));
-      return;
-    }
-    setWeighing((prev) => [
-      ...prev,
-      { fraction, weight_kg: kg, photo_name: weighPhoto.name, photo_b64: weighPhoto.b64 },
-    ]);
-    setWeighPhoto(null);
-    setWeight("");
-  };
-
-  const submit = async () => {
-    setBusy(true);
-    setStorageError(false);
-    try {
-      localStorage.setItem(officerKey(stop), officerName.trim());
-    } catch {
-      // Pre-fill is a convenience only.
-    }
-    // #45: evidence is hoisted so the offline catch can queue it durably.
-    let evidence = null;
-    try {
-      const pos = arrival.fix || arrivalFix || (await getPosition(stop));
-      evidence = {
-        arrival: {
-          photo_name: arrival.name,
-          photo_b64: arrival.b64,
-          lat: pos.lat,
-          lng: pos.lng,
-          approx: Boolean(pos.approx),
-          ...(!arrival.fix && !pos.approx && pos.accuracy_m != null ? { accuracy_m: pos.accuracy_m } : {}),
-          ...(arrival.fix
-            ? {
-                source: "ar",
-                accuracy_m: arrival.fix.accuracy_m,
-                at: arrival.fix.at,
-                fix_at: arrival.fix.fix_at,
-              }
-            : {}),
-        },
-        weighing: needsWeighing ? weighing : [],
-        officer: { name: officerName.trim(), photo_name: officerPhoto.name, photo_b64: officerPhoto.b64 },
-      };
-      await postQueueable(`/spj/${spj.spj_id}/stops/${index}/complete`, { evidence });
-      onCompleted();
-    } catch (err) {
-      if (err?.network && evidence) {
-        // #45: queue durably; the outbox overlay marks the stop done locally
-        // (the next stop unlocks) and replays the evidence on reconnect.
-        try {
-          await enqueueDriverOperation({
-            path: `/spj/${spj.spj_id}/stops/${index}/complete`,
-            data: { evidence },
-            label: t("drv_stop_title")
-              .replace("{n}", index + 1)
-              .replace("{name}", stop.name),
-          });
-          onCompleted();
-          say(t("drv_queued_offline"));
-        } catch (queueErr) {
-          // Never silent: the form stays filled and the driver is told why.
-          if (queueErr instanceof OutboxStorageFullError) setStorageError(true);
-          say(
-            queueErr instanceof OutboxStorageFullError
-              ? t("drv6_storage_full")
-              : t("drv_stop_complete_failed"),
-            8000,
-          );
-        }
-      } else {
-        say(err.message || t("drv_stop_complete_failed"));
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const canSubmit =
-    arrival && (!needsWeighing || weighing.length > 0) && officerPhoto && officerName.trim().length > 0;
-
-  // The heading's accessible name stays "Titik n: name"; the number is drawn
-  // apart (row badge, hero count) so the name reads large on its own.
-  const title = (
-    <>
-      <span className="sr-only">{t("drv11_stop_prefix").replace("{n}", index + 1)} </span>
-      {stop.name}
-    </>
-  );
-
-  // Every stop that is not the one being worked on is a flat row of the route list.
-  if (!current || completed) {
-    return (
-      <li
-        className={`stop-row${completed ? " is-done" : ""}${locked && !completed ? " is-locked" : ""}`}
-        data-testid={`stop-${index}`}
-      >
-        <span className="stop-row-num" aria-hidden="true">
-          {completed ? <Check size={18} strokeWidth={2.5} /> : index + 1}
-        </span>
-        <div className="stop-row-body">
-          <h3>{title}</h3>
-          <p className="stop-row-meta">
-            {stop.kecamatan} — {stop.address}
-          </p>
-          {completed && stop.queued && (
-            <p className="stop-row-note" data-testid="stop-queued-note">
-              {t("drv6_stop_queued")}
-            </p>
-          )}
-        </div>
-        {completed ? (
-          <span className={`driver-badge ${stop.queued ? "queued" : "done"}`}>
-            {stop.queued ? t("drv6_stop_queued_badge") : t("drv_stop_selesai")}
-          </span>
-        ) : (
-          <MapsLink target={stop} name={stop.name} testId={`stop-maps-${index}`} compact />
-        )}
-      </li>
-    );
-  }
-
-  const total = spj.stops?.length || index + 1;
-  return (
-    <article className="driver-card stop-hero" data-testid={`stop-${index}`}>
-      <div className="stop-hero-head">
-        <div className="stop-hero-title">
-          <p className="driver-mono-label">{t("drv11_next_stop")}</p>
-          <h2>{title}</h2>
-          <p className="stop-hero-meta">
-            {stop.kecamatan} — {stop.address}
-          </p>
-        </div>
-        <p
-          className="stop-hero-count"
-          aria-label={t("drv11_stop_of")
-            .replace("{n}", index + 1)
-            .replace("{total}", total)}
-        >
-          <strong>{index + 1}</strong>
-          <span aria-hidden="true">/{total}</span>
-        </p>
-      </div>
-
-      {!open && blocked && (
-        <p className="driver-held" data-testid="stop-held">
-          {t("drv6_safety_held")}
-        </p>
-      )}
-
-      {!open && (
-        <div className="driver-actions">
-          <button
-            type="button"
-            className="driver-btn primary driver-btn-hero"
-            data-testid="stop-start"
-            disabled={blocked}
-            onClick={() => setOpen(true)}
-          >
-            <Camera size={22} aria-hidden="true" /> {t("drv_stop_start")}
-          </button>
-          <MapsLink target={stop} name={stop.name} testId={`stop-maps-${index}`} />
-        </div>
-      )}
-      {open && (
-        <div className="driver-actions">
-          <MapsLink target={stop} name={stop.name} testId={`stop-maps-${index}`} />
-        </div>
-      )}
-
-      {ar && (
-        <Suspense fallback={null}>
-          <ArNavigator
-            spj={spj}
-            stop={stop}
-            index={index}
-            orientationPermission={ar.orientationPermission}
-            onClose={closeAr}
-            onCapture={captureFromAr}
-            onUseForm={openFormFromAr}
-          />
-        </Suspense>
-      )}
-
-      {open && (
-        <div className="stop-form">
-          <ol className="step-list">
-            {stepLabels.map((label, i) => (
-              <li key={label} className={`step ${step > i + 1 ? "done" : step === i + 1 ? "current" : ""}`}>
-                {step > i + 1 ? <CheckCircle2 size={15} /> : <span className="step-num">{i + 1}</span>}
-                {label}
-              </li>
-            ))}
-          </ol>
-
-          {/* Step 1: arrival photo (from the picker or the AR navigator). L4: AR
-              is offered only here, after arrival, to find the TPS point on foot. */}
-          {!arrival && arEnabled && (
-            <div className="driver-actions">
-              <button
-                type="button"
-                className="driver-btn ghost"
-                data-testid="ar-nav-open"
-                aria-label={t("drv_ar_open_aria").replace("{name}", stop.name)}
-                onClick={openAr}
-              >
-                <Navigation size={16} /> {t("drv_ar_open")}
-              </button>
-            </div>
-          )}
-          <label className="driver-label" htmlFor={`arrival-${index}`}>
-            {t("drv_arrival_label")}
-          </label>
-          <input
-            id={`arrival-${index}`}
-            data-testid="arrival-input"
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="driver-file"
-            onChange={(e) => handleArrivalPhoto(e.target.files?.[0])}
-          />
-          {arrival && (
-            <p className="driver-muted">{t("drv_photo_attached").replace("{name}", arrival.name)}</p>
-          )}
-          <PhotoSize photo={arrival} />
-          {arrival && <GeotagLabel fix={arrivalFix} />}
-          {arrival?.fix && (
-            <figure className="arrival-ar" data-testid="arrival-ar-evidence">
-              <img src={arrival.b64} alt={t("drv_ar_photo_alt")} />
-              <figcaption>
-                {t("drv_ar_photo_from_ar").replace("{n}", arrival.fix.accuracy_m ?? "?")}
-              </figcaption>
-            </figure>
-          )}
-
-          {/* Step 2: weighing (only when this SPJ weighs on site) */}
-          {needsWeighing && step >= 2 && (
-            <>
-              <label className="driver-label" htmlFor={`weigh-${index}`}>
-                {t("drv_weigh_label")}
-              </label>
-              <input
-                id={`weigh-${index}`}
-                data-testid="weigh-input"
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="driver-file"
-                onChange={(e) => handlePhoto(e.target.files?.[0], setWeighPhoto)}
-              />
-              <PhotoSize photo={weighPhoto} />
-              <div className="driver-row">
-                <div>
-                  <label className="driver-label" htmlFor={`fraction-${index}`}>
-                    {t("drv_fraction")}
-                  </label>
-                  <select
-                    id={`fraction-${index}`}
-                    className="driver-input"
-                    value={fraction}
-                    onChange={(e) => setFraction(e.target.value)}
-                  >
-                    {FRACTIONS.map((f) => (
-                      <option key={f}>{f}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="driver-label" htmlFor={`weight-${index}`}>
-                    {t("drv_weight")}
-                  </label>
-                  <input
-                    id={`weight-${index}`}
-                    className="driver-input"
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={weight}
-                    onChange={(e) => setWeight(e.target.value)}
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-              <div className="driver-actions">
-                <button type="button" className="driver-btn ghost" onClick={addWeighing}>
-                  <Scale size={16} /> {t("drv_weigh_add")}
-                </button>
-              </div>
-              {weighing.length > 0 && (
-                <ul className="weigh-list">
-                  {weighing.map((w, i) => (
-                    <li key={i}>
-                      {w.fraction} — {w.weight_kg} kg
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          )}
-
-          {/* Last step: officer */}
-          {step >= officerStep && (
-            <>
-              <label className="driver-label" htmlFor={`officer-${index}`}>
-                {t("drv_officer_label")}
-              </label>
-              <input
-                id={`officer-${index}`}
-                data-testid="officer-input"
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="driver-file"
-                onChange={(e) => handlePhoto(e.target.files?.[0], setOfficerPhoto)}
-              />
-              <PhotoSize photo={officerPhoto} />
-              <label className="driver-label" htmlFor={`officer-name-${index}`}>
-                {t("drv_officer_name_label")}
-              </label>
-              <input
-                id={`officer-name-${index}`}
-                className="driver-input"
-                value={officerName}
-                onChange={(e) => setOfficerName(e.target.value)}
-                placeholder={t("drv_officer_name_placeholder")}
-              />
-              <div className="driver-actions">
-                <button
-                  type="button"
-                  className="driver-btn primary"
-                  onClick={submit}
-                  disabled={!canSubmit || busy}
-                >
-                  <Check size={18} /> {t("drv_stop_complete")}
-                </button>
-              </div>
-              {storageError && (
-                <p className="driver-error" role="alert" data-testid="stop-storage-full">
-                  {t("drv6_storage_full")}
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </article>
-  );
-}
-
-// ── Delivery / receipt ────────────────────────────────────────────────────────
-
-const WEIGHT_ROW_NAMES = { gross_weight_kg: "gross", tare_weight_kg: "tare", net_weight_kg: "net" };
-
-// The receipt as the server recorded it: weights plus weight_labels. The POST
-// answer carries it as `receipt`; without one the SPJ is read back.
-async function recordedReceipt(spjId, body) {
-  if (body?.receipt?.weight_labels) return body.receipt;
+  let queued = false;
   try {
-    const res = await apiFetch(`/spj/${encodeURIComponent(spjId)}`, { tokenKey: FIELD_TOKEN_KEY });
-    return res.ok ? (await res.json()).receipt || null : null;
-  } catch {
-    return null;
+    await postQueueable("/pretrip", pretrip);
+  } catch (err) {
+    if (!err?.network) throw err;
+    await enqueueDriverOperation({ path: "/pretrip", data: pretrip, label: t("d1_pretrip_title") });
+    queued = true;
   }
-}
-
-// H10: gross, tare and net exactly as recorded; one row per weight_labels key,
-// and a weight the server did not record says so instead of showing a number.
-function ReceiptWeights({ receipt }) {
-  const { t, lang } = useLanguage();
-  const rows = receiptWeightRows(receipt);
-  if (rows.length === 0) return null;
-  return (
-    <dl className="receipt-weights" data-testid="receipt-weights">
-      {rows.map((row) => {
-        const name = WEIGHT_ROW_NAMES[row.key];
-        return (
-          <div key={row.key} className="receipt-weight" data-testid={`receipt-weight-${name}`}>
-            <dt>{t(`drv7_weight_${name}`)}</dt>
-            <dd>
-              {row.kg === null
-                ? t("drv7_weight_not_recorded")
-                : `${row.kg.toLocaleString(localeFor(lang))} kg`}
-            </dd>
-            <dd className="receipt-weight-note">{t(`drv7_weight_${name}_desc`)}</dd>
-          </div>
-        );
-      })}
-    </dl>
-  );
-}
-
-// One tap opens the camera; the photo submits the receipt (or queues it
-// offline). The ticket weights are optional and typed before the photo.
-function DeliveryCard({ spj, say, onDone }) {
-  const { t } = useLanguage();
-  const [receipt, setReceipt] = useState(null);
-  const [failed, setFailed] = useState(false);
-  const [gross, setGross] = useState("");
-  // The empty truck's weight rarely changes: the last tare used for this
-  // truck is pre-filled on this phone.
-  const tareKey = `pythia_driver_tare_${spj.truck_code}`;
-  const [tare, setTare] = useState(() => {
-    try {
-      return localStorage.getItem(tareKey) || "";
-    } catch {
-      return "";
+  let partial = false;
+  for (const key of failures) {
+    const data = damage(key);
+    const label = `${t("d1_pretrip_title")} · ${t(`d1_item_${key}`)}`;
+    if (queued) {
+      await enqueueDriverOperation({ path: "/damage-reports", data, label });
+      continue;
     }
-  });
-  const [busy, setBusy] = useState(false);
-  // One id per submission attempt: a retry after a dropped response replays the
-  // same id, so the server returns the original receipt instead of a conflict.
-  const operationId = useRef(null);
-  // R5: the gate wait starts when the driver reports arrival at the disposal
-  // gate (device time, so an offline replay does not shorten the wait).
-  const gateKey = `pythia_gate_${spj.spj_id}`;
-  const [gateAt, setGateAt] = useState(() => {
     try {
-      return localStorage.getItem(gateKey);
-    } catch {
-      return null;
-    }
-  });
-  const weights = receiptWeights(gross, tare);
-
-  const arriveAtGate = async () => {
-    const at = new Date().toISOString();
-    const path = "/safety/gate-arrival";
-    const data = { spj_id: spj.spj_id, arrived_at: at };
-    try {
-      await postQueueable(path, data);
+      await postQueueable("/damage-reports", data);
     } catch (err) {
       if (!err?.network) {
-        say(err.message);
-        return;
+        partial = true;
+        continue;
       }
-      try {
-        await enqueueDriverOperation({ path, data, label: t("drv6_gate_arrive") });
-        say(t("drv_queued_offline"));
-      } catch (queueErr) {
-        say(
-          queueErr instanceof OutboxStorageFullError ? t("drv6_storage_full") : t("drv6_gate_failed"),
-          8000,
-        );
-        return;
-      }
+      await enqueueDriverOperation({ path: "/damage-reports", data, label });
     }
-    try {
-      localStorage.setItem(gateKey, at);
-    } catch {
-      // The server (or the queue) holds the arrival; the flag is cosmetic.
-    }
-    setGateAt(at);
-  };
-
-  const markDone = () => {
-    try {
-      localStorage.setItem(`pythia_receipt_${spj.spj_id}`, "done");
-    } catch {
-      /* flag is best-effort; the server (or the queue) holds the receipt */
-    }
-  };
-
-  const send = async (photo) => {
-    if (!weights.ok) return;
-    setBusy(true);
-    setFailed(false);
-    // Kept across a failed attempt so a retry is idempotent; a new photo or a
-    // weight change starts a new operation.
-    operationId.current = operationId.current || `${spj.spj_id}-${Date.now()}`;
-    const path = `/spj/${spj.spj_id}/receipt`;
-    const data = {
-      photo_name: photo.name,
-      photo_b64: photo.b64,
-      ...weights.weights,
-      operation_id: operationId.current,
-    };
-    if (data.tare_weight_kg) {
-      try {
-        localStorage.setItem(tareKey, String(data.tare_weight_kg));
-      } catch {
-        // Pre-fill is a convenience only.
-      }
-    }
-    try {
-      const body = await postQueueable(path, data);
-      markDone();
-      onDone(await recordedReceipt(spj.spj_id, body));
-    } catch (err) {
-      if (err?.network) {
-        // #45: the receipt replays with its stable operation_id, so a
-        // reconnect can never double-record the handover.
-        try {
-          await enqueueDriverOperation({ path, data, label: t("drv_receipt_title") });
-        } catch (queueErr) {
-          setFailed(true);
-          say(
-            queueErr instanceof OutboxStorageFullError ? t("drv6_storage_full") : t("drv_receipt_failed"),
-            8000,
-          );
-          return;
-        }
-        markDone();
-        onDone(null);
-        say(t("drv_queued_offline"));
-      } else {
-        setFailed(true);
-        say(err.message || t("drv_receipt_failed"));
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handlePhoto = async (file) => {
-    if (!file || busy || !weights.ok) return;
-    setBusy(true);
-    let photo;
-    try {
-      photo = await readPhoto(file);
-    } catch (err) {
-      setBusy(false);
-      say(err.message);
-      return;
-    }
-    operationId.current = null; // a new photo is a new submission
-    setReceipt(photo);
-    await send(photo);
-  };
-
-  const editWeight = (setter) => (e) => {
-    setter(e.target.value);
-    operationId.current = null; // edited weights are a new submission
-  };
-
-  const cameraDisabled = busy || !weights.ok;
-
-  return (
-    <section className="driver-card driver-delivery" data-testid="delivery-card" data-spj-id={spj.spj_id}>
-      <TpaGuide
-        spj={spj}
-        gateAt={gateAt}
-        onArriveGate={arriveAtGate}
-        fallback={
-          gateAt ? (
-            <p className="driver-geotag" data-testid="gate-arrived">
-              <Flag size={16} />
-              {t("drv6_gate_arrived").replace("{time}", clockTime(gateAt) || "—")}
-            </p>
-          ) : (
-            <div className="driver-actions">
-              <button
-                type="button"
-                className="driver-btn ghost"
-                data-testid="gate-arrival"
-                onClick={arriveAtGate}
-              >
-                <Flag size={18} /> {t("drv6_gate_arrive")}
-              </button>
-            </div>
-          )
-        }
-      />
-      <div className="driver-receipt">
-        <h2>
-          <PackageCheck size={20} aria-hidden="true" /> {t("drv_receipt_title")}
-        </h2>
-        <p className="driver-muted">{t("drv_receipt_intro").replace("{destination}", spj.destination)}</p>
-      </div>
-      <div className="driver-row">
-        <div>
-          <label className="driver-label" htmlFor="receipt-gross">
-            {t("drv7_receipt_gross_label")}
-          </label>
-          <input
-            id="receipt-gross"
-            data-testid="receipt-gross"
-            className="driver-input"
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="any"
-            value={gross}
-            disabled={busy}
-            onChange={editWeight(setGross)}
-            placeholder={t("drv_receipt_weight_placeholder")}
-          />
-        </div>
-        <div>
-          <label className="driver-label" htmlFor="receipt-tare">
-            {t("drv7_receipt_tare_label")}
-          </label>
-          <input
-            id="receipt-tare"
-            data-testid="receipt-tare"
-            className="driver-input"
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="any"
-            value={tare}
-            disabled={busy}
-            onChange={editWeight(setTare)}
-            placeholder={t("drv7_receipt_tare_placeholder")}
-          />
-        </div>
-      </div>
-      <p className="driver-muted">{t("drv7_receipt_weights_hint")}</p>
-      {!weights.ok && (
-        <p className="driver-error" role="alert" data-testid="receipt-weight-error">
-          {t(`drv7_receipt_${weights.error}_invalid`)}
-        </p>
-      )}
-      <div className="driver-actions">
-        <label
-          className={`driver-btn primary driver-btn-hero driver-camera${cameraDisabled ? " is-disabled" : ""}`}
-          data-testid="receipt-camera"
-        >
-          <input
-            id="receipt-photo"
-            data-testid="receipt-input"
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="driver-camera-input"
-            disabled={cameraDisabled}
-            onChange={(e) => {
-              handlePhoto(e.target.files?.[0]);
-              e.target.value = ""; // permit choosing the same image again
-            }}
-          />
-          <Camera size={22} aria-hidden="true" /> {busy ? t("drv_receipt_sending") : t("drv7_receipt_camera")}
-        </label>
-      </div>
-      {receipt && <p className="driver-muted">{t("drv_photo_attached").replace("{name}", receipt.name)}</p>}
-      <PhotoSize photo={receipt} />
-      {failed && receipt && (
-        <div className="driver-actions">
-          <button
-            type="button"
-            className="driver-btn ghost"
-            data-testid="receipt-retry"
-            onClick={() => send(receipt)}
-            disabled={cameraDisabled}
-          >
-            <Check size={18} /> {t("drv_receipt_send")}
-          </button>
-        </div>
-      )}
-    </section>
-  );
+  }
+  return queued ? "queued" : partial ? "partial" : "saved";
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -1255,18 +186,33 @@ function pretripCacheKey(truckCode) {
   return `pythia_driver_pretrip_${truckCode}`;
 }
 
-function pretripDoneLocally(truckCode) {
+// Today's check as this phone knows it: the saved record ({ date, items,
+// created_at }; older phones stored only the date), else a queued check.
+function pretripLocalRecord(truckCode) {
   try {
-    if (localStorage.getItem(pretripCacheKey(truckCode)) === localDay()) return true;
+    const raw = localStorage.getItem(pretripCacheKey(truckCode));
+    if (raw === localDay()) return { items: {}, created_at: null };
+    const saved = raw ? JSON.parse(raw) : null;
+    if (saved?.date === localDay()) return saved;
   } catch {
-    // Storage blocked: fall through to the queue.
+    // Storage blocked or an unreadable value: fall through to the queue.
   }
-  return pretripQueuedFor(readDriverOutbox(), truckCode);
+  const queued = readDriverOutbox().find(
+    (item) => item.path === "/pretrip" && item.data?.truck_code === truckCode,
+  );
+  return queued ? { items: queued.data.items || {}, created_at: queued.queued_at } : null;
 }
 
-function rememberPretrip(truckCode) {
+function rememberPretrip(truckCode, record) {
   try {
-    localStorage.setItem(pretripCacheKey(truckCode), localDay());
+    localStorage.setItem(
+      pretripCacheKey(truckCode),
+      JSON.stringify({
+        date: localDay(),
+        items: record?.items || {},
+        created_at: record?.created_at || null,
+      }),
+    );
   } catch {
     // Best effort.
   }
@@ -1297,60 +243,29 @@ function useDriverManifest(lang) {
   }, [lang]);
 }
 
-function destinationTarget(spj, destinations) {
-  const facility = destinations.find(
-    (d) => d?.destination === spj.destination || d?.name === spj.destination,
-  );
-  return { lat: facility?.lat ?? null, lng: facility?.lng ?? null, name: spj.destination };
-}
-
-function DestinationCard({ spj, destinations, row = false }) {
-  const { t } = useLanguage();
-  const target = destinationTarget(spj, destinations);
-  const hasCoord = Number.isFinite(Number(target.lat)) && target.lat !== null && target.lng !== null;
-  if (row) {
-    return (
-      <div className="stop-row is-dest" data-testid="destination-card">
-        <span className="stop-row-num" aria-hidden="true">
-          <Flag size={18} />
-        </span>
-        <div className="stop-row-body">
-          <h3>{t("drv6_dest_title").replace("{name}", spj.destination)}</h3>
-          <p className="stop-row-meta">{hasCoord ? t("drv10_route_dest") : t("drv6_dest_name_only")}</p>
-        </div>
-        <MapsLink target={target} name={spj.destination} testId="destination-maps" compact />
-      </div>
-    );
-  }
-  return (
-    <section className="driver-card driver-destination" data-testid="destination-card">
-      <p className="driver-mono-label">{t("drv10_route_dest")}</p>
-      <h2>{spj.destination}</h2>
-      {!hasCoord && <p className="driver-muted">{t("drv6_dest_name_only")}</p>}
-      <div className="driver-actions">
-        <MapsLink target={target} name={spj.destination} testId="destination-maps" />
-      </div>
-    </section>
-  );
-}
-
 // L3: one field app. The old /field instructions are the Instruksi tab and the
 // exception buttons the Lapor tab; ?tab= keeps the choice in the URL so the
 // back button and the /field redirect land on the right tab.
-// wave11 driver: four tabs in the order of a shift (instructions, the route,
-// the landfill, problems), one task each. Without ?tab= the app opens on the
-// route, and on TPA once every stop is done or a receipt is still owed.
-const TABS = [
-  { id: "instruksi", icon: ClipboardList, label: "drv10_tab_instructions" },
-  { id: "rute", icon: Route, label: "drv10_tab_route" },
-  { id: "tpa", icon: Warehouse, label: "drv11_tab_tpa" },
-  { id: "lapor", icon: MessageSquareWarning, label: "drv10_tab_report" },
-];
+// Wave 13: four tabs in the order of the design (instructions, route, report,
+// TPA). Without ?tab= the app opens on TPA once every stop is done or a receipt
+// is still owed, on the route while a stop is pending, else on instructions.
+const TAB_IDS = ["instruksi", "rute", "lapor", "tpa"];
+
+function signOutField() {
+  try {
+    localStorage.removeItem(FIELD_TOKEN_KEY);
+    localStorage.removeItem(FIELD_ROLE_KEY);
+    localStorage.removeItem(SESSION_CACHE_KEY);
+  } catch {
+    // Storage blocked: the gate still validates the token on load.
+  }
+  window.location.reload();
+}
 
 export default function DriverApp() {
   const { t, lang } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabParam = TABS.some((item) => item.id === searchParams.get("tab")) ? searchParams.get("tab") : null;
+  const tabParam = TAB_IDS.includes(searchParams.get("tab")) ? searchParams.get("tab") : null;
   const selectTab = (id) => {
     const next = new URLSearchParams(searchParams);
     if (id) next.set("tab", id);
@@ -1363,16 +278,20 @@ export default function DriverApp() {
   const boundDriver = useMemo(() => boundDriverOf(session), [session]);
   const driver = boundDriver || pickedDriver;
   const [fleet, setFleet] = useState([]);
+  const [fleetLoading, setFleetLoading] = useState(true);
   const [spjAktif, setSpjAktif] = useState(() =>
     driver ? (readSpjCache(driver.truck_code)?.aktif ?? null) : null,
   );
   const [history, setHistory] = useState(() =>
     driver ? readSpjCache(driver.truck_code)?.selesai || [] : [],
   );
-  // null = today's inspection status not known yet: show neither the form nor
-  // the done card, so the form never flashes up for a truck already inspected.
+  // null = today's check status not known yet: show neither the form nor the
+  // done banner, so the form never flashes up for a truck already checked.
   const [pretripDone, setPretripDone] = useState(null);
-  const [screen, setScreen] = useState("gate");
+  const [pretripRecord, setPretripRecord] = useState(null);
+  const [pretripOpen, setPretripOpen] = useState(false);
+  // The truck the driver changes away from; the pick screen's back returns to it.
+  const [previousTruck, setPreviousTruck] = useState(null);
   const [toast, setToast] = useState("");
   const [online, setOnline] = useState(navigator.onLine);
   // false, or { receipt, spjId } once the receipt is sent (receipt null when queued).
@@ -1387,6 +306,7 @@ export default function DriverApp() {
   const queuedCount = outboxItems.length;
   const safety = useDriverSafety(driver?.truck_code);
   const instructionFeed = useDispatchInstructions(driver?.truck_code);
+  const planInstructions = useStructuredInstructions(driver?.truck_code);
   const blocked = safetyBlocksNewWork(safety);
   const arEnabled = useMemo(
     () =>
@@ -1406,6 +326,19 @@ export default function DriverApp() {
     toastTimer.current = setTimeout(() => setToast(""), ms);
   }, []);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+  // Signed in without "Stay signed in on this phone": a new browser session
+  // signs out (the outbox stays and sends after the next sign-in).
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(FIELD_EPHEMERAL_KEY) === "1" && !sessionStorage.getItem(FIELD_SESSION_MARK)) {
+        localStorage.removeItem(FIELD_EPHEMERAL_KEY);
+        signOutField();
+      }
+    } catch {
+      // Storage blocked: nothing to check.
+    }
+  }, []);
 
   useEffect(() => {
     let token = null;
@@ -1441,7 +374,8 @@ export default function DriverApp() {
     apiFetch("/fleet", { tokenKey: FIELD_TOKEN_KEY })
       .then((r) => r.json())
       .then((body) => setFleet(Array.isArray(body) ? body : body.trucks || []))
-      .catch(() => setOnline(false));
+      .catch(() => setOnline(false))
+      .finally(() => setFleetLoading(false));
     apiFetch("/spj/destinations", { tokenKey: FIELD_TOKEN_KEY })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((body) => {
@@ -1459,7 +393,12 @@ export default function DriverApp() {
   const drivers = useMemo(
     () =>
       [...fleet]
-        .map((t) => ({ name: t.driver_name, code: t.truck_code }))
+        .map((truck) => ({
+          name: truck.driver_name,
+          code: truck.truck_code,
+          zone: truck.assigned_zone || null,
+          plate: truck.plate_number || null,
+        }))
         .sort((a, b) => a.code.localeCompare(b.code)),
     [fleet],
   );
@@ -1519,16 +458,21 @@ export default function DriverApp() {
   useEffect(() => {
     if (!driver) return;
     const truck = driver.truck_code;
-    setPretripDone(pretripDoneLocally(truck) ? true : null);
+    const local = pretripLocalRecord(truck);
+    setPretripDone(local ? true : null);
+    setPretripRecord(local);
+    setPretripOpen(false);
     apiFetch(`/pretrip/today/${truck}`, { tokenKey: FIELD_TOKEN_KEY })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((body) => {
-        if (body.done) rememberPretrip(truck);
-        setPretripDone(Boolean(body.done) || pretripDoneLocally(truck));
+        if (body.done) rememberPretrip(truck, body.record);
+        const record = body.record || pretripLocalRecord(truck);
+        setPretripRecord(record);
+        setPretripDone(Boolean(body.done) || Boolean(record));
       })
-      // Offline or unreachable: an inspection done or queued on this phone
-      // today counts; otherwise show the form (a submission queues).
-      .catch(() => setPretripDone(pretripDoneLocally(truck)));
+      // Offline or unreachable: a check done or queued on this phone today
+      // counts; otherwise the form shows (a submission queues).
+      .catch(() => setPretripDone(Boolean(pretripLocalRecord(truck))));
   }, [driver]);
 
   useEffect(() => {
@@ -1548,17 +492,6 @@ export default function DriverApp() {
     window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
   }, []);
-
-  const signInAgain = () => {
-    try {
-      localStorage.removeItem(FIELD_TOKEN_KEY);
-      localStorage.removeItem(FIELD_ROLE_KEY);
-      localStorage.removeItem(SESSION_CACHE_KEY);
-    } catch {
-      // Storage blocked: the gate still validates the token on load.
-    }
-    window.location.reload();
-  };
 
   // #45: replay the durable queue when connectivity returns, a new operation
   // is queued, or the periodic retry fires. Never in a tight loop.
@@ -1615,7 +548,7 @@ export default function DriverApp() {
     if (!canFlush) return undefined;
     // One reconnect is one replay: browsers can fire `online` twice in a burst,
     // and a second flush right after a server error would retry at once instead
-    // of waiting for the periodic retry or the driver's "kirim sekarang".
+    // of waiting for the periodic retry or the driver's "try sending now".
     let lastOnline = 0;
     const onOnline = () => {
       const now = Date.now();
@@ -1631,10 +564,6 @@ export default function DriverApp() {
       clearInterval(id);
     };
   }, [canFlush]);
-
-  useEffect(() => {
-    setScreen(driver ? "home" : "gate");
-  }, [driver]);
 
   // A new truck (picked, switched, or bound by the session on a personal
   // account's first start) starts from that truck's saved lists.
@@ -1669,12 +598,13 @@ export default function DriverApp() {
 
   const pickDriver = (d) => {
     const next = { driver_name: d.name, truck_code: d.code };
-    rememberRecentTruck({ name: d.name, code: d.code });
+    rememberRecentTruck({ name: d.name, code: d.code, zone: d.zone || null, plate: d.plate || null });
     try {
       localStorage.setItem("pythia_driver", JSON.stringify(next));
     } catch {
       // The choice still applies for this session.
     }
+    setPreviousTruck(null);
     setPickedDriver(next);
   };
 
@@ -1684,7 +614,19 @@ export default function DriverApp() {
     } catch {
       // Nothing stored.
     }
+    setPreviousTruck(pickedDriver);
     setPickedDriver(null);
+  };
+
+  const backToPrevious = () => {
+    if (!previousTruck) return;
+    try {
+      localStorage.setItem("pythia_driver", JSON.stringify(previousTruck));
+    } catch {
+      // The choice still applies for this session.
+    }
+    setPickedDriver(previousTruck);
+    setPreviousTruck(null);
   };
 
   const dismissRejected = (opId) => {
@@ -1692,54 +634,58 @@ export default function DriverApp() {
     setRejected(readRejectedOperations());
   };
 
-  const sessionCard = sessionExpired && (
-    <section className="driver-card driver-session" data-testid="driver-session-expired" role="alert">
-      <h2>
-        <LogIn size={18} /> {t("drv6_session_expired")}
-      </h2>
-      <p className="driver-muted">{t("drv6_session_expired_desc")}</p>
-      <div className="driver-actions">
-        <button type="button" className="driver-btn primary" onClick={signInAgain}>
-          <LogIn size={18} /> {t("drv6_sign_in_again")}
-        </button>
-      </div>
-    </section>
+  const sendPretrip = async (items, notes) => {
+    try {
+      const outcome = await submitPretrip(driver, items, notes, t);
+      const record = { items, created_at: new Date().toISOString() };
+      rememberPretrip(driver.truck_code, record);
+      setPretripRecord(record);
+      setPretripDone(true);
+      setPretripOpen(false);
+      say(
+        outcome === "queued"
+          ? t("drv_queued_offline")
+          : outcome === "partial"
+            ? t("drv_pretrip_damage_failed")
+            : t("drv_pretrip_saved"),
+      );
+    } catch (err) {
+      say(
+        err instanceof OutboxStorageFullError
+          ? t("drv6_storage_full")
+          : err?.message || t("drv_pretrip_save_failed"),
+        8000,
+      );
+    }
+  };
+
+  const syncPill = (
+    <SyncPill
+      online={online}
+      queued={queuedCount}
+      flushing={flushing}
+      lastSync={lastSync}
+      onOpen={() => selectTab("instruksi")}
+    />
   );
 
-  // ── Gate ──
-  if (screen === "gate" || !driver) {
+  // ── Choose your truck (shared depot account) ──
+  if (!driver) {
     return (
       <main className="driver-shell" data-testid="driver-app">
-        <header className="driver-header">
-          <span className="driver-brand">
-            <span className="driver-brand-mark">
-              <Truck size={19} />
-            </span>
-            <span>
-              <strong>Pythia Driver</strong>
-              <small>{t("drv_subtitle")}</small>
-            </span>
-          </span>
-          {!online && (
-            <span className="driver-offline">
-              <WifiOff size={14} /> {t("drv_offline")}
-            </span>
-          )}
-        </header>
-        {sessionCard}
-        <section className="driver-card" data-testid="driver-truck-gate">
-          <div className="driver-card-head">
-            <h2>
-              <User size={18} /> {t("drv10_pick_title")}
-            </h2>
-            {/* H3: the roster is the simulated fleet, not real personnel. */}
-            <span className="driver-badge driver-provenance" data-testid="driver-roster-sim">
-              {t("drv6_sim_badge")}
-            </span>
-          </div>
-          <p className="driver-muted">{t("drv6_sim_roster")}</p>
-          <TruckPicker drivers={drivers} onPick={pickDriver} />
-        </section>
+        <TruckPickScreen
+          drivers={drivers}
+          loading={fleetLoading}
+          initialCode={previousTruck?.truck_code}
+          onStart={pickDriver}
+          onBack={previousTruck ? backToPrevious : signOutField}
+          backLabel={
+            previousTruck
+              ? t("d1_pick_back").replace("{code}", previousTruck.truck_code)
+              : t("d1_pick_sign_out")
+          }
+          sync={syncPill}
+        />
         <Toast message={toast} />
       </main>
     );
@@ -1747,7 +693,9 @@ export default function DriverApp() {
 
   const spjView = withQueuedStops(spjAktif, queuedStopKeys(outboxItems));
   const stops = spjView?.stops || [];
-  const pendingIndex = stops.findIndex((s) => s.status !== "completed");
+  // A stop dispatch skipped is closed like a completed one.
+  const stopOpen = (s) => s.status !== "completed" && s.status !== "skipped";
+  const pendingIndex = stops.findIndex(stopOpen);
   const allStopsDone = spjView && pendingIndex === -1 && stops.length > 0;
   // Newest completed SPJ still missing its receipt: `history` arrives newest
   // first, and receipt state comes from the server, so two browsers agree.
@@ -1755,274 +703,150 @@ export default function DriverApp() {
   const receiptDue = !spjAktif && history[0] && !receiptDoneFor(history[0]) ? pendingReceipt : null;
   const deliverySpj = allStopsDone ? spjView : receiptDue;
   const openInstructions = openInstructionCount(instructionFeed.list, outboxItems);
-  const tab = tabParam || (doneScreen || deliverySpj ? "tpa" : "rute");
-  const stopsLeft = stops.filter((s) => s.status !== "completed").length;
+  const tab =
+    tabParam || (doneScreen || deliverySpj ? "tpa" : spjView && pendingIndex >= 0 ? "rute" : "instruksi");
+  const stopsLeft = stops.filter(stopOpen).length;
+  const showPretripForm = pretripDone === false && pretripOpen;
+  const routeMap = tab === "rute" && !sessionExpired && Boolean(spjView) && stops.length > 0;
+
+  const queuePanel = (
+    <QueuePanel
+      items={outboxItems}
+      flushing={flushing}
+      lastSync={lastSync}
+      onRetry={canFlush ? flushQueue : undefined}
+    />
+  );
 
   return (
-    <main className="driver-shell has-tabs" data-testid="driver-app">
-      <header className="driver-header">
-        <span className="driver-brand">
-          <span className="driver-brand-mark">
-            <Route size={19} />
-          </span>
-          <span>
-            <strong>Pythia Driver</strong>
-            <small>{driver.truck_code}</small>
-          </span>
-        </span>
-        <span className="driver-header-right">
-          {queuedCount > 0 && (
-            <span className="driver-queued" data-testid="driver-queued-count">
-              {flushing ? t("drv_syncing") : t("drv10_waiting_signal").replace("{n}", queuedCount)}
-            </span>
-          )}
-          {!online && (
-            <span className="driver-offline">
-              <WifiOff size={14} /> {t("drv_offline")}
-            </span>
-          )}
-          {!driver.bound && (
-            <button type="button" className="driver-link" onClick={switchDriver}>
-              {t("drv_switch")}
-            </button>
-          )}
-        </span>
-      </header>
-
-      <SyncStatus
-        lastSync={lastSync}
-        pending={queuedCount}
-        flushing={flushing}
-        online={online}
-        onRetry={canFlush ? flushQueue : undefined}
-      />
-      {sessionCard}
-      <SafetyBanner safety={safety} />
-      <NeedsActionList items={rejected} onDismiss={dismissRejected} />
-
-      {tab === "instruksi" && (
-        <InstructionCard
-          feed={instructionFeed}
-          blocked={blocked}
-          outboxItems={outboxItems}
-          say={say}
-          showEmpty
+    <main className={`driver-shell has-tabs${routeMap ? " is-route-map" : ""}`} data-testid="driver-app">
+      {/* sY4R6: the route map is full-bleed, without the app header. */}
+      {!routeMap && (
+        <DriverTopBar
+          truckCode={driver.truck_code}
+          onChangeTruck={driver.bound ? undefined : switchDriver}
+          sync={syncPill}
         />
       )}
 
-      {tab === "lapor" && (
-        <ExceptionPanel
-          driver={driver}
-          spj={spjView}
-          stopIndex={pendingIndex}
-          outboxItems={outboxItems}
-          say={say}
+      {sessionExpired ? (
+        <SignInAgain
+          username={session?.username || null}
+          queued={queuedCount}
+          onSignedIn={() => {
+            setSessionExpired(false);
+            flushRef.current();
+          }}
         />
-      )}
+      ) : (
+        <div className={`drv-body${tab === "rute" ? " is-route" : ""}`}>
+          <RejectedList items={rejected} onDismiss={dismissRejected} />
 
-      {tab === "rute" && (
-        <>
-          <section className="driver-identity">
-            <h1>
-              {driver.driver_name}{" "}
-              {/* H3: a picked name is from the simulated roster; a bound account names itself. */}
-              {!driver.bound && (
-                <span className="driver-badge driver-provenance" data-testid="driver-identity-sim">
-                  {t("drv6_sim_badge")}
-                </span>
-              )}
-            </h1>
-            <p className="driver-trip-meta">
-              <span className="driver-mono">{driver.truck_code}</span>
-              {spjAktif ? (
-                <>
-                  {" · "}
-                  <span className="driver-mono">{spjAktif.spj_number}</span>
-                  {" → "}
-                  {spjAktif.destination}
-                </>
-              ) : (
-                t("drv_no_spj")
-              )}
-            </p>
-          </section>
-
-          <PreTripForm
-            driver={driver}
-            done={pretripDone}
-            onDone={() => {
-              rememberPretrip(driver.truck_code);
-              setPretripDone(true);
-              say(t("drv_pretrip_saved"));
-            }}
-            say={say}
-          />
-
-          {spjView && pendingIndex >= 0 && (
-            <StopCard
-              key={`${spjView.spj_id}-${pendingIndex}`}
-              spj={spjView}
-              stop={stops[pendingIndex]}
-              index={pendingIndex}
-              current
-              locked={false}
-              blocked={blocked}
-              arEnabled={arEnabled}
-              onCompleted={() => {
-                loadSpj();
-                say(t("drv_stop_done_toast"));
-              }}
-              say={say}
-            />
-          )}
-
-          {/* A new supervisor instruction interrupts the route, after the current stop. */}
-          <InstructionCard feed={instructionFeed} blocked={blocked} outboxItems={outboxItems} say={say} />
-
-          {spjView && (
-            <RouteOverview spj={spjView} destination={destinationTarget(spjView, destinations)}>
-              <ol className="driver-stop-list">
-                {stops.map((stop, i) =>
-                  i === pendingIndex ? (
-                    <li key={`${spjView.spj_id}-${i}`} className="stop-row is-next" aria-current="step">
-                      <span className="stop-row-num" aria-hidden="true">
-                        {i + 1}
-                      </span>
-                      <div className="stop-row-body">
-                        <strong className="stop-row-name">{stop.name}</strong>
-                        <p className="stop-row-meta">{t("drv10_route_next")}</p>
-                      </div>
-                    </li>
-                  ) : (
-                    <StopCard
-                      key={`${spjView.spj_id}-${i}`}
-                      spj={spjView}
-                      stop={stop}
-                      index={i}
-                      current={false}
-                      locked={pendingIndex !== -1 && i > pendingIndex}
-                      blocked={blocked}
-                      arEnabled={false}
-                      onCompleted={loadSpj}
-                      say={say}
-                    />
-                  ),
-                )}
-              </ol>
-              <DestinationCard spj={spjView} destinations={destinations} row />
-            </RouteOverview>
-          )}
-
-          {!spjAktif && (
-            <section className="driver-card driver-empty" data-testid="driver-no-spj">
-              <span className="driver-empty-icon" aria-hidden="true">
-                <Truck size={24} />
-              </span>
-              <h2>{t("drv_no_spj_desc")}</h2>
-              <p className="driver-muted">{t("drv_no_spj_hint")}</p>
-            </section>
-          )}
-
-          {history.length > 0 && (
-            <section className="driver-card" data-testid="history-card">
-              <h2>
-                <ClipboardCheck size={20} aria-hidden="true" /> {t("drv_history_title")}
-              </h2>
-              <ul className="history-list">
-                {history.slice(0, 5).map((s) => (
-                  <li key={s.spj_id}>
-                    <span>
-                      <strong className="driver-mono">{s.spj_number}</strong>
-                      <small>
-                        {s.date} — {s.destination}
-                      </small>
-                    </span>
-                    <span className="driver-badge done">{t("drv_history_done")}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </>
-      )}
-
-      {tab === "tpa" &&
-        (doneScreen ? (
-          <section className="driver-card driver-done" data-testid="done-screen">
-            <span className="driver-done-icon" aria-hidden="true">
-              <ShieldCheck size={32} />
-            </span>
-            <h1>{t("drv_done_title")}</h1>
-            <p className="driver-muted">{t("drv_done_desc")}</p>
-            {doneScreen.receipt ? (
-              <ReceiptWeights receipt={doneScreen.receipt} />
+          {tab === "instruksi" &&
+            (blocked ? (
+              <>
+                {queuePanel}
+                <SafetyGate safety={safety} onTellDispatch={() => selectTab("lapor")} />
+              </>
+            ) : pretripDone === null ? (
+              <p className="drv-muted" data-testid="pretrip-loading" role="status" aria-busy="true">
+                {t("d1_pretrip_loading")}
+              </p>
+            ) : showPretripForm ? (
+              <>
+                {queuePanel}
+                <PretripCheck onSubmit={sendPretrip} />
+              </>
             ) : (
-              <p className="driver-muted" data-testid="receipt-weights-pending">
-                {t("drv7_receipt_weights_pending")}
-              </p>
-            )}
-            <div className="driver-actions">
-              <button
-                type="button"
-                className="driver-btn ghost"
-                onClick={() => {
-                  setDoneScreen(false);
-                  selectTab(null);
-                }}
-              >
-                <ArrowLeft size={18} aria-hidden="true" /> {t("drv_done_back")}
-              </button>
-            </div>
-          </section>
-        ) : deliverySpj ? (
-          <>
-            <DestinationCard spj={deliverySpj} destinations={destinations} />
-            <DeliveryCard
-              spj={deliverySpj}
+              <>
+                <SafetyNotice safety={safety} />
+                <InstructionsScreen
+                  driver={driver}
+                  feed={instructionFeed}
+                  plans={planInstructions}
+                  blocked={blocked}
+                  outboxItems={outboxItems}
+                  pretrip={{ done: pretripDone, record: pretripRecord }}
+                  onStartPretrip={() => setPretripOpen(true)}
+                  say={say}
+                  queuePanel={queuePanel}
+                />
+              </>
+            ))}
+
+          {tab === "lapor" && (
+            <ExceptionPanel
+              driver={driver}
+              spj={spjView}
+              stopIndex={pendingIndex}
+              outboxItems={outboxItems}
               say={say}
-              onDone={(receipt) => {
-                setDoneScreen({ receipt, spjId: deliverySpj.spj_id });
+            />
+          )}
+
+          {tab === "rute" &&
+            (routeMap ? (
+              <RouteScreen
+                driver={driver}
+                spj={spjView}
+                pendingIndex={pendingIndex}
+                destinations={destinations}
+                blocked={blocked}
+                arEnabled={arEnabled}
+                instructionFeed={instructionFeed}
+                outboxItems={outboxItems}
+                safety={safety}
+                online={online}
+                pending={queuedCount}
+                flushing={flushing}
+                onStopCompleted={() => {
+                  loadSpj();
+                  say(t("drv_stop_done_toast"));
+                  // The last stop hands over to the TPA tab, as designed.
+                  if (stopsLeft <= 1) selectTab("tpa");
+                }}
+                onOpenInstructions={() => selectTab("instruksi")}
+                say={say}
+              />
+            ) : (
+              <section className="drv-screen drv-empty" data-testid="driver-no-spj">
+                <Mascot size={80} />
+                <h1 className="drv-h2">{t("drv_no_spj_desc")}</h1>
+                <p className="drv-muted">{t("drv_no_spj_hint")}</p>
+              </section>
+            ))}
+
+          {tab === "tpa" && (
+            <TpaScreen
+              driver={driver}
+              spj={deliverySpj}
+              routeSpj={spjView}
+              stopsLeft={stopsLeft}
+              destinations={destinations}
+              doneScreen={doneScreen}
+              onReceiptDone={(receipt, spjId) => {
+                setDoneScreen({ receipt, spjId });
                 loadSpj();
               }}
+              onDoneBack={() => {
+                setDoneScreen(false);
+                selectTab(null);
+              }}
+              history={history}
+              instructionFeed={instructionFeed}
+              safety={safety}
+              online={online}
+              pending={queuedCount}
+              flushing={flushing}
+              lastSync={lastSync}
+              say={say}
+              onSignOut={signOutField}
             />
-          </>
-        ) : (
-          <>
-            <section className="driver-card driver-empty" data-testid="tpa-waiting">
-              <span className="driver-empty-icon" aria-hidden="true">
-                <Warehouse size={24} />
-              </span>
-              <h2>{t("drv11_tpa_wait_title")}</h2>
-              <p className="driver-muted">
-                {spjView ? t("drv11_tpa_wait_desc").replace("{n}", stopsLeft) : t("drv_no_spj_desc")}
-              </p>
-            </section>
-            {spjView && <DestinationCard spj={spjView} destinations={destinations} />}
-          </>
-        ))}
+          )}
+        </div>
+      )}
 
-      <nav className="driver-tabs" aria-label={t("drv10_tabs_label")}>
-        {TABS.map(({ id, icon: Icon, label }) => (
-          <button
-            key={id}
-            type="button"
-            className={`driver-tab${tab === id ? " active" : ""}`}
-            data-testid={`driver-tab-${id}`}
-            aria-current={tab === id ? "page" : undefined}
-            onClick={() => selectTab(id)}
-          >
-            <span className="driver-tab-icon" aria-hidden="true">
-              <Icon size={22} />
-            </span>
-            <span>{t(label)}</span>
-            {id === "instruksi" && openInstructions > 0 && (
-              <span className="driver-tab-count" data-testid="driver-tab-instruksi-count">
-                {openInstructions}
-              </span>
-            )}
-          </button>
-        ))}
-      </nav>
+      {!sessionExpired && <DriverTabBar tab={tab} onSelect={selectTab} instructionCount={openInstructions} />}
 
       <Toast message={toast} />
     </main>

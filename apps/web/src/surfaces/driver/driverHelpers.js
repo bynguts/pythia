@@ -151,6 +151,44 @@ export function receiptWeightRows(receipt) {
     });
 }
 
+// The gate slot a plan instruction carries only as text (a dispatch without
+// structured fields): "Berangkat 05:30 · Slot gerbang <facility> 10:00–10:15".
+// Returns { facility, start, end, depart_at } or null.
+export function instructionSlotFromText(text) {
+  const s = String(text || "");
+  const slot = /Slot gerbang (.+?) (\d{1,2}:\d{2})[–-](\d{1,2}:\d{2})/.exec(s);
+  const depart = /Berangkat (\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}|\d{1,2}:\d{2})/.exec(s);
+  if (!slot && !depart) return null;
+  return {
+    facility: slot ? slot[1] : null,
+    start: slot ? slot[2] : null,
+    end: slot ? slot[3] : null,
+    depart_at: depart ? depart[1] : null,
+  };
+}
+
+// The "Depart HH:MM" headline of a gate slot. `depart_at` is "HH:MM", or
+// "YYYY-MM-DD HH:MM" when the departure falls on another day than the slot.
+export function departHeadline(slot) {
+  const raw = typeof slot?.depart_at === "string" ? slot.depart_at.trim() : "";
+  const match = /^(?:(\d{4}-\d{2}-\d{2}) )?(\d{1,2}:\d{2})$/.exec(raw);
+  if (!match) return null;
+  return { time: match[2], date: match[1] || null };
+}
+
+// Today's pre-trip record ({ items, created_at }) for the done banner: the time,
+// how many minor NO items went to dispatch, and whether a serious one did.
+export function pretripSummary(record, seriousKeys) {
+  const items = record && typeof record.items === "object" && record.items ? record.items : {};
+  const failed = Object.keys(items).filter((key) => items[key] === false);
+  const serious = failed.some((key) => seriousKeys.has(key));
+  return {
+    time: clockTime(record?.created_at),
+    minor: failed.filter((key) => !seriousKeys.has(key)).length,
+    serious,
+  };
+}
+
 // "14:05" (HH:MM, 24 h) in the phone's local time; id-ID would print "14.05".
 export function clockTime(iso) {
   const date = iso ? new Date(iso) : null;
