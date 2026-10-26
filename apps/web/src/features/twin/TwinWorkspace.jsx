@@ -716,6 +716,16 @@ export function TwinWorkspace({ onCityChange }) {
   useEffect(() => {
     placeOverlays();
   }, [landfillLabel, landfillOpen, prepared, view, mapReady, placeOverlays]);
+  // The tag can grow after it was placed (a web font swapping in, a longer queue line); place it
+  // again so it never hangs past the canvas edge.
+  const hasLandfillTag = Boolean(landfillLabel);
+  useEffect(() => {
+    const tag = landfillTagRef.current;
+    if (!tag || typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(() => placeLandfillTag());
+    observer.observe(tag);
+    return () => observer.disconnect();
+  }, [mapReady, hasLandfillTag, placeLandfillTag]);
 
   // The district tooltip flips to the other side of the cursor near an edge.
   const tooltipRef = useRef(null);
