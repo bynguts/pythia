@@ -952,6 +952,13 @@ class SpjStore:
             row = self._fetch_status(connection, spj_id)
             if row["status"] != "draft":
                 raise ValueError(f"cannot activate SPJ in status '{row['status']}'")
+            # A trip worked today on tomorrow's SPJ would count for tomorrow: the day
+            # recap, the KPIs and readiness read the SPJ date, so it is refused.
+            if row["date"] > _today():
+                raise ValueError(
+                    f"cannot activate: this SPJ is for {row['date']} and today is {_today()}; "
+                    "activate it on that day so its trips and tonnes count for the right day"
+                )
             stop_count = connection.execute(
                 "SELECT COUNT(*) FROM spj_stops WHERE spj_id=?", (spj_id,)
             ).fetchone()[0]
