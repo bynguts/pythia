@@ -318,9 +318,12 @@
 
 /* ── Allocation card ───────────────────────────────────────────────────── */
 .tmr-alloc {
+  min-width: 0;
   min-height: 100%;
 }
+/* min-width: 0 lets the truck table scroll inside its wrap instead of widening the page. */
 .tmr-alloc > .ui-card-body {
+  min-width: 0;
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
