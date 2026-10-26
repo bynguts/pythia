@@ -361,6 +361,12 @@ export function NeedsYouPanel({ feed, alerts, openId, onSelect, onFocusTruck, tr
                     {open && when && <span className="ops-item-when">{when}</span>}
                   </div>
                   <p className="ops-item-sub">{view.sub}</p>
+                  {item.next_step && item.rule && (
+                    <p className="ops-item-sub" data-testid="needs-next-step">
+                      {fill(t(item.next_step.key), item.next_step.params || {})} ·{" "}
+                      {fill(t(item.rule.key), item.rule.params || {})}
+                    </p>
+                  )}
                   {state.done && (
                     <p className="ops-item-note" role="status">
                       {state.done}

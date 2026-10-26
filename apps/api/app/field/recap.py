@@ -3,6 +3,8 @@
 Read-only. Every figure comes from records on this server (SPJ, receipts, gate
 arrivals, driver exceptions, damage reports) or from the stored plans (MODEL_OUTPUT).
 A side with no data is ``None``, never zero, and ``delta`` needs both sides.
+``by_truck`` flags a truck's exception rate only from ``MIN_TRIPS_FOR_FLAG`` trips
+on; below that the row says ``few_trips`` instead of a misleading 50-100%.
 """
 
 from __future__ import annotations
@@ -11,7 +13,7 @@ from datetime import date as date_type
 from typing import Any
 
 from app.api.state import _OPERATIONS_PLAN_STORE
-from app.core.units import GATE_ALERT_MIN
+from app.core.units import GATE_ALERT_MIN, MIN_TRIPS_FOR_FLAG
 from app.field import safety
 from app.field.damage_reports import DAMAGE_STORE
 from app.field.driver_exceptions import EXCEPTION_STORE, KINDS
@@ -21,6 +23,10 @@ FORECAST_CLASSIFICATION = "MODEL_OUTPUT"
 ACTUAL_CLASSIFICATION = "OBSERVED_IN_APP"
 SPJ_STATUSES = ("draft", "aktif", "selesai", "batal")
 PLAN_LIMIT = 200
+# Share of a truck's trips with a driver exception from which the recap flags it for review.
+EXCEPTION_RATE_FLAG = 0.25
+# An empty TPS is the stop's problem, not the truck's: it does not count against the truck.
+_TRUCK_EXCEPTION_KINDS = tuple(kind for kind in KINDS if kind != "tps_empty")
 
 
 def _local_date(iso: str | None) -> str | None:
@@ -97,6 +103,34 @@ def _incidents(day: str) -> dict[str, Any]:
             kinds[exc.kind] += 1
     damage = sum(1 for rep in DAMAGE_STORE.list() if _local_date(rep.created_at) == day)
     return {"exceptions": kinds, "damage_reports": damage}
+
+
+def _by_truck(day: str) -> list[dict[str, Any]]:
+    """Per truck: trips (receipts), driver exceptions and their rate; flagged only with enough trips."""
+    trips: dict[str, int] = {}
+    for spj in SPJ_STORE.list():
+        if spj.date == day:
+            trips[spj.truck_code] = trips.get(spj.truck_code, 0) + (1 if spj.receipt else 0)
+    exceptions: dict[str, int] = {}
+    for exc in EXCEPTION_STORE.list():
+        if exc.kind in _TRUCK_EXCEPTION_KINDS and _local_date(exc.reported_at or exc.created_at) == day:
+            exceptions[exc.truck_code] = exceptions.get(exc.truck_code, 0) + 1
+    rows = []
+    for code in sorted(set(trips) | set(exceptions)):
+        n, k = trips.get(code, 0), exceptions.get(code, 0)
+        rate = round(k / n, 2) if n else None
+        few = n < MIN_TRIPS_FOR_FLAG
+        rows.append(
+            {
+                "truck_code": code,
+                "trips": n,
+                "exceptions": k,
+                "exception_rate": None if few else rate,
+                "flagged": not few and rate is not None and rate >= EXCEPTION_RATE_FLAG,
+                "few_trips": few,
+            }
+        )
+    return rows
 
 
 def _summary_parts(data: dict[str, Any]) -> dict[str, list[str]]:
@@ -183,6 +217,8 @@ def daily_recap(date: str | date_type) -> dict[str, Any]:
             "max_min": max(waits) if waits else None,
         },
         "incidents": _incidents(day),
+        "by_truck": _by_truck(day),
+        "flag_rule": {"min_trips": MIN_TRIPS_FOR_FLAG, "exception_rate": EXCEPTION_RATE_FLAG},
         "evidence": {
             "stops_missing_evidence": facts["missing"],
             "overrides": facts["overrides"],

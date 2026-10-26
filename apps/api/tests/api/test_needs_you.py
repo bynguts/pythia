@@ -18,6 +18,7 @@ STOP = {
     "lat": -6.14,
     "lng": 106.7,
 }
+TINY_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 ITEM_KEYS = {
     "id",
     "kind",
@@ -30,6 +31,8 @@ ITEM_KEYS = {
     "suggestion",
     "actions",
     "classification",
+    "next_step",
+    "rule",
 }
 
 
@@ -257,3 +260,136 @@ def test_gate_peak_groups_unaccepted_holds_by_slot(monkeypatch):
     assert item["classification"] == "SIMULATED" and item["facts"]["expected_wait_min"] == 38.0
     assert [h["truck_code"] for h in item["facts"]["holds"]] == ["T-031", "T-044"]
     assert feed._gate_peaks("2026-10-26", {item["id"]: {"status": "RESOLVED"}}) == []
+    step, rule = feed._guidance(item)
+    assert step == {"key": "ns_step_gate_peak", "params": {"n": 2, "slot": "10:00"}}
+    assert rule["id"] == "CAPACITY_PER_SLOT" and rule["key"] == "ns_rule_gate_peak"
+
+
+def _keys(body: dict, truck: str) -> list[tuple]:
+    return [(i["next_step"]["key"], i["rule"]["id"], i["rule"]["value"]) for i in _mine(body, truck)]
+
+
+def test_every_item_names_a_next_step_and_the_rule_that_raised_it(api_client, auth_headers, truck):
+    _exception(truck, "accident")
+    [item] = _mine(_feed(api_client, auth_headers), truck)
+    assert item["next_step"] == {"key": "ns_step_accident", "params": {"truck": truck}}
+    assert item["rule"] == {
+        "id": "DRIVER_EXCEPTION",
+        "value": "accident",
+        "unit": None,
+        "key": "ns_rule_accident",
+        "params": {"value": "accident", "reports": 1},
+    }
+
+
+def test_heavy_damage_cites_its_severity_and_a_backup_step(api_client, auth_headers, truck):
+    rep = DAMAGE_STORE.create(truck, "Driver 01", "rem", "berat", "rem blong", source="pretrip")
+    try:
+        assert _keys(_feed(api_client, auth_headers), truck) == [
+            ("ns_step_breakdown", "DAMAGE_SEVERITY", "berat")
+        ]
+    finally:
+        DAMAGE_STORE.resolve(rep.report_id)
+
+
+def test_duty_items_cite_the_duty_limits_from_units(monkeypatch):
+    from app.core.units import DUTY_BLOCK_MIN, DUTY_WARN_MIN
+
+    def truck(code, state, minutes, override=None):
+        return {
+            "truck_code": code,
+            "duty_state": state,
+            "override": override,
+            "duty_minutes": minutes,
+            "warn_at_minutes": DUTY_WARN_MIN,
+            "block_at_minutes": DUTY_BLOCK_MIN,
+            "shift_started_at": None,
+            "shift_source": "pretrip",
+        }
+
+    trucks = [truck("DTW-1", "warn", 650), truck("DTW-2", "blocked", 730), truck("DTW-3", "blocked", 730, {})]
+    monkeypatch.setattr(
+        feed.safety, "overview", lambda now: {"classification": feed.safety.OBSERVED, "trucks": trucks}
+    )
+    items = {i["truck_code"]: i for i in feed.needs_you()["items"] if i["id"].startswith("duty-DTW")}
+    assert (items["DTW-1"]["rule"]["id"], items["DTW-1"]["rule"]["value"]) == ("DUTY_WARN_MIN", DUTY_WARN_MIN)
+    assert (items["DTW-2"]["rule"]["id"], items["DTW-2"]["rule"]["value"]) == (
+        "DUTY_BLOCK_MIN",
+        DUTY_BLOCK_MIN,
+    )
+    assert items["DTW-2"]["next_step"]["key"] == "ns_step_duty_blocked"
+    # An overridden block is a warning, but the limit it crossed is still the 12 h one.
+    assert items["DTW-3"]["kind"] == "duty_warn" and items["DTW-3"]["rule"]["id"] == "DUTY_BLOCK_MIN"
+
+
+def _receipt_item(failed: list[str], spj_number: str = "DLH-DKI/SPJ/27-10-2026/000009") -> dict:
+    return {
+        "kind": "receipt_check",
+        "truck_code": "T-1",
+        "spj_id": "abc",
+        "suggestion": None,
+        "actions": ["mark_handled"],
+        "facts": {"spj_number": spj_number, "failed": [{"id": c, "detail": ""} for c in failed]},
+    }
+
+
+def test_receipt_check_steps_answer_the_most_serious_failed_check():
+    from app.core.units import TRUCK_CAPACITY_TONS
+
+    step, rule = feed._guidance(_receipt_item(["ocr_vs_entered", "sealed"]))
+    assert step["key"] == "ns_step_receipt_sealed" and rule["id"] == "SPJ_SEAL"
+    step, rule = feed._guidance(_receipt_item(["net_vs_capacity"]))
+    assert step == {"key": "ns_step_receipt_capacity", "params": {"spj": "DLH-DKI/SPJ/27-10-2026/000009"}}
+    assert (rule["id"], rule["value"], rule["unit"]) == ("TRUCK_CAPACITY_TONS", TRUCK_CAPACITY_TONS, "t")
+    assert feed._guidance(_receipt_item(["duplicate_ticket"]))[1]["id"] == "DUPLICATE_TICKET_PHOTO"
+    assert feed._guidance(_receipt_item(["ocr_vs_entered"]))[0]["key"] == "ns_step_receipt_ocr"
+
+
+def test_failed_receipt_check_is_an_item_and_a_broken_seal_is_urgent(monkeypatch, truck):
+    import app.field.receipt_checks as checks
+
+    spj = SPJ_STORE.create_with_stops(
+        "Driver 01", truck, "TPST Bantargebang", False, "normal", "uji", [dict(STOP)], created_by="admin"
+    )
+    SPJ_STORE.activate(spj.spj_id, actor="admin")
+    override = {"reason": "Foto bukti tidak tersedia di lokasi", "actor": "supervisor"}
+    SPJ_STORE.complete_stop(spj.spj_id, 0, override=override, actor="supervisor")
+    SPJ_STORE.record_receipt(spj.spj_id, "r.png", TINY_PNG, 15_000.0, "manual", tare_weight_kg=9_000.0)
+
+    def fake(store, record, photos=None, tickets=None):
+        if record.spj_id != spj.spj_id:
+            return None
+        failed = {"id": "sealed", "state": "fail", "detail": "Seal broken."}
+        return {"overall": "review", "basis": checks.BASIS, "checks": [failed]}
+
+    monkeypatch.setattr(checks, "checks_for", fake)
+    [item] = [i for i in feed.needs_you()["items"] if i["spj_id"] == spj.spj_id]
+    assert item["kind"] == "receipt_check" and item["severity"] == "urgent" and item["category"] == "gate"
+    assert item["next_step"]["key"] == "ns_step_receipt_sealed" and item["rule"]["id"] == "SPJ_SEAL"
+
+
+@pytest.mark.parametrize(
+    ("check", "step", "rule_id"),
+    [
+        ("ticket_document", "ns_step_receipt_document", "TICKET_DOCUMENT"),
+        ("ticket_arithmetic", "ns_step_receipt_arithmetic", "TICKET_ARITHMETIC_TOLERANCE_KG"),
+        ("duplicate_ticket_no", "ns_step_receipt_ticket_no", "DUPLICATE_TICKET_NO"),
+        ("plate_vs_truck", "ns_step_receipt_plate", "PLATE_VS_TRUCK"),
+    ],
+)
+def test_ticket_ocr_checks_each_have_their_own_step_and_rule(check, step, rule_id):
+    got_step, got_rule = feed._guidance(_receipt_item([check, "ocr_vs_entered"]))
+    assert got_step["key"] == step and got_rule["id"] == rule_id
+
+
+def test_ticket_arithmetic_rule_cites_the_tolerance_and_the_feed_batches_ticket_numbers(monkeypatch, truck):
+    import app.field.receipt_checks as checks
+
+    rule = feed._guidance(_receipt_item(["ticket_arithmetic"]))[1]
+    assert (rule["value"], rule["unit"]) == (checks.TICKET_ARITHMETIC_TOLERANCE_KG, "kg")
+    seen = []
+    monkeypatch.setattr(
+        checks, "checks_for", lambda store, spj, photos=None, tickets=None: seen.append(tickets)
+    )
+    feed._receipt_checks(feed.local_today().isoformat(), {})
+    assert all(isinstance(t, dict) for t in seen)  # one batch lookup, never None (a query per receipt)

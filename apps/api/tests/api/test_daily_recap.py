@@ -223,3 +223,54 @@ def test_empty_day_summary_lines_say_there_is_no_data(day):
     lines = daily_recap(day)["summary_lines"]
     assert lines["en"] == ["No plan or recorded activity for this day yet."]
     assert len(lines["id"]) == 1
+
+
+def _truck_exception(truck: str, day: str, kind: str = "road_closed") -> None:
+    EXCEPTION_STORE.create(
+        kind=kind,
+        truck_code=truck,
+        driver_name="Pengemudi Uji",
+        reported_by="driver",
+        spj_id=None,
+        stop_index=None,
+        note="",
+        photo_name=None,
+        photo_b64=None,
+        lat=None,
+        lng=None,
+        approx=False,
+        reported_at=f"{day}T09:00:00+07:00",
+    )
+
+
+def test_truck_with_fewer_than_three_trips_says_few_trips_not_a_rate(day):
+    from app.core.units import MIN_TRIPS_FOR_FLAG
+
+    assert MIN_TRIPS_FOR_FLAG == 3
+    truck = f"FEW-{uuid4().hex[:6]}"
+    spj = _spj(truck)
+    _receipt(spj.spj_id, 15_000.0, 9_000.0)
+    _truck_exception(truck, day)
+    [row] = [r for r in daily_recap(day)["by_truck"] if r["truck_code"] == truck]
+    assert row == {
+        "truck_code": truck,
+        "trips": 1,
+        "exceptions": 1,
+        "exception_rate": None,
+        "flagged": False,
+        "few_trips": True,
+    }
+
+
+def test_truck_is_flagged_only_from_three_trips_on(day):
+    flagged, clean = f"FLG-{uuid4().hex[:6]}", f"CLN-{uuid4().hex[:6]}"
+    for truck in (flagged, clean):
+        for _ in range(3):
+            _receipt(_spj(truck).spj_id, 15_000.0, 9_000.0)
+    _truck_exception(flagged, day)
+    _truck_exception(clean, day, kind="tps_empty")  # the stop's problem, not the truck's
+    rows = {r["truck_code"]: r for r in daily_recap(day)["by_truck"]}
+    assert rows[flagged]["trips"] == 3 and rows[flagged]["exception_rate"] == 0.33
+    assert rows[flagged]["flagged"] is True and rows[flagged]["few_trips"] is False
+    assert rows[clean]["exceptions"] == 0 and rows[clean]["flagged"] is False
+    assert daily_recap(day)["flag_rule"] == {"min_trips": 3, "exception_rate": 0.25}

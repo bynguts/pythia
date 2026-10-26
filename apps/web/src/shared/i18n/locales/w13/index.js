@@ -22,6 +22,12 @@ import { s4En } from "./s4.en.js";
 import { s4Id } from "./s4.id.js";
 import { s5En } from "./s5.en.js";
 import { s5Id } from "./s5.id.js";
+import { slEn } from "./sl.en.js";
+import { slId } from "./sl.id.js";
+import { ocEn } from "./oc.en.js";
+import { ocId } from "./oc.id.js";
+import { nsEn } from "./ns.en.js";
+import { nsId } from "./ns.id.js";
 
 export const w13En = {
   ...fEn,
@@ -34,6 +40,9 @@ export const w13En = {
   ...s4En,
   ...s5En,
   ...olEn,
+  ...slEn,
+  ...ocEn,
+  ...nsEn,
 };
 export const w13Id = {
   ...fId,
@@ -46,4 +55,7 @@ export const w13Id = {
   ...s4Id,
   ...s5Id,
   ...olId,
+  ...slId,
+  ...ocId,
+  ...nsId,
 };

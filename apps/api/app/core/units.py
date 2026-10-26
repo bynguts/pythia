@@ -35,6 +35,10 @@ DUTY_WARN_MIN = 600
 DUTY_BLOCK_MIN = 720
 GATE_ALERT_MIN = 180
 
+# A truck's exception rate is flagged only from this many trips on: below it one
+# report reads as 50-100% and says more about the sample than about the truck.
+MIN_TRIPS_FOR_FLAG = 3
+
 UNIT_GLOSSARY = {
     "trucks_required": "trucks",
     "crews_required": "crew teams (1 team operates 1 truck per shift)",

@@ -9,7 +9,14 @@ Read-only. It gathers what other stores already hold and adds no fact of its own
 - ``gate_peak``: unaccepted hold recommendations of today's gate-slot board (queue model);
 - ``duty_warn`` / ``duty_blocked``: duty hours from **observed** app events only.
   The safety module's seeded scenario is not an alert (blocking and WhatsApp
-  alerts act on observed events only), so it is counted under ``sources`` instead.
+  alerts act on observed events only), so it is counted under ``sources`` instead;
+- ``receipt_check``: a weighbridge receipt of the last ``RECEIPT_CHECK_DAYS`` local
+  days whose rule checks (app.field.receipt_checks) want a review: recorded data
+  compared by plain rules, not AI. A broken seal is urgent.
+
+Every item also carries a deterministic ``next_step`` (one imperative sentence) and
+the ``rule`` that raised it (the constant's name and value), both as an i18n key
+plus params for the console's ``ns_`` catalog: templates, never generated text.
 
 An item whose follow-up (``POST /api/alert/follow-up``, keyed by the item ``id``)
 is RESOLVED is dropped. Ids that recur every day (a corridor, a duty clock, a
@@ -19,10 +26,12 @@ gate slot) only honour a follow-up recorded on the same local day.
 from __future__ import annotations
 
 from datetime import datetime
+from inspect import signature
 from typing import Any
 
 from app.api.state import _OPERATIONS_PLAN_STORE, history_store
 from app.core.env import local_today
+from app.core.units import DUTY_BLOCK_MIN, DUTY_WARN_MIN, TRUCK_CAPACITY_TONS
 from app.field import safety
 from app.field.damage_reports import DAMAGE_STORE
 from app.field.driver_exceptions import EXCEPTION_STORE
@@ -37,11 +46,13 @@ CATEGORIES = {
     "duty_blocked": "trucks",
     "gate_peak": "gate",
     "tps_empty": "tps",
+    "receipt_check": "gate",
 }
 URGENT_KINDS = ("accident", "truck_breakdown", "duty_blocked")
 FOLLOW_UP_SCAN = 2000
 # Unique per record: a follow-up on any day closes them.
-_UNIQUE_PREFIXES = ("driver-exception:", "damage:")
+_UNIQUE_PREFIXES = ("driver-exception:", "damage:", "receipt-check:")
+RECEIPT_CHECK_DAYS = 7
 
 
 def _local_date(iso: str | None) -> str | None:
@@ -318,6 +329,49 @@ def _gate_peaks(day: str, follow_ups: dict[str, dict[str, Any]]) -> list[dict[st
     return items
 
 
+def _receipt_checks(day: str, follow_ups: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Receipts of the recent local days whose rule checks ask for a review."""
+    from datetime import date, timedelta
+
+    from app.field.receipt_checks import checks_for
+
+    since = (date.fromisoformat(day) - timedelta(days=RECEIPT_CHECK_DAYS - 1)).isoformat()
+    recent = [
+        s
+        for s in SPJ_STORE.list()
+        if s.receipt and (_local_date(s.receipt.get("recorded_at")) or "") >= since
+    ]
+    photos = SPJ_STORE.sealed_receipt_photos() if recent else {}
+    tickets = SPJ_STORE.receipt_ticket_numbers() if recent else {}
+    items = []
+    for spj in recent:
+        alert_id = f"receipt-check:{spj.spj_id}"
+        if (follow_ups.get(alert_id) or {}).get("status") == "RESOLVED":
+            continue
+        result = checks_for(SPJ_STORE, spj, photos, tickets)
+        if result is None or result["overall"] != "review":
+            continue
+        failed = [c for c in result["checks"] if c["state"] == "fail"]
+        items.append(
+            _item(
+                alert_id,
+                "receipt_check",
+                truck_code=spj.truck_code,
+                spj_id=spj.spj_id,
+                created_at=spj.receipt.get("recorded_at"),
+                facts={
+                    "spj_number": spj.spj_number,
+                    "failed": [{"id": c["id"], "detail": c["detail"]} for c in failed],
+                    "basis": result["basis"],
+                },
+                actions=["mark_handled"],
+                classification="FIELD",
+                severity="urgent" if any(c["id"] == "sealed" for c in failed) else None,
+            )
+        )
+    return items
+
+
 def _duty(day: str, now: datetime, follow_ups: dict[str, dict[str, Any]]) -> tuple[list, dict[str, Any]]:
     overview = safety.overview(now)
     observed = overview["classification"] == safety.OBSERVED
@@ -380,6 +434,131 @@ def _suggest_backups(items: list[dict[str, Any]], day: str) -> None:
             }
 
 
+def _step(key: str, **params: Any) -> dict[str, Any]:
+    return {"key": f"ns_step_{key}", "params": params}
+
+
+def _rule(key: str, rule_id: str, value: Any, unit: str | None = None, **params: Any) -> dict[str, Any]:
+    """The rule or threshold that raised an item: its name, its value, and the i18n key that says it."""
+    return {
+        "id": rule_id,
+        "value": value,
+        "unit": unit,
+        "key": f"ns_rule_{key}",
+        "params": {"value": value, **params},
+    }
+
+
+# A failed receipt check, most serious first: the one the next step answers.
+_RECEIPT_CHECK_ORDER = (
+    "sealed",
+    "duplicate_ticket",
+    "duplicate_ticket_no",
+    "ticket_document",
+    "plate_vs_truck",
+    "ticket_arithmetic",
+    "net_vs_capacity",
+    "ocr_vs_entered",
+)
+
+
+def _guidance(item: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """(next_step, rule) of one item, from its kind and facts alone."""
+    kind, facts = item["kind"], item["facts"]
+    truck = item["truck_code"] or ""
+    if kind == "deviation":
+        from app.forecast.engine import detect_route_deviation
+
+        # The corridor width the fleet feed calls the detector with (its default), read, not copied.
+        meters = signature(detect_route_deviation).parameters["threshold_meters"].default
+        return _step("deviation", truck=truck), _rule("deviation", "CORRIDOR_THRESHOLD_M", meters, "m")
+    if kind == "truck_breakdown" and "exception_id" not in facts:
+        rule = _rule("damage_heavy", "DAMAGE_SEVERITY", "berat")
+    elif kind in ("accident", "truck_breakdown", "road_closed", "tps_empty"):
+        rule = _rule(kind, "DRIVER_EXCEPTION", kind, reports=facts.get("reports", 1))
+    if kind == "accident":
+        return _step("accident", truck=truck), rule
+    if kind == "truck_breakdown":
+        suggestion = item["suggestion"] or {}
+        if suggestion.get("kind") == "reassign":
+            return _step("breakdown_backup", truck=truck, to=suggestion["to_truck"]), rule
+        return _step("breakdown", truck=truck), rule
+    if kind == "road_closed":
+        return _step("road_closed", truck=truck), rule
+    if kind == "tps_empty":
+        stop = facts.get("stop_name") or ""
+        return _step("tps_skip" if "skip_stop" in item["actions"] else "tps", stop=stop), rule
+    if kind == "gate_peak":
+        from app.fleet.gate_slots import CAPACITY_PER_SLOT, STAGGER_SLOT_MINUTES
+
+        return (
+            _step("gate_peak", n=len(facts["holds"]), slot=facts["slot"]),
+            _rule(
+                "gate_peak",
+                "CAPACITY_PER_SLOT",
+                CAPACITY_PER_SLOT,
+                "trucks",
+                slot=facts["slot"],
+                minutes=STAGGER_SLOT_MINUTES,
+            ),
+        )
+    if kind in ("duty_warn", "duty_blocked"):
+        # An overridden block stays a warning, but the 12 h limit is what it crossed.
+        blocked = (facts.get("duty_minutes") or 0) >= DUTY_BLOCK_MIN
+        rule = (
+            _rule("duty_block", "DUTY_BLOCK_MIN", DUTY_BLOCK_MIN, "min")
+            if blocked
+            else _rule("duty_warn", "DUTY_WARN_MIN", DUTY_WARN_MIN, "min")
+        )
+        return _step(kind, truck=truck, h=DUTY_BLOCK_MIN // 60), rule
+    if kind == "receipt_check":
+        from app.field.receipt_checks import (
+            OCR_TOLERANCE_MIN_KG,
+            OCR_TOLERANCE_SHARE,
+            TICKET_ARITHMETIC_TOLERANCE_KG,
+        )
+
+        failed = {c["id"] for c in facts.get("failed") or []}
+        check = next((c for c in _RECEIPT_CHECK_ORDER if c in failed), None)
+        spj = facts.get("spj_number") or item["spj_id"] or ""
+        if check == "sealed":
+            return _step("receipt_sealed", spj=spj), _rule("receipt_sealed", "SPJ_SEAL", "broken")
+        if check == "duplicate_ticket":
+            return _step("receipt_duplicate", spj=spj), _rule(
+                "receipt_duplicate", "DUPLICATE_TICKET_PHOTO", "same photo"
+            )
+        if check == "duplicate_ticket_no":
+            return _step("receipt_ticket_no", spj=spj), _rule(
+                "receipt_ticket_no", "DUPLICATE_TICKET_NO", "same ticket number"
+            )
+        if check == "ticket_document":
+            return _step("receipt_document", spj=spj), _rule(
+                "receipt_document", "TICKET_DOCUMENT", "not a ticket"
+            )
+        if check == "plate_vs_truck":
+            return _step("receipt_plate", spj=spj, truck=truck), _rule(
+                "receipt_plate", "PLATE_VS_TRUCK", "mismatch"
+            )
+        if check == "ticket_arithmetic":
+            return _step("receipt_arithmetic", spj=spj), _rule(
+                "receipt_arithmetic", "TICKET_ARITHMETIC_TOLERANCE_KG", TICKET_ARITHMETIC_TOLERANCE_KG, "kg"
+            )
+        if check == "net_vs_capacity":
+            return _step("receipt_capacity", spj=spj), _rule(
+                "receipt_capacity", "TRUCK_CAPACITY_TONS", TRUCK_CAPACITY_TONS, "t"
+            )
+        if check is None:
+            return _step("review", truck=truck), _rule("review", "RECEIPT_CHECK", "review")
+        return _step("receipt_ocr", spj=spj), _rule(
+            "receipt_ocr",
+            "OCR_TOLERANCE_SHARE",
+            round(OCR_TOLERANCE_SHARE * 100, 1),
+            "%",
+            min_kg=OCR_TOLERANCE_MIN_KG,
+        )
+    return _step("review", truck=truck), _rule("review", kind, None)
+
+
 def _sort_key(item: dict[str, Any]) -> tuple:
     """Urgent first, then newest first; items without a time last."""
     at = safety._parse(item["created_at"])
@@ -397,10 +576,13 @@ def needs_you(now: datetime | None = None) -> dict[str, Any]:
         + exceptions
         + _damage(covered, follow_ups)
         + _gate_peaks(day, follow_ups)
+        + _receipt_checks(day, follow_ups)
         + duty
     )
     items = [i for i in items if (follow_ups.get(i["id"]) or {}).get("status") != "RESOLVED"]
     _suggest_backups(items, day)
+    for item in items:
+        item["next_step"], item["rule"] = _guidance(item)
     items.sort(key=_sort_key)
     counts = {"all": len(items), "urgent": sum(1 for i in items if i["severity"] == "urgent")}
     for category in ("trucks", "gate", "tps"):
@@ -415,5 +597,10 @@ def needs_you(now: datetime | None = None) -> dict[str, Any]:
             "exceptions": {"classification": "FIELD", "window": "local day"},
             "gate": {"classification": "SIMULATED"},
             "duty": duty_source,
+            "receipts": {
+                "classification": "FIELD",
+                "window_days": RECEIPT_CHECK_DAYS,
+                "method": "rule checks",
+            },
         },
     }
