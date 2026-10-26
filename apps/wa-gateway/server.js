@@ -15,6 +15,31 @@ app.use(express.json());
 let sock = null;
 let connectionState = 'starting';
 let latestQrDataUrl = null;
+// groupFetchAllParticipating takes several seconds on an account with many groups, longer
+// than the API waits, so the list is fetched in the background and served from here.
+let groupCache = null;
+let groupFetch = null;
+
+function refreshGroups() {
+  if (!sock || connectionState !== 'open') return Promise.resolve(groupCache);
+  if (!groupFetch) {
+    groupFetch = sock
+      .groupFetchAllParticipating()
+      .then((groupList) => {
+        const groups = Object.entries(groupList || {}).map(([jid, meta]) => ({
+          jid,
+          subject: meta?.subject || jid,
+        }));
+        groups.sort((a, b) => (a.subject || '').localeCompare(b.subject || ''));
+        groupCache = groups;
+        return groups;
+      })
+      .finally(() => {
+        groupFetch = null;
+      });
+  }
+  return groupFetch;
+}
 
 function normalizeChatId(chatId) {
   if (!chatId || typeof chatId !== 'string') return '';
@@ -47,6 +72,9 @@ async function startWA() {
   });
 
   sock.ev.on('creds.update', saveCreds);
+  // A group joined or renamed shows up in the picker without waiting for the next refresh.
+  sock.ev.on('groups.upsert', () => refreshGroups().catch(() => {}));
+  sock.ev.on('groups.update', () => refreshGroups().catch(() => {}));
 
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -70,6 +98,7 @@ async function startWA() {
     } else if (connection === 'open') {
       connectionState = 'open';
       latestQrDataUrl = null;
+      refreshGroups().catch((err) => console.error('Group list fetch failed:', err.message));
       console.log('\n======================================');
       console.log('WhatsApp connection opened successfully!');
       console.log('======================================\n');
@@ -103,12 +132,10 @@ app.get('/api/groups', async (req, res) => {
     return res.json({ connected: false, groups: [], message: `Socket not ready (${connectionState}).` });
   }
   try {
-    const groupList = await sock.groupFetchAllParticipating();
-    const groups = Object.entries(groupList || {}).map(([jid, meta]) => ({
-      jid,
-      subject: meta?.subject || jid
-    }));
-    groups.sort((a, b) => (a.subject || '').localeCompare(b.subject || ''));
+    // A cached list answers at once and is refreshed behind it; the first call waits.
+    const pending = refreshGroups();
+    const groups = groupCache || (await pending);
+    if (groupCache) pending.catch(() => {});
     res.json({ connected: true, groups, message: `${groups.length} groups found` });
   } catch (err) {
     res.status(500).json({ connected: true, groups: [], message: err.message });

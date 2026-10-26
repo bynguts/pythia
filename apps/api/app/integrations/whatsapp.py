@@ -33,6 +33,9 @@ def build_alert_message(truck_code: str, issue: str, recommendation: str) -> str
     )
 
 
+GROUPS_TIMEOUT_SECONDS = 25.0
+
+
 @dataclass
 class OpenWAClient:
     base_url: str = ""
@@ -121,7 +124,10 @@ class OpenWAClient:
                 "message": "WhatsApp gateway is not configured.",
             }
         try:
-            with urlopen(f"{self.base_url}/groups", timeout=self.timeout_seconds) as response:
+            # The first listing after pairing waits for WhatsApp, which takes several
+            # seconds on an account with many groups; later ones come from the cache.
+            timeout = max(self.timeout_seconds, GROUPS_TIMEOUT_SECONDS)
+            with urlopen(f"{self.base_url}/groups", timeout=timeout) as response:
                 body = response.read().decode("utf-8")
             payload = json.loads(body) if body else {}
             return {

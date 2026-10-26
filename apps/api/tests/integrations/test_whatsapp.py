@@ -68,3 +68,22 @@ class WhatsAppTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_group_listing_waits_longer_than_the_short_gateway_timeout(monkeypatch):
+    # The first listing after pairing waits for WhatsApp; a 3 s timeout made the picker empty.
+    import io
+
+    from app.integrations import whatsapp
+
+    seen = {}
+
+    def fake_urlopen(url, timeout):
+        seen["timeout"] = timeout
+        return io.BytesIO(b'{"connected": true, "groups": [{"jid": "1@g.us", "subject": "Drivers"}]}')
+
+    monkeypatch.setattr(whatsapp, "urlopen", fake_urlopen)
+    client = OpenWAClient(base_url="http://127.0.0.1:2785/api", session_id="default", timeout_seconds=3)
+    result = client.groups()
+    assert seen["timeout"] >= whatsapp.GROUPS_TIMEOUT_SECONDS
+    assert result["groups"] == [{"jid": "1@g.us", "subject": "Drivers"}]
