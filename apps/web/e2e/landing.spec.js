@@ -20,6 +20,10 @@ test("landing renders its story with one main landmark", async ({ page }) => {
   await expect(citywide).toContainText("8,500");
   await expect(citywide).toHaveAttribute("title", /modelled estimate/);
   await expect(page.getByText("Live GPS tracking is coming soon.").first()).toBeAttached();
+  // Claims stay within what the data shows: trips (not trucks), no daily error band, no deployment.
+  const body = page.locator("body");
+  await expect(body).toContainText("1,228 trips a day");
+  await expect(body).not.toContainText(/error band|Running today|trucks a day/);
 });
 
 for (const width of [1440, 390, 320]) {

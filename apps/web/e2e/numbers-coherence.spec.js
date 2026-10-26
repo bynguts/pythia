@@ -186,6 +186,9 @@ test("trucks, gate trips and tonnage each carry their own definition", async ({ 
   await signIn(page, "/app/tomorrow");
   const trucks = page.getByTestId("tmr-res-trucks");
   await expect(trucks).toContainText(`${baseline.units.truck_capacity_tons} t per truk`, { timeout: 30000 });
+  // #honesty: the counts are capacity-based (a full truck), and the tooltip says so.
+  await expect(trucks).toContainText("kapasitas");
+  await expect(trucks).toHaveAttribute("title", /^Berbasis kapasitas/);
 });
 
 // wave11 numbers: the safety panel's gate waits are example dwells per simulated truck,

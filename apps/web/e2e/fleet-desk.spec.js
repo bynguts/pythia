@@ -59,7 +59,7 @@ const FEED = {
       truck_code: "T-E2D",
       spj_id: "SPJ-E2E-D",
       created_at: null,
-      facts: { distance_meters: 1434 },
+      facts: { distance_meters: 1434, spj_number: "DLH-DKI/SPJ/01-01-2026/000001" },
       actions: ["send_route", "mark_handled"],
       classification: "SIMULATED",
     },
@@ -240,6 +240,32 @@ test("every open item shows its one action; the chips count and filter the list"
   await expect(panel.getByTestId("action-row")).toHaveAttribute("data-kind", "gate_peak");
   await page.getByTestId("needs-filter-tps").click();
   await expect(panel.getByTestId("action-row")).toHaveAttribute("data-kind", "tps_empty");
+});
+
+// #honesty: the deviation row names the work order by its human number, never the spj_id
+// hash, and a reroute without a road distance shows its ETA alone, never "— km".
+test("a deviation row shows the SPJ number and a reroute without a distance omits the km", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route(/\/api\/ops\/needs-you$/, (route) => route.fulfill({ json: FEED }));
+  await page.route(/\/api\/command-center(\?|$)/, async (route) => {
+    const response = await route.fetch();
+    const json = await response.json();
+    const reroute = { name: "Rute B", distance_km: null, eta_minutes: 48, source: "scenario" };
+    json.alerts = [
+      ...(json.alerts || []),
+      { id: "ALT-T-E2D", truck_code: "T-E2D", recommended_routes: [reroute] },
+    ];
+    await route.fulfill({ response, json });
+  });
+  await signIn(page);
+  const deviation = row(page, "deviation");
+  await expect(deviation).toContainText("SPJ-000001", { timeout: 30000 });
+  await expect(deviation).not.toContainText("SPJ-E2E-D");
+  const suggestion = deviation.getByTestId("decision-route-name");
+  await expect(suggestion).toHaveText("Lewat Rute B: 48 mnt.");
+  await expect(suggestion).not.toContainText("km");
 });
 
 test("each action writes the existing API with the item's own ids", async ({ page }) => {

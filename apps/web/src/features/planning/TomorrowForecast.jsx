@@ -173,11 +173,17 @@ export function ResourcesCard({ forecast }) {
   const units = forecast?.units || {};
   const shiftHours = units.shift_hours ?? units.crew_shift_hours ?? null;
   const binTons = units.bin_capacity_tons ?? null;
+  // Trucks, crews and man-hours divide tonnes by a full truck; real trips carry less.
+  const capacityHint =
+    units.truck_capacity_tons != null
+      ? t("s3_res_capacity_title").replace("{t}", units.truck_capacity_tons)
+      : undefined;
   const cells = [
     {
       key: "trucks",
       label: t("s3_res_trucks"),
       value: forecast ? forecast.trucks_needed : null,
+      hint: capacityHint,
       note:
         units.truck_capacity_tons != null
           ? t("s3_res_truck_note").replace("{t}", units.truck_capacity_tons)
@@ -187,6 +193,7 @@ export function ResourcesCard({ forecast }) {
       key: "crews",
       label: t("s3_res_crews"),
       value: forecast ? forecast.crews_needed : null,
+      hint: capacityHint,
       note:
         units.crew_size_workers != null
           ? t("s3_res_crew_note").replace("{n}", units.crew_size_workers)
@@ -196,6 +203,7 @@ export function ResourcesCard({ forecast }) {
       key: "manhours",
       label: t("s3_res_manhours"),
       value: sum("man_hours_required"),
+      hint: capacityHint,
       note: shiftHours != null ? t("s3_res_shift_note").replace("{h}", shiftHours) : null,
     },
     {
@@ -216,7 +224,7 @@ export function ResourcesCard({ forecast }) {
     >
       <dl className="tmr-res">
         {cells.map((cell) => (
-          <div key={cell.key} data-testid={`tmr-res-${cell.key}`}>
+          <div key={cell.key} data-testid={`tmr-res-${cell.key}`} title={cell.hint}>
             <dt>{cell.label}</dt>
             <dd className="tmr-res-value">{number(cell.value)}</dd>
             {cell.note && <dd className="tmr-res-note">{cell.note}</dd>}

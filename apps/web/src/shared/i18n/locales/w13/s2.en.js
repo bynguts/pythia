@@ -152,6 +152,7 @@ export const s2En = {
   s2_week_failed: "Driver figures are not available right now.",
   s2_week_forbidden: "Driver figures are shown to roles that can read the audit history.",
   s2_duty_title: "Duty hours today",
+  s2_duty_sim: "Simulated",
   s2_duty_aside: "Warn {warn} h · stop {stop} h",
   s2_duty_blocked_tag: "Blocked",
   s2_duty_override_tag: "Override",

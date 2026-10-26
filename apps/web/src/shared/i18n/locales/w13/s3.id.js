@@ -65,7 +65,9 @@ export const s3Id = {
   s3_res_crews: "Kru",
   s3_res_manhours: "Jam kerja",
   s3_res_bins: "Kontainer",
-  s3_res_truck_note: "{t} t per truk",
+  s3_res_truck_note: "kapasitas {t} t per truk",
+  s3_res_capacity_title:
+    "Berbasis kapasitas: tonase dibagi truk penuh {t} t. Ritase nyata mengangkut lebih sedikit per rit, jadi ritase yang dibutuhkan lebih banyak.",
   s3_res_crew_note: "{n} orang",
   s3_res_shift_note: "shift {h} jam",
   s3_res_bin_note: "{t} t per kontainer",
@@ -109,8 +111,9 @@ export const s3Id = {
   s3_kpi_gate_note: "{from}–{to}",
   s3_kpi_queue: "Antrean di gerbang",
   s3_kpi_queue_value: "{a} → {b}",
-  s3_kpi_queue_note: "mnt per truk, tanpa rencana vs dengan rencana",
-  s3_kpi_queue_title: "Model antrean simulasi pada hari normal: keberangkatan tanpa jeda vs berjeda",
+  s3_kpi_queue_note: "mnt/truk jika semua ritasi diberi slot · seluruh kota · simulasi",
+  s3_kpi_queue_title:
+    "Simulasi seluruh kota pada hari normal: semua ritasi tanpa jeda vs semua ritasi diberi slot. Bukan hasil rencana ini: slot dan tunggu modelnya ada di Slot gerbang.",
   s3_kpi_sim_title: "Armada pilot simulasi",
   s3_flags_title: "Periksa sebelum mengirim",
   s3_flags_review: "Periksa sebelum menyetujui",
@@ -142,6 +145,15 @@ export const s3Id = {
   s3_show_fewer: "Tampilkan lebih sedikit",
   s3_wait_min: "{n} mnt",
   s3_gate_empty: "Tidak ada slot gerbang dalam rencana ini.",
+  s3_wait_model_title:
+    "Keluaran model: antrean alir per slot timbangan 15 menit, dengan truk rencana ini dan lalu lintas gerbang lain hari itu menurut model",
+  s3_wait_none_facility: "Tanpa tunggu model: fasilitas ini tidak punya model antrean timbangan.",
+  s3_wait_none_older:
+    "Tanpa tunggu model: rencana ini dibuat sebelum tunggu per slot dimodelkan. Susun ulang untuk melihatnya.",
+  s3_gate_saturated:
+    "Sejak {from}, lalu lintas gerbang lain hari itu, tanpa jeda, sudah memenuhi timbangan (model). Rencana ini membawa {n} dari sekitar {total} kedatangan gerbang per hari, jadi truknya mengantre di belakang lalu lintas itu.",
+  s3_gate_overflow:
+    "{n} truk tanpa slot gerbang: setiap slot di shift-nya sudah memuat {cap} truk rencana, sebanyak yang dilayani timbangan dalam 15 menit.",
   s3_drag_handle: "Pindahkan {code}. Seret ke truk lain, atau tekan Enter lalu pilih truk lainnya.",
   s3_drag_picked: "Memindahkan {code}. Pilih truk untuk ditukar, atau tekan Escape.",
   s3_drag_target: "Tukar {a} dengan {b}",

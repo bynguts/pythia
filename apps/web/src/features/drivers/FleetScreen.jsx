@@ -429,6 +429,13 @@ export function FleetScreen() {
                       })
                     : null
                 }
+                actions={
+                  dutySimulated ? (
+                    <Tag tone="model" title={t("s2_prov_duty")} data-provenance="simulated">
+                      {t("s2_duty_sim")}
+                    </Tag>
+                  ) : null
+                }
                 flush
               >
                 <ul

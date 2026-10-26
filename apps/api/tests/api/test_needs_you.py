@@ -90,6 +90,21 @@ def test_shape_counts_and_simulated_deviations(api_client, auth_headers):
         assert item["created_at"] is None
 
 
+def test_deviation_carries_the_human_spj_number_not_only_its_hash(monkeypatch, truck):
+    from types import SimpleNamespace
+
+    from app.fleet import data
+
+    deviation = {"violated": True, "distance_meters": 420, "severity": "warning", "rule_flags": []}
+    monkeypatch.setattr(data, "get_dynamic_trucks", lambda: [{"truck_code": truck, "deviation": deviation}])
+    spj = SimpleNamespace(spj_id="edbc85798e75", spj_number="DLH-DKI/SPJ/27-10-2026/000001")
+    [item] = feed._deviations({truck: spj})
+    assert item["spj_id"] == "edbc85798e75"
+    assert item["facts"]["spj_number"] == "DLH-DKI/SPJ/27-10-2026/000001"
+    [bare] = feed._deviations({})
+    assert bare["spj_id"] is None and bare["facts"]["spj_number"] is None
+
+
 def test_accident_is_urgent_and_drops_out_once_resolved(api_client, auth_headers, truck):
     exc = _exception(truck, "accident")
     item = _mine(_feed(api_client, auth_headers), truck)[0]

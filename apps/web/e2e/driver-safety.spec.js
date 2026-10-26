@@ -81,6 +81,10 @@ test("duty hours today lists the longest shifts with the Blocked and Plan relief
   const card = page.getByTestId("duty-hours");
   await expect(card.locator("li").first()).toBeVisible({ timeout: 20000 });
   await expect(card).toHaveAttribute("data-provenance", "simulated");
+  // #honesty: the simulated rows say so on the header, not only in a tooltip.
+  const simTag = page.locator("[aria-labelledby=flt-duty-title] .ui-card-head .ui-tag-model");
+  await expect(simTag).toHaveText("Simulated");
+  await expect(simTag).toHaveAttribute("data-provenance", "simulated");
   await expect(page.getByText("Warn 10 h · stop 12 h")).toBeVisible();
   const rows = card.locator("li");
   await expect(rows).toHaveCount(6);
@@ -107,6 +111,7 @@ test("Indonesian copy, 44 px targets and no horizontal overflow at 390 px", asyn
   await signIn(page, { lang: "id" });
   await expect(page.getByRole("heading", { name: "Jam tugas hari ini" })).toBeVisible({ timeout: 20000 });
   await expect(page.getByTestId("duty-hours").getByText("Terblokir")).toBeVisible();
+  await expect(page.locator("[aria-labelledby=flt-duty-title] .ui-tag-model")).toHaveText("Simulasi");
   const geometry = await page.evaluate(() => {
     const small = [...document.querySelectorAll(".flt button")]
       .map((el) => el.getBoundingClientRect())

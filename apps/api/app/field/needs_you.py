@@ -106,8 +106,8 @@ def _item(
     }
 
 
-def _active_spj_ids() -> dict[str, str]:
-    return {s.truck_code: s.spj_id for s in SPJ_STORE.list() if s.status == "aktif"}
+def _active_spjs() -> dict[str, Any]:
+    return {s.truck_code: s for s in SPJ_STORE.list() if s.status == "aktif"}
 
 
 def _plan_of(truck_code: str, day: str) -> str | None:
@@ -120,7 +120,7 @@ def _plan_of(truck_code: str, day: str) -> str | None:
     return None
 
 
-def _deviations(active: dict[str, str]) -> list[dict[str, Any]]:
+def _deviations(active: dict[str, Any]) -> list[dict[str, Any]]:
     from app.fleet.data import get_dynamic_trucks
 
     items = []
@@ -129,14 +129,17 @@ def _deviations(active: dict[str, str]) -> list[dict[str, Any]]:
         if not deviation.get("violated"):
             continue
         code = truck["truck_code"]
+        spj = active.get(code)
         items.append(
             _item(
                 f"ALT-{code}",  # the command-center alert id, so follow-ups match
                 "deviation",
                 truck_code=code,
-                spj_id=active.get(code),
+                spj_id=spj.spj_id if spj else None,
                 created_at=None,  # the simulated feed carries no onset time
                 facts={
+                    # The human work-order number the row shows; the spj_id is a hash.
+                    "spj_number": spj.spj_number if spj else None,
                     "distance_meters": deviation.get("distance_meters"),
                     "sustained": "sustained_deviation" in (deviation.get("rule_flags") or []),
                     "model_severity": deviation.get("severity"),
@@ -390,7 +393,7 @@ def needs_you(now: datetime | None = None) -> dict[str, Any]:
     exceptions, covered = _exceptions(day, follow_ups)
     duty, duty_source = _duty(day, now, follow_ups)
     items = (
-        _deviations(_active_spj_ids())
+        _deviations(_active_spjs())
         + exceptions
         + _damage(covered, follow_ups)
         + _gate_peaks(day, follow_ups)

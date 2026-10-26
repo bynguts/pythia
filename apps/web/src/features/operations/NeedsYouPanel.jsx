@@ -80,7 +80,9 @@ export function describe(item, { t, lang, alert }) {
           ? fill(t("s1_dev_sub"), { d: formatDistance(facts.distance_meters, lang) })
           : t("s1_dev_sub_plain"),
       ];
-      if (item.spj_id) parts.push(item.spj_id);
+      // The human work-order number in its short form (SPJ-000001); never the internal spj_id hash.
+      const spjSeq = /\/(\d+)$/.exec(facts.spj_number || "");
+      if (spjSeq) parts.push(`SPJ-${spjSeq[1]}`);
       return {
         title: fill(t("s1_dev_title"), { truck }),
         sub: parts.join(" · "),
@@ -381,16 +383,18 @@ export function NeedsYouPanel({ feed, alerts, openId, onSelect, onFocusTruck, tr
                       <span className="ops-suggest-key">{t("s1_suggests")}</span>
                       <p data-testid="decision-route-name">
                         {view.route
-                          ? fill(t("s1_suggest_route"), {
-                              route: routeName(t, view.route),
-                              km:
-                                view.route.distance_km != null
-                                  ? Number(view.route.distance_km).toLocaleString(localeFor(lang), {
-                                      maximumFractionDigits: 1,
-                                    })
-                                  : "—",
-                              eta: view.route.eta_minutes ?? "—",
-                            })
+                          ? fill(
+                              t(
+                                view.route.distance_km != null ? "s1_suggest_route" : "s1_suggest_route_nokm",
+                              ),
+                              {
+                                route: routeName(t, view.route),
+                                km: Number(view.route.distance_km).toLocaleString(localeFor(lang), {
+                                  maximumFractionDigits: 1,
+                                }),
+                                eta: view.route.eta_minutes ?? "—",
+                              },
+                            )
                           : t("s1_suggest_none")}
                       </p>
                     </div>

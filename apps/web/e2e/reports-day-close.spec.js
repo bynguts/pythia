@@ -137,10 +137,13 @@ test("Reports shows the closed day with its provenance and honest limits", async
   await expect(page.getByTestId("recap-actual")).toContainText("vs 8,557 t planned");
   await expect(page.getByTestId("recap-gate-wait")).toContainText("16 min");
   await expect(page.getByTestId("recap-gate-wait")).toContainText("longest 47 min");
-  // The forecast error is the monthly backtest, tagged Model, never "this week".
+  // #honesty: the error is the monthly Bantargebang intake backtest on real data, with its period,
+  // tagged Model, never read as daily accuracy.
   await expect(page.getByTestId("recap-error")).toContainText("4.3%");
   await expect(page.getByTestId("recap-error")).toContainText("Model");
-  await expect(page.getByTestId("recap-error")).toContainText("Monthly intake backtest");
+  await expect(page.getByTestId("recap-error")).toContainText("Monthly intake backtest error");
+  await expect(page.getByTestId("recap-error")).toContainText("Bantargebang, real data · 2022-12–2026-04");
+  await expect(page.getByTestId("recap-error")).not.toContainText("Forecast error");
 
   // The chart is the pilot fleet, not the city.
   await expect(page.getByTestId("reports-chart")).toContainText("Pilot fleet: planned vs weighed");

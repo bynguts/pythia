@@ -23,9 +23,10 @@ export const s5Id = {
   s5_rp_gate_sub: "per truk · terlama {n} mnt",
   s5_rp_gate_none: "Belum ada kedatangan gerbang tercatat",
   s5_rp_min: "mnt",
-  s5_rp_error: "Galat prakiraan",
+  s5_rp_error: "Galat backtest sampah masuk bulanan",
   s5_rp_error_model: "Model",
-  s5_rp_error_sub: "Backtest sampah masuk bulanan",
+  s5_rp_error_sub: "Bantargebang, data riil",
+  s5_rp_error_sub_period: "Bantargebang, data riil · {period}",
   s5_rp_error_hint:
     "Rata-rata persentase galat absolut prakiraan sampah masuk Bantargebang bulanan pada data riil ({period})",
   s5_rp_chart_title: "Armada pilot: rencana vs ditimbang",

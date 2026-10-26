@@ -23,9 +23,10 @@ export const s5En = {
   s5_rp_gate_sub: "per truck · longest {n} min",
   s5_rp_gate_none: "No gate arrivals recorded yet",
   s5_rp_min: "min",
-  s5_rp_error: "Forecast error",
+  s5_rp_error: "Monthly intake backtest error",
   s5_rp_error_model: "Model",
-  s5_rp_error_sub: "Monthly intake backtest",
+  s5_rp_error_sub: "Bantargebang, real data",
+  s5_rp_error_sub_period: "Bantargebang, real data · {period}",
   s5_rp_error_hint:
     "Mean absolute percentage error of the monthly Bantargebang intake forecast on real data ({period})",
   s5_rp_chart_title: "Pilot fleet: planned vs weighed",

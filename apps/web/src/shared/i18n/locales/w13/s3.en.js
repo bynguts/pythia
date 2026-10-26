@@ -64,7 +64,9 @@ export const s3En = {
   s3_res_crews: "Crews",
   s3_res_manhours: "Man-hours",
   s3_res_bins: "Bins",
-  s3_res_truck_note: "{t} t each",
+  s3_res_truck_note: "at {t} t a truck",
+  s3_res_capacity_title:
+    "Capacity-based: tonnes divided by a full {t} t truck. Real trips carry less each, so the trips needed run higher.",
   s3_res_crew_note: "{n} people",
   s3_res_shift_note: "{h} h shifts",
   s3_res_bin_note: "{t} t each",
@@ -108,8 +110,9 @@ export const s3En = {
   s3_kpi_gate_note: "{from}–{to}",
   s3_kpi_queue: "Queue at gate",
   s3_kpi_queue_value: "{a} → {b}",
-  s3_kpi_queue_note: "min per truck, no plan vs plan",
-  s3_kpi_queue_title: "Simulated queue model on a normal day: unstaggered vs staggered departures",
+  s3_kpi_queue_note: "min/truck if every trip were slotted · city-wide · simulated",
+  s3_kpi_queue_title:
+    "City-wide simulation of a normal day: every trip unstaggered vs every trip slotted. Not this plan's result: its slots and modelled waits are under Gate slots.",
   s3_kpi_sim_title: "Simulated pilot fleet",
   s3_flags_title: "Check before you submit",
   s3_flags_review: "Check before you approve",
@@ -141,6 +144,15 @@ export const s3En = {
   s3_show_fewer: "Show fewer",
   s3_wait_min: "{n} min",
   s3_gate_empty: "No gate slots in this plan.",
+  s3_wait_model_title:
+    "Model output: fluid queue per 15-min weighbridge slot, with this plan's trucks and the rest of the day's modelled gate traffic",
+  s3_wait_none_facility: "No modelled wait: this facility has no weighbridge queue model.",
+  s3_wait_none_older:
+    "No modelled wait: this plan was built before slot waits were modelled. Rebuild it to see them.",
+  s3_gate_saturated:
+    "From {from}, the rest of the day's gate traffic, unstaggered, already fills the weighbridges (model). This plan carries {n} of about {total} daily gate arrivals, so its trucks queue behind that traffic.",
+  s3_gate_overflow:
+    "{n} trucks have no gate slot: every slot of their shift already holds {cap} plan trucks, what the weighbridges clear in 15 min.",
   s3_drag_handle: "Move {code}. Drag onto another truck, or press Enter and then pick the other truck.",
   s3_drag_picked: "Moving {code}. Pick the truck to swap with, or press Escape.",
   s3_drag_target: "Swap {a} with {b}",

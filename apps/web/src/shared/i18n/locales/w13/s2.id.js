@@ -150,6 +150,7 @@ export const s2Id = {
   s2_week_failed: "Data pengemudi belum tersedia.",
   s2_week_forbidden: "Data pengemudi ditampilkan untuk peran yang dapat membaca riwayat audit.",
   s2_duty_title: "Jam tugas hari ini",
+  s2_duty_sim: "Simulasi",
   s2_duty_aside: "Peringatan {warn} jam · berhenti {stop} jam",
   s2_duty_blocked_tag: "Terblokir",
   s2_duty_override_tag: "Override",

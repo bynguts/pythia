@@ -292,7 +292,11 @@ export function ReportsView() {
           <strong className="rp-stat-v" data-provenance="model">
             {backtest?.mape_model_pct == null ? "—" : `${number(backtest.mape_model_pct, 1)}%`}
           </strong>
-          <span className="rp-stat-n">{t("s5_rp_error_sub")}</span>
+          <span className="rp-stat-n">
+            {backtest?.period && backtest.period !== "unavailable"
+              ? fill(t("s5_rp_error_sub_period"), { period: backtest.period.replace("..", "–") })
+              : t("s5_rp_error_sub")}
+          </span>
         </div>
       </section>
 

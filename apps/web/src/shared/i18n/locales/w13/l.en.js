@@ -2,7 +2,7 @@
 export const lEn = {
   // Landing: announcement, nav, hero
   l_announce_new: "New",
-  l_announce_text: "Pythia now forecasts 7 days and 3 months ahead, and learns from weighbridge tickets",
+  l_announce_text: "A 7-day outlook on the Tomorrow page, filled in from weather, events and holidays",
   l_nav_label: "Main",
   l_nav_product: "Product",
   l_nav_how: "How it works",
@@ -16,7 +16,7 @@ export const lEn = {
   l_hero_h1_b: "decided before dawn.",
   l_hero_sub:
     "Pythia forecasts tomorrow's waste for every district, plans the trucks and crews to carry it, and catches route problems while there is still time to fix them.",
-  l_hero_note: "Running today on Jakarta's 42 districts and Bantargebang's trip records.",
+  l_hero_note: "Built on Jakarta's 42 districts and Bantargebang's trip records.",
   l_shot_ops_alt:
     "The Operations screen: needs-you panel, KPI strip and a fleet map, shown with example data.",
   l_shot_tomorrow_alt:
@@ -61,7 +61,7 @@ export const lEn = {
   l_col_gate: "Landfill gate",
   l_col_gate_hi: "Every truck arrives at 09:00.",
   l_col_gate_b:
-    "Staggered dispatch waves spread arrivals so drivers wait minutes, not hours, at Bantargebang.",
+    "Staggered dispatch waves spread arrivals. In simulation, the gate-stage wait drops from about 57 to about 6 minutes a truck.",
   l_col_fc: "Forecast",
   l_col_fc_hi: "Tomorrow's load is a guess.",
   l_col_fc_b: "Daily forecasts for 42 districts, with weather, holidays and events read in automatically.",
@@ -123,22 +123,23 @@ export const lEn = {
   l_f3_t: "Landfill gate queue",
   l_f3_b: "Models the Bantargebang gate and staggers arrivals into waves.",
   l_f4_t: "42-district forecast",
-  l_f4_b: "Daily tonnes with an error band, from Prophet plus XGBoost.",
+  l_f4_b: "Daily tonnes from Prophet plus XGBoost, labelled as model output.",
   l_f5_t: "Weekly plan",
   l_f5_b: "CP-SAT allocates trucks, crews and shifts against the forecast.",
   l_f6_t: "Digital work orders",
   l_f6_b: "SPJ work orders with supervisor approval and an audit trail.",
   l_f7_t: "Driver app",
-  l_f7_b: "Offline-first phone app with AR turn-by-turn and pre-trip checks.",
+  l_f7_b:
+    "Offline-first phone app with a 2D route and landfill guide, AR optional on foot, and pre-trip checks.",
   l_f8_t: "Ana, the assistant",
   l_f8_b: "Answers from the same data you see, using tools, and says when it can't.",
   l_day1_h: "What changes on day one",
-  l_day1_a_v: "1,233",
-  l_day1_a_t: "trucks a day into Bantargebang",
+  l_day1_a_v: "1,228",
+  l_day1_a_t: "trips a day into Bantargebang",
   l_day1_a_b: "Read from the landfill's trip records and fed into the forecast and the gate plan.",
   l_day1_b_v: "42",
   l_day1_b_t: "districts forecast every day",
-  l_day1_b_b: "Each with an error band and the inputs that moved it.",
+  l_day1_b_b: "Each labelled as model output, with the inputs that moved it.",
   l_day1_c_v: "6",
   l_day1_c_t: "decisions a day, one checklist",
   l_day1_c_b:
@@ -150,18 +151,19 @@ export const lEn = {
   l_hon_p:
     "Public agencies can't act on a number they can't trace. Pythia labels every figure on every screen.",
   l_hon1_a: "Bantargebang trip records:",
-  l_hon1_hi: "1,233 trucks a day",
+  l_hon1_hi: "1,228 trips a day",
   l_hon1_b: "feed the forecast and the queue model.",
-  l_hon2_a: "Every forecast comes as",
-  l_hon2_hi: "a range, not a point,",
-  l_hon2_b: "with its error band shown.",
+  l_hon2_a: "Every forecast is labelled",
+  l_hon2_hi: "model output,",
+  l_hon2_b: "and the monthly intake model is backtested on real data.",
   l_hon3_a: "Every reroute is",
   l_hon3_hi: "computed on real roads",
   l_hon3_b: "from OpenStreetMap, never straight lines.",
   l_q1_t: "Is this live?",
   l_q1_b: "Only where it says Live. Everything else carries its label.",
   l_q2_t: "What if the model is wrong?",
-  l_q2_b: "You see its error band and the backtest before you approve.",
+  l_q2_b:
+    "A supervisor approves every plan. So far only the monthly intake is backtested; daily figures are not yet.",
   l_q3_t: "What if a source goes down?",
   l_q3_b: "The last good value is served and marked Stale.",
   l_reads_from: "Reads from",
@@ -187,7 +189,7 @@ export const lEn = {
     "No. Pythia works from each truck's last stop check-in. Live GPS tracking is coming soon and is labelled as such.",
   l_faq4_q: "How accurate is the forecast?",
   l_faq4_a:
-    "On monthly totals the backtest error is 4.32% (MAPE), against 4.98% for a naive baseline. Daily figures always show an error band, and you can see the backtest before you approve a plan.",
+    "On monthly totals the backtest error is 4.32% (MAPE), against 4.98% for a naive baseline. Daily district figures are not yet backtested, so they are labelled model output and a supervisor approves every plan.",
   l_faq5_q: "Does the driver app work offline?",
   l_faq5_a:
     "Yes. Stop proofs, pre-trip checks and weigh tickets queue on the phone and send when the signal returns.",
@@ -205,7 +207,7 @@ export const lEn = {
   l_cta_h2_a: "Plan tomorrow",
   l_cta_h2_b: "before tonight.",
   l_cta_p: "See Pythia run a full day for Jakarta's 42 districts, from the forecast to the driver's phone.",
-  l_cta_c1: "Runs on your agency's own data",
+  l_cta_c1: "Runs on public data today; your agency's data plugs in",
   l_cta_c2: "Driver app works offline",
   l_cta_c3: "English and Bahasa Indonesia",
   l_foot_tag: "The operations console for city waste fleets. Built with Jakarta's waste-agency case.",
