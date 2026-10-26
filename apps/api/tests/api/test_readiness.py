@@ -12,6 +12,7 @@ from app.core.units import DUTY_BLOCK_MIN, DUTY_WARN_MIN
 from app.field import safety
 from app.field.damage_reports import DAMAGE_STORE
 from app.field.pretrip import PRETRIP_ITEMS, PRETRIP_STORE
+from app.field.service_history import SERVICE_STORE
 from app.field.spj import SPJ_STORE
 
 # 20:00 WIB on a fixed past day, so the duty window never crosses a WIB midnight.
@@ -263,3 +264,12 @@ def test_duty_is_not_applicable_for_a_day_other_than_today(api_client, auth_head
         t["duty"] == {"minutes": None, "state": None, "override": None, "source": "not_applicable"}
         for t in body["trucks"]
     )
+
+
+@pytest.mark.parametrize(
+    ("due", "expected"), [("2026-10-25", True), ("2026-10-27", True), ("2026-10-28", False)]
+)
+def test_service_due_soon_uses_a_seven_day_window(api_client, auth_headers, truck, due, expected):
+    _plan(truck)
+    SERVICE_STORE.create(truck, "2026-04-20", "rem", "servis berkala", next_due_date=due)
+    assert _board(api_client, auth_headers, truck)["service"]["due_soon"] is expected
