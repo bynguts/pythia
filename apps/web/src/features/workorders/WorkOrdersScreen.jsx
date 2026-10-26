@@ -1,6 +1,7 @@
 import { Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { formatDriverName } from "../../shared/format/driverName.js";
 import { useConsole } from "../../app/console/useConsole.js";
 import {
   Button,
@@ -121,7 +122,19 @@ export function WorkOrdersScreen() {
                         <span className="wo-row-main">
                           <strong>{spj.spj_number}</strong>
                           <small>
-                            {spj.truck_code} · {spj.driver_name} ·{" "}
+                            {spj.truck_code} ·{" "}
+                            {(() => {
+                              const driver = formatDriverName(spj.driver_name, t);
+                              return (
+                                <span
+                                  data-provenance={driver.simulated ? "simulated" : undefined}
+                                  title={driver.title}
+                                >
+                                  {driver.label}
+                                </span>
+                              );
+                            })()}{" "}
+                            ·{" "}
                             {t("s4_wo_stops_count")
                               .replace("{done}", stopsDone(spj).split("/")[0])
                               .replace("{total}", (spj.stops || []).length)}

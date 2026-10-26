@@ -2,6 +2,7 @@ import { Check, Lock, MessageCircle, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { ApiError, apiPost } from "../../shared/api/client.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
+import { formatDriverName } from "../../shared/format/driverName.js";
 import { useConsole } from "../../app/console/useConsole.js";
 import { Button, Skeleton, StatusDot, Tag } from "../../shared/ui/index.js";
 import { jakartaClock, jakartaDay } from "../gate/gateModel.js";
@@ -153,6 +154,7 @@ export function WorkOrderDetail({ spj, state, onChanged }) {
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState(false);
 
+  const driver = formatDriverName(spj.driver_name, t);
   const base = `/spj/${encodeURIComponent(spj.spj_id)}`;
   const proofMissing = state === "proof";
   const evidenceStops = evidence?.stops || [];
@@ -268,7 +270,9 @@ export function WorkOrderDetail({ spj, state, onChanged }) {
         </div>
         <div>
           <dt>{t("s4_wo_driver")}</dt>
-          <dd>{spj.driver_name}</dd>
+          <dd data-provenance={driver.simulated ? "simulated" : undefined} title={driver.title}>
+            {driver.label}
+          </dd>
         </div>
         <div>
           <dt>{t("s4_wo_destination")}</dt>

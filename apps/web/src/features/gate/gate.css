@@ -274,13 +274,7 @@
   }
 }
 
-/* The export draws this strip as a white bordered card of plain cells, no progress bar. */
-.gate-page .ui-kpi-strip {
-  padding: 20px 0;
-  border: 1px solid var(--f-border);
-  border-radius: 10px;
-  background: var(--f-white);
-}
+/* The export draws these cells without the progress bar. */
 .gate-page .ui-kpi-top {
   justify-content: space-between;
 }

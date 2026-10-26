@@ -352,7 +352,7 @@ function Kpis({ day, board, safety, recap, queue, t, lang, nowMin }) {
     const mean = board?.modelled_wait?.mean_per_truck_min;
     const impact = board?.impact;
     return (
-      <KpiStrip label={t("s4_kpis_label")}>
+      <KpiStrip variant="surface" label={t("s4_kpis_label")}>
         <Kpi
           testId="gate-kpi-mean"
           label={t("s4_kpi_mean")}
@@ -389,7 +389,7 @@ function Kpis({ day, board, safety, recap, queue, t, lang, nowMin }) {
   const longest = longestWait(safety?.trucks);
   const limit = safety?.gate_alert_at_minutes;
   return (
-    <KpiStrip label={t("s4_kpis_label")}>
+    <KpiStrip variant="surface" label={t("s4_kpis_label")}>
       <Kpi
         testId="gate-kpi-queue"
         label={t("s4_kpi_queue")}
