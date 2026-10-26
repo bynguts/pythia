@@ -125,7 +125,7 @@ test("core workspaces meet text contrast requirements", async ({ page }) => {
 
   await page.evaluate(() => localStorage.removeItem("pythia_auth"));
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Masuk ke pusat kendali" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Masuk ke Pythia" })).toBeVisible();
   await scan("login");
   await signIn(page);
   for (const [workspace, heading] of [
@@ -159,7 +159,7 @@ test("login requires explicit credentials and exposes password visibility contro
     localStorage.removeItem("pythia_token");
   });
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Masuk ke pusat kendali" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Masuk ke Pythia" })).toBeVisible();
   await expect(page.getByPlaceholder("contoh: dispatcher")).toHaveValue("");
   await expect(page.getByRole("button", { name: "Tampilkan kata sandi" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Masuk" })).toBeVisible();

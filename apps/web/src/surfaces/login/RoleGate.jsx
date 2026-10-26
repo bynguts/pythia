@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch, FIELD_ROLE_KEY, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
-import { LoginPage } from "./LoginPage.jsx";
+import { DriverLogin } from "../driver/DriverLogin.jsx";
 
 // gsc P0-2: /driver stays a public route (/field redirects to it), but every write they make
 // needs a token whose role may act on field work (the same permissions the
@@ -89,12 +89,10 @@ export function RoleGate({ role = "driver", children }) {
 
   if (!signedIn) {
     return (
-      <LoginPage
+      <DriverLogin
         onLogin={onLogin}
         initialUsername={role}
         notice={forbidden ? t("role_gate_forbidden") : t("role_gate_notice")}
-        fieldSession
-        variant="driver"
       />
     );
   }

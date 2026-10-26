@@ -60,8 +60,8 @@ test("the driver sign-in is titled for drivers and drops the command-centre stor
   await freshPhone(page);
   await page.goto("/driver");
   await expect(page.getByRole("heading", { name: "Masuk aplikasi sopir" })).toBeVisible();
-  await expect(page.getByText("Masuk ke pusat kendali")).toHaveCount(0);
-  await expect(page.locator(".login-story")).toHaveCount(0);
+  await expect(page.getByText("Masuk ke Pythia")).toHaveCount(0);
+  await expect(page.locator(".si-art")).toHaveCount(0);
   const username = page.locator('input[autocomplete="username"]');
   await expect(username).toHaveValue("driver");
   await expect(username).toHaveAttribute("placeholder", "contoh: driver");
@@ -69,7 +69,7 @@ test("the driver sign-in is titled for drivers and drops the command-centre stor
 
   // The command centre keeps its own sign-in.
   await page.goto("/fleet");
-  await expect(page.getByRole("heading", { name: "Masuk ke pusat kendali" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Masuk ke Pythia" })).toBeVisible();
 });
 
 test("/field redirects to the driver app's Instruksi tab behind the same sign-in", async ({ page }) => {
@@ -83,6 +83,7 @@ test("/field redirects to the driver app's Instruksi tab behind the same sign-in
   // One field token: the shared account picks its truck once, then lands on the tab.
   await page.getByTestId("driver-truck-search").fill(TRUCK);
   await page.getByTestId(`pick-${TRUCK}`).click();
+  await page.getByTestId("driver-pick-start").click();
   await expect(page.getByTestId("driver-tab-instruksi")).toHaveAttribute("aria-current", "page");
   await expect(
     page.getByTestId("driver-instructions-empty").or(page.getByTestId("driver-instructions")),
@@ -109,16 +110,17 @@ test("a bound account opens on its truck; the shared account searches and is rem
     }),
   );
   await openDriver(page, token, { truck: null });
-  await expect(page.locator(".driver-brand small")).toHaveText("T-238");
+  await expect(page.getByTestId("driver-truck-code")).toHaveText("T-238");
   await expect(page.getByTestId("driver-truck-search")).toHaveCount(0);
   await page.unroute("**/api/driver/session");
 
-  // Shared demo account: no 59-row list, a search box instead.
+  // Shared demo account: a short list and a search box, never the 59-row roster.
   await openDriver(page, token, { truck: null });
   const search = page.getByTestId("driver-truck-search");
   await expect(search).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Masukkan kode truk" })).toBeVisible();
-  await expect(page.locator('[data-testid^="pick-"]')).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Pilih truk Anda" })).toBeVisible();
+  await expect(page.getByTestId("driver-pick-start")).toBeDisabled();
+  await expect.poll(() => page.locator('[data-testid^="pick-"]').count()).toBeLessThanOrEqual(6);
   await search.fill("2");
   await expect.poll(() => page.locator('[data-testid^="pick-"]').count()).toBeLessThanOrEqual(6);
   await search.fill("254");
@@ -127,13 +129,18 @@ test("a bound account opens on its truck; the shared account searches and is rem
   await expect(page.getByTestId("driver-pick-none")).toBeVisible();
   await search.fill("254");
   await page.getByTestId(`pick-${TRUCK}`).click();
-  await expect(page.locator(".driver-brand small")).toHaveText(TRUCK);
+  await expect(page.getByTestId("driver-pick-start")).toHaveText(`Mulai dengan ${TRUCK}`);
+  await page.getByTestId("driver-pick-start").click();
+  await expect(page.getByTestId("driver-truck-code")).toHaveText(TRUCK);
 
-  // The choice survives a reload, and "Ganti" offers it again as a recent truck.
+  // The choice survives a reload; the truck chip changes it and offers it again
+  // as a recent truck, and back returns to it.
   await page.reload();
-  await expect(page.locator(".driver-brand small")).toHaveText(TRUCK);
-  await page.getByRole("button", { name: "Ganti" }).click();
+  await expect(page.getByTestId("driver-truck-code")).toHaveText(TRUCK);
+  await page.getByTestId("driver-truck-chip").click();
   await expect(page.getByTestId("driver-pick-recent").getByTestId(`pick-${TRUCK}`)).toBeVisible();
+  await page.getByTestId("driver-pick-back").click();
+  await expect(page.getByTestId("driver-truck-code")).toHaveText(TRUCK);
 });
 
 test("an exception button queues offline, counts as waiting for signal, then syncs", async ({
@@ -145,7 +152,7 @@ test("an exception button queues offline, counts as waiting for signal, then syn
   const dispatcher = await apiLogin(request, "dispatcher");
   await openDriver(page, token, { path: "/driver?tab=lapor" });
   await expect(page.getByTestId("driver-tab-lapor")).toHaveAttribute("aria-current", "page");
-  await expectTargets(page, ".driver-exception-btn", 64);
+  await expectTargets(page, ".drt-kind", 64);
   for (const kind of ["tps_empty", "road_closed", "truck_breakdown", "accident"]) {
     await expect(page.getByTestId(`exc-${kind}`)).toBeVisible();
   }
@@ -154,7 +161,7 @@ test("an exception button queues offline, counts as waiting for signal, then syn
   await page.getByTestId("exc-road_closed").click();
   await page.getByTestId("exc-note").fill("E2E jalan ditutup");
   await page.getByTestId("exc-send").click();
-  await expect(page.getByTestId("driver-queued-count")).toHaveText("1 item menunggu sinyal");
+  await expect(page.getByTestId("driver-queued-count")).toHaveText("1 menunggu");
   await expect(page.getByTestId("exc-log")).toContainText("Menunggu sinyal");
   const queued = await page.evaluate(() => JSON.parse(localStorage.getItem("pythia_driver_outbox") || "[]"));
   expect(queued).toHaveLength(1);
@@ -176,7 +183,7 @@ test("an exception button queues offline, counts as waiting for signal, then syn
   expect(mine[0].reported_by).toBe("driver");
 });
 
-test("the TPA guide walks gate, weighbridge and zone with labelled modelled values", async ({
+test("the TPA gate screen shows the modelled wait and queue labelled as model output", async ({
   page,
   request,
 }) => {
@@ -223,26 +230,27 @@ test("the TPA guide walks gate, weighbridge and zone with labelled modelled valu
   await expect(page.getByTestId("driver-tab-tpa")).toHaveAttribute("aria-current", "page");
   await page.getByTestId("driver-tab-rute").click();
 
-  // L4: today's route in order before the per-stop cards.
+  // Wave 13: the route map with every stop listed in the "Semua titik" sheet.
   await expect(page.getByTestId("driver-route-overview")).toBeVisible();
+  await expect(page.getByTestId("driver-route-all-done")).toBeVisible();
+  await page.getByTestId("driver-all-stops").click();
   await expect(page.getByTestId("driver-route-progress")).toHaveText("2 dari 2 titik");
-  await expect(page.getByTestId("driver-route-sketch")).toBeVisible();
-  await expect(page.getByTestId("driver-route-overview")).toContainText("bukan peta jalan");
+  await page.keyboard.press("Escape");
 
   await page.getByTestId("driver-tab-tpa").click();
   const guide = page.getByTestId("tpa-guide");
   await expect(guide).toBeVisible({ timeout: 15000 });
-  await expect(guide.getByTestId("tpa-guide-sim")).toHaveText("SIMULASI");
-  await expect(guide.getByTestId("tpa-queue-ahead")).toContainText("(model)");
-  await expect(guide.getByTestId("tpa-queue-ahead")).toContainText(/± \d+ truk/);
+  // No plan instruction carries a gate slot here: the slot is a dash, never invented.
+  await expect(guide.getByTestId("tpa-slot")).toContainText("—");
   await expect(guide.getByTestId("tpa-queue-eta")).toContainText(/\d+ mnt/);
-  await expect(guide.getByTestId("tpa-model-note")).toContainText("simulasi");
-  await expect(guide.getByTestId("tpa-step-zone")).toContainText("belum punya data zona aktif");
-  // No immersive-ar in the test browser: the 2D card stands alone.
-  await expect(guide.getByTestId("tpa-ar-open")).toHaveCount(0);
+  await expect(guide.getByTestId("tpa-queue-eta")).toHaveAttribute("data-provenance", "simulated");
+  await expect(guide.getByTestId("tpa-model-note")).toContainText("perkiraan model");
+  const ahead = page.getByTestId("tpa-queue-ahead");
+  await expect(ahead).toContainText(/Jam puncak model \d\d:00 · sekitar \d+ truk/);
+  await expect(ahead).toHaveAttribute("data-provenance", "simulated");
 
-  await guide.getByTestId("gate-arrival").click();
-  await expect(guide.getByTestId("gate-arrived")).toBeVisible();
+  await page.getByTestId("gate-arrival").click();
+  await expect(page.getByTestId("gate-arrived")).toHaveText(/^Di gerbang sejak \d\d:\d\d$/);
   await expect(guide.getByTestId("tpa-waited")).toContainText("jam HP");
   await expect(page.getByTestId("receipt-camera")).toBeVisible();
 });
@@ -260,8 +268,10 @@ for (const width of [320, 390]) {
     await page.getByTestId("driver-truck-search").fill("254");
     await expect(page.getByTestId(`pick-${TRUCK}`)).toBeVisible({ timeout: 15000 });
     await expectNoOverflow(page);
-    await expectTargets(page, ".driver-pick", 44);
+    await expectTargets(page, ".drv-pick", 44);
     await page.getByTestId(`pick-${TRUCK}`).click();
+    await expectTargets(page, '[data-testid="driver-pick-start"]', 44);
+    await page.getByTestId("driver-pick-start").click();
 
     for (const tab of ["rute", "instruksi", "tpa", "lapor"]) {
       await page.getByTestId(`driver-tab-${tab}`).click();
@@ -269,11 +279,11 @@ for (const width of [320, 390]) {
       await expectNoOverflow(page);
       await expectTargets(page, ".driver-tab", 44);
     }
-    await expectTargets(page, ".driver-exception-btn", 64);
+    await expectTargets(page, ".drt-kind", 64);
     await page.getByTestId("exc-accident").click();
     await expect(page.getByTestId("exc-call-112")).toHaveAttribute("href", "tel:112");
     await expectNoOverflow(page);
-    await expectTargets(page, ".driver-exception-sheet .driver-btn", 44);
+    await expectTargets(page, ".drt-report-sheet .drt-btn", 44);
     await expect(page.getByRole("main")).toHaveCount(1);
   });
 }
@@ -283,6 +293,7 @@ test("English mode names the tabs and the exception buttons", async ({ page, req
   await openDriver(page, token, { lang: "en", path: "/driver?tab=lapor" });
   await expect(page.getByTestId("driver-tab-rute")).toHaveText("Route");
   await expect(page.getByTestId("driver-tab-lapor")).toHaveText("Report");
-  await expect(page.getByTestId("exc-tps_empty")).toHaveText("TPS empty / waste not put out");
-  await expect(page.getByTestId("exc-truck_breakdown")).toHaveText("Truck broken down");
+  await expect(page.getByTestId("exc-tps_empty")).toContainText("TPS empty");
+  await expect(page.getByTestId("exc-tps_empty")).toContainText("Waste not put out");
+  await expect(page.getByTestId("exc-truck_breakdown")).toContainText("Truck broke down");
 });

@@ -67,45 +67,51 @@ for (const width of [390, 320]) {
   test(`four bottom tabs in shift order, pinned to the bottom at ${width} px`, async ({ page, request }) => {
     await openWith(page, request, fakeSpj(["pending", "pending"]), { width });
     const tabs = page.locator(".driver-tabs .driver-tab");
-    await expect(tabs).toContainText(["Instruksi", "Rute", "TPA", "Lapor"]);
+    // Wave 13: the design's order, Instructions / Route / Report / TPA.
+    await expect(tabs).toContainText(["Instruksi", "Rute", "Lapor", "TPA"]);
     await expect(page.getByTestId("driver-tab-rute")).toHaveAttribute("aria-current", "page");
     const nav = await box(page.locator(".driver-tabs"));
     expect(Math.round(nav.y + nav.height)).toBe(800);
     for (const tab of await tabs.all()) {
       const b = await box(tab);
-      expect(b.height).toBeGreaterThanOrEqual(56);
-      expect(b.width).toBeGreaterThanOrEqual(56);
+      expect(b.height).toBeGreaterThanOrEqual(52);
+      expect(b.width).toBeGreaterThanOrEqual(52);
     }
     await expectNoOverflow(page);
   });
 }
 
-test("the route screen leads with the current stop; the rest are flat rows", async ({ page, request }) => {
+test("the route screen leads with the current stop; the rest are in the all-stops sheet", async ({
+  page,
+  request,
+}) => {
   await openWith(page, request, fakeSpj(["completed", "pending", "pending"]));
 
-  const hero = page.getByTestId("stop-1");
-  await expect(hero).toHaveClass(/stop-hero/);
-  await expect(hero.getByText("Titik berikutnya")).toBeVisible();
-  // The heading keeps "Titik n: name" for assistive tech while the name reads large.
-  await expect(hero.getByRole("heading", { name: "Titik 2: TPS W11 2" })).toBeVisible();
-  const start = await box(hero.getByTestId("stop-start"));
-  expect(start.height).toBeGreaterThanOrEqual(64);
-  expect((await box(hero.getByTestId("stop-maps-1"))).height).toBeGreaterThanOrEqual(56);
-
-  // Hero sits above the route list; done and locked stops are rows, not cards.
+  // Wave 13: a full-bleed map with the current stop in the bottom sheet.
   const route = page.getByTestId("driver-route-overview");
-  expect((await box(hero)).y).toBeLessThan((await box(route)).y);
-  await expect(page.getByTestId("stop-0")).toHaveClass(/stop-row is-done/);
-  await expect(page.getByTestId("stop-0")).toContainText("SELESAI");
-  await expect(page.getByTestId("stop-2")).toHaveClass(/is-locked/);
-  const rowMaps = page.getByTestId("stop-maps-2");
+  await expect(route).toBeVisible({ timeout: 15000 });
+  await expect(route.getByTestId("driver-route-map")).toBeVisible();
+  const sheet = page.getByTestId("stop-1");
+  // The heading keeps "Titik n: name" for assistive tech while the name reads large.
+  await expect(sheet.getByRole("heading", { name: "Titik 2: TPS W11 2" })).toBeVisible();
+  const start = await box(sheet.getByTestId("stop-start"));
+  expect(start.height).toBeGreaterThanOrEqual(48);
+
+  // Done and later stops are rows in the "Semua titik" sheet, not cards.
+  await page.getByTestId("driver-all-stops").click();
+  const list = page.getByTestId("driver-stops-sheet");
+  await expect(list.getByTestId("stop-0")).toHaveClass(/drt-stop is-done/);
+  await expect(list.getByTestId("stop-0")).toContainText("SELESAI");
+  await expect(list.getByTestId("stop-row-next")).toHaveAttribute("aria-current", "step");
+  await expect(list.getByTestId("stop-2")).toHaveClass(/is-locked/);
+  const rowMaps = list.getByTestId("stop-maps-2");
   await expect(rowMaps).toHaveAccessibleName("Buka rute ke TPS W11 3 di Google Maps");
   const rowBox = await box(rowMaps);
-  expect(rowBox.width).toBeGreaterThanOrEqual(56);
-  expect(rowBox.height).toBeGreaterThanOrEqual(56);
-  await expect(route.getByTestId("destination-card")).toContainText("Tujuan: TPST Bantargebang");
-  await expect(page.getByTestId("pretrip-done")).toBeVisible();
-  await expect(page.locator(".driver-card .driver-card")).toHaveCount(0);
+  expect(rowBox.width).toBeGreaterThanOrEqual(44);
+  expect(rowBox.height).toBeGreaterThanOrEqual(44);
+  await expect(list.getByTestId("destination-card")).toContainText("Tujuan: TPST Bantargebang");
+  await page.keyboard.press("Escape");
+  await expect(list).toHaveCount(0);
 
   // TPA before the stops are done: the screen says how many are left.
   await page.getByTestId("driver-tab-tpa").click();
@@ -113,7 +119,7 @@ test("the route screen leads with the current stop; the rest are flat rows", asy
   await expect(page.getByTestId("delivery-card")).toHaveCount(0);
 });
 
-test("with every stop done the app opens on the TPA tab and its one action is the receipt camera", async ({
+test("with every stop done the app opens on the TPA tab and its one action is the gate arrival", async ({
   page,
   request,
 }) => {
@@ -121,45 +127,45 @@ test("with every stop done the app opens on the TPA tab and its one action is th
   await expect(page.getByTestId("driver-tab-tpa")).toHaveAttribute("aria-current", "page");
   const delivery = page.getByTestId("delivery-card");
   await expect(delivery).toBeVisible({ timeout: 15000 });
-  const camera = await box(page.getByTestId("receipt-camera"));
-  expect(camera.height).toBeGreaterThanOrEqual(64);
+  // Wave 13: one action at the gate first ("I'm at the gate"), then the ticket camera.
+  const gate = await box(delivery.getByTestId("gate-arrival"));
+  expect(gate.height).toBeGreaterThanOrEqual(48);
   await expect(page.getByTestId("destination-card")).toContainText("TPST Bantargebang");
   await expect(page.getByTestId("driver-route-overview")).toHaveCount(0);
 
   // An explicit tab choice is kept: the route is one tap away.
   await page.getByTestId("driver-tab-rute").click();
   await expect(page).toHaveURL(/tab=rute/);
+  await page.getByTestId("driver-all-stops").click();
   await expect(page.getByTestId("driver-route-progress")).toHaveText("2 dari 2 titik");
   await expect(page.getByTestId("delivery-card")).toHaveCount(0);
 });
 
-test("the product login is a full-bleed split with a drawn route and no case-study footer", async ({
-  page,
-}) => {
+test("the product login is the designed split with a statement and a pixel band", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/");
+  await page.goto("/app");
   await page.evaluate(() => {
     localStorage.clear();
     localStorage.setItem("pythia_lang", "id");
   });
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Masuk ke pusat kendali" })).toBeVisible();
-  const story = await box(page.locator(".login-story"));
-  expect(Math.round(story.x)).toBe(0);
-  expect(Math.round(story.height)).toBe(900);
-  await expect(page.locator(".login-story-art")).toHaveAttribute("aria-hidden", "true");
-  await expect(page.locator(".login-story-footer")).toHaveCount(0);
-  await expect(page.locator(".login-eyebrow")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Masuk ke Pythia" })).toBeVisible();
+  const art = await box(page.locator(".si-art"));
+  expect(Math.round(art.width)).toBeGreaterThanOrEqual(600);
+  expect(art.x).toBeGreaterThan(600);
+  await expect(page.locator(".si-band")).toHaveAttribute("aria-hidden", "true");
   const submit = page.getByRole("button", { name: "Masuk", exact: true });
-  expect((await box(submit)).height).toBeGreaterThanOrEqual(48);
-  expect(await submit.evaluate((el) => getComputedStyle(el).borderRadius)).toMatch(/^9\d\dpx$/);
+  expect((await box(submit)).height).toBeGreaterThanOrEqual(44);
 
   // A phone gets the form alone with the brand above it.
   await page.setViewportSize({ width: 390, height: 800 });
-  await expect(page.locator(".login-story")).toBeHidden();
-  await expect(page.locator(".login-mobile-brand")).toBeVisible();
+  await expect(page.locator(".si-art")).toBeHidden();
+  await expect(page.locator(".si-logo")).toBeVisible();
   await expectNoOverflow(page);
-  for (const button of await page.locator(".login-language button").all()) {
-    expect((await box(button)).width).toBeGreaterThanOrEqual(44);
+  for (const target of [
+    page.getByTestId("login-lang-switch"),
+    page.getByRole("button", { name: /Tampilkan kata sandi/ }),
+  ]) {
+    expect((await box(target)).height).toBeGreaterThanOrEqual(44);
   }
 });
