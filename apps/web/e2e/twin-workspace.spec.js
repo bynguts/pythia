@@ -37,20 +37,16 @@ async function waitForTwin(page, predicate = "true") {
   });
 }
 
+// Wave 13: the twin is the full-screen briefing room at /twin, outside the console nav.
 async function openTwin(page) {
-  await page
-    .getByTestId("workspace-navigation")
-    .getByRole("button", { name: "3D City", exact: true })
-    .click();
+  await page.goto("/twin");
   await expect(page.getByTestId("twin-workspace")).toBeVisible();
 }
 
-// wave9 fleet composition: the twin ("3D City") is the last workspace before Settings.
-test("twin is in the rail and renders all 42 Jakarta districts with provenance", async ({ page }) => {
+test("the twin renders all 42 Jakarta districts with provenance", async ({ page }) => {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await signIn(page);
-  await expect(page.getByTestId("workspace-navigation").getByRole("button").nth(4)).toHaveText("3D City");
   await openTwin(page);
   await expect(page.getByRole("heading", { name: "City waste digital twin" })).toBeVisible();
 
@@ -158,13 +154,12 @@ test("Ho Chi Minh City is labelled as a simulated demo city", async ({ page }) =
   await expect(banner).toContainText(/simulated demo city/i);
   await expect(page.getByTestId("twin-provenance-districts")).toContainText("Simulated demo city");
   await expect(page.getByTestId("twin-provenance-trucks")).toContainText("Unavailable");
-  // The shell header names the city on screen, so it follows the switch.
-  // wave11 design system: the city context moved into the top-bar status chip.
-  await expect(page.getByTestId("shell-status")).toContainText(/Ho Chi Minh/);
+  // The city switch names the city on screen, so it follows the switch.
+  await expect(page.getByTestId("twin-city-hcmc")).toHaveAttribute("aria-pressed", "true");
 
   await page.getByTestId("twin-city-jakarta").click();
   await waitForTwin(page, "window.__pythiaTwin.city === 'jakarta'");
-  await expect(page.getByTestId("shell-status")).toContainText(/Jakarta/);
+  await expect(page.getByTestId("twin-city-jakarta")).toHaveAttribute("aria-pressed", "true");
   await expect(banner).toHaveCount(0);
 });
 
@@ -205,9 +200,7 @@ test("under reduced motion the tour uses jump cuts", async ({ page }) => {
 test("twin stays touch-friendly with no horizontal overflow at 390 px", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, "id");
-  const nav = page.locator(".command-mobile-nav");
-  await nav.getByRole("button", { name: "Kota 3D" }).click();
-  await expect(page.getByTestId("twin-workspace")).toBeVisible();
+  await openTwin(page);
   await waitForTwin(page);
 
   // Controls live in a bottom sheet; the map stays visible above it.
@@ -220,12 +213,7 @@ test("twin stays touch-friendly with no horizontal overflow at 390 px", async ({
 
   const failures = await page.evaluate((min) => {
     const out = [];
-    const selectors = [
-      ".twin-workspace button",
-      ".twin-workspace a",
-      ".twin-workspace input[type=range]",
-      ".command-mobile-nav button",
-    ];
+    const selectors = [".twin-workspace button", ".twin-workspace a", ".twin-workspace input[type=range]"];
     for (const selector of selectors) {
       document.querySelectorAll(selector).forEach((el) => {
         const r = el.getBoundingClientRect();
@@ -253,7 +241,7 @@ for (const width of [360, 320])
   test(`day buttons keep 44 px targets at ${width} px without page overflow`, async ({ page }) => {
     await page.setViewportSize({ width, height: 780 });
     await signIn(page, "id");
-    await page.locator(".command-mobile-nav").getByRole("button", { name: "Kota 3D" }).click();
+    await openTwin(page);
     await waitForTwin(page);
     const days = page.locator(".twin-day");
     await expect(days).toHaveCount(7);
@@ -284,10 +272,7 @@ test("presentation HUD states that the landfill queue is simulated", async ({ pa
 
 test("twin controls meet text contrast requirements", async ({ page }) => {
   await signIn(page, "id");
-  await page
-    .getByTestId("workspace-navigation")
-    .getByRole("button", { name: "Kota 3D", exact: true })
-    .click();
+  await openTwin(page);
   await waitForTwin(page);
   await page.getByTestId("twin-city-hcmc").click();
   await waitForTwin(page, "window.__pythiaTwin.city === 'hcmc'");
