@@ -99,6 +99,9 @@ def test_contract_shape_and_thresholds(api_client, auth_headers, truck):
     assert set(row) == {
         "truck_code",
         "driver_name",
+        "zone",
+        "zone_classification",
+        "gate_slot",
         "pretrip",
         "duty",
         "instruction",
@@ -273,3 +276,114 @@ def test_service_due_soon_uses_a_seven_day_window(api_client, auth_headers, truc
     _plan(truck)
     SERVICE_STORE.create(truck, "2026-04-20", "rem", "servis berkala", next_due_date=due)
     assert _board(api_client, auth_headers, truck)["service"]["due_soon"] is expected
+
+
+def _slot(start: str, depart: str, depart_date: str = DAY) -> dict:
+    return {
+        "facility": "TPST Bantargebang",
+        "slot_index": 0,
+        "date": DAY,
+        "start": start,
+        "end": start,
+        "depart_at": depart,
+        "depart_date": depart_date,
+        "classification": "MODEL_OUTPUT",
+    }
+
+
+def _plan_with_slots(slots: dict[str, dict]) -> str:
+    plan_id = f"plan-{uuid4().hex[:8]}"
+    items = [
+        {"truck_code": code, "text": f"Rencana {plan_id}", "fields": {"plan_id": plan_id, "gate_slot": slot}}
+        for code, slot in slots.items()
+    ]
+    _OPERATIONS_PLAN_STORE.save_proposed(
+        plan_id, {"plan_id": plan_id, "plan_date": DAY, "assignments": [], "dispatches": items}
+    )
+    _OPERATIONS_PLAN_STORE.approve(
+        plan_id,
+        "supervisor",
+        lambda i: history_store.save_dispatch(i["truck_code"], i["text"], "operations_optimizer"),
+    )
+    return plan_id
+
+
+def test_gate_slot_per_truck_and_first_departure_come_from_the_plan(api_client, auth_headers, truck):
+    other = f"RDY-{uuid4().hex[:6]}"
+    # A night slot whose departure falls on the evening before is the earliest departure.
+    _plan_with_slots(
+        {truck: _slot("10:00", "08:30"), other: _slot("01:00", "2026-10-19 23:30", "2026-10-19")}
+    )
+    body = api_client.get(f"/api/readiness?date={DAY}", headers=auth_headers("dispatcher")).json()
+    row = next(t for t in body["trucks"] if t["truck_code"] == truck)
+    assert row["gate_slot"]["start"] == "10:00" and row["gate_slot"]["depart_at"] == "08:30"
+    assert row["gate_slot"]["classification"] == "MODEL_OUTPUT"
+    first = body["first_departure"]
+    assert first["date"] == "2026-10-19" and first["depart_at"] == "23:30"
+    assert first["classification"] == "MODEL_OUTPUT"
+
+
+def test_first_departure_is_null_without_a_planned_slot(api_client, auth_headers):
+    body = api_client.get("/api/readiness?date=2031-01-02", headers=auth_headers("dispatcher")).json()
+    assert body["first_departure"] is None
+    assert all(t["gate_slot"] is None for t in body["trucks"])
+
+
+def test_zone_comes_from_the_simulated_fleet(api_client, auth_headers):
+    body = api_client.get("/api/readiness?date=2031-01-03", headers=auth_headers("dispatcher")).json()
+    zoned = [t for t in body["trucks"] if t["zone"]]
+    assert zoned and all(t["zone_classification"] == "SIMULATED" for t in zoned)
+
+
+def test_backup_candidates_passed_pretrip_outside_the_plan(api_client, auth_headers, truck, monkeypatch):
+    from app.fleet import data
+
+    spare, failed, busy = (f"BKP-{uuid4().hex[:6]}" for _ in range(3))
+    real = data.get_dynamic_trucks()
+    fake = [
+        {
+            "truck_code": code,
+            "driver_name": "Driver 99",
+            "assigned_zone": "Jakarta Barat",
+            "is_damaged": False,
+        }
+        for code in (spare, failed, busy)
+    ]
+    monkeypatch.setattr(data, "get_dynamic_trucks", lambda: real + fake)
+    _plan(truck)
+    _pretrip(spare, minutes_ago=30)
+    _pretrip(failed, failed=("rem",))
+    _pretrip(busy)
+    spj = SPJ_STORE.create_with_stops(
+        "Pengemudi Uji", busy, "TPST Bantargebang", False, "normal", "uji", [dict(STOP)], created_by="admin"
+    )
+    SPJ_STORE.activate(spj.spj_id, actor="admin")
+    try:
+        body = api_client.get(f"/api/readiness?date={DAY}", headers=auth_headers("dispatcher")).json()
+    finally:
+        SPJ_STORE.cancel(spj.spj_id, actor="admin")
+    codes = [c["truck_code"] for c in body["backup_candidates"]]
+    assert spare in codes and failed not in codes and busy not in codes and truck not in codes
+    candidate = next(c for c in body["backup_candidates"] if c["truck_code"] == spare)
+    assert candidate["zone"] == "Jakarta Barat" and candidate["pretrip_at"]
+    assert candidate["classification"] == "FIELD"
+
+
+def test_backup_candidates_skip_open_damage_and_out_of_service_trucks():
+    from app.field.readiness import _backup_candidates
+
+    ok = {"items": {"rem": True}, "created_at": "2026-10-20T05:00:00+00:00"}
+    fleet = {
+        "A": {"assigned_zone": "Z", "is_damaged": False},
+        "B": {"assigned_zone": "Z", "is_damaged": False},
+        "C": {"assigned_zone": "Z", "is_damaged": True},
+    }
+    out = _backup_candidates(
+        fleet, set(), {"A": ok, "B": ok, "C": ok}, {"B": [object()]}, {}, None, {}, FROZEN_NOW
+    )
+    assert [c["truck_code"] for c in out] == ["A"]
+
+
+def test_backup_candidates_are_empty_on_the_fleet_scope(api_client, auth_headers):
+    body = api_client.get(f"/api/readiness?date={DAY}&scope=fleet", headers=auth_headers("dispatcher")).json()
+    assert body["backup_candidates"] == []

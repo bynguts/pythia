@@ -61,6 +61,7 @@ def test_empty_day_is_zeros_and_nulls(day):
         "plan_ids": [],
         "planned_tons": None,
         "forecast_tons": None,
+        "planned_trips": None,
         "classification": "MODEL_OUTPUT",
     }
     assert recap["actual"]["receipt_tons"] is None
@@ -68,7 +69,14 @@ def test_empty_day_is_zeros_and_nulls(day):
     assert recap["actual"]["spj"] == {"draft": 0, "aktif": 0, "selesai": 0, "batal": 0}
     assert recap["actual"]["classification"] == "OBSERVED_IN_APP"
     assert recap["delta"] == {"tons": None, "pct": None, "delta_basis": None}
-    assert recap["gate_wait"] == {"observed_n": 0, "median_min": None, "p90_min": None, "over_180": 0}
+    assert recap["gate_wait"] == {
+        "observed_n": 0,
+        "median_min": None,
+        "p90_min": None,
+        "over_180": 0,
+        "mean_min": None,
+        "max_min": None,
+    }
     assert recap["incidents"]["damage_reports"] == 0
     assert set(recap["incidents"]["exceptions"].values()) == {0}
     assert recap["evidence"] == {"stops_missing_evidence": 0, "overrides": 0, "receipts_pending_review": 0}
@@ -171,3 +179,47 @@ def test_endpoint_permissions_and_shape(api_client, auth_headers, day):
         assert res.status_code == 200, role
         assert res.json()["date"] == day
     assert api_client.get("/api/recap/daily?date=nope", headers=auth_headers("dispatcher")).status_code == 422
+
+
+def test_planned_trips_count_the_assignment_rows_of_approved_plans(day):
+    rows = [
+        {"truck_code": "RCP-021", "area": "gambir", "assigned_tons": 9.0, "trip_index": i} for i in (1, 2)
+    ]
+    _approved_plan(day, assignments=rows)
+    _approved_plan(day, assignments=rows[:1])
+    assert daily_recap(day)["forecast"]["planned_trips"] == 3
+
+
+def test_plan_without_assignment_rows_keeps_planned_trips_null(day):
+    _approved_plan(day)
+    assert daily_recap(day)["forecast"]["planned_trips"] is None
+
+
+def test_gate_wait_mean_and_max_come_from_observed_waits(day):
+    now = datetime.now(UTC)
+    for truck, minutes in (("RCP-031", 20), ("RCP-032", 60)):
+        spj = _spj(truck)
+        SPJ_STORE.record_gate_arrival(spj.spj_id, "driver", (now - timedelta(minutes=minutes)).isoformat())
+        _receipt(spj.spj_id, 15_000.0, 9_000.0)
+    wait = daily_recap(day)["gate_wait"]
+    assert wait["observed_n"] == 2
+    assert 59 <= wait["max_min"] <= 62
+    assert 39 <= wait["mean_min"] <= 42
+
+
+def test_summary_lines_carry_the_summary_facts_one_per_line(day):
+    spj = _spj("RCP-041")
+    _receipt(spj.spj_id, 15_000.0, 9_000.0)
+    recap = daily_recap(day)
+    for lang in ("en", "id"):
+        lines = recap["summary_lines"][lang]
+        assert len(lines) >= 3 and all(line.endswith(".") for line in lines)
+        assert any("6.0 t" in line for line in lines)
+    assert recap["summary_lines"]["en"][0].startswith("1 SPJ completed")
+    assert recap["summary"]["en"].startswith(f"{day}: 1 SPJ completed, 0 active, 0 draft; 1 receipts")
+
+
+def test_empty_day_summary_lines_say_there_is_no_data(day):
+    lines = daily_recap(day)["summary_lines"]
+    assert lines["en"] == ["No plan or recorded activity for this day yet."]
+    assert len(lines["id"]) == 1

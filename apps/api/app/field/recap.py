@@ -38,10 +38,13 @@ def _forecast(day: str) -> dict[str, Any]:
     needed = [float(p["total_demand_tons"]) for p in plans if p.get("total_demand_tons") is not None]
     planned = round(sum(assigned), 1) if assigned else None
     demand = round(sum(needed), 1) if needed else None
+    # One assignment row per planned trip; a plan stored without rows says nothing.
+    trips = [len(p["assignments"]) for p in plans if p.get("assignments")]
     return {
         "plan_ids": [p["plan_id"] for p in plans],
         "planned_tons": planned,
         "forecast_tons": demand,
+        "planned_trips": sum(trips) if trips else None,
         "classification": FORECAST_CLASSIFICATION,
     }
 
@@ -96,22 +99,20 @@ def _incidents(day: str) -> dict[str, Any]:
     return {"exceptions": kinds, "damage_reports": damage}
 
 
-def _summary(day: str, data: dict[str, Any]) -> dict[str, str]:
+def _summary_parts(data: dict[str, Any]) -> dict[str, list[str]]:
+    """The recap's facts, one per entry, in both languages; empty when the day has no data."""
     fc, act, delta = data["forecast"], data["actual"], data["delta"]
     if not fc["plan_ids"] and not act["receipts"] and not any(act["spj"].values()):
-        return {
-            "id": f"{day}: belum ada data rencana atau realisasi untuk hari ini.",
-            "en": f"{day}: no plan or recorded activity for this day yet.",
-        }
+        return {"id": [], "en": []}
     spj = act["spj"]
     tons = act["receipt_tons"]
     id_parts = [
-        f"{day}: {spj['selesai']} SPJ selesai, {spj['aktif']} aktif, {spj['draft']} draf; "
+        f"{spj['selesai']} SPJ selesai, {spj['aktif']} aktif, {spj['draft']} draf",
         f"{act['receipts']} tanda terima",
         f"tonase tercatat {tons} t" if tons is not None else "tonase tercatat belum ada",
     ]
     en_parts = [
-        f"{day}: {spj['selesai']} SPJ completed, {spj['aktif']} active, {spj['draft']} draft; "
+        f"{spj['selesai']} SPJ completed, {spj['aktif']} active, {spj['draft']} draft",
         f"{act['receipts']} receipts",
         f"recorded tonnage {tons} t" if tons is not None else "no recorded tonnage yet",
     ]
@@ -125,7 +126,26 @@ def _summary(day: str, data: dict[str, Any]) -> dict[str, str]:
     if wait["median_min"] is not None:
         id_parts.append(f"antre gerbang median {wait['median_min']} menit (n={wait['observed_n']})")
         en_parts.append(f"median gate wait {wait['median_min']} min (n={wait['observed_n']})")
-    return {"id": "; ".join(id_parts) + ".", "en": "; ".join(en_parts) + "."}
+    return {"id": id_parts, "en": en_parts}
+
+
+def _summary(day: str, parts: dict[str, list[str]]) -> dict[str, str]:
+    if not parts["en"]:
+        return {
+            "id": f"{day}: belum ada data rencana atau realisasi untuk hari ini.",
+            "en": f"{day}: no plan or recorded activity for this day yet.",
+        }
+    return {lang: f"{day}: " + "; ".join(lines) + "." for lang, lines in parts.items()}
+
+
+def _summary_lines(parts: dict[str, list[str]]) -> dict[str, list[str]]:
+    """The same facts as ``summary``, one sentence each, for a bulleted brief."""
+    if not parts["en"]:
+        return {
+            "id": ["Belum ada data rencana atau realisasi untuk hari ini."],
+            "en": ["No plan or recorded activity for this day yet."],
+        }
+    return {lang: [line[0].upper() + line[1:] + "." for line in lines] for lang, lines in parts.items()}
 
 
 def daily_recap(date: str | date_type) -> dict[str, Any]:
@@ -159,6 +179,8 @@ def daily_recap(date: str | date_type) -> dict[str, Any]:
             "median_min": safety.percentile(waits, 0.5),
             "p90_min": safety.percentile(waits, 0.9),
             "over_180": sum(1 for w in waits if w >= GATE_ALERT_MIN),
+            "mean_min": round(sum(waits) / len(waits), 1) if waits else None,
+            "max_min": max(waits) if waits else None,
         },
         "incidents": _incidents(day),
         "evidence": {
@@ -167,5 +189,7 @@ def daily_recap(date: str | date_type) -> dict[str, Any]:
             "receipts_pending_review": facts["pending_review"],
         },
     }
-    data["summary"] = _summary(day, data)
+    parts = _summary_parts(data)
+    data["summary"] = _summary(day, parts)
+    data["summary_lines"] = _summary_lines(parts)
     return data
