@@ -6,13 +6,14 @@ import logging
 import sqlite3
 import threading
 import time
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
-from app.api.deps import require_any_permission, require_permission
+from app.api.deps import require_any_permission, require_any_principal, require_permission
 from app.api.routers.forecast import predictions_kecamatan
 from app.api.schemas import EventPermitRequest, PlanReassignRequest
 from app.api.state import _OPERATIONS_PLAN_STORE, _tpa_cache, dispatch_center, history_store
@@ -259,6 +260,11 @@ def create_operations_plan(
     event_lng: float | None = Query(
         None, ge=-180, le=180, description="Event longitude; localizes attendance demand"
     ),
+    auto_inputs: bool = Query(
+        False,
+        description="Take rain, events and holiday from the forecast and apply the day's field facts; "
+        "the rain/event parameters are then ignored",
+    ),
     _role: str = Depends(require_permission("operations:plan")),
 ) -> dict[str, Any]:
     """Build a day plan (truck trips per shift) for the top forecast districts via CP-SAT.
@@ -272,13 +278,31 @@ def create_operations_plan(
     are supplied with a non-zero attendance, the same coordinate the map uses
     localizes the demand, so two different event sites no longer produce an
     identical plan.
+
+    With `auto_inputs=true` (the console's Tomorrow page) the operator types no
+    scenario: rain, the located event and the holiday come from
+    `/api/forecast/tomorrow` for `plan_date`, and the day's field facts take
+    unavailable trucks out of the fleet. The scenario records what was applied.
     """
     plan_date = plan_date or today()
     is_weekend = plan_date.weekday() >= 5
+    is_holiday = False
+    auto = None
+    if auto_inputs:
+        try:
+            auto = _auto_inputs(plan_date)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        rainfall_mm, is_holiday = auto["rainfall_mm"], auto["holiday"] is not None
+        event = auto["event_applied"]
+        event_attendance = event["attendance"] if event else 0
+        event_lat = event["lat"] if event else None
+        event_lng = event["lng"] if event else None
     preds = predictions_kecamatan(
         rainfall_mm=rainfall_mm,
         event_attendance=event_attendance,
         is_weekend=is_weekend,
+        is_holiday=is_holiday,
         target_date=plan_date,
         event_lat=event_lat,
         event_lng=event_lng,
@@ -296,11 +320,12 @@ def create_operations_plan(
         )
         for rank, h in enumerate(reversed(hotspots), start=1)
     ]
+    held = auto["unavailable_trucks"] if auto else {}
     vehicles = [
         Vehicle(
             truck_code=t["truck_code"],
             capacity_tons=TRUCK_CAPACITY_TONS,
-            available=not t["is_damaged"],
+            available=not t["is_damaged"] and t["truck_code"] not in held,
             permit_compliant=not t["deviation"]["violated"],
             vehicle_type=t.get("vehicle_type", ""),
             # The simulated fleet has no leachate flag: a compactor is assumed
@@ -312,7 +337,9 @@ def create_operations_plan(
     city_tons = float(preds.get("total_predicted_tons") or 0.0)
     plan_tons = sum(d.tons for d in demands)
     rules = resolve_rules(plan_date, capacity_share=(plan_tons / city_tons) if city_tons > 0 else 1.0)
+    solve_started = time.perf_counter()
     plan = build_operational_plan(demands, vehicles, rules=rules)
+    solve_seconds = round(time.perf_counter() - solve_started, 2)
     # The stored scenario is the full normalized input, not just the subset the
     # optimizer happened to use, so an approved plan can be reproduced exactly.
     scenario = {
@@ -327,7 +354,19 @@ def create_operations_plan(
         "top_kecamatan": [h["slug"] for h in hotspots],
         "total_predicted_tons": preds["total_predicted_tons"],
         "kecamatan_count": preds["kecamatan_count"],
+        "is_holiday": is_holiday,
+        "inputs_auto": auto is not None,
     }
+    if auto is not None:
+        scenario["auto_inputs"] = {
+            "rainfall": auto["rainfall"],
+            "event_applied": auto["event_applied"],
+            "events_not_applied": auto["events_not_applied"],
+            "holiday": auto["holiday"],
+            "field_facts_applied": [
+                {"fact_id": fact_id, "truck_code": code} for code, fact_id in sorted(held.items())
+            ],
+        }
     assignments = [
         {
             "truck_code": a.truck_code,
@@ -362,6 +401,7 @@ def create_operations_plan(
         "total_assigned_tons": plan.total_assigned_tons,
         "unassigned_tons": plan.unassigned_tons,
         "feasible": plan.feasible,
+        "solve_seconds": solve_seconds,
         "shortfall_label": None if plan.feasible else f"infeasible: {plan.unassigned_tons:.0f} t unassigned",
         "quota_usage": plan.quota_usage,
         "facility_usage": plan.facility_usage,
@@ -375,9 +415,66 @@ def create_operations_plan(
     return payload
 
 
+def _auto_inputs(plan_date: date) -> dict[str, Any]:
+    """The plan inputs nobody types: forecast drivers for `plan_date` plus its field facts.
+
+    The demand model localizes one event per run, so of several located events
+    the largest is applied and the rest are listed with the reason. An event
+    without a location or attendance is never placed at a default venue.
+    """
+    from app.field.field_facts import unavailable_trucks
+    from app.forecast.baseline import tomorrow_forecast
+
+    forecast = tomorrow_forecast(plan_date.isoformat())
+    drivers = forecast.get("drivers") or []
+    weather = next((d for d in drivers if d["kind"] == "weather"), None)
+    holiday = next((d for d in drivers if d["kind"] == "holiday"), None)
+    # The forecast lists events it could not localize; only located permits carry coordinates.
+    not_applied = [
+        {"name": d["detail"].get("name"), "reason": d["effect_reason"]}
+        for d in drivers
+        if d["kind"] == "event" and d.get("effect_reason")
+    ]
+    located = sorted(
+        (
+            p
+            for p in PERMIT_STORE.list()
+            if p.get("event_date") == plan_date.isoformat()
+            and p.get("lat") is not None
+            and p.get("lng") is not None
+            and int(p.get("expected_attendance") or 0) > 0
+        ),
+        key=lambda p: -int(p["expected_attendance"]),
+    )
+    applied = None
+    if located:
+        top = located[0]
+        applied = {
+            "name": top.get("name"),
+            "attendance": int(top["expected_attendance"]),
+            "lat": top["lat"],
+            "lng": top["lng"],
+            "data_class": top.get("data_class"),
+        }
+        not_applied += [{"name": p.get("name"), "reason": "one_event_per_plan"} for p in located[1:]]
+    rainfall = float((weather or {}).get("detail", {}).get("rainfall_mm") or 0.0)
+    return {
+        "rainfall_mm": rainfall,
+        "rainfall": {
+            "rainfall_mm": rainfall,
+            "source": (weather or {}).get("source"),
+            "input_classification": (weather or {}).get("input_classification"),
+        },
+        "event_applied": applied,
+        "events_not_applied": not_applied,
+        "holiday": (holiday or {}).get("detail", {}).get("name"),
+        "unavailable_trucks": unavailable_trucks(plan_date.isoformat()),
+    }
+
+
 @router.get("/api/operations/plans")
 def list_operations_plans(
-    status: str | None = Query(None, pattern="^(proposed|approved)$"),
+    status: str | None = Query(None, pattern="^(proposed|approved|returned|withdrawn)$"),
     limit: int = Query(20, ge=1, le=100),
     _role: str = Depends(require_any_permission("operations:plan", "operations:approve")),
 ) -> list[dict[str, Any]]:
@@ -476,6 +573,8 @@ def approve_operations_plan(
         )
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Plan {plan_id} not found.") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
     try:
         ensure_plan_spjs(plan, approved_by=plan.get("approved_by") or _role)
     except Exception:  # noqa: BLE001 - the approval is committed; drafts report per truck
@@ -491,6 +590,133 @@ def approve_operations_plan(
             "operations_plan_approved", {"plan_id": plan_id, "dispatches": len(dispatch_ids)}
         )
     return {**plan, "spj_drafts": _spj_drafts(plan)}
+
+
+class PlanReturnBody(BaseModel):
+    note: str = Field(min_length=3, max_length=500)
+
+
+class PlanSwapBody(BaseModel):
+    truck_a: str = Field(min_length=1, max_length=32)
+    truck_b: str = Field(min_length=1, max_length=32)
+
+
+def _edit_plan(
+    plan_id: str, allowed: tuple[str, ...], mutate, to_status: str | None = None
+) -> dict[str, Any]:
+    try:
+        return _OPERATIONS_PLAN_STORE.edit(plan_id, allowed, mutate, to_status)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Plan {plan_id} not found.") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    except sqlite3.Error as exc:
+        logger.exception("plan %s edit failed", plan_id)
+        raise HTTPException(status_code=503, detail="Plan storage is unavailable; nothing changed.") from exc
+
+
+@router.post("/api/operations/plans/{plan_id}/return")
+def return_operations_plan(
+    plan_id: str,
+    body: PlanReturnBody,
+    principal: dict = Depends(require_any_principal("operations:approve")),
+) -> dict[str, Any]:
+    """The approver sends a proposed plan back with a note; it leaves the inbox (`status: returned`)."""
+    now = datetime.now(UTC).isoformat()
+
+    def mutate(payload: dict[str, Any]) -> dict[str, Any]:
+        return {
+            **payload,
+            "return_note": body.note.strip(),
+            "returned_at": now,
+            "returned_by": principal["username"],
+        }
+
+    plan = _edit_plan(plan_id, ("proposed",), mutate, "returned")
+    history_store.record_event("operations_plan_returned", {"plan_id": plan_id, "by": principal["username"]})
+    return plan
+
+
+@router.post("/api/operations/plans/{plan_id}/withdraw")
+def withdraw_operations_plan(
+    plan_id: str, principal: dict = Depends(require_any_principal("operations:plan"))
+) -> dict[str, Any]:
+    """The planner takes back a proposed or returned plan (`status: withdrawn`); it can no longer be approved."""
+    now = datetime.now(UTC).isoformat()
+
+    def mutate(payload: dict[str, Any]) -> dict[str, Any]:
+        return {**payload, "withdrawn_at": now, "withdrawn_by": principal["username"]}
+
+    plan = _edit_plan(plan_id, ("proposed", "returned"), mutate, "withdrawn")
+    history_store.record_event("operations_plan_withdrawn", {"plan_id": plan_id, "by": principal["username"]})
+    return plan
+
+
+def _swap_code(dispatch: dict[str, Any], old: str, new: str) -> dict[str, Any]:
+    header, sep, rest = dispatch["text"].partition("\n")
+    fields = {**dispatch["fields"], "truck_code": new} if "fields" in dispatch else None
+    out = {**dispatch, "truck_code": new, "text": header.replace(f"Truk {old}", f"Truk {new}") + sep + rest}
+    if fields is not None:
+        out["fields"] = fields
+    return out
+
+
+@router.post("/api/operations/plans/{plan_id}/swap")
+def swap_operations_plan_trucks(
+    plan_id: str,
+    body: PlanSwapBody,
+    principal: dict = Depends(require_any_principal("operations:plan")),
+) -> dict[str, Any]:
+    """Exchange the work of two trucks in a plan that is not approved yet.
+
+    `truck_b` may be a fleet truck outside the plan: `truck_a`'s work then moves
+    to it. The gate slot belongs to the work (its shift and first stop), so it
+    moves with it unchanged. Every swap is appended to `edits`.
+    """
+    a, b = body.truck_a.strip(), body.truck_b.strip()
+    if a == b:
+        raise HTTPException(status_code=422, detail="truck_a and truck_b must differ.")
+    fleet = {t["truck_code"]: t for t in TRUCKS}
+    now = datetime.now(UTC).isoformat()
+
+    def mutate(payload: dict[str, Any]) -> dict[str, Any]:
+        codes = {x.get("truck_code") for x in payload.get("assignments") or []}
+        if a not in codes:
+            raise KeyError(f"Truck {a} is not in plan {plan_id}")
+        if b not in codes:
+            if b not in fleet:
+                raise KeyError(f"Truck {b} not found")
+            if fleet[b].get("is_damaged"):
+                raise ValueError(f"Truck {b} is out of service")
+        swap = {a: b, b: a}
+        payload["assignments"] = [
+            {**x, "truck_code": swap.get(x["truck_code"], x["truck_code"])} for x in payload["assignments"]
+        ]
+        dispatches = [
+            _swap_code(d, d["truck_code"], swap[d["truck_code"]]) if d.get("truck_code") in swap else d
+            for d in payload.get("dispatches") or []
+        ]
+        payload["dispatches"] = sorted(dispatches, key=lambda d: str(d.get("truck_code", "")))
+        payload["edits"] = [
+            *(payload.get("edits") or []),
+            {"at": now, "by": principal["username"], "truck_a": a, "truck_b": b},
+        ]
+        return payload
+
+    try:
+        plan = _OPERATIONS_PLAN_STORE.edit(plan_id, ("proposed",), mutate)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    except sqlite3.Error as exc:
+        logger.exception("plan %s swap failed", plan_id)
+        raise HTTPException(status_code=503, detail="Plan storage is unavailable; nothing changed.") from exc
+    history_store.record_event(
+        "operations_plan_swapped",
+        {"plan_id": plan_id, "truck_a": a, "truck_b": b, "by": principal["username"]},
+    )
+    return plan
 
 
 _REASSIGN_LOCKS: dict[str, threading.Lock] = {}

@@ -321,9 +321,44 @@ def create_driver_exception(
     return {**rec.public(), "replayed": False}
 
 
+# What a driver sees of an operator's follow-up on their report (wave 13).
+_DRIVER_REPORT_STATUS = {None: "sent", "OPEN": "seen", "DISPATCHED": "seen", "RESOLVED": "handled"}
+
+
 @router.get("/api/driver/exceptions")
 def list_driver_exceptions(
-    truck_code: str | None = None, _role: str = Depends(require_any_permission(*OPERATOR_READ))
+    truck_code: str | None = None,
+    principal: dict = Depends(require_any_principal(*OPERATOR_READ, "dispatch:confirm")),
 ) -> dict[str, Any]:
-    reports = [r.public() for r in EXCEPTION_STORE.list(truck_code=truck_code)]
+    """Exception reports, newest first, each with the latest operator follow-up on it.
+
+    A driver session (no operator read permission) must name its truck and reads
+    only that truck's reports. ``report_status`` is ``sent`` until an operator
+    records a follow-up, then ``seen`` (open or dispatched) or ``handled``.
+    """
+    from app.core.auth import has_permission
+    from app.field.needs_you import exception_alert_id, follow_up_statuses
+
+    if not any(has_permission(principal["role"], p) for p in OPERATOR_READ):
+        if not truck_code:
+            # The unscoped list stays operator-only.
+            raise HTTPException(
+                status_code=403, detail="A driver session reads only its own truck's reports."
+            )
+        ensure_truck_access(principal, truck_code)
+    follow_ups = follow_up_statuses(local_today().isoformat())
+    reports = []
+    for record in EXCEPTION_STORE.list(truck_code=truck_code):
+        follow_up = follow_ups.get(exception_alert_id(record.exception_id)) or follow_ups.get(
+            record.exception_id
+        )
+        status = (follow_up or {}).get("status")
+        reports.append(
+            {
+                **record.public(),
+                "follow_up_status": status,
+                "follow_up_at": (follow_up or {}).get("at"),
+                "report_status": _DRIVER_REPORT_STATUS.get(status, "seen"),
+            }
+        )
     return {"exceptions": reports, "count": len(reports)}

@@ -157,7 +157,7 @@ class OperationsPlanStore:
         return payload
 
     def list_plans(self, status: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
-        """Stored plans, newest first; `status` narrows to proposed or approved.
+        """Stored plans, newest first; `status` narrows to proposed, approved, returned or withdrawn.
 
         This is how a plan built in one browser reaches the approver in another.
         """
@@ -198,6 +198,9 @@ class OperationsPlanStore:
                         if row["status"] == "approved":
                             connection.execute("COMMIT")
                             return self.get(plan_id), False
+                        if row["status"] != "proposed":
+                            # A returned or withdrawn plan is no longer in the approver's inbox.
+                            raise ValueError(f"Plan {plan_id} is {row['status']}, not proposed")
                         payload = json.loads(row["payload"])
                         dispatch_ids: list[str] = []
                         now = datetime.now(UTC).isoformat()
@@ -228,6 +231,39 @@ class OperationsPlanStore:
             except sqlite3.OperationalError:
                 raise
             return self.get(plan_id), True
+
+    def edit(
+        self, plan_id: str, allowed: tuple[str, ...], mutate, to_status: str | None = None
+    ) -> dict[str, Any]:
+        """Change a not-yet-approved plan in ONE transaction; returns the stored plan.
+
+        ``mutate(payload) -> payload`` runs only while the status is in ``allowed``;
+        otherwise ValueError (the caller answers 409), KeyError when unknown.
+        ``to_status`` moves the plan (e.g. proposed -> returned) in the same commit.
+        """
+        with self._lock:
+            connection = self._connect()
+            connection.isolation_level = None
+            with closing(connection):
+                connection.execute("BEGIN IMMEDIATE")
+                try:
+                    row = connection.execute(
+                        "SELECT * FROM operations_plans WHERE plan_id=?", (plan_id,)
+                    ).fetchone()
+                    if row is None:
+                        raise KeyError(f"Plan {plan_id} not found")
+                    if row["status"] not in allowed:
+                        raise ValueError(f"Plan {plan_id} is {row['status']}")
+                    payload = mutate(json.loads(row["payload"]))
+                    connection.execute(
+                        "UPDATE operations_plans SET payload=?, status=? WHERE plan_id=?",
+                        (json.dumps(payload), to_status or row["status"], plan_id),
+                    )
+                    connection.execute("COMMIT")
+                except Exception:
+                    connection.execute("ROLLBACK")
+                    raise
+        return self.get(plan_id)
 
     def instructions_for(self, truck_code: str) -> list[dict[str, Any]]:
         """Structured plan instructions sent to one truck, oldest first."""
