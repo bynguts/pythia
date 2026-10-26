@@ -40,13 +40,21 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     from app.api.routers.ai import _start_ai_engine
     from app.api.routers.safety import start_gate_alert_timer
     from app.api.warmup import _warm_route_cache
+    from app.integrations import wa_gateway_process
+    from app.integrations.whatsapp import OpenWAClient
 
     _warm_route_cache()
     _start_ai_engine()
     gate_timer = start_gate_alert_timer()
+    if getenv("WA_AUTOSTART", "off") == "on":
+        try:
+            wa_gateway_process.start(OpenWAClient.from_env().base_url)
+        except (wa_gateway_process.GatewayExternal, wa_gateway_process.GatewayUnavailable) as error:
+            logging.getLogger(__name__).warning("WhatsApp gateway autostart skipped: %s", error)
     yield
     if gate_timer is not None:
         gate_timer.set()
+    wa_gateway_process.stop()
 
 
 def create_app() -> FastAPI:

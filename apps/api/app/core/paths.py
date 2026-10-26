@@ -46,6 +46,8 @@ WEATHER_SNAPSHOT_DEFAULT = API_DIR / "data" / "weather_snapshot.json"
 # placeholders and is what the API serves when no local file exists.
 DRIVER_CONTACTS_FILE = API_DIR / "driver_contacts.json"
 DRIVER_CONTACTS_EXAMPLE_FILE = API_DIR / "driver_contacts.example.json"
+# The Node WhatsApp gateway the API may start for pairing (app/integrations/wa_gateway_process.py).
+WA_GATEWAY_DIR = REPO_ROOT / "apps" / "wa-gateway"
 
 DATA_DIR = Path(getenv("DATA_DIR") or REPO_ROOT / "ml" / "data")
 REAL_DIR = DATA_DIR / "real"

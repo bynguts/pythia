@@ -15,6 +15,7 @@ from app.api.state import history_store
 from app.core.env import getenv
 from app.core.paths import DRIVER_CONTACTS_EXAMPLE_FILE, DRIVER_CONTACTS_FILE
 from app.field.privacy import mask_phones_in_text
+from app.integrations import wa_gateway_process
 from app.integrations.whatsapp import (
     PLACEHOLDER_GROUP_ID,
     OpenWAClient,
@@ -225,8 +226,27 @@ def whatsapp_status(
         "state": health.get("state"),
         "base_url": client.base_url,
         "session_id": client.session_id,
+        "gateway_process": wa_gateway_process.process_state(client.base_url),
         "provenance": GATEWAY_PROVENANCE,
     }
+
+
+@router.post("/api/whatsapp/gateway/start")
+def whatsapp_gateway_start(principal: dict = Depends(require_any_principal("admin:manage"))) -> dict:
+    """Start the local gateway so an administrator can pair from Settings without a terminal.
+
+    409 when the gateway is not this machine's to start (not configured, or managed
+    externally as in docker), 503 when it cannot start here (no Node.js, spawn failed).
+    """
+    try:
+        result = wa_gateway_process.start(OpenWAClient.from_env().base_url)
+    except wa_gateway_process.GatewayExternal as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except wa_gateway_process.GatewayUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    if result["started"]:
+        history_store.record_event("whatsapp_gateway_start", {"actor": principal["username"]})
+    return result
 
 
 # The pairing QR links a WhatsApp account to this gateway and the group list

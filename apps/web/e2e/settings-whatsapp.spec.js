@@ -1,6 +1,6 @@
 // wave9 settings: Settings (Pengaturan) replaces the audit workspace in the rail and is where an
 // operator connects WhatsApp. Every gateway answer here is stubbed with page.route, and the
-// writes (alert group, test send, logout) never reach a real gateway.
+// writes (alert group, test send, logout, gateway start) never reach a real gateway.
 import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
@@ -53,7 +53,12 @@ async function stubStatus(page, body) {
 
 test.beforeEach(async ({ page }) => {
   // Safety net: no write reaches a real gateway unless a test stubs it on top.
-  for (const path of ["**/whatsapp/logout", "**/whatsapp/test", "**/whatsapp/alert-group"]) {
+  for (const path of [
+    "**/whatsapp/logout",
+    "**/whatsapp/test",
+    "**/whatsapp/alert-group",
+    "**/whatsapp/gateway/start",
+  ]) {
     await page.route(path, (route) => route.abort());
   }
 });
@@ -88,7 +93,9 @@ test("old /audit links land on Settings → data sources, query kept", async ({ 
   await expect(page.getByTestId("model-card")).toContainText("Calibrated-synthetic");
 });
 
-test("gateway offline shows a human state and the one command, never the raw error", async ({ page }) => {
+test("gateway offline shows a human state and a Connect button, never the raw error or a command", async ({
+  page,
+}) => {
   await signIn(page, "administrator");
   await stubStatus(page, status("offline"));
   await page.goto("/settings?tab=whatsapp", { waitUntil: "domcontentloaded" });
@@ -96,11 +103,68 @@ test("gateway offline shows a human state and the one command, never the raw err
   await expect(state).toHaveAttribute("data-state", "offline");
   await expect(state).toHaveText("Gateway WhatsApp belum berjalan");
   const offline = page.getByTestId("settings-wa-offline");
-  await expect(offline).toContainText("cd apps/wa-gateway && npm install && npm start");
+  await expect(offline.getByRole("button", { name: "Hubungkan WhatsApp" })).toBeVisible();
+  await expect(offline).not.toContainText("npm start");
   await expect(page.locator("main")).not.toContainText("urlopen");
   await expect(page.locator("main")).not.toContainText("WinError");
   // The unofficial transport stays disclosed.
   await expect(page.getByTestId("settings-whatsapp")).toContainText("tidak resmi");
+});
+
+// The founder pairs WhatsApp without a terminal: Connect starts the gateway on the server,
+// the page shows it starting, and the status poll brings the QR code.
+test("Connect WhatsApp starts the gateway once, then the QR code appears", async ({ page }) => {
+  await signIn(page, "administrator");
+  let current = status("offline", { gateway_process: { managed: "local", running: false, exit_code: null } });
+  await stubStatus(page, () => current);
+  let starts = 0;
+  await page.route("**/whatsapp/gateway/start", (route) => {
+    starts += 1;
+    current = status("offline", { gateway_process: { managed: "local", running: true, exit_code: null } });
+    return route.fulfill({ json: { started: true, state: "starting" } });
+  });
+  await page.route("**/whatsapp/qr", (route) => route.fulfill({ json: { state: "qr", qr: PNG_1PX } }));
+  await page.goto("/settings?tab=whatsapp", { waitUntil: "domcontentloaded" });
+
+  const connect = page.getByTestId("settings-wa-connect");
+  await connect.click();
+  await expect(connect).toHaveText("Menjalankan gateway…");
+  await expect(connect).toBeDisabled();
+  expect(starts).toBe(1);
+
+  current = status("pairing", { state: "qr" });
+  await expect(page.getByTestId("settings-wa-qr")).toBeVisible({ timeout: 12000 });
+  await expect(page.getByTestId("settings-wa-offline")).toHaveCount(0);
+  expect(starts).toBe(1);
+});
+
+for (const [code, detail] of [
+  [
+    409,
+    "The WhatsApp gateway is managed externally (OPENWA_BASE_URL is not this machine); start it where it runs.",
+  ],
+  [503, "Node.js is not installed on the server (node is not on PATH)."],
+]) {
+  test(`a ${code} from Connect WhatsApp shows the server's reason and allows a retry`, async ({ page }) => {
+    await signIn(page, "administrator");
+    await stubStatus(page, status("offline"));
+    await page.route("**/whatsapp/gateway/start", (route) =>
+      route.fulfill({ status: code, json: { detail } }),
+    );
+    await page.goto("/settings?tab=whatsapp", { waitUntil: "domcontentloaded" });
+    await page.getByTestId("settings-wa-connect").click();
+    await expect(page.getByTestId("settings-wa-connect-error")).toHaveText(detail);
+    await expect(page.getByTestId("settings-wa-connect")).toBeEnabled();
+    await expect(page.getByTestId("settings-wa-connect")).toHaveText("Hubungkan WhatsApp");
+  });
+}
+
+test("a dispatcher sees the gateway offline without a Connect button", async ({ page }) => {
+  await signIn(page, "dispatcher");
+  await stubStatus(page, status("offline"));
+  await page.goto("/settings?tab=whatsapp", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("settings-wa-offline")).toContainText("Minta administrator menghubungkan");
+  await expect(page.getByTestId("settings-wa-connect")).toHaveCount(0);
 });
 
 test("pairing shows the QR, polls while waiting and stops when hidden or left", async ({ page }) => {

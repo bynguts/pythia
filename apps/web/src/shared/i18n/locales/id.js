@@ -536,7 +536,13 @@ export const id = {
   set_wa_state_error: "Status WhatsApp tidak dapat dimuat.",
   set_wa_retry: "Coba lagi",
   set_wa_offline_body:
-    "Peringatan WhatsApp tidak terkirim sampai gateway berjalan di server. Minta administrator menjalankan:",
+    "Peringatan WhatsApp tidak terkirim sampai gateway berjalan di server. Jalankan dari sini, lalu pindai kode QR dengan ponsel operasional.",
+  set_wa_offline_admin_only:
+    "Peringatan WhatsApp tidak terkirim sampai gateway berjalan di server. Minta administrator menghubungkan WhatsApp dari halaman ini.",
+  set_wa_connect: "Hubungkan WhatsApp",
+  set_wa_connecting: "Menjalankan gateway…",
+  set_wa_connect_failed: "Gateway WhatsApp tidak dapat dijalankan. Coba lagi.",
+  set_wa_gateway_exited: "Gateway berhenti tepat setelah dijalankan. Periksa log gateway di server.",
   set_wa_offline_after: "Halaman ini memeriksa ulang otomatis setiap beberapa detik.",
   set_wa_scan_title: "Tautkan WhatsApp",
   set_wa_scan_steps:

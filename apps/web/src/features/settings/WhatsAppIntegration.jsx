@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, LogOut, QrCode, Send, WifiOff } from "lucide-react";
+import { CheckCircle2, LogOut, Plug, QrCode, Send, WifiOff } from "lucide-react";
 import { apiGet, apiPost } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { Button } from "../../shared/ui/Button.jsx";
 
 const POLL_MS = 4000;
 // States in which the page keeps checking: a scan, a session start or the gateway coming up.
@@ -9,7 +10,6 @@ const WAITING = new Set(["pairing", "starting", "offline"]);
 const STATES = new Set(["connected", "pairing", "starting", "offline", "unconfigured"]);
 // The gateway serves the pairing QR as a PNG data URL (QRCode.toDataURL); nothing else is rendered.
 const QR_PREFIX = "data:image/png;base64,";
-const GATEWAY_COMMAND = "cd apps/wa-gateway && npm install && npm start";
 
 const TONE = { connected: "good", pairing: "wait", starting: "wait", offline: "bad", unconfigured: "bad" };
 const ICON = {
@@ -39,6 +39,9 @@ export function WhatsAppIntegration({ canManage }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  // Connect WhatsApp: true once the start request succeeded, an error text when it failed.
+  const [launching, setLaunching] = useState(false);
+  const [launchError, setLaunchError] = useState(null);
 
   const linkState = STATES.has(status?.link_state) ? status.link_state : status ? "starting" : null;
 
@@ -47,6 +50,8 @@ export function WhatsAppIntegration({ canManage }) {
       const body = await apiGet("/whatsapp/status", { signal });
       setStatus(body);
       setLoadError(null);
+      // The gateway answered: the start is over (the pairing QR takes it from here).
+      if (body?.link_state !== "offline" && body?.link_state !== "unconfigured") setLaunching(false);
     } catch (error) {
       if (error?.name === "AbortError") return;
       setLoadError(error?.status === 403 ? "forbidden" : "failed");
@@ -148,6 +153,23 @@ export function WhatsAppIntegration({ canManage }) {
       }
     });
 
+  // Starts the local gateway on the server; the status poll then brings the QR code.
+  const connect = () =>
+    run(async () => {
+      setLaunchError(null);
+      try {
+        await apiPost("/whatsapp/gateway/start");
+        setLaunching(true);
+        setReload((n) => n + 1);
+      } catch (error) {
+        setLaunchError(
+          (error?.status === 409 || error?.status === 503) && error.detail
+            ? error.detail
+            : t("set_wa_connect_failed"),
+        );
+      }
+    });
+
   const logout = () =>
     run(async () => {
       setConfirmLogout(false);
@@ -170,6 +192,8 @@ export function WhatsAppIntegration({ canManage }) {
   const source = status?.alert_group?.source;
   const selectedGroup = groups?.find((group) => group.selected);
   const manage = linkState === "connected" && canManage;
+  const gateway = status?.gateway_process;
+  const exited = launching && gateway?.running === false && gateway?.exit_code != null;
 
   return (
     <section className="settings-panel" aria-labelledby="settings-wa-title" data-testid="settings-whatsapp">
@@ -253,8 +277,29 @@ export function WhatsAppIntegration({ canManage }) {
               {(linkState === "offline" || linkState === "unconfigured") && (
                 <div className="settings-offline" data-testid="settings-wa-offline">
                   <strong>{t(`set_wa_state_${linkState}`)}</strong>
-                  <p>{t("set_wa_offline_body")}</p>
-                  <code className="settings-command">{GATEWAY_COMMAND}</code>
+                  {canManage ? (
+                    <>
+                      <p>{t("set_wa_offline_body")}</p>
+                      <div>
+                        <Button
+                          variant="primary"
+                          icon={Plug}
+                          disabled={busy || (launching && !exited)}
+                          onClick={connect}
+                          data-testid="settings-wa-connect"
+                        >
+                          {launching && !exited ? t("set_wa_connecting") : t("set_wa_connect")}
+                        </Button>
+                      </div>
+                      {(launchError || exited) && (
+                        <p role="alert" data-testid="settings-wa-connect-error">
+                          {launchError || t("set_wa_gateway_exited")}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p>{t("set_wa_offline_admin_only")}</p>
+                  )}
                   <small>{t("set_wa_offline_after")}</small>
                 </div>
               )}

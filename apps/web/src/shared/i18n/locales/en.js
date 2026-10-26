@@ -533,7 +533,13 @@ export const en = {
   set_wa_state_error: "The WhatsApp status could not be loaded.",
   set_wa_retry: "Try again",
   set_wa_offline_body:
-    "WhatsApp alerts are not delivered until the gateway runs on the server. Ask an administrator to run:",
+    "WhatsApp alerts are not delivered until the gateway runs on the server. Start it here, then scan the QR code with the operations phone.",
+  set_wa_offline_admin_only:
+    "WhatsApp alerts are not delivered until the gateway runs on the server. Ask an administrator to connect WhatsApp from this page.",
+  set_wa_connect: "Connect WhatsApp",
+  set_wa_connecting: "Starting the gateway…",
+  set_wa_connect_failed: "The WhatsApp gateway could not be started. Try again.",
+  set_wa_gateway_exited: "The gateway stopped right after starting. Check the gateway log on the server.",
   set_wa_offline_after: "This page checks again automatically every few seconds.",
   set_wa_scan_title: "Link WhatsApp",
   set_wa_scan_steps:
