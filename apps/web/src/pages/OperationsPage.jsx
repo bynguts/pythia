@@ -1,10 +1,10 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { MessageCircle, Send } from "lucide-react";
 import { dayPhase, useConsole } from "../app/console/useConsole.js";
 import { decisionRoute, drawableRoute } from "../features/fleet/decisionRoute.js";
 import { GateCard } from "../features/operations/GateCard.jsx";
 import { InstructionDrawer } from "../features/operations/InstructionDrawer.jsx";
+import { MessageDrawer } from "../features/operations/MessageDrawer.jsx";
 import { NeedsYouPanel } from "../features/operations/NeedsYouPanel.jsx";
 import { jakartaTime, slotAt, useOperationsData } from "../features/operations/useOperations.js";
 import "../features/operations/operations.css";
@@ -47,7 +47,6 @@ function number(value, lang, digits = 0) {
 // simulated truck data keeps data-provenance="simulated" and says so in its tooltip.
 export function OperationsPage() {
   const { t, lang } = useLanguage();
-  const navigate = useNavigate();
   const { role, setNavCount } = useConsole();
   const now = useClock();
   const { snapshot, status } = useSnapshot();
@@ -55,6 +54,7 @@ export function OperationsPage() {
   const [selectedId, setSelectedId] = useState(undefined);
   const [focusRequest, setFocusRequest] = useState(null);
   const [instructionOpen, setInstructionOpen] = useState(false);
+  const [messageOpen, setMessageOpen] = useState(false);
   const [wide] = useState(() => typeof window === "undefined" || window.innerWidth > WIDE_STAGE);
 
   const time = jakartaTime(now);
@@ -146,9 +146,9 @@ export function OperationsPage() {
         <div className="ops-head-actions">
           <Button
             icon={MessageCircle}
-            title={t("s1_message_hint")}
+            aria-haspopup="dialog"
             data-testid="ops-message-drivers"
-            onClick={() => navigate("/app/settings?tab=whatsapp")}
+            onClick={() => setMessageOpen(true)}
           >
             {t("s1_message_drivers")}
           </Button>
@@ -219,7 +219,7 @@ export function OperationsPage() {
           }
           value={
             <span data-provenance="model" title={t("s1_model_hint")}>
-              {gateWait != null ? `${number(gateWait, lang)} min` : "—"}
+              {gateWait != null ? t("s1_minutes").replace("{n}", number(gateWait, lang)) : "—"}
             </span>
           }
           sub={gateSub}
@@ -269,6 +269,7 @@ export function OperationsPage() {
         </div>
       </div>
 
+      <MessageDrawer open={messageOpen} onClose={() => setMessageOpen(false)} />
       <InstructionDrawer
         open={instructionOpen}
         onClose={() => setInstructionOpen(false)}

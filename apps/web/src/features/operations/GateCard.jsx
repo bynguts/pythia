@@ -51,7 +51,7 @@ export function GateCard({ board, currentStart }) {
                   key={slot.start}
                   className={`ops-gate-bar is-${tone}`}
                   style={{ height: `${Math.max(3, Math.round((waits[index] / (max || 1)) * BAR_MAX_PX))}px` }}
-                  title={`${slot.start} · ${Math.round(waits[index])} min`}
+                  title={`${slot.start} · ${t("s1_minutes").replace("{n}", Math.round(waits[index]))}`}
                 />
               );
             })}
