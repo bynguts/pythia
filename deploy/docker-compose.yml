@@ -29,6 +29,8 @@ services:
       PYTHIA_DB_PATH: /app/data/history/pythia_history.db
       PYTHIA_DATA_DIR: /data
       PYTHIA_AI_ENGINE: "${PYTHIA_AI_ENGINE:-on}"
+      # "Today" and "tomorrow" are Jakarta days, whatever the server's clock zone.
+      TZ: "${TZ:-Asia/Jakarta}"
       # The gateway runs in its own container; the API never spawns a local one here.
       OPENWA_BASE_URL: "http://wa-gateway:2785/api"
       PYTHIA_WA_AUTOSTART: "off"
@@ -101,6 +103,13 @@ services:
     cpus: 1.5
     ports:
       - "8090:8090"
+
+networks:
+  default:
+    driver_opts:
+      # A fixed host interface name, so a host firewall rule can let the backend reach a
+      # gateway on the host (e.g. iptables -I INPUT -i pythia0 -p tcp --dport <port> -j ACCEPT).
+      com.docker.network.bridge.name: pythia0
 
 volumes:
   pythia-history:
