@@ -1279,7 +1279,6 @@ export const en = {
   set11_wa_meta_starting: "The gateway is opening a session. This page checks again by itself.",
   set11_wa_meta_offline: "No alerts are sent until the gateway runs.",
   set11_wa_meta_unconfigured: "The server has no gateway address set.",
-  set11_wa_chip_unofficial: "Unofficial client",
   set11_wa_step_open: "Open WhatsApp on the operations phone.",
   set11_wa_step_devices: "Go to Linked devices, then Link a device.",
   set11_wa_step_scan: "Point the camera at this code.",

@@ -1288,7 +1288,6 @@ export const id = {
   set11_wa_meta_starting: "Gateway sedang membuka sesi. Halaman ini memeriksa ulang sendiri.",
   set11_wa_meta_offline: "Tidak ada peringatan terkirim sampai gateway berjalan.",
   set11_wa_meta_unconfigured: "Server belum memiliki alamat gateway.",
-  set11_wa_chip_unofficial: "Klien tidak resmi",
   set11_wa_step_open: "Buka WhatsApp di ponsel operasional.",
   set11_wa_step_devices: "Buka Perangkat tertaut, lalu Tautkan perangkat.",
   set11_wa_step_scan: "Arahkan kamera ke kode ini.",

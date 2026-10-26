@@ -61,8 +61,8 @@ test("WhatsApp is grouped: connection, delivery, linked device, with no eyebrow"
   for (const name of ["Koneksi", "Pengiriman peringatan", "Perangkat tertaut"]) {
     await expect(panel.getByRole("heading", { level: 3, name })).toBeVisible();
   }
-  // The unofficial transport is a provenance label beside the state, and stays in the footnote.
-  await expect(panel.locator(".prov")).toContainText(["Klien tidak resmi"]);
+  // The unofficial transport is disclosed once, in the footnote, not as a chip beside the state.
+  await expect(panel.locator(".prov")).toHaveCount(0);
   await expect(panel).toContainText("tidak resmi");
   await expect(page.getByTestId("settings-wa-account")).toHaveText("+62812****7890");
   // Craft floor: no kicker above a heading anywhere on the page.

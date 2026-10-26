@@ -246,7 +246,6 @@ export function WhatsAppIntegration({ canManage }) {
                   </strong>
                   <span>{t(`set11_wa_meta_${linkState}`)}</span>
                 </div>
-                <span className="prov prov-proxy">{t("set11_wa_chip_unofficial")}</span>
               </div>
 
               <dl className="settings-facts">
