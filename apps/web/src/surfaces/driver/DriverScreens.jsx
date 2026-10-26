@@ -620,8 +620,9 @@ function structuredCacheKey(truckCode) {
 }
 
 // GET /api/operations/instructions/{truck}: the approved plan's trips, gate slot
-// and reason as fields (the dispatch row carries the same as Indonesian text).
-// Keyed by dispatch_id; the last live copy stays on this phone.
+// and reason as `fields` (the dispatch row carries the same as Indonesian text).
+// Keyed by dispatch_id, with the fields lifted to the top level; the last live
+// copy stays on this phone.
 export function useStructuredInstructions(truckCode) {
   const read = useCallback(() => {
     try {
@@ -659,7 +660,10 @@ export function useStructuredInstructions(truckCode) {
       clearInterval(id);
     };
   }, [truckCode, read]);
-  return useMemo(() => new Map(list.map((item) => [item.dispatch_id, item])), [list]);
+  return useMemo(
+    () => new Map(list.map((item) => [item.dispatch_id, item.fields ? { ...item, ...item.fields } : item])),
+    [list],
+  );
 }
 
 function newOperationId() {
@@ -672,6 +676,14 @@ function greetingKey(date = new Date()) {
   if (h < 11) return "d1_greet_morning";
   if (h < 18) return "d1_greet_afternoon";
   return "d1_greet_evening";
+}
+
+// "YYYY-MM-DD" of the phone's local day, `offset` days from today.
+function localDay(offset = 0) {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function ModelTag() {
@@ -711,12 +723,25 @@ function InstructionCard({ dispatch, plan, cachedTag }) {
       month: "short",
     });
   const lastFacility = stops.length ? stops[stops.length - 1].facility_display : null;
+  // A plan for a later day says which day it is for, never "today".
+  const planDay = typeof fields?.plan_date === "string" ? fields.plan_date : null;
+  const kicker =
+    planDay && planDay > localDay()
+      ? planDay === localDay(1)
+        ? t("d1_instr_tomorrow")
+        : fill(t("d1_instr_for_day"), {
+            date: new Date(`${planDay}T00:00:00`).toLocaleDateString(localeFor(lang), {
+              day: "numeric",
+              month: "short",
+            }),
+          })
+      : t("d1_instr_today");
 
   return (
     <article className="drv-card drv-instr">
       <div className="drv-instr-head">
         <p className="drv-instr-kicker">
-          <span>{t("d1_instr_today")}</span>
+          <span data-testid="driver-instruction-day">{kicker}</span>
           {cachedTag ||
             (received && (
               <span className="drv-tag is-new">{fill(t("d1_instr_new"), { time: received })}</span>
@@ -934,7 +959,11 @@ export function InstructionsScreen({
   const visible = pendingInstructions(feed.list, hidden);
   const [first, ...rest] = visible;
   const firstPlan = first ? plans.get(first.id) : null;
-  const trips = Array.isArray(firstPlan?.stops) ? firstPlan.stops.length : 0;
+  // "N trips today" counts only a plan for today.
+  const trips =
+    Array.isArray(firstPlan?.stops) && (!firstPlan.plan_date || firstPlan.plan_date <= localDay())
+      ? firstPlan.stops.length
+      : 0;
   const today = new Date().toLocaleDateString(localeFor(lang), {
     weekday: "short",
     day: "numeric",

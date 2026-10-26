@@ -191,7 +191,8 @@ test("a real day plan never uses more rit than a district quota", async ({ page 
 });
 
 // wave10 driver-field-app: /field merged into /driver; the plan instruction shows in its Instruksi tab.
-test("the driver app finds a simulated truck and shows its approved plan dispatch in Indonesian", async ({
+// #w14-walk: the card renders the plan's structured trips (fields), not the Indonesian template text.
+test("the driver app finds a simulated truck and shows its approved plan as trips in Indonesian", async ({
   page,
 }) => {
   await page.goto("/");
@@ -224,9 +225,10 @@ test("the driver app finds a simulated truck and shows its approved plan dispatc
   await page.getByTestId("driver-pick-start").click();
   await expect(page.getByTestId("driver-tab-instruksi")).toHaveAttribute("aria-current", "page");
   const card = page.getByTestId("driver-instructions");
-  await expect(card).toContainText(`Rencana ${plan.plan_id}`, { timeout: 15000 });
-  await expect(card).toContainText("Shift pagi");
-  await expect(card).toContainText("Alasan: prakiraan timbulan");
+  await expect(card).toContainText("Instruksi hari ini", { timeout: 15000 });
+  await expect(card).toContainText(/Rencana ritase · \d+ ritase/);
+  await expect(card).toContainText(`Kec. ${first.fields.stops[0].kecamatan}`);
+  await expect(card).toContainText("Prakiraan untuk");
 
   const structured = await page.request.get(`${API}/operations/instructions/${first.truck_code}`, {
     headers: { Authorization: `Bearer ${driver.token}` },

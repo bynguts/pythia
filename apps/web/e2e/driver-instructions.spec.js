@@ -159,3 +159,38 @@ test("a plan instruction leads with the departure time and tags the modelled gat
   await item.getByTestId("driver-instruction-cant").click();
   await expect(item.getByTestId("driver-instruction-reason")).toBeVisible();
 });
+
+// #w14-walk: the real /operations/instructions shape nests the trips under `fields`;
+// tomorrow's plan says so and renders in the UI language, never as the Indonesian text.
+test("tomorrow's approved plan reads as tomorrow's instruction, in English, from the real backend", async ({
+  page,
+  request,
+}) => {
+  const dispatcher = await apiLogin(request);
+  const supervisor = await apiLogin(request, "supervisor");
+  const now = new Date();
+  now.setDate(now.getDate() + 1);
+  const pad = (n) => String(n).padStart(2, "0");
+  const tomorrow = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const created = await request.post(`${API}/operations/plan?top_n=1&plan_date=${tomorrow}`, {
+    headers: authHeaders(dispatcher.token),
+  });
+  expect(created.ok()).toBeTruthy();
+  const plan = await created.json();
+  const approved = await request.post(`${API}/operations/${plan.plan_id}/approve`, {
+    headers: authHeaders(supervisor.token),
+  });
+  expect(approved.ok()).toBeTruthy();
+  const { dispatch_ids: ids } = await approved.json();
+  const first = plan.dispatches[0];
+
+  await openDriver(page, request, { token: dispatcher.token, truck: first.truck_code, lang: "en" });
+  await page.getByTestId("driver-tab-instruksi").click();
+  const item = page.getByTestId(`driver-instruction-${ids[0]}`);
+  await expect(item).toBeVisible({ timeout: 20000 });
+  await expect(item.getByTestId("driver-instruction-day")).toHaveText("Tomorrow's instruction");
+  await expect(item).toContainText(`Kec. ${first.fields.stops[0].kecamatan}`);
+  await expect(item).toContainText("Forecast for");
+  await expect(item).not.toContainText("angkut");
+  await expect(item).not.toContainText("Alasan");
+});

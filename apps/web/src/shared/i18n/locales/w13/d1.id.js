@@ -97,6 +97,8 @@ export const d1Id = {
   d1_pretrip_notes: "{n} catatan ringan terkirim",
   d1_pretrip_serious: "Truk tidak aman dikemudikan · dispatcher diberi tahu",
   d1_instr_today: "Instruksi hari ini",
+  d1_instr_tomorrow: "Instruksi besok",
+  d1_instr_for_day: "Instruksi untuk {date}",
   d1_instr_new: "Baru {time}",
   d1_instr_cached: "Salinan tersimpan",
   d1_instr_trips: "Rencana ritase · {n} ritase",

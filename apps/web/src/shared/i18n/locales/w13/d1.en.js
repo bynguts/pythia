@@ -95,6 +95,8 @@ export const d1En = {
   d1_pretrip_notes: "{n} minor notes sent",
   d1_pretrip_serious: "Truck not safe to drive · dispatch is told",
   d1_instr_today: "Today's instruction",
+  d1_instr_tomorrow: "Tomorrow's instruction",
+  d1_instr_for_day: "Instruction for {date}",
   d1_instr_new: "New {time}",
   d1_instr_cached: "Saved copy",
   d1_instr_trips: "Trip plan · {n} trips",
