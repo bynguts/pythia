@@ -23,7 +23,8 @@ test("a driver signing in on a second tab keeps the supervisor's command-center 
     localStorage.setItem("pythia_token", token);
     localStorage.setItem("pythia_role", role);
   }, supervisor);
-  await page.reload({ waitUntil: "domcontentloaded" });
+  // wave 13: "/" is the public landing; the console lives under /app.
+  await page.goto("/app/operations", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("workspace-navigation")).toBeVisible({ timeout: 20000 });
 
   // Second tab, same browser profile: the driver signs in through the field gate.
