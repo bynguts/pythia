@@ -7,6 +7,7 @@ import {
   Drawer,
   EmptyState,
   ErrorState,
+  OfflineBanner,
   Segmented,
   Skeleton,
   StatusDot,
@@ -31,7 +32,7 @@ export function WorkOrdersScreen() {
   const { t } = useLanguage();
   const { permissions, setSubtitle } = useConsole();
   const canCreate = permissions.includes("dispatch:create");
-  const { items, waiting, loading, error, reload } = useWorkOrders();
+  const { items, waiting, loading, error, offline, since, reload } = useWorkOrders();
   const [tab, setTab] = useState("active");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(null);
@@ -79,8 +80,13 @@ export function WorkOrdersScreen() {
         </div>
       </header>
 
-      {error && !items.length ? (
-        <ErrorState title={t("s4_wo_error_title")} reason={error.detail || error.message} onRetry={reload} />
+      {offline && <OfflineBanner since={since} />}
+      {(error || offline) && !items.length ? (
+        <ErrorState
+          title={t("s4_wo_error_title")}
+          reason={error?.detail || error?.message || t("s4_error_reason")}
+          onRetry={reload}
+        />
       ) : loading ? (
         <Skeleton rows={5} />
       ) : (

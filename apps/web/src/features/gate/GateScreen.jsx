@@ -10,6 +10,7 @@ import {
   EmptyState,
   ErrorState,
   Kpi,
+  OfflineBanner,
   KpiStrip,
   Segmented,
   Skeleton,
@@ -432,7 +433,10 @@ export function GateScreen() {
   const [day, setDay] = useState("today");
   const todayIso = jakartaDay();
   const isoDay = day === "today" ? todayIso : addDays(todayIso, 1);
-  const { board, safety, recap, queue, facts, loading, failed, reload } = useGateData(day, isoDay);
+  const { board, safety, recap, queue, facts, loading, failed, offline, since, reload } = useGateData(
+    day,
+    isoDay,
+  );
   const nowMin = day === "today" ? nowMinutes() : null;
   const slots = board?.slots || [];
   const closure = laneClosure(facts?.facts);
@@ -473,6 +477,7 @@ export function GateScreen() {
         />
       </header>
 
+      {offline && <OfflineBanner since={since} />}
       {failed && !board ? (
         <ErrorState title={t("s4_error_title")} reason={t("s4_error_reason")} onRetry={reload} />
       ) : loading && !board ? (

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import { apiGet } from "../../shared/api/client.js";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ApiError, apiGet } from "../../shared/api/client.js";
+import { jakartaClock } from "./gateModel.js";
 
 const POLL_MS = 30000;
 
@@ -12,6 +13,8 @@ export function useGateData(day, isoDay) {
   const [state, setState] = useState({ board: null, safety: null, recap: null, queue: null, facts: null });
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const lastOk = useRef(null);
 
   const load = useCallback(async () => {
     const today = day === "today";
@@ -24,8 +27,16 @@ export function useGateData(day, isoDay) {
       apiGet(`/field-facts?date=${isoDay}`),
     ]);
     const [board, safety, recap, queue, facts] = results.map(settled);
+    // A network failure (not an HTTP error) keeps the last data on screen and says so.
+    const unreachable =
+      navigator.onLine === false ||
+      (results[0].status === "rejected" && !(results[0].reason instanceof ApiError));
+    if (!unreachable) lastOk.current = jakartaClock(new Date());
+    setOffline(unreachable);
     setFailed(board === null);
-    setState((current) => ({ board: board ?? current.board, safety, recap, queue, facts }));
+    setState((current) =>
+      unreachable ? current : { board: board ?? current.board, safety, recap, queue, facts },
+    );
     setLoading(false);
   }, [day, isoDay]);
 
@@ -34,8 +45,14 @@ export function useGateData(day, isoDay) {
     setState({ board: null, safety: null, recap: null, queue: null, facts: null });
     load();
     const id = setInterval(load, POLL_MS);
-    return () => clearInterval(id);
+    window.addEventListener("online", load);
+    window.addEventListener("offline", load);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("online", load);
+      window.removeEventListener("offline", load);
+    };
   }, [load]);
 
-  return { ...state, loading, failed, reload: load };
+  return { ...state, loading, failed, offline, since: lastOk.current, reload: load };
 }

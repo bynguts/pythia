@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import { apiGet } from "../../shared/api/client.js";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ApiError, apiGet } from "../../shared/api/client.js";
+import { jakartaClock } from "../gate/gateModel.js";
 import { planIdOf } from "./workOrdersModel.js";
 
 const POLL_MS = 10000;
@@ -10,9 +11,20 @@ export function useWorkOrders() {
   const [waiting, setWaiting] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [offline, setOffline] = useState(false);
+  const lastOk = useRef(null);
 
   const load = useCallback(async () => {
     const [list, safety] = await Promise.allSettled([apiGet("/spj?limit=500"), apiGet("/safety/overview")]);
+    // A network failure keeps the last list on screen and says so.
+    const unreachable =
+      navigator.onLine === false || (list.status === "rejected" && !(list.reason instanceof ApiError));
+    setOffline(unreachable);
+    if (unreachable) {
+      setLoading(false);
+      return;
+    }
+    lastOk.current = jakartaClock(new Date());
     if (list.status === "fulfilled") {
       setItems(list.value.spj || []);
       setError(null);
@@ -28,10 +40,16 @@ export function useWorkOrders() {
   useEffect(() => {
     load();
     const id = setInterval(load, POLL_MS);
-    return () => clearInterval(id);
+    window.addEventListener("online", load);
+    window.addEventListener("offline", load);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("online", load);
+      window.removeEventListener("offline", load);
+    };
   }, [load]);
 
-  return { items, waiting, loading, error, reload: load };
+  return { items, waiting, loading, error, offline, since: lastOk.current, reload: load };
 }
 
 // Everything the detail pane reads for one SPJ: per-stop evidence, the audit trail, and the gate slot
