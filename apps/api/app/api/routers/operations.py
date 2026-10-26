@@ -260,6 +260,9 @@ def create_operations_plan(
     event_lng: float | None = Query(
         None, ge=-180, le=180, description="Event longitude; localizes attendance demand"
     ),
+    draft: bool = Query(
+        False, description="Store as a draft: it reaches the approver only after POST …/submit"
+    ),
     auto_inputs: bool = Query(
         False,
         description="Take rain, events and holiday from the forecast and apply the day's field facts; "
@@ -410,7 +413,9 @@ def create_operations_plan(
         # The role that built it, so an approver in another browser sees who proposed it.
         "proposed_by": _role,
     }
-    payload = _OPERATIONS_PLAN_STORE.save_proposed(plan.plan_id, payload)
+    if draft:
+        payload["status"] = "draft"
+    payload = _OPERATIONS_PLAN_STORE.save_proposed(plan.plan_id, payload, "draft" if draft else "proposed")
     history_store.record_event("operations_plan_created", {"plan_id": plan.plan_id, "scenario": scenario})
     return payload
 
@@ -474,7 +479,7 @@ def _auto_inputs(plan_date: date) -> dict[str, Any]:
 
 @router.get("/api/operations/plans")
 def list_operations_plans(
-    status: str | None = Query(None, pattern="^(proposed|approved|returned|withdrawn)$"),
+    status: str | None = Query(None, pattern="^(draft|proposed|approved|returned|withdrawn)$"),
     limit: int = Query(20, ge=1, le=100),
     _role: str = Depends(require_any_permission("operations:plan", "operations:approve")),
 ) -> list[dict[str, Any]]:
@@ -637,6 +642,21 @@ def return_operations_plan(
     return plan
 
 
+@router.post("/api/operations/plans/{plan_id}/submit")
+def submit_operations_plan(
+    plan_id: str, principal: dict = Depends(require_any_principal("operations:plan"))
+) -> dict[str, Any]:
+    """Send a draft plan to the approver's inbox (`draft` -> `proposed`); 409 from any other status."""
+    now = datetime.now(UTC).isoformat()
+
+    def mutate(payload: dict[str, Any]) -> dict[str, Any]:
+        return {**payload, "status": "proposed", "submitted_at": now, "submitted_by": principal["username"]}
+
+    plan = _edit_plan(plan_id, ("draft",), mutate, "proposed")
+    history_store.record_event("operations_plan_submitted", {"plan_id": plan_id, "by": principal["username"]})
+    return plan
+
+
 @router.post("/api/operations/plans/{plan_id}/withdraw")
 def withdraw_operations_plan(
     plan_id: str, principal: dict = Depends(require_any_principal("operations:plan"))
@@ -647,7 +667,7 @@ def withdraw_operations_plan(
     def mutate(payload: dict[str, Any]) -> dict[str, Any]:
         return {**payload, "withdrawn_at": now, "withdrawn_by": principal["username"]}
 
-    plan = _edit_plan(plan_id, ("proposed", "returned"), mutate, "withdrawn")
+    plan = _edit_plan(plan_id, ("draft", "proposed", "returned"), mutate, "withdrawn")
     history_store.record_event("operations_plan_withdrawn", {"plan_id": plan_id, "by": principal["username"]})
     return plan
 
@@ -704,7 +724,7 @@ def swap_operations_plan_trucks(
         return payload
 
     try:
-        plan = _OPERATIONS_PLAN_STORE.edit(plan_id, ("proposed",), mutate)
+        plan = _OPERATIONS_PLAN_STORE.edit(plan_id, ("draft", "proposed"), mutate)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc).strip("'")) from None
     except ValueError as exc:

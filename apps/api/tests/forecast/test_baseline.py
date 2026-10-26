@@ -9,7 +9,7 @@ from datetime import date, timedelta
 import pytest
 
 from app.api.routers import twin as twin_router
-from app.core.units import TRUCK_CAPACITY_TONS
+from app.core.units import BIN_CAPACITY_TONS, SHIFT_HOURS, TRUCK_CAPACITY_TONS
 from app.forecast import baseline as baseline_module
 from app.forecast.baseline import capacity_recommendation
 
@@ -144,3 +144,9 @@ def test_facility_gap_uses_the_baseline_tonnes_with_outlook(api_client, forecast
     for area in gap["areas"]:
         assert area["predicted_tons_per_day"] == pytest.approx(by_slug[area["slug"]], abs=0.05)
     assert gap["assumptions"]["coverage_code"] == "tps_proxy_partial_coverage"
+
+
+def test_outlook_units_carry_shift_hours_and_bin_capacity(api_client, forecast_week):
+    units = api_client.get("/api/baseline/today").json()["units"]
+    assert units["shift_hours"] == SHIFT_HOURS and units["bin_capacity_tons"] == BIN_CAPACITY_TONS
+    assert units["truck_capacity_tons"] == TRUCK_CAPACITY_TONS

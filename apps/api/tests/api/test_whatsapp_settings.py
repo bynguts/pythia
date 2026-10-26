@@ -196,3 +196,40 @@ def test_gateway_account_is_masked_end_to_end(api_client, auth_headers, contacts
     assert res.status_code == 200
     assert res.json()["linked_account"] == "62812****7890@s.whatsapp.net"
     assert "6281234567890" not in res.text
+
+
+def _choose_group(contacts_file: Path) -> None:
+    contacts_file.write_text(json.dumps({"drivers": {}, "group_jid": GROUP}), encoding="utf-8")
+
+
+def test_summary_goes_to_the_alert_group_and_logs_no_text(api_client, auth_headers, contacts_file, gateway):
+    _choose_group(contacts_file)
+    text = "26 Oct: 61 trips, 486 t weighed. Call 6281234567890 for details."
+    assert api_client.post("/api/whatsapp/summary", json={"text": text}).status_code == 401
+    denied = api_client.post("/api/whatsapp/summary", json={"text": text}, headers=auth_headers("driver"))
+    assert denied.status_code == 403
+    res = api_client.post(
+        "/api/whatsapp/summary", json={"text": text, "lang": "en"}, headers=auth_headers("dispatcher")
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["sent"] is True and res.json()["recipient"] == "12036****0042@g.us"
+    ((chat, sent_text),) = gateway["sent"]
+    assert chat == GROUP and "486 t" in sent_text and "6281234567890" not in sent_text
+    event = next(e for e in history_store.list_events(limit=20) if e["event_type"] == "whatsapp_summary")
+    assert "486" not in json.dumps(event["payload"]) and event["payload"]["chars"] == len(sent_text)
+
+
+def test_summary_refuses_the_placeholder_group(api_client, auth_headers, contacts_file, gateway):
+    res = api_client.post("/api/whatsapp/summary", json={"text": "x"}, headers=auth_headers("dispatcher"))
+    assert res.status_code == 409 and gateway["sent"] == []
+
+
+def test_summary_is_503_when_the_gateway_does_not_deliver(
+    api_client, auth_headers, contacts_file, monkeypatch
+):
+    _choose_group(contacts_file)
+    monkeypatch.setattr(
+        OpenWAClient, "send_text", lambda self, chat, text: {"sent": False, "message": "down"}
+    )
+    res = api_client.post("/api/whatsapp/summary", json={"text": "x"}, headers=auth_headers("supervisor"))
+    assert res.status_code == 503

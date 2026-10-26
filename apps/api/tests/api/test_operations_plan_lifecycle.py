@@ -158,3 +158,47 @@ def test_swap_needs_operations_plan_and_a_plan_not_yet_approved(api_client, auth
         plan_id, "supervisor", lambda i: history_store.save_dispatch(i["truck_code"], i["text"], "test")
     )
     assert _post(api_client, auth_headers, path, json=body).status_code == 409
+
+
+def test_a_draft_stays_out_of_the_inbox_until_submitted(api_client, auth_headers):
+    res = _post(api_client, auth_headers, "/api/operations/plan?top_n=2&plan_date=2026-10-27&draft=true")
+    assert res.status_code == 200, res.text
+    plan = res.json()
+    pid = plan["plan_id"]
+    assert plan["status"] == "draft"
+    inbox = api_client.get(
+        "/api/operations/plans?status=proposed&limit=100", headers=auth_headers("supervisor")
+    )
+    assert pid not in {p["plan_id"] for p in inbox.json()}
+    drafts = api_client.get(
+        "/api/operations/plans?status=draft&limit=100", headers=auth_headers("dispatcher")
+    )
+    assert pid in {p["plan_id"] for p in drafts.json()}
+    assert _post(api_client, auth_headers, f"/api/operations/{pid}/approve", "supervisor").status_code == 409
+    assert (
+        _post(api_client, auth_headers, f"/api/operations/plans/{pid}/submit", "supervisor").status_code
+        == 403
+    )
+    submitted = _post(api_client, auth_headers, f"/api/operations/plans/{pid}/submit")
+    assert submitted.status_code == 200, submitted.text
+    body = submitted.json()
+    assert body["status"] == "proposed" and body["submitted_by"] == "dispatcher" and body["submitted_at"]
+    assert _post(api_client, auth_headers, f"/api/operations/plans/{pid}/submit").status_code == 409
+    inbox = api_client.get(
+        "/api/operations/plans?status=proposed&limit=100", headers=auth_headers("supervisor")
+    )
+    assert pid in {p["plan_id"] for p in inbox.json()}
+
+
+def test_a_plan_without_the_draft_flag_is_proposed_as_before(api_client, auth_headers):
+    res = _post(api_client, auth_headers, "/api/operations/plan?top_n=2&plan_date=2026-10-27")
+    assert res.json()["status"] == "proposed"
+
+
+def test_a_draft_can_be_swapped_and_withdrawn(api_client, auth_headers, plan_id):
+    _OPERATIONS_PLAN_STORE.edit(plan_id, ("proposed",), lambda p: p, "draft")
+    body = {"truck_a": "T-001", "truck_b": "T-002"}
+    swapped = _post(api_client, auth_headers, f"/api/operations/plans/{plan_id}/swap", json=body)
+    assert swapped.status_code == 200 and swapped.json()["status"] == "draft"
+    withdrawn = _post(api_client, auth_headers, f"/api/operations/plans/{plan_id}/withdraw")
+    assert withdrawn.status_code == 200 and withdrawn.json()["status"] == "withdrawn"

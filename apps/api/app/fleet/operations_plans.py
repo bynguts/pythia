@@ -125,15 +125,17 @@ class OperationsPlanStore:
 
     # -- plan lifecycle -----------------------------------------------------
 
-    def save_proposed(self, plan_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        """Persist a newly proposed plan; returns the stored payload."""
+    def save_proposed(
+        self, plan_id: str, payload: dict[str, Any], status: str = "proposed"
+    ) -> dict[str, Any]:
+        """Persist a newly built plan (``proposed``, or ``draft`` until submitted); returns the stored payload."""
         with self._lock, closing(self._connect()) as connection:
             with connection:
                 connection.execute(
                     "INSERT OR REPLACE INTO operations_plans "
                     "(plan_id, payload, status, dispatch_ids, approved_at, approved_by, created_at) "
                     "VALUES (?,?,?,NULL,NULL,NULL,?)",
-                    (plan_id, json.dumps(payload), "proposed", datetime.now(UTC).isoformat()),
+                    (plan_id, json.dumps(payload), status, datetime.now(UTC).isoformat()),
                 )
         return self.get(plan_id) or payload
 
@@ -157,7 +159,7 @@ class OperationsPlanStore:
         return payload
 
     def list_plans(self, status: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
-        """Stored plans, newest first; `status` narrows to proposed, approved, returned or withdrawn.
+        """Stored plans, newest first; `status` narrows to draft, proposed, approved, returned or withdrawn.
 
         This is how a plan built in one browser reaches the approver in another.
         """

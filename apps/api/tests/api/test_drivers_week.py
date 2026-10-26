@@ -106,6 +106,8 @@ def test_on_time_compares_the_gate_arrival_with_the_planned_slot_end(driver):
     )
     early = _trip(driver, truck, f"Rencana {plan_id} (MODEL)", receipt=False)
     SPJ_STORE.record_gate_arrival(early.spj_id, "driver", now.isoformat())
+    # Close the gate wait, so no later safety sweep sees this truck still waiting.
+    SPJ_STORE.record_receipt(early.spj_id, "r.png", TINY_PNG, 15_000.0, "manual", tare_weight_kg=9_000.0)
     row = _row(driver)
     if end > start:  # skip the minute around midnight
         assert row["on_time_pct"] == 100.0 and row["on_time_n"] == 1

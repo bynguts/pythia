@@ -21,7 +21,9 @@ from typing import Any
 from app.core.env import today
 from app.core.paths import REAL_DIR
 from app.core.units import (
+    BIN_CAPACITY_TONS,
     CREW_SIZE_WORKERS,
+    SHIFT_HOURS,
     TRUCK_CAPACITY_TONS,
     UNIT_GLOSSARY,
     extra_trucks_for,
@@ -299,6 +301,8 @@ def build_outlook(
             **UNIT_GLOSSARY,
             "truck_capacity_tons": TRUCK_CAPACITY_TONS,
             "crew_size_workers": CREW_SIZE_WORKERS,
+            "shift_hours": SHIFT_HOURS,
+            "bin_capacity_tons": BIN_CAPACITY_TONS,
             "tons": "waste generated (timbulan) per day, not landfill intake",
         },
         "tonnage_reference": tonnage_reference(),

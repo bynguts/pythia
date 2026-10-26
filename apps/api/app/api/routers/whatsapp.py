@@ -290,6 +290,37 @@ def whatsapp_test_message(principal: dict = Depends(require_any_principal("admin
     return {"sent": sent, "recipient": masked}
 
 
+class WhatsAppSummaryBody(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    lang: str | None = Field(default=None, pattern="^(id|en)$")
+
+
+@router.post("/api/whatsapp/summary")
+def whatsapp_summary(
+    body: WhatsAppSummaryBody, principal: dict = Depends(require_any_principal("dispatch:create"))
+) -> dict:
+    """Send the day's summary text to the alert group (never to drivers); wave 13 Reports.
+
+    409 when no alert group is chosen, 503 when the gateway did not deliver it.
+    Phone numbers in the text are masked before sending; the history log keeps
+    only the length, never the text.
+    """
+    jid, source = alert_group()
+    if source == "placeholder":
+        raise HTTPException(status_code=409, detail="Choose an alert group before sending a summary.")
+    text = mask_phones_in_text(body.text.strip())
+    result = OpenWAClient.from_env().send_text(jid, text)
+    masked = mask_phones_in_text(jid)
+    sent = bool(result.get("sent"))
+    history_store.record_event(
+        "whatsapp_summary",
+        {"recipient": f"Group: {masked}", "sent": sent, "chars": len(text), "actor": principal["username"]},
+    )
+    if not sent:
+        raise HTTPException(status_code=503, detail="The WhatsApp gateway did not deliver the summary.")
+    return {"sent": True, "recipient": masked, "chars": len(text)}
+
+
 @router.post("/api/whatsapp/logout")
 def whatsapp_logout(_role: str = Depends(require_permission("admin:manage"))) -> dict:
     return OpenWAClient.from_env().logout()
