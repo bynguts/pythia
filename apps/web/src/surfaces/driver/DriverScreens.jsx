@@ -30,7 +30,7 @@ import { formatDriverName } from "../../shared/format/driverName.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { Mascot } from "../../shared/ui/Mascot.jsx";
 import { enqueueDriverOperation, markDriverSynced, OutboxStorageFullError } from "./DriverOutbox.js";
-import { announceSessionExpired } from "./DriverPanels.jsx";
+import { announceSessionExpired, cachedAgeMinutes } from "./DriverPanels.jsx";
 import { matchTrucks, readRecentTrucks } from "./TruckPicker.jsx";
 import {
   clockTime,
@@ -936,9 +936,11 @@ export function InstructionsScreen({
     month: "short",
   });
   const summary = pretripSummary(pretrip.record, BERAT_COMPONENTS);
+  // A copy served from the cache says so, with its age when the service worker knows it.
+  const cachedAge = feed.cached ? cachedAgeMinutes(feed.cached.at) : null;
   const cachedTag = feed.cached && (
     <span className="drv-tag is-neutral" data-testid="driver-instructions-cached">
-      {t("d1_instr_cached")}
+      {cachedAge === null ? t("d1_instr_cached") : t("drv10_instr_cached_age").replace("{n}", cachedAge)}
     </span>
   );
   const failedEmpty = feed.loadFailed && feed.list.length === 0;

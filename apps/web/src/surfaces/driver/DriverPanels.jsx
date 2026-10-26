@@ -180,7 +180,7 @@ export function useDispatchInstructions(truckCode) {
   return { list, cached, loadFailed };
 }
 
-function cachedAgeMinutes(at) {
+export function cachedAgeMinutes(at) {
   const time = at ? Date.parse(at) : NaN;
   return Number.isFinite(time) ? Math.max(0, Math.round((Date.now() - time) / 60000)) : null;
 }
