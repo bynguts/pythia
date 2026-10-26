@@ -18,40 +18,33 @@ async function signIn(page) {
   await page.reload({ waitUntil: "domcontentloaded" });
 }
 
-test.beforeEach(async ({ page }) => signIn(page));
+test.beforeEach(async ({ page }) => {
+  await signIn(page);
+  await page.goto("/app/operations", { waitUntil: "domcontentloaded" });
+});
 
-// wave9 fleet composition: reroute approvals left "Lapisan & kontrol" for the default
-// "Perlu tindakan" rail tab (teardown v4 F6).
-test("operations context exposes the AI traffic monitor without a simulate button", async ({ page }) => {
-  const panel = page.getByTestId("fleet-rail-action").getByTestId("astar-panel");
-  await expect(panel).toContainText("Pengalihan rute otomatis", { timeout: 15000 });
+// Wave 13 Operations: the AI router's reroute is the deviation card's "Pythia suggests",
+// sent with one button; there is no simulate button on the dispatcher's screen.
+test("the deviation card carries the AI reroute without a simulate button", async ({ page }) => {
+  const card = page.locator('[data-testid=action-row][data-kind="deviation"]').first();
+  await expect(card.getByTestId("needs-suggestion")).toContainText("Saran Pythia", { timeout: 30000 });
+  await expect(card.getByTestId("needs-action-send_route")).toHaveText("Kirim rute ke sopir");
   await expect(page.locator(".astar-toggle-btn")).toHaveCount(0);
 });
 
-test("TPA queue shows its forecast gauge or honest empty state", async ({ page }) => {
-  await page.getByRole("tab", { name: "Antrean TPA" }).click();
-  await expect(page.getByText(/Prediksi Antrean TPA|Prediksi Antrian TPA/)).toBeVisible({ timeout: 15000 });
-  await expect(page.locator(".tpa-live-gauge, .ai-feed-empty").first()).toBeVisible();
+// The gate queue figure is model output: it carries the Model tag, and shows a dash, never a
+// sample, when the model has no answer.
+test("the gate queue KPI is labelled as model output", async ({ page }) => {
+  const tile = page.getByTestId("kpi-gate");
+  await expect(tile.locator(".ui-tag-model")).toHaveText("Model");
+  await expect(tile.locator(".ui-kpi-value strong")).toHaveText(/^(\d+ mnt|—)$/, { timeout: 30000 });
+  await expect(tile.locator("[data-provenance=model]")).toHaveCount(1);
 });
 
-test("planning flow exposes the seven-day outlook", async ({ page }) => {
-  await page.getByRole("button", { name: "Rencana" }).click();
-  await expect(page.getByText("Prediksi AI 7 hari")).toBeVisible({ timeout: 15000 });
-});
-
-// wave9 fleet composition: carbon is not a dispatch task, so it left /fleet (teardown v4 F8).
-test("fleet no longer carries the carbon panel", async ({ page }) => {
+// wave9 fleet composition: carbon is not a dispatch task (teardown v4 F8); still true on
+// the wave 13 Operations screen.
+test("operations carries no carbon panel", async ({ page }) => {
   await expect(page.getByTestId("metric-strip")).toBeVisible({ timeout: 15000 });
   await expect(page.getByTestId("carbon-panel")).toHaveCount(0);
   await expect(page.getByTestId("fleet-workspace")).not.toContainText("Jejak Karbon");
-});
-
-// wave9 fleet composition: unlicensed collectors are an alert type in "Perlu tindakan",
-// polled while that tab is open, instead of a separate "Kolektor Liar" document link.
-test("unlicensed collector surface reads the AI flags endpoint", async ({ page }) => {
-  const responsePromise = page.waitForResponse((res) => res.url().includes("/api/ai/unlicensed-flags"), {
-    timeout: 20000,
-  });
-  await expect(page.getByTestId("fleet-rail-action")).toBeVisible();
-  expect((await responsePromise).ok()).toBeTruthy();
 });

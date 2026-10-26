@@ -1,8 +1,7 @@
-// wave11 fleet: /fleet is the approved desk (docs/design/export/app-fleet.png): an
-// edge-to-edge metric strip whose numbers carry mono provenance labels, a left work rail
-// of one-line rows under a single tab header (repeat driver reports grouped), a full-bleed
-// map with a legend pill and a mono provenance chip, and the staggered-dispatch figures at
-// the rail's foot, which the strip's queue tile headlines.
+// wave13 Operations (docs/design/export-handoff/U0H9au.png): a flat strip of four KPIs over
+// a full-width map; the "Needs you" panel floats on the map's left and the Bantargebang gate
+// card sits in its bottom-right corner. Each open item offers one action, and every action
+// writes the existing API (follow-up log, gate holds, stop skip, plan reassign).
 import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
@@ -20,155 +19,252 @@ async function signIn(page) {
     localStorage.setItem("pythia_token", token);
     localStorage.setItem("pythia_role", role);
   }, principal);
-  await page.goto("/fleet", { waitUntil: "domcontentloaded" });
+  await page.goto("/app/operations", { waitUntil: "domcontentloaded" });
 }
 
-test("the strip runs edge to edge, the rail sits left and the map runs to the right edge", async ({
+// One open item of every kind the panel acts on. The deviation's truck has no computed
+// reroute in the live snapshot, so its card must say so and keep "send" disabled.
+const FEED = {
+  date: "2026-01-01",
+  counts: { all: 6, urgent: 2, trucks: 4, gate: 1, tps: 1 },
+  items: [
+    {
+      id: "driver-exception:E2E-ACC",
+      kind: "accident",
+      category: "trucks",
+      severity: "urgent",
+      truck_code: "T-E2A",
+      created_at: new Date(Date.now() - 5 * 60000).toISOString(),
+      facts: { note: "Tabrakan ringan di simpang." },
+      actions: ["escalate", "mark_handled"],
+      classification: "FIELD",
+    },
+    {
+      id: "damage:E2E-DMG",
+      kind: "truck_breakdown",
+      category: "trucks",
+      severity: "urgent",
+      truck_code: "T-E2B",
+      created_at: null,
+      facts: { plan_id: "PLAN-E2E" },
+      suggestion: { kind: "reassign", plan_id: "PLAN-E2E", from_truck: "T-E2B", to_truck: "T-E2C" },
+      actions: ["reassign", "mark_handled"],
+      classification: "FIELD",
+    },
+    {
+      id: "ALT-T-E2D",
+      kind: "deviation",
+      category: "trucks",
+      severity: "normal",
+      truck_code: "T-E2D",
+      spj_id: "SPJ-E2E-D",
+      created_at: null,
+      facts: { distance_meters: 1434 },
+      actions: ["send_route", "mark_handled"],
+      classification: "SIMULATED",
+    },
+    {
+      id: "gate-peak:2026-01-01:10:00",
+      kind: "gate_peak",
+      category: "gate",
+      severity: "normal",
+      truck_code: null,
+      created_at: null,
+      facts: {
+        slot: "10:00",
+        holds: [
+          { rec_id: "rec-a", truck_code: "T-E2E", hold_minutes: 15 },
+          { rec_id: "rec-b", truck_code: "T-E2F", hold_minutes: 15 },
+        ],
+      },
+      actions: ["accept"],
+      classification: "MODEL",
+    },
+    {
+      id: "tps-empty:SPJ-E2E-G:1",
+      kind: "tps_empty",
+      category: "tps",
+      severity: "normal",
+      truck_code: "T-E2G",
+      spj_id: "SPJ-E2E-G",
+      created_at: null,
+      facts: { reports: 3, stop_name: "TPS Uji 1", stop_index: 1 },
+      actions: ["skip_stop", "mark_handled"],
+      classification: "FIELD",
+    },
+    {
+      id: "duty:T-E2H",
+      kind: "duty_warn",
+      category: "trucks",
+      severity: "normal",
+      truck_code: "T-E2H",
+      created_at: null,
+      facts: { duty_minutes: 605, block_at_minutes: 720 },
+      actions: ["plan_relief", "mark_handled"],
+      classification: "FIELD",
+    },
+  ],
+};
+
+// Every write the panel makes is captured and answered here, so nothing reaches the store.
+async function captureWrites(page) {
+  const writes = [];
+  const record = (name) => async (route) => {
+    writes.push({ name, url: route.request().url(), body: route.request().postDataJSON() });
+    await route.fulfill({ json: { ok: true } });
+  };
+  await page.route(/\/api\/alert\/follow-up$/, record("follow-up"));
+  await page.route(/\/api\/whatsapp\/alert$/, record("whatsapp"));
+  await page.route(/\/api\/gate\/slots\/recommendations\/[^/]+\/accept$/, record("accept"));
+  await page.route(/\/api\/spj\/[^/]+\/stops\/\d+\/skip$/, record("skip"));
+  await page.route(/\/api\/operations\/[^/]+\/reassign$/, record("reassign"));
+  return writes;
+}
+
+const row = (page, kind) => page.locator(`[data-testid=action-row][data-kind="${kind}"]`);
+
+test("the strip has four KPIs and the panels float on the map: needs-you left, gate card bottom-right", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);
   const strip = page.getByTestId("metric-strip");
-  await expect(strip.locator("[data-metric=queue]")).toBeVisible({ timeout: 30000 });
+  for (const id of ["kpi-trucks", "kpi-trips", "kpi-tonnes", "kpi-gate"])
+    await expect(strip.getByTestId(id)).toBeVisible({ timeout: 30000 });
+  await expect(page.getByTestId("metric-strip")).toHaveCount(1);
+  await expect(page.getByTestId("kpi-trucks")).toContainText("Truk di jalan");
+  await expect(page.getByTestId("kpi-gate")).toContainText("Antrean gerbang kini");
 
-  const geometry = await page.evaluate(() => {
-    const box = (selector) => document.querySelector(selector).getBoundingClientRect();
-    const labels = [...document.querySelectorAll("[data-testid=metric-cell] .prov")].map((el) => {
-      const style = getComputedStyle(el);
-      return { mono: /Geist Mono|monospace/i.test(style.fontFamily), upper: style.textTransform };
-    });
-    return {
-      width: innerWidth,
-      strip: box("[data-testid=metric-strip]").toJSON(),
-      rail: box("[data-testid=fleet-rail]").toJSON(),
-      stage: box("[data-testid=fleet-map-stage]").toJSON(),
-      labels,
-    };
-  });
-  expect(geometry.strip.left).toBeLessThanOrEqual(1);
-  expect(geometry.strip.right).toBeGreaterThanOrEqual(geometry.width - 1);
-  // Every number keeps its provenance, drawn as an 11 px uppercase mono label.
-  expect(geometry.labels.length).toBeGreaterThanOrEqual(3);
-  for (const label of geometry.labels) expect(label).toEqual({ mono: true, upper: "uppercase" });
-  expect(geometry.rail.left).toBeLessThanOrEqual(1);
-  expect(geometry.stage.left).toBeGreaterThanOrEqual(geometry.rail.right - 1);
-  expect(geometry.stage.right).toBeGreaterThanOrEqual(geometry.width - 1);
-  // The desk fills the viewport under the strip: the map's bottom edge is not below the fold.
-  expect(geometry.stage.bottom).toBeLessThanOrEqual(900 + 1);
+  await expect(page.getByTestId("map-gps-soon")).toContainText("Segera hadir");
+  await expect(page.getByTestId("map-gps-soon")).toContainText("Pelacakan GPS langsung");
 
-  // The map's provenance is one mono chip at the bottom of the map, the legend a pill on top.
-  const chip = page.getByTestId("map-provenance");
-  await expect(chip).toContainText("Data simulasi");
-  const [chipBox, stageBox] = await Promise.all([
-    chip.boundingBox(),
-    page.getByTestId("fleet-map-stage").boundingBox(),
+  const box = async (selector) => (await page.locator(selector).first().boundingBox()) || null;
+  await expect(page.getByTestId("gate-card")).toBeVisible({ timeout: 30000 });
+  const [stage, needs, corner] = await Promise.all([
+    box("[data-testid=fleet-map-stage]"),
+    box("[data-testid=needs-you]"),
+    box(".ops-corner"),
   ]);
-  expect(chipBox.y).toBeGreaterThan(stageBox.y + stageBox.height / 2);
-  await expect(page.getByTestId("map-legend").locator(".map-key-peek")).toBeVisible();
+  // The map runs the content width; the needs panel floats inside it at the left edge.
+  expect(needs.x).toBeGreaterThanOrEqual(stage.x);
+  expect(needs.x - stage.x).toBeLessThanOrEqual(24);
+  expect(needs.y).toBeGreaterThanOrEqual(stage.y);
+  expect(needs.x + needs.width).toBeLessThan(stage.x + stage.width / 2);
+  // The gate card hugs the bottom-right corner.
+  expect(stage.x + stage.width - (corner.x + corner.width)).toBeLessThanOrEqual(24);
+  expect(stage.y + stage.height - (corner.y + corner.height)).toBeLessThanOrEqual(24);
+  expect(corner.x).toBeGreaterThan(stage.x + stage.width / 2);
 });
 
-test("one rail header, rows in one line, and the queue tile names the rail foot's statistic", async ({
-  page,
-}) => {
+test("every open item shows its one action; the chips count and filter the list", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route(/\/api\/ops\/needs-you$/, (route) => route.fulfill({ json: FEED }));
   await signIn(page);
-  const rail = page.getByTestId("fleet-rail-action");
-  await expect(rail.getByTestId("action-row").first()).toBeVisible({ timeout: 30000 });
+  const panel = page.getByTestId("needs-you");
+  await expect(panel.getByTestId("action-row")).toHaveCount(6, { timeout: 30000 });
+  await expect(panel.getByTestId("needs-you-count")).toHaveText("6");
+  await expect(panel.getByTestId("needs-you-urgent")).toHaveText("2 mendesak");
 
-  // One header: a single tab control, no second row of filter pills.
-  await expect(page.getByTestId("fleet-rail").getByRole("tablist")).toHaveCount(1);
-  await expect(page.locator("[data-testid^=attention-filter]")).toHaveCount(0);
+  await expect(row(page, "accident")).toContainText("Kecelakaan · T-E2A");
+  await expect(row(page, "accident").getByTestId("needs-action-escalate")).toHaveText("Eskalasi");
+  await expect(row(page, "truck_breakdown")).toContainText("T-E2C bisa mengambil sisa titiknya.");
+  await expect(row(page, "truck_breakdown").getByTestId("needs-action-reassign")).toHaveText("Alihkan");
+  await expect(row(page, "gate_peak")).toContainText("Puncak gerbang 10:00–10:15");
+  await expect(row(page, "gate_peak").locator(".ui-tag-model")).toHaveText("Model");
+  await expect(row(page, "gate_peak").getByTestId("needs-action-accept")).toHaveText("Terima");
+  await expect(row(page, "tps_empty")).toContainText("TPS Uji 1 kosong");
+  await expect(row(page, "tps_empty").getByTestId("needs-action-skip_stop")).toHaveText("Lewati titik");
+  await expect(row(page, "duty_warn").getByTestId("needs-action-plan_relief")).toHaveText("Atur pengganti");
 
-  // One line of title and one of meta per row on desktop.
-  const tall = await rail.evaluate((root) =>
-    [...root.querySelectorAll(".ui-row .ui-row-title, .ui-row .ui-row-meta")]
-      .filter((el) => el.getBoundingClientRect().height > parseFloat(getComputedStyle(el).lineHeight) * 1.5)
-      .map((el) => el.textContent),
+  // The first deviation opens with Pythia's suggestion; with no computed reroute it says so
+  // and the send button stays disabled rather than sending nothing.
+  const deviation = row(page, "deviation");
+  await expect(deviation).toHaveAttribute("data-provenance", "simulated");
+  await expect(deviation.getByTestId("needs-suggestion")).toContainText(
+    "Belum ada rute pengalihan untuk truk ini.",
   );
-  expect(tall).toEqual([]);
+  await expect(deviation.getByTestId("needs-action-send_route")).toBeDisabled();
 
-  // The modelled TPA peak is one row of work, labelled simulated, that opens the queue tab.
-  const queueRow = rail.getByTestId("attention-queue-row");
-  await expect(queueRow).toContainText("Puncak antrean TPA", { timeout: 30000 });
-  await expect(queueRow).toContainText("SIMULASI");
-  await queueRow.getByRole("button", { name: "Atur keberangkatan bertahap" }).click();
-  await expect(page.getByTestId("fleet-queue-surface")).toBeVisible();
-
-  // The stagger foot hides on the queue tab (the full panel is there) and returns elsewhere.
-  await expect(page.getByTestId("fleet-stagger-summary")).toHaveCount(0);
-  await page.getByRole("tab", { name: /Perlu tindakan/ }).click();
-  const foot = page.getByTestId("fleet-stagger-summary");
-  await expect(foot.locator("strong")).toHaveCount(2, { timeout: 30000 });
-  await expect(page.getByTestId("fleet-stagger-provenance")).toContainText("Simulasi");
-
-  // The strip headlines the staggered day mean and quotes the unstaggered one, the same pair
-  // (and the same basis) as the rail foot.
-  const [before, after] = await foot.locator("strong").allTextContents();
-  const tile = page.locator('[data-metric="queue"]');
-  await expect(tile.locator("strong")).toHaveText(`${after} mnt/truk`);
-  await expect(tile.locator(".metric-meta")).toContainText(`Rata-rata sehari, tanpa penjadwalan ${before}`);
-  await expect(tile.locator(".prov")).toHaveText("Simulasi · antre timbang, hari normal · bertahap");
+  await expect(page.getByTestId("needs-filter-all")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("needs-filter-trucks")).toHaveText("Truk 4");
+  await page.getByTestId("needs-filter-gate").click();
+  await expect(page.getByTestId("needs-filter-gate")).toHaveAttribute("aria-pressed", "true");
+  await expect(panel.getByTestId("action-row")).toHaveCount(1);
+  await expect(panel.getByTestId("action-row")).toHaveAttribute("data-kind", "gate_peak");
+  await page.getByTestId("needs-filter-tps").click();
+  await expect(panel.getByTestId("action-row")).toHaveAttribute("data-kind", "tps_empty");
 });
 
-test("repeat driver reports are one row with a count; Tandai ditangani sits beside Hubungi sopir", async ({
-  page,
-}) => {
-  const at = (min) => new Date(Date.now() - min * 60000).toISOString();
-  await page.route("**/api/driver/exceptions*", (route) =>
+test("each action writes the existing API with the item's own ids", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route(/\/api\/ops\/needs-you$/, (route) => route.fulfill({ json: FEED }));
+  const writes = await captureWrites(page);
+  await signIn(page);
+  await expect(page.getByTestId("action-row")).toHaveCount(6, { timeout: 30000 });
+  const latest = (name) => writes.filter((write) => write.name === name).at(-1);
+
+  // Deviation: Mark handled closes it in the follow-up log.
+  await row(page, "deviation").getByTestId("needs-action-mark_handled").click();
+  await expect
+    .poll(() => latest("follow-up")?.body)
+    .toMatchObject({
+      alert_id: "ALT-T-E2D",
+      status: "RESOLVED",
+    });
+
+  // Accident: Escalate records DISPATCHED (and a best-effort WhatsApp alert).
+  await row(page, "accident").getByTestId("needs-action-escalate").click();
+  await expect
+    .poll(() => latest("follow-up")?.body)
+    .toMatchObject({
+      alert_id: "driver-exception:E2E-ACC",
+      status: "DISPATCHED",
+    });
+  await expect.poll(() => latest("whatsapp")?.body?.truck_code).toBe("T-E2A");
+
+  // Gate peak: Accept takes every recommended hold.
+  await row(page, "gate_peak").getByTestId("needs-action-accept").click();
+  await expect
+    .poll(() => writes.filter((write) => write.name === "accept").map((write) => write.url.split("/").at(-2)))
+    .toEqual(["rec-a", "rec-b"]);
+
+  // Empty TPS: Skip stop skips that stop of that work order, with the drivers' reason.
+  await row(page, "tps_empty").getByTestId("needs-action-skip_stop").click();
+  await expect.poll(() => latest("skip")?.url).toMatch(/\/spj\/SPJ-E2E-G\/stops\/1\/skip$/);
+  expect(latest("skip").body).toEqual({ reason: "Dilaporkan kosong oleh 3 sopir" });
+
+  // Breakdown: Reassign asks first, then moves the plan share and closes the item.
+  const breakdown = row(page, "truck_breakdown");
+  await breakdown.getByTestId("needs-action-reassign").click();
+  await expect(breakdown.locator(".ops-confirm")).toContainText(
+    "Pindahkan bagian T-E2B dari rencana hari ini ke T-E2C?",
+  );
+  expect(latest("reassign")).toBeUndefined();
+  await breakdown.getByTestId("needs-reassign-confirm").click();
+  await expect.poll(() => latest("reassign")?.url).toMatch(/\/operations\/PLAN-E2E\/reassign$/);
+  expect(latest("reassign").body).toMatchObject({ from_truck: "T-E2B", to_truck: "T-E2C" });
+  await expect
+    .poll(() => latest("follow-up")?.body)
+    .toMatchObject({
+      alert_id: "damage:E2E-DMG",
+      status: "RESOLVED",
+    });
+
+  // Duty: no relief roster exists, so Plan relief opens the Fleet & drivers duty view.
+  await row(page, "duty_warn").getByTestId("needs-action-plan_relief").click();
+  await expect(page).toHaveURL(/\/app\/fleet/);
+});
+
+test("with nothing open the panel says so in the design's words", async ({ page }) => {
+  await page.route(/\/api\/ops\/needs-you$/, (route) =>
     route.fulfill({
-      json: {
-        exceptions: [
-          {
-            exception_id: "EXC-W11-A",
-            truck_code: "T-901",
-            kind: "road_closed",
-            note: "jalan ditutup",
-            reported_at: at(30),
-          },
-          {
-            exception_id: "EXC-W11-B",
-            truck_code: "T-901",
-            kind: "road_closed",
-            note: "masih ditutup",
-            reported_at: at(5),
-          },
-          {
-            exception_id: "EXC-W11-C",
-            truck_code: "T-901",
-            kind: "road_closed",
-            note: "ditutup",
-            reported_at: at(15),
-          },
-          {
-            exception_id: "EXC-W11-D",
-            truck_code: "T-902",
-            kind: "accident",
-            note: "tabrakan ringan",
-            reported_at: at(10),
-          },
-        ],
-      },
+      json: { ...FEED, counts: { all: 0, urgent: 0, trucks: 0, gate: 0, tps: 0 }, items: [] },
     }),
   );
-  await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);
-  const rows = page.getByTestId("driver-exception-row");
-  await expect(rows).toHaveCount(2, { timeout: 30000 });
-
-  // The accident leads; the three closures are one row showing the latest report.
-  await expect(rows.first()).toHaveAttribute("data-kind", "accident");
-  const closed = page.locator('[data-exception-id="EXC-W11-B"]');
-  await expect(closed).toHaveAttribute("data-exception-ids", "EXC-W11-B EXC-W11-C EXC-W11-A");
-  await expect(closed.locator(".attn-repeat")).toHaveText("×3");
-  await expect(closed).toContainText("masih ditutup");
-  await expect(closed).not.toContainText("EXC-W11");
-
-  // Both actions share one action line (it may wrap in the narrow rail); the quiet one is
-  // an outlined pill inside a 44 px target, never bare text.
-  const actions = closed.locator(".attn-actions");
-  await expect(actions.getByRole("button", { name: "Hubungi sopir" })).toBeVisible();
-  const handled = actions.getByRole("button", { name: "Tandai ditangani" });
-  expect((await handled.boundingBox()).height).toBeGreaterThanOrEqual(44);
-  const pill = await handled.evaluate((el) => getComputedStyle(el, "::before").borderTopWidth);
-  expect(pill).toBe("1px");
+  const empty = page.getByTestId("needs-you-empty");
+  await expect(empty).toContainText("Tidak ada yang perlu Anda tangani", { timeout: 30000 });
+  await expect(page.getByTestId("needs-you-count")).toHaveText("0");
+  await expect(page.getByTestId("needs-you-urgent")).toHaveCount(0);
+  await expect(page.locator("[data-testid^=needs-filter-]")).toHaveCount(0);
 });

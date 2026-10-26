@@ -11,7 +11,9 @@ let authHeaders;
 // per-test beforeEach reset) makes the shared jam state deterministic.
 test.describe.configure({ mode: "serial" });
 
-// Map truthfulness E2E: render, deviation coloring, heatmap, TPA marker.
+// Map truthfulness E2E: render, deviation coloring, heatmap, TPA marker. Wave 13: the map
+// is the Operations screen's (/app/operations); "/" is the public landing page.
+const OPS = "/app/operations";
 test.beforeEach(async ({ page }) => {
   const login = await page.request.post(`${API_BASE}/api/auth/login`, {
     data: { username: "dispatcher", password: "dispatcher-demo-pass" },
@@ -30,36 +32,29 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("map canvas renders (not blank)", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto(OPS, { waitUntil: "domcontentloaded" });
   const canvas = page.locator(".maplibregl-canvas");
   await expect(canvas).toBeVisible({ timeout: 15000 });
 });
 
-test("cold Fleet load reuses aggregate map truth for route playback", async ({ page }) => {
+// Wave 13: Operations has no replay control; a cold load still never asks for per-truck
+// breadcrumbs (the aggregate map truth carries every trail).
+test("cold Operations load requests no per-truck breadcrumbs", async ({ page }) => {
   const breadcrumbRequests = [];
   page.on("request", (request) => {
     if (/\/api\/fleet\/[^/]+\/breadcrumbs(?:\?|$)/.test(request.url()))
       breadcrumbRequests.push(request.url());
   });
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  // wave9 fleet composition: replay moved from a layers-panel combobox into the truck
-  // drawer's "Riwayat" view (Truk tab → row → Riwayat → Putar ulang perjalanan).
-  await page.getByRole("tab", { name: "Truk" }).click();
-  await page.getByPlaceholder("Cari kode, plat, sopir, wilayah").fill("T-047");
-  await page.locator('[data-testid=truck-row][data-truck="T-047"]').click();
-  await page.getByTestId("truck-drawer-history").click();
-  const playback = page.getByTestId("truck-replay");
-  // beforeEach's jam reset invalidates the map-truth cache, so this first
-  // fetch is a cold OSRM-bound rebuild (3-7 s measured): wait like the other
-  // map-truth checks in this file instead of the 5 s default.
-  await expect(playback).toBeVisible({ timeout: 30000 });
+  await page.goto(OPS, { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => (window.__pythiaMapFeatures?.actualKinds || []).length > 0, null, {
+    timeout: 30000,
+  });
+  await expect(page.locator(".truck-marker").first()).toBeVisible();
   expect(breadcrumbRequests).toEqual([]);
-  await playback.click();
-  await expect(page.locator(".playback-marker")).toBeVisible();
 });
 
 test("actual routes colored by violation state", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto(OPS, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => (window.__pythiaMapFeatures?.actualKinds || []).length > 0, null, {
     timeout: 30000,
   });
@@ -69,33 +64,28 @@ test("actual routes colored by violation state", async ({ page }) => {
   expect(kinds).toContain("actual-violation");
 });
 
-test("map legend shows provenance tags", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  // wave9: the one legend lives on the map (open on wide screens, folded on phones).
-  const details = page.getByTestId("map-legend");
-  if (!(await details.evaluate((el) => el.open))) await details.locator("summary").click();
-  const legend = details.locator(".map-key-body");
-  // wave9 fleet composition: the standalone OSRM route row (tagged LANGSUNG) is gone; a
-  // route is drawn only for the selected decision, tagged with its own source.
-  await expect(legend).not.toContainText("LANGSUNG");
-  await expect(legend).toContainText("MODEL");
-  await expect(legend).toContainText("SIMULASI");
-});
-
-test("fleet panel labels positions as simulated data", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  const notice = page.locator(".map-data-notice");
-  await expect(notice).toContainText("Data simulasi");
-  await expect(notice).toContainText("Posisi bukan GPS langsung");
+// Wave 13 honesty, thin: every pin and the trucks KPI say "simulated" in their tooltip and
+// data-provenance; live GPS is a "Coming soon" chip, never implied.
+test("pins and the trucks KPI are labelled simulated; live GPS is Coming soon", async ({ page }) => {
+  await page.goto(OPS, { waitUntil: "domcontentloaded" });
+  const pin = page.locator(".truck-marker").first();
+  await expect(pin).toBeVisible({ timeout: 30000 });
+  await expect(pin).toHaveAttribute("data-provenance", "simulated");
+  await expect(pin).toHaveAttribute("title", /· Posisi simulasi, bukan GPS langsung$/);
+  const unlabelled = await page.locator(".truck-marker:not([data-provenance=simulated])").count();
+  expect(unlabelled).toBe(0);
+  const trucks = page.getByTestId("kpi-trucks").locator("[data-provenance=simulated]");
+  await expect(trucks).toHaveAttribute("title", "Posisi dan aktivitas armada simulasi, bukan GPS langsung.");
+  await expect(page.getByTestId("map-gps-soon")).toHaveText(/Segera hadir\s*Pelacakan GPS langsung/);
 });
 
 test("TPA marker present on map", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto(OPS, { waitUntil: "domcontentloaded" });
   await expect(page.locator(".tpa-marker")).toBeVisible({ timeout: 15000 });
 });
 
 test("map canvas has real color diversity (decoded pixels, not byte variance)", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto(OPS, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(4500);
   const buf = await page.locator(".maplibregl-canvas").screenshot();
   const dataUrl = "data:image/png;base64," + buf.toString("base64");
@@ -150,7 +140,7 @@ test("breadcrumbs endpoint returns simulated trail", async ({ page }) => {
 
 test("mobile viewport renders map without horizontal overflow", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto(OPS, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(2500);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
   expect(overflow).toBe(false);
@@ -194,12 +184,7 @@ async function verifiedJamCleared(page) {
 // in the caller can restore the cleared state even on failure.
 async function runJamDiversionScenario(page) {
   await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=true`, { headers: authHeaders });
-  // wave9 fleet composition: the reroute monitor lives in the "Perlu tindakan" rail tab.
-  await expect(page.getByTestId("fleet-rail-action").locator(".traffic-status-badge")).toContainText(
-    /JAM TERDETEKSI AI|Jam Active|Macet Aktif/,
-    { timeout: 45000 },
-  );
-
+  // Wave 13: Operations shows no reroute monitor; the API and the drawn layers are checked.
   // The AI engine loop may independently clear/re-set the global jam flag, and
   // the demo jam is position-relative (truck cruising): wait until the server
   // actually applies a diversion before asserting the diverted-state payloads.
@@ -214,10 +199,6 @@ async function runJamDiversionScenario(page) {
       { timeout: 45000, intervals: [1000, 2000, 3000] },
     )
     .toBe(true);
-  await expect(
-    page.locator(".astar-stat-col strong").filter({ hasText: /Diverted automatically|Dialihkan otomatis/ }),
-  ).toBeVisible({ timeout: 20000 });
-
   const reroute = await (
     await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)
   ).json();
@@ -258,8 +239,7 @@ test("jam toggle diverts T-047 end-to-end (UI, reroute API, map-truth agree)", a
   test.slow();
   // Known initial state first, restored even when the scenario fails (#69).
   await verifiedJamCleared(page);
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await expect(page.getByTestId("fleet-rail-action").getByTestId("astar-panel")).toBeVisible();
+  await page.goto(OPS, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => (window.__pythiaMapFeatures?.actualKinds || []).length > 0, null, {
     timeout: 15000,
   });
@@ -289,8 +269,7 @@ test("restore traffic returns T-047 to compliant and clears abandoned line", asy
   // scenario cannot race a leftover jam from a prior run or test.
   await verifiedJamCleared(page);
   await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=true`, { headers: authHeaders });
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await expect(page.getByTestId("fleet-rail-action").getByTestId("astar-panel")).toBeVisible();
+  await page.goto(OPS, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(
     () => (window.__pythiaMapFeatures?.assignedKinds || []).includes("astar-abandoned"),
     null,
@@ -329,11 +308,6 @@ async function restoreScenario(page) {
       { timeout: 45000, intervals: [1000, 2000, 3000] },
     )
     .toBe(true);
-  await expect(page.getByTestId("fleet-rail-action").locator(".traffic-status-badge")).toContainText(
-    /KORIDOR NORMAL|Corridor Clear|Koridor Lancar/,
-    { timeout: 20000 },
-  );
-
   const reroute = await (
     await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)
   ).json();
@@ -346,35 +320,27 @@ async function restoreScenario(page) {
   );
 }
 
-test("TPS and WR layers survive basemap switch", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(3000);
-  const satBtn = page.locator(".map-basemap button", { hasText: "Satellite" });
-  if (await satBtn.count()) await satBtn.click();
-  await page.waitForTimeout(2500);
-  const mapBtn = page.locator(".map-basemap button", { hasText: "Map" });
-  if (await mapBtn.count()) await mapBtn.click();
-  await page.waitForTimeout(2500);
-  const layerCheck = await page.evaluate(() => {
-    const m = document.querySelector("canvas")?.__maplibre_map || window.__pythiaMap;
-    if (!m || !m.getLayer) return { error: "no map ref" };
-    return {
-      tps: !!m.getLayer("tps-layer"),
-      tpsCluster: !!m.getLayer("tps-clusters"),
-      wr: !!m.getLayer("wr-unclustered-point"),
-      wrCluster: !!m.getLayer("wr-clusters"),
-    };
-  });
-  if (!layerCheck.error) {
-    expect(layerCheck.tps).toBe(true);
-    expect(layerCheck.tpsCluster).toBe(true);
-    expect(layerCheck.wr).toBe(true);
-    expect(layerCheck.wrCluster).toBe(true);
-  }
+// Wave 13: Operations has no basemap switch and keeps the reference layers off, but the
+// layers stay registered so the Fleet & drivers map (and a later toggle) can show them.
+test("TPS and WR layers stay registered on the Operations map", async ({ page }) => {
+  await page.goto(OPS, { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => window.__pythiaMap?.isStyleLoaded?.(), null, { timeout: 30000 });
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const m = window.__pythiaMap;
+          return ["tps-layer", "tps-clusters", "wr-unclustered-point", "wr-clusters"].map(
+            (id) => !!m.getLayer(id),
+          );
+        }),
+      { timeout: 30000 },
+    )
+    .toEqual([true, true, true, true]);
 });
 
 test("truck markers cruise smoothly on the live map", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto(OPS, { waitUntil: "domcontentloaded" });
   const marker = page.locator(".truck-marker").first();
   await marker.waitFor({ state: "visible", timeout: 30000 });
   const box1 = await marker.boundingBox();

@@ -1,50 +1,32 @@
-// wave9 fleet composition: the shell nav reads in daily-use order with Settings pinned
-// apart, a phone can sign out from the profile menu, and /fleet is one strip of four
-// metrics, a large map and a rail (Perlu tindakan · Truk · Antrean TPA) whose numbers
-// agree: one denominator, the TPA peak in minutes, one ETA per route.
+// wave13 Operations composition (U0H9au): the old /fleet link lands on Operations; a
+// deviation card carries one reroute, drawn on the map only while the card is open, and
+// sends it to the driver in one press; the head's buttons reach the existing flows; the
+// Indonesian screen has no English backend prose; phones stack the panels under the map and
+// desktops frame the fleet. The shell's nav and profile menu are covered by routing.spec.js.
 import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
-async function signIn(page, lang = "id") {
+async function signIn(page, path = "/app/operations") {
   await page.goto("/");
   const response = await page.request.post(`${API}/auth/login`, {
     data: { username: "dispatcher", password: "dispatcher-demo-pass" },
   });
   expect(response.ok()).toBeTruthy();
   const principal = await response.json();
-  await page.evaluate(
-    ({ token, role, lang }) => {
-      localStorage.setItem("pythia_auth", "true");
-      localStorage.setItem("pythia_lang", lang);
-      localStorage.setItem("pythia_token", token);
-      localStorage.setItem("pythia_role", role);
-    },
-    { ...principal, lang },
-  );
-  await page.goto("/fleet", { waitUntil: "domcontentloaded" });
+  await page.evaluate(({ token, role }) => {
+    localStorage.setItem("pythia_auth", "true");
+    localStorage.setItem("pythia_lang", "id");
+    localStorage.setItem("pythia_token", token);
+    localStorage.setItem("pythia_role", role);
+  }, principal);
+  await page.goto(path, { waitUntil: "domcontentloaded" });
 }
 
-const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
-
-// Two of today's work orders, one closed: the trips tile reads "1 dari 2".
-async function stubTrips(page) {
-  await page.route(/\/api\/spj\?limit=500$/, (route) =>
-    route.fulfill({
-      json: {
-        spj: [
-          { spj_id: "e2e-1", spj_number: "SPJ/E2E/1", date: today(), status: "selesai", stops: [] },
-          { spj_id: "e2e-2", spj_number: "SPJ/E2E/2", date: today(), status: "aktif", stops: [] },
-        ],
-        count: 2,
-      },
-    }),
-  );
-}
-
-// One deviation decision with a computed route, first in the queue.
+// One deviation decision with a computed route: the snapshot's alert and the needs-you item
+// share the id, as the API's do (ALT-<truck>).
 const DECISION = {
-  id: "ALT-E2E",
+  id: "ALT-T-047",
   type: "route_deviation",
   severity: "critical",
   truck_code: "T-047",
@@ -70,7 +52,27 @@ const DECISION = {
   ],
 };
 
+const FEED = {
+  date: "2026-01-01",
+  counts: { all: 1, urgent: 0, trucks: 1, gate: 0, tps: 0 },
+  items: [
+    {
+      id: "ALT-T-047",
+      kind: "deviation",
+      category: "trucks",
+      severity: "normal",
+      truck_code: "T-047",
+      spj_id: null,
+      created_at: null,
+      facts: { distance_meters: 2924 },
+      actions: ["send_route", "mark_handled"],
+      classification: "SIMULATED",
+    },
+  ],
+};
+
 async function stubDecision(page) {
+  await page.route(/\/api\/ops\/needs-you$/, (route) => route.fulfill({ json: FEED }));
   await page.route(/\/api\/command-center(\?|$)/, async (route) => {
     try {
       const response = await route.fetch();
@@ -83,298 +85,179 @@ async function stubDecision(page) {
   });
 }
 
-// wave11 design system: the sidebar rail became one top bar, so Settings now sits at the
-// right end of the workspace pills, after a separator, instead of below one.
-test("the top nav lists the workspaces in daily order with Settings set apart after a separator", async ({
-  page,
-}) => {
+const deviation = (page) => page.locator('[data-testid=action-row][data-kind="deviation"]');
+
+test("the old /fleet link lands on Operations, marked current in the nav", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await signIn(page);
-  const nav = page.getByTestId("workspace-navigation");
-  await expect(nav.getByRole("button")).toHaveText([
-    "Armada",
-    "Rencana",
-    "Prediksi",
-    "Sopir",
-    "Kota 3D",
-    "Pengaturan",
-  ]);
-  await expect(nav.getByRole("button", { name: "Armada" })).toHaveAttribute("aria-current", "page");
-  const separator = nav.getByRole("separator");
-  await expect(separator).toHaveCount(1);
-  const [twin, line, settings] = await Promise.all([
-    nav.getByRole("button", { name: "Kota 3D" }).boundingBox(),
-    separator.boundingBox(),
-    nav.getByRole("button", { name: "Pengaturan" }).boundingBox(),
-  ]);
-  expect(line.x).toBeGreaterThanOrEqual(twin.x + twin.width);
-  expect(settings.x).toBeGreaterThanOrEqual(line.x + line.width);
-  // Settings is set apart, not just the next item: at least 16 px between the groups.
-  expect(settings.x - (twin.x + twin.width)).toBeGreaterThanOrEqual(16);
-
-  // The twin moved to fifth, but its deep links still land on it.
-  await page.goto("/?workspace=twin", { waitUntil: "domcontentloaded" });
-  await expect(page).toHaveURL(/\/twin$/);
-  await page.goto("/?present=1", { waitUntil: "domcontentloaded" });
-  await expect(page).toHaveURL(/\/twin\?present=1$/);
+  await signIn(page, "/fleet");
+  await expect(page).toHaveURL(/\/app\/operations$/);
+  await expect(page.getByTestId("fleet-workspace")).toBeVisible();
+  await expect(page.getByTestId("nav-operations")).toHaveAttribute("aria-current", "page");
+  await expect(page.locator("main")).toHaveCount(1);
 });
 
-test("a phone signs out from the profile menu; Settings lives there, not in the tab bar", async ({
+test("a deviation has one reroute, drawn on the map only while its card is open", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await stubDecision(page);
+  await signIn(page);
+  const card = deviation(page);
+  await expect(card.getByTestId("decision-route-name")).toHaveText(
+    "Lewat Rute B · pemulihan via Daan Mogot: 34,7 km, 95 mnt.",
+    { timeout: 30000 },
+  );
+  await expect(card).toContainText("T-047 keluar dari koridornya");
+  await expect(card.getByTestId("needs-action-send_route")).toBeEnabled();
+  const routeRow = page.locator('[data-testid=map-legend-row][data-layer="osrm"]');
+  await expect(routeRow).toHaveText("Rute usulan");
+
+  // Collapsing the card removes its suggestion, and the route leaves the map and the legend.
+  await card.locator(".ops-item-title").click();
+  await expect(card).not.toHaveClass(/is-open/);
+  await expect(card.getByTestId("needs-suggestion")).toHaveCount(0);
+  await expect(routeRow).toHaveCount(0);
+  await card.locator(".ops-item-title").click();
+  await expect(routeRow).toHaveCount(1);
+});
+
+test("Send route to driver dispatches the reroute and logs the follow-up", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await stubDecision(page);
+  const writes = [];
+  for (const [name, pattern] of [
+    ["dispatch", /\/api\/dispatch$/],
+    ["follow-up", /\/api\/alert\/follow-up$/],
+  ]) {
+    await page.route(pattern, async (route) => {
+      writes.push({ name, body: route.request().postDataJSON() });
+      await route.fulfill({ json: { ok: true } });
+    });
+  }
+  await signIn(page);
+  const card = deviation(page);
+  await expect(card.getByTestId("needs-action-send_route")).toBeEnabled({ timeout: 30000 });
+  await card.getByTestId("needs-action-send_route").click();
+  await expect(card.getByRole("status")).toHaveText("Rute terkirim ke T-047. Menunggu sopir.");
+  expect(writes.map((write) => write.name)).toEqual(["dispatch", "follow-up"]);
+  expect(writes[0].body.truck_code).toBe("T-047");
+  expect(writes[0].body.instruction).toContain("Rute B · pemulihan via Daan Mogot");
+  expect(writes[1].body).toMatchObject({ alert_id: "ALT-T-047", status: "DISPATCHED" });
+});
+
+test("New instruction sends to one truck", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const sent = [];
+  await page.route(/\/api\/dispatch$/, async (route) => {
+    sent.push(route.request().postDataJSON());
+    await route.fulfill({ json: { ok: true } });
+  });
+  await signIn(page);
+  await page.getByTestId("ops-new-instruction").click();
+  const drawer = page.getByTestId("instruction-drawer");
+  await expect(drawer).toBeVisible();
+  const truck = page.getByTestId("instruction-truck");
+  await expect(truck.locator("option").first()).toHaveText(/^T-\d+/, { timeout: 30000 });
+  const code = await truck.inputValue();
+  await expect(page.getByTestId("instruction-send")).toBeDisabled();
+  await page.getByTestId("instruction-text").fill("Lanjut ke TPS berikutnya setelah titik ini.");
+  await page.getByTestId("instruction-send").click();
+  await expect(drawer.getByRole("status")).toHaveText(
+    `Terkirim ke ${code}. Sopir mengonfirmasi di aplikasi.`,
+  );
+  expect(sent).toEqual([
+    {
+      truck_code: code,
+      instruction: "Lanjut ke TPS berikutnya setelah titik ini.",
+      manager_id: "dispatcher",
+    },
+  ]);
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
+});
+
+// "Message drivers" posts free text to the WhatsApp alert group; it says plainly when the
+// gateway is offline or no group is chosen (with the way to choose one).
+test("Message drivers posts to the WhatsApp group and names a failure honestly", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const answers = [
+    { status: 503, json: { detail: "The WhatsApp gateway did not deliver the summary." } },
+    { status: 409, json: { detail: "Choose an alert group before sending a summary." } },
+  ];
+  const sent = [];
+  await page.route(/\/api\/whatsapp\/summary$/, async (route) => {
+    sent.push(route.request().postDataJSON());
+    await route.fulfill(answers.shift());
+  });
+  await signIn(page);
+  await page.getByTestId("ops-message-drivers").click();
+  const drawer = page.getByTestId("message-drawer");
+  await expect(drawer).toBeVisible();
+  await expect(page.getByTestId("message-send")).toBeDisabled();
+  await page.getByTestId("message-text").fill("Hujan di rute timur, hati-hati.");
+  await page.getByTestId("message-send").click();
+  await expect(page.getByTestId("message-error")).toHaveText(
+    "Gateway WhatsApp offline. Pesan tidak terkirim.",
+  );
+  expect(sent).toEqual([{ text: "Hujan di rute timur, hati-hati.", lang: "id" }]);
+  await page.getByTestId("message-send").click();
+  await expect(page.getByTestId("message-error")).toHaveText("Belum ada grup WhatsApp yang dipilih.");
+  await page.getByTestId("message-settings").click();
+  await expect(page).toHaveURL(/\/app\/settings\?tab=whatsapp$/);
+});
+
+test("the Indonesian Operations screen shows no English backend prose or engineering jargon", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await signIn(page);
-  const tabs = page.locator(".command-mobile-nav");
-  await expect(tabs.getByRole("button")).toHaveText(["Armada", "Rencana", "Prediksi", "Sopir", "Kota 3D"]);
-
-  const profile = page.getByTestId("profile-button");
-  await expect(profile).toBeVisible();
-  const box = await profile.boundingBox();
-  expect(box.width).toBeGreaterThanOrEqual(44);
-  expect(box.height).toBeGreaterThanOrEqual(44);
-  await profile.click();
-  const menu = page.getByTestId("profile-menu");
-  await expect(menu).toContainText("Pengatur armada");
-  await expect(menu.getByRole("menuitemradio", { name: "Bahasa Indonesia" })).toHaveAttribute(
-    "aria-checked",
-    "true",
-  );
-  await menu.getByRole("menuitem", { name: "Pengaturan" }).click();
-  await expect(page).toHaveURL(/\/settings/);
-  // The phone's way back to Settings marks itself as the current page.
-  await profile.click();
-  await expect(page.getByTestId("profile-menu-settings")).toHaveAttribute("aria-current", "page");
-  await page.keyboard.press("Escape");
-  await expect(page.getByTestId("profile-menu")).toHaveCount(0);
-
-  await profile.click();
-  await page.getByTestId("profile-logout").click();
-  await expect(page.locator(".command-shell")).toHaveCount(0);
-  const stored = await page.evaluate(() =>
-    ["pythia_auth", "pythia_token", "pythia_role"].map((key) => localStorage.getItem(key)),
-  );
-  expect(stored).toEqual([null, null, null]);
-});
-
-test("one strip of four metrics, no duplicate strip, and each number matches its list", async ({ page }) => {
-  await stubTrips(page);
-  await signIn(page);
-  const strip = page.getByTestId("metric-strip");
-  const cells = strip.getByTestId("metric-cell");
-  await expect(cells).toHaveCount(4, { timeout: 30000 });
-  await expect(cells.locator("span")).toHaveText([
-    "Truk aktif",
-    "Antrean TPA",
-    "Deviasi terbuka",
-    "Ritase selesai",
-  ]);
-  await expect(page.locator(".fleet-problem-strip, [data-testid^=problem-chip]")).toHaveCount(0);
-  await expect(page.getByTestId("metric-strip")).toHaveCount(1);
-
-  // One denominator: "52 / 59 unit" under "Truk aktif", the same total as the truck list.
-  const active = strip.locator('[data-metric="active"] strong');
-  await expect(active).toHaveText(/^\d+ \/ \d+ unit$/);
-  // wave11 fleet: the number and its unit words are separate flex items, so read textContent.
-  const activeText = (await active.textContent()).replace(/\s+/g, " ").trim();
-  const [, activeCount, total] = /^(\d+) \/ (\d+) unit$/.exec(activeText);
-
-  // The TPA tile is minutes per truck, never "89m".
-  const queue = strip.locator('[data-metric="queue"]');
-  // wave11 fleet: the tile headlines the staggered day mean (Pythia's answer); the per-truck
-  // peak-hour wait stays in its meta line, so it never reads as the day mean.
-  await expect(queue.locator("strong")).toHaveText(/^\d+(,\d)? mnt\/truk$/, { timeout: 30000 });
-  await expect(queue.locator(".metric-meta")).toContainText(/Puncak \d{2}[.:]\d{2}: ±\d+ mnt\/truk$/);
-  await expect(queue).not.toContainText(/\d+m\b/);
-  await expect(strip.locator('[data-metric="trips"] strong')).toHaveText("1 dari 2");
-
-  await strip.locator('[data-metric="active"]').click();
-  await expect(page.getByRole("tab", { name: "Truk" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByTestId("truck-filter-all").locator("b")).toHaveText(total);
-  await expect(page.getByTestId("truck-filter-active").locator("b")).toHaveText(activeCount);
-  await expect(page.getByTestId("truck-filter-active")).toHaveAttribute("aria-pressed", "true");
-
-  // F3: "Di bengkel N" lists exactly N trucks.
-  const workshop = page.getByTestId("truck-filter-workshop");
-  const shown = Number(await workshop.locator("b").innerText());
-  await workshop.click();
-  if (shown > 12) await page.getByRole("button", { name: `Tampilkan semua (${shown})` }).click();
-  await expect(page.getByTestId("truck-row")).toHaveCount(shown);
-
-  // The deviation tile opens the work queue and agrees with the off-route filter.
-  const deviations = await strip.locator('[data-metric="deviation"] strong').innerText();
-  await expect(page.getByTestId("truck-filter-deviation").locator("b")).toHaveText(deviations);
-  await strip.locator('[data-metric="deviation"]').click();
-  await expect(page.getByRole("tab", { name: /Perlu tindakan/ })).toHaveAttribute("aria-selected", "true");
-});
-
-test("the work queue lives in Perlu tindakan, the layers panel holds layers only", async ({ page }) => {
   await stubDecision(page);
   await signIn(page);
-  const actionTab = page.getByRole("tab", { name: /Perlu tindakan/ });
-  await expect(actionTab).toHaveAttribute("aria-selected", "true");
-  const rail = page.getByTestId("fleet-rail-action");
-  await expect(rail.getByTestId("action-queue")).toBeVisible();
-  const first = rail.getByTestId("action-row").first();
-  await expect(first).toContainText("T-047 keluar dari koridor tugas");
-  await expect(first.getByTestId("action-card-button")).toHaveText("Kirim rute ke sopir");
-  // One primary action per view.
-  await expect(page.getByTestId("fleet-rail").locator(".action-card-button:visible")).toHaveCount(1);
-  await expect(rail.getByTestId("astar-panel")).toBeVisible();
-
-  await page.getByTestId("deck-tools-toggle").click();
-  const layers = page.getByTestId("deck-tools-panel");
-  await expect(layers.getByRole("checkbox")).toHaveCount(3);
-  await expect(layers.locator("[data-testid=action-queue], [data-testid=astar-panel], select")).toHaveCount(
-    0,
-  );
-});
-
-test("a truck row opens its drawer in place, with Sekarang and Riwayat", async ({ page }) => {
-  await signIn(page);
-  await page.getByRole("tab", { name: "Truk" }).click();
-  const row = page.getByTestId("truck-row").first();
-  await expect(row).toBeVisible({ timeout: 30000 });
-  const code = await row.getAttribute("data-truck");
-  await row.click();
-  const drawer = page.getByTestId("truck-drawer");
-  await expect(drawer.locator("#truck-drawer-title")).toContainText(code);
-  await expect(page.getByTestId("truck-drawer-now")).toHaveAttribute("aria-pressed", "true");
-  for (const section of ["drawer-route", "drawer-spj", "drawer-damage", "drawer-safety"]) {
-    await expect(drawer.getByTestId(section)).toBeVisible();
-  }
-  await page.getByTestId("truck-drawer-history").click();
-  await expect(drawer.getByTestId("history-record-note")).toContainText("REKONSTRUKSI MODEL");
-  await page.getByTestId("truck-drawer-close").click();
-  await expect(page.getByTestId("truck-list")).toBeVisible();
-
-  await page.getByRole("tab", { name: "Antrean TPA" }).click();
-  await expect(page.getByTestId("fleet-queue-surface").getByTestId("tpa-queue-panel")).toBeVisible();
-});
-
-// wave12: the ETA says what it is (here the fixed-speed fallback), never "AI".
-test("a decision has one route: one name, one ETA, drawn only while it is selected", async ({ page }) => {
-  await stubDecision(page);
-  await signIn(page);
-  const rail = page.getByTestId("fleet-rail-action");
-  await expect(rail.getByTestId("decision-route-name").first()).toHaveText(
-    "Rute B · pemulihan via Daan Mogot",
-  );
-  await expect(rail.getByTestId("decision-route-eta").first()).toHaveText(
-    "ETA 95 mnt · 34,7 km · perkiraan cadangan",
-  );
-  const card = page.getByTestId("map-route-card");
-  await expect(card).toContainText("Rute B · pemulihan via Daan Mogot");
-  await expect(card.getByTestId("map-route-eta")).toHaveText("ETA 95 mnt · 34,7 km · perkiraan cadangan");
-  await expect(card).toContainText("rute cadangan (offline)");
-  const text = await page.getByTestId("fleet-workspace").innerText();
-  expect(text.match(/\bETA \d+ mnt/g)).toEqual(["ETA 95 mnt", "ETA 95 mnt"]);
-
-  // Collapsing the decision removes its line and card from the map.
-  await rail.getByTestId("action-row").first().locator(".action-row-head").click();
-  await expect(card).toHaveCount(0);
-});
-
-test("the Indonesian /fleet shows no English backend prose or engineering jargon", async ({ page }) => {
-  await stubDecision(page);
-  await signIn(page);
-  await expect(page.getByTestId("action-queue")).toBeVisible({ timeout: 30000 });
-  // Scan the live (stubbed) snapshot, not the offline sample shown while it loads.
-  await expect(page.getByTestId("decision-route-eta").first()).toHaveText(
-    "ETA 95 mnt · 34,7 km · perkiraan cadangan",
-    {
-      timeout: 30000,
-    },
-  );
+  await expect(deviation(page).getByTestId("decision-route-name")).toContainText("Rute B", {
+    timeout: 30000,
+  });
+  await expect(page.getByTestId("needs-you")).toContainText("Perlu Anda");
+  await expect(page.getByTestId("kpi-trucks")).toContainText("Truk di jalan");
   const leaks =
-    /deviated|Hauling|Maintenance hold|Recovery|Route [ABC]\b|Confidence|Auto-detected|OSRM|A\*|auto_reroute|\bseed\b|real-time/;
-  const scan = async () => {
-    const text = await page.locator(".command-main").innerText();
-    expect(text).not.toMatch(leaks);
-  };
-  await scan();
-  await page.getByRole("tab", { name: "Truk" }).click();
-  await scan();
-  await page.getByTestId("truck-row").first().click();
-  await scan();
-  await page.getByTestId("deck-tools-toggle").click();
-  await scan();
+    /deviated|Hauling|Maintenance hold|Recovery|Route [ABC]\b|Confidence|Auto-detected|OSRM|A\*|auto_reroute|\bseed\b|real-time|Needs you|Good (morning|afternoon|evening)|Trucks on route|Coming soon/;
+  const text = await page.locator("main").innerText();
+  expect(text).not.toMatch(leaks);
 });
 
 for (const width of [320, 390]) {
-  test(`at ${width} px the page never scrolls sideways and the rail sits under the map`, async ({ page }) => {
+  test(`at ${width} px the page never scrolls sideways and the panels sit under the map`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width, height: 800 });
     await stubDecision(page);
     await signIn(page);
-    await expect(page.getByTestId("map-route-card")).toBeVisible({ timeout: 30000 });
+    await expect(deviation(page).getByTestId("decision-route-name")).toBeVisible({ timeout: 30000 });
     const geometry = await page.evaluate(() => {
-      const box = (selector) => document.querySelector(selector)?.getBoundingClientRect();
+      const box = (selector) => document.querySelector(selector).getBoundingClientRect();
       const stage = box("[data-testid=fleet-map-stage]");
-      const rail = box("[data-testid=fleet-rail]");
-      // Nothing covers the route card or the legend toggle.
-      const covered = ["[data-testid=map-route-card]", "[data-testid=map-legend] > summary"].filter(
-        (selector) => {
-          const el = document.querySelector(selector);
-          const r = el.getBoundingClientRect();
-          const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-          return !el.contains(hit);
-        },
-      );
       return {
         overflow: document.documentElement.scrollWidth - innerWidth,
-        railBelowMap: rail.top >= stage.bottom - 1,
-        covered,
+        needsBelowMap: box("[data-testid=needs-you]").top >= stage.bottom - 1,
+        gateBelowMap: box(".ops-corner").top >= stage.bottom - 1,
       };
     });
-    expect(geometry.overflow).toBeLessThanOrEqual(0);
-    expect(geometry.railBelowMap).toBe(true);
-    expect(geometry.covered).toEqual([]);
-    for (const tab of await page.getByRole("tab").all()) {
-      const tabBox = await tab.boundingBox();
-      if (!tabBox) continue;
-      expect(tabBox.height).toBeGreaterThanOrEqual(44);
+    expect(geometry).toEqual({ overflow: 0, needsBelowMap: true, gateBelowMap: true });
+    for (const button of await page.getByTestId("needs-you").getByRole("button").all()) {
+      const buttonBox = await button.boundingBox();
+      if (!buttonBox) continue;
+      expect(buttonBox.height).toBeGreaterThanOrEqual(44);
     }
   });
 }
 
-// Lead visual review: at desktop widths every rail tab fits the rail, the legend starts
-// folded, and the first view frames the fleet instead of a few trucks in a corner.
+// Lead visual review: the first view frames the fleet in the map area the panels leave free,
+// instead of a few trucks in a corner or under the needs-you panel.
 for (const width of [1280, 1440]) {
-  test(`at ${width} px the rail tabs fit, the legend is folded and the fleet is framed`, async ({ page }) => {
+  test(`at ${width} px the fleet is framed beside the needs-you panel`, async ({ page }) => {
     test.setTimeout(90000);
     await page.setViewportSize({ width, height: 900 });
     await signIn(page);
-    await expect(page.locator("[data-metric=queue]")).toBeVisible({ timeout: 60000 });
-
-    const legend = page.getByTestId("map-legend");
-    await expect(legend).not.toHaveAttribute("open", "");
-    await legend.locator("summary").click();
-    const legendFits = await page.evaluate(() => {
-      const body = document.querySelector("[data-testid=map-legend] .map-key-body").getBoundingClientRect();
-      const stage = document.querySelector("[data-testid=fleet-map-stage]").getBoundingClientRect();
-      return body.bottom <= stage.bottom;
-    });
-    expect(legendFits).toBe(true);
-    await legend.locator("summary").click();
-
-    for (const tab of ["Perlu tindakan", "Truk", "Antrean TPA"]) {
-      await page.getByRole("tab", { name: tab }).click();
-      await page.waitForTimeout(tab === "Antrean TPA" ? 2500 : 500);
-      const overflow = await page.evaluate(() => {
-        const panel = document.querySelector(".fleet-rail .rail-panel");
-        const edge = panel.getBoundingClientRect().right;
-        const wide = [...panel.querySelectorAll("*")].filter((el) => {
-          if (el.closest(".table-wrap")) return false; // tables scroll inside their own frame
-          const r = el.getBoundingClientRect();
-          return r.width > 0 && r.right > edge + 1;
-        });
-        return { scroll: panel.scrollWidth - panel.clientWidth, wide: wide.length };
-      });
-      expect(overflow, `${tab} overflows the rail`).toEqual({ scroll: 0, wide: 0 });
-    }
-
-    // The first view holds the visible trucks: most markers sit inside the map, not a corner.
+    await expect(page.locator(".truck-marker").first()).toBeVisible({ timeout: 60000 });
+    await page.waitForTimeout(1500);
     const framing = await page.evaluate(() => {
       const stage = document.querySelector("[data-testid=fleet-map-stage]").getBoundingClientRect();
+      const panel = document.querySelector("[data-testid=needs-you]").getBoundingClientRect();
       const markers = [...document.querySelectorAll(".truck-marker")].map((m) => m.getBoundingClientRect());
       const inside = markers.filter(
         (r) =>
@@ -384,11 +267,13 @@ for (const width of [1280, 1440]) {
       return {
         total: markers.length,
         inside: inside.length,
+        underPanel: inside.filter((r) => r.right <= panel.right).length,
         spread: xs.length ? (Math.max(...xs) - Math.min(...xs)) / stage.width : 0,
       };
     });
     expect(framing.total).toBeGreaterThan(5);
     expect(framing.inside / framing.total).toBeGreaterThan(0.8);
+    expect(framing.underPanel / framing.total).toBeLessThan(0.2);
     expect(framing.spread).toBeGreaterThan(0.3);
   });
 }

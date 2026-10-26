@@ -20,7 +20,7 @@ async function signIn(page) {
     localStorage.setItem("pythia_token", token);
     localStorage.setItem("pythia_role", role);
   }, principal);
-  await page.goto("/fleet", { waitUntil: "domcontentloaded" });
+  await page.goto("/app/operations", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(
     () =>
       window.__pythiaMapPerf &&
@@ -89,13 +89,13 @@ test("reduced motion: no cruise, trucks sit on their reported fix", async ({ pag
 });
 
 // wave11 map cap: the founder asked for a lighter map. It draws at most 10 trucks, the
-// off-corridor truck always among them, and the legend says how many of the fleet are shown.
+// off-corridor truck always among them, and the legend says how many of the fleet are shown
+// (wave 13: the Operations map's one-line legend, always open).
 test("the map draws at most ten trucks and keeps the off-corridor one", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);
   const markers = page.locator(".truck-marker:not(.event-permit-marker)");
   expect(await markers.count()).toBeLessThanOrEqual(10);
   await expect(page.locator('.truck-marker[aria-label^="T-047"]')).toHaveCount(1);
-  await page.getByTestId("map-legend").locator("summary").click();
   await expect(page.getByTestId("map-fleet-denominator")).toHaveText(/^10 dari \d+ ditampilkan/);
 });

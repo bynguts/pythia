@@ -1,6 +1,6 @@
-// wave9 map clarity: an SPJ route numbers only its planned stops, the waste-levy
-// registry is off until asked for, a localized legend explains the layers, and
-// the map chrome never overlaps on a phone.
+// wave9 map clarity, wave 13 Operations: an SPJ route numbers only its planned stops, the
+// reference layers stay off on the Operations map, the one-line legend explains what is
+// drawn in both languages, and the floating map chrome never overlaps.
 import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
@@ -69,7 +69,7 @@ async function stubRoutes(page) {
       return; // the sign-in reload abandoned this request; the next poll is stubbed
     }
     const decision = {
-      id: "ALT-CLARITY",
+      id: "ALT-T-047",
       type: "route_deviation",
       severity: "critical",
       truck_code: "T-047",
@@ -99,7 +99,7 @@ async function stubRoutes(page) {
 test("an SPJ route numbers only its planned stops, capped per SPJ", async ({ page }) => {
   await stubRoutes(page);
   await signIn(page);
-  await page.goto("/fleet", { waitUntil: "domcontentloaded" });
+  await page.goto("/app/operations", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => window.__pythiaSpjMap?.routes === 2, null, { timeout: 30000 });
   const spj = await page.evaluate(() => window.__pythiaSpjMap);
   const labels = spj.stopLabels.map(Number);
@@ -110,104 +110,85 @@ test("an SPJ route numbers only its planned stops, capped per SPJ", async ({ pag
   expect(spj.destinations).toBe(2);
 });
 
-test("the waste-levy registry layer is hidden until switched on", async ({ page }) => {
+// wave 13: the Operations map shows the fleet and its decisions; the registry, TPS and
+// heat layers stay off and the legend never explains a hidden layer.
+test("the reference layers stay off on the Operations map", async ({ page }) => {
   await signIn(page);
-  await page.goto("/fleet", { waitUntil: "domcontentloaded" });
-  await page.waitForFunction(() => Boolean(window.__pythiaMap?.getLayer?.("wr-clusters")), null, {
-    timeout: 30000,
-  });
+  await page.goto("/app/operations", { waitUntil: "domcontentloaded" });
   const visibility = () =>
     page.evaluate(() =>
-      ["wr-clusters", "wr-cluster-count", "wr-unclustered-point"].map((id) =>
-        window.__pythiaMap.getLayoutProperty(id, "visibility"),
+      ["wr-clusters", "wr-unclustered-point", "tps-layer", "kelurahan-heatmap-fill"].map((id) =>
+        window.__pythiaMap?.getLayer(id) ? window.__pythiaMap.getLayoutProperty(id, "visibility") : "missing",
       ),
     );
-  expect(await visibility()).toEqual(["none", "none", "none"]);
+  await expect.poll(visibility, { timeout: 30000 }).toEqual(["none", "none", "none", "none"]);
   const legend = page.getByTestId("map-legend");
-  await expect(legend.locator('[data-layer="wr"]')).toHaveCount(0);
-
-  await page.getByTestId("deck-tools-toggle").click();
-  await page.getByTestId("deck-tools-panel").getByLabel("Usaha wajib retribusi sampah").check();
-  await expect.poll(visibility).toEqual(["visible", "visible", "visible"]);
-  await expect(legend.locator('[data-layer="wr"]')).toHaveCount(1);
+  await expect(legend.locator('[data-layer="wr"], [data-layer="tps"]')).toHaveCount(0);
+  await expect(page.getByTestId("deck-tools-toggle")).toHaveCount(0);
 });
 
-test("the legend explains the default layers in both languages", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+test("the legend explains the drawn layers in both languages", async ({ page }) => {
   await stubRoutes(page);
-  await signIn(page, "id");
-  await page.goto("/fleet", { waitUntil: "domcontentloaded" });
-  // The decision route (and its legend row) comes with the live snapshot, not the offline sample.
-  await expect(page.getByTestId("map-route-card")).toBeVisible({ timeout: 30000 });
-  const summary = page.getByTestId("map-legend").locator("summary");
-  await expect(summary).toHaveAttribute("aria-label", "Legenda peta");
-  // Folded on a phone, one tap away.
-  await expect(page.getByTestId("map-legend")).not.toHaveAttribute("open", "");
-  await summary.click();
-  const body = page.getByTestId("map-legend").locator(".map-key-body");
-  await expect(body).toBeVisible();
-  for (const text of ["Truk sesuai rute", "Truk keluar koridor", "Rute SPJ aktif", "Titik angkut SPJ"]) {
-    await expect(body).toContainText(text);
-  }
-  await expect(body).toContainText("Rute usulan (keputusan terpilih)");
-  // One fleet denominator everywhere (shown of total, then active / total units).
-  await expect(page.getByTestId("map-fleet-denominator")).toHaveText(
-    /^\d+ dari (\d+) ditampilkan · \d+ aktif \/ \1 unit$/,
-  );
-  const card = page.getByTestId("map-route-card");
-  await expect(card).toContainText("Rute B · pemulihan via Daan Mogot");
-  await expect(card).toContainText("mnt");
-  await expect(card).not.toContainText("Recovery");
+  await signIn(page);
+  await page.goto("/app/operations", { waitUntil: "domcontentloaded" });
+  const legend = page.getByTestId("map-legend");
+  await expect(legend.locator('[data-layer="osrm"]')).toHaveText("Rute usulan", { timeout: 30000 });
+  await expect(legend.locator('[data-layer="corridor"]')).toHaveText("Koridor rencana");
+  await expect(legend).toHaveAttribute("aria-label", "Legenda peta");
+  await expect(page.getByTestId("map-fleet-denominator")).toHaveText(/^\d+ dari \d+ ditampilkan$/);
+  await expect(page.getByTestId("decision-route-name")).toContainText("Rute B · pemulihan via Daan Mogot");
+  await expect(page.getByTestId("decision-route-name")).not.toContainText("Recovery");
 
-  await page.evaluate(() => localStorage.setItem("pythia_lang", "en"));
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.getByTestId("map-legend").locator("summary")).toHaveAttribute("aria-label", "Map legend");
-  await page.getByTestId("map-legend").locator("summary").click();
-  await expect(page.getByTestId("map-legend")).toContainText("Active SPJ route");
-  await expect(page.getByTestId("map-route-card")).toContainText("Route B · recovery via Daan Mogot", {
-    timeout: 30000,
-  });
+  await page.getByTestId("profile-button").click();
+  await page.getByTestId("profile-lang-en").click();
+  await expect(legend.locator('[data-layer="osrm"]')).toHaveText("Suggested route");
+  await expect(legend).toHaveAttribute("aria-label", "Map legend");
+  await expect(page.getByTestId("decision-route-name")).toContainText("Route B · recovery via Daan Mogot");
+  await expect(page.getByTestId("map-gps-soon")).toHaveText(/Coming soon\s*Live GPS tracking/);
 });
 
-for (const width of [390, 320]) {
+const CHROME = {
+  soon: "[data-testid=map-gps-soon]",
+  zoom: ".ops-map-zoom",
+  legend: "[data-testid=map-legend]",
+  needs: "[data-testid=needs-you]",
+  gate: ".ops-corner",
+};
+
+for (const [width, height, inside] of [
+  [1440, 960, ["soon", "zoom", "legend", "needs", "gate"]],
+  [390, 844, ["soon", "zoom", "legend"]],
+  [320, 700, ["soon", "zoom", "legend"]],
+]) {
   test(`map chrome does not overlap at ${width} px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 844 });
+    await page.setViewportSize({ width, height });
     await stubRoutes(page);
     await signIn(page);
-    await page.goto("/fleet", { waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("map-route-card")).toBeVisible({ timeout: 30000 });
-    await expect(page.locator(".map-data-notice")).toContainText("Data simulasi");
-    await expect(page.locator(".maplibregl-ctrl-top-right .map-reset-btn")).toBeVisible();
+    await page.goto("/app/operations", { waitUntil: "domcontentloaded" });
+    await expect(page.locator('[data-testid=map-legend] [data-layer="osrm"]')).toBeVisible({
+      timeout: 30000,
+    });
+    await expect(page.locator(".truck-marker[data-provenance=simulated]").first()).toBeVisible();
 
-    const boxes = await page.evaluate(() => {
-      const selectors = {
-        notice: ".map-data-notice",
-        search: ".map-search",
-        legend: "[data-testid=map-legend] > summary",
-        routeCard: "[data-testid=map-route-card]",
-        layers: "[data-testid=deck-tools-toggle]",
-        controls: ".maplibregl-ctrl-top-right",
-      };
+    const boxes = await page.evaluate((selectors) => {
       const out = {};
       for (const [name, selector] of Object.entries(selectors)) {
         const box = document.querySelector(selector)?.getBoundingClientRect();
         if (box) out[name] = { x: box.x, y: box.y, right: box.right, bottom: box.bottom };
       }
       const stage = document.querySelector("[data-testid=fleet-map-stage]").getBoundingClientRect();
-      return { out, stage: { x: stage.x, right: stage.right } };
-    });
-    expect(Object.keys(boxes.out).sort()).toEqual(
-      ["controls", "layers", "legend", "notice", "routeCard", "search"].sort(),
-    );
-    const names = Object.keys(boxes.out);
-    for (let i = 0; i < names.length; i += 1) {
-      const a = boxes.out[names[i]];
-      expect(a.x, `${names[i]} starts inside the map`).toBeGreaterThanOrEqual(boxes.stage.x - 1);
-      expect(a.right, `${names[i]} ends inside the map`).toBeLessThanOrEqual(boxes.stage.right + 1);
-      for (let j = i + 1; j < names.length; j += 1) {
-        const b = boxes.out[names[j]];
+      return { out, stage: { x: stage.x, y: stage.y, right: stage.right, bottom: stage.bottom } };
+    }, CHROME);
+    expect(Object.keys(boxes.out).sort()).toEqual(Object.keys(CHROME).sort());
+    for (let i = 0; i < inside.length; i += 1) {
+      const a = boxes.out[inside[i]];
+      expect(a.x, `${inside[i]} starts inside the map`).toBeGreaterThanOrEqual(boxes.stage.x - 1);
+      expect(a.right, `${inside[i]} ends inside the map`).toBeLessThanOrEqual(boxes.stage.right + 1);
+      expect(a.bottom, `${inside[i]} ends above the map's foot`).toBeLessThanOrEqual(boxes.stage.bottom + 1);
+      for (let j = i + 1; j < inside.length; j += 1) {
+        const b = boxes.out[inside[j]];
         const overlap = a.x < b.right - 1 && b.x < a.right - 1 && a.y < b.bottom - 1 && b.y < a.bottom - 1;
-        expect(overlap, `${names[i]} ${JSON.stringify(a)} overlaps ${names[j]} ${JSON.stringify(b)}`).toBe(
+        expect(overlap, `${inside[i]} ${JSON.stringify(a)} overlaps ${inside[j]} ${JSON.stringify(b)}`).toBe(
           false,
         );
       }
