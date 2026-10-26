@@ -246,6 +246,11 @@
   border-radius: 14px;
   background: var(--f-paper);
 }
+.ui-kpi-strip.is-surface {
+  border: 1px solid var(--f-border);
+  border-radius: 10px;
+  background: var(--f-white);
+}
 .ui-kpi {
   display: flex;
   flex: 1 1 0;

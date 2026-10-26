@@ -36,6 +36,8 @@ export const fId = {
   f_sync_of: "{n} dari {m} ponsel tersinkron",
   f_sync_one: "1 ponsel tersinkron",
   f_sync_hint: "Truk yang aplikasi sopirnya menghubungi server ini dalam {m} menit terakhir",
+  f_driver_n: "Pengemudi {n}",
+  f_driver_simulated: "Pengemudi simulasi: nama pengganti armada demo",
   f_bell: "Perlu tindakan Anda",
   f_ask_ana: "Tanya Ana",
   f_ana_title: "Ana",

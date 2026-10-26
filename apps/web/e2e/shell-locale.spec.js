@@ -67,11 +67,13 @@ test("the phone sidebar opens from the menu button without horizontal overflow",
   await signIn(page, { lang: "en" });
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 844 });
+    await page.goto("/app/settings?from=test");
     await expect(page.getByTestId("workspace-navigation")).toBeHidden();
     await page.getByRole("button", { name: "Open the menu" }).click();
-    await expect(page.getByTestId("nav-tomorrow")).toBeVisible();
-    await page.getByTestId("nav-tomorrow").click();
-    await expect(page).toHaveURL(/\/app\/tomorrow$/);
+    await expect(page.getByTestId("nav-settings")).toBeVisible();
+    // Settings: the shell is under test here, not a screen lane's page.
+    await page.getByTestId("nav-settings").click();
+    await expect(page).toHaveURL(/\/app\/settings$/);
     await expect(page.getByTestId("workspace-navigation")).toBeHidden();
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -101,7 +103,8 @@ test("supervisor mode is locked for a dispatcher and persists for a supervisor",
   await signIn(page, { lang: "en" });
   const toggle = page.getByTestId("supervisor-toggle");
   await expect(toggle).toHaveAttribute("aria-disabled", "true");
-  await toggle.click();
+  // aria-disabled keeps the tooltip reachable, so the click lands and does nothing.
+  await toggle.click({ force: true });
   await expect(toggle).toHaveAttribute("aria-checked", "false");
 
   await signIn(page, { role: "supervisor", lang: "en" });

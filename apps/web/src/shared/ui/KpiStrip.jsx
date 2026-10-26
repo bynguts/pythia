@@ -1,10 +1,16 @@
 /**
- * Flat paper strip of KPIs (usually 4) divided by hairlines. Children are <Kpi>.
- * @param {{ label?: string, className?: string, children: any }} props label: aria-label of the group.
+ * Flat strip of KPIs (usually 4) divided by hairlines. Children are <Kpi>.
+ * @param {{ label?: string, variant?: "paper"|"surface", className?: string, children: any }} props
+ *   label: aria-label of the group. variant: paper ground (Operations) or white with a
+ *   hairline border (Readiness, Fleet, Gate).
  */
-export function KpiStrip({ label, className = "", children, ...rest }) {
+export function KpiStrip({ label, variant = "paper", className = "", children, ...rest }) {
   return (
-    <section className={`ui-kpi-strip ${className}`.trim()} aria-label={label} {...rest}>
+    <section
+      className={`ui-kpi-strip${variant === "surface" ? " is-surface" : ""} ${className}`.trim()}
+      aria-label={label}
+      {...rest}
+    >
       {children}
     </section>
   );

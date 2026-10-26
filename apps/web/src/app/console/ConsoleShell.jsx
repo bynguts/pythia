@@ -141,10 +141,15 @@ export function ConsoleShell({ page, onLogout }) {
     };
   }, [setNavCount]);
 
-  useEffect(() => {
-    setSubtitle(null);
-    setNavOpen(false);
-  }, [page]);
+  // Reset in the cleanup: it runs before the next page's mount effects, which may
+  // set their own subtitle (a parent's effect would run after them and wipe it).
+  useEffect(
+    () => () => {
+      setSubtitle(null);
+      setNavOpen(false);
+    },
+    [page],
+  );
 
   // ⌘K / Ctrl+K focuses the search box.
   useEffect(() => {
@@ -244,6 +249,7 @@ export function ConsoleShell({ page, onLogout }) {
         className="cx-nav-item"
         aria-current={id === page ? "page" : undefined}
         data-testid={`nav-${id}`}
+        onClick={() => setNavOpen(false)}
       >
         <span className="cx-nav-face">
           <Icon size={18} strokeWidth={1.75} aria-hidden="true" />

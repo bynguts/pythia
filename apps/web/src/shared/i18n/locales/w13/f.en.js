@@ -36,6 +36,8 @@ export const fEn = {
   f_sync_of: "{n} of {m} phones synced",
   f_sync_one: "1 phone synced",
   f_sync_hint: "Trucks whose driver app reached this server in the last {m} minutes",
+  f_driver_n: "Driver {n}",
+  f_driver_simulated: "Simulated driver: the demo fleet's placeholder name",
   f_bell: "Needs you",
   f_ask_ana: "Ask Ana",
   f_ana_title: "Ana",
