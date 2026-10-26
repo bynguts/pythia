@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Send } from "lucide-react";
 import { apiPost } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
@@ -15,10 +15,13 @@ export function InstructionDrawer({ open, onClose, truckCodes, role }) {
   const [text, setText] = useState("");
   const [status, setStatus] = useState({ busy: false, sent: null, error: null });
   const chosen = truck || truckCodes[0] || "";
+  // A double tap lands before the busy state renders; the ref keeps it to one dispatch.
+  const sending = useRef(false);
 
   async function submit(event) {
     event.preventDefault();
-    if (!chosen || !text.trim() || status.busy) return;
+    if (!chosen || !text.trim() || sending.current) return;
+    sending.current = true;
     setStatus({ busy: true, sent: null, error: null });
     try {
       await apiPost("/dispatch", {
@@ -34,6 +37,8 @@ export function InstructionDrawer({ open, onClose, truckCodes, role }) {
         sent: null,
         error: t(error?.status === 403 ? "s1_err_denied" : "s1_err_failed"),
       });
+    } finally {
+      sending.current = false;
     }
   }
 

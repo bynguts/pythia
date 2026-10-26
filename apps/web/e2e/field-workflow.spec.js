@@ -193,51 +193,38 @@ for (const [width, height] of [
   });
 }
 
-test("secondary alert action authenticates and persists one dispatch despite a double tap", async ({
-  page,
-}) => {
+// Wave 13: Operations sends a free-text instruction from its drawer; a double tap still
+// persists one dispatch, signed by the operator's role. (The old fleet action card that showed
+// the driver's READY/ISSUE answer is gone with the fleet deck.)
+test("a new instruction from Operations persists one dispatch despite a double tap", async ({ page }) => {
   const { api, token } = await authenticatedApi();
-  const key = `e2e-secondary-${Date.now()}`;
-  const alert = {
-    id: key,
-    truck_code: "T-210",
-    title: key,
-    description: `Follow up ${key}`,
-    severity: "warning",
-    recommended_routes: [],
-  };
-  await page.route("**/api/command-center", async (route) => {
-    const response = await route.fetch();
-    const snapshot = await response.json();
-    await route.fulfill({ response, json: { ...snapshot, alerts: [alert, ...snapshot.alerts] } });
-  });
+  const key = `e2e-instruction-${Date.now()}`;
   await page.goto("/");
   await page.evaluate((value) => {
     localStorage.setItem("pythia_token", value);
     localStorage.setItem("pythia_auth", "true");
     localStorage.setItem("pythia_role", "dispatcher");
+    localStorage.setItem("pythia_lang", "id");
   }, token);
-  await page.reload();
-  // wave9 fleet composition: the alert queue is the default "Perlu tindakan" rail tab;
-  // expanding a row shows its decision card with the one primary button.
-  const item = page.getByTestId("action-row").filter({ hasText: key });
-  await expect(item).toBeVisible({ timeout: 15000 });
-  await item.locator(".action-row-head").click();
-  await expect(item.getByTestId("action-card-button")).toBeVisible();
-  await page.evaluate((value) => {
-    const item = [...document.querySelectorAll("[data-testid=action-row]")].find((node) =>
-      node.textContent.includes(value),
-    );
-    const button = item.querySelector("[data-testid=action-card-button]");
+  await page.goto("/app/operations");
+  await page.getByTestId("ops-new-instruction").click();
+  const drawer = page.getByTestId("instruction-drawer");
+  await expect(drawer).toBeVisible();
+  // The truck list fills once the fleet snapshot is in.
+  await expect(drawer.getByTestId("instruction-truck")).toHaveValue(/^T-\d+$/, { timeout: 20000 });
+  const truck = await drawer.getByTestId("instruction-truck").inputValue();
+  await drawer.getByTestId("instruction-text").fill(`Follow up ${key}`);
+  await page.evaluate(() => {
+    const button = document.querySelector("[data-testid=instruction-send]");
     button.click();
     button.click();
-  }, key);
+  });
   let created;
   try {
     await expect
       .poll(
         async () => {
-          const response = await api.get(`${API}/dispatch/T-210`);
+          const response = await api.get(`${API}/dispatch/${truck}`);
           expect(response.ok()).toBeTruthy();
           const matches = (await response.json()).filter((dispatch) => dispatch.instruction.includes(key));
           created = matches[0];
@@ -246,68 +233,13 @@ test("secondary alert action authenticates and persists one dispatch despite a d
         { timeout: 15000 },
       )
       .toBe(1);
-    await expect(item.getByTestId("action-row-status")).toHaveText("Dikirim");
+    await expect(drawer.getByRole("status")).toContainText(truck);
     expect(created.manager_id).toBe("dispatcher");
   } finally {
     if (created)
       await api.post(`${API}/dispatch/${created.id}/confirm`, {
         data: { status: "READY", note: "E2E cleanup" },
       });
-    await api.dispose();
-  }
-});
-
-test("command-center action distinguishes field READY from ISSUE and shows the field note", async ({
-  page,
-}) => {
-  test.setTimeout(100000);
-  const { api, token } = await authenticatedApi();
-  await page.goto("/");
-  await page.evaluate((value) => {
-    localStorage.setItem("pythia_token", value);
-    localStorage.setItem("pythia_auth", "true");
-    localStorage.setItem("pythia_role", "dispatcher");
-    localStorage.setItem("pythia_lang", "id");
-  }, token);
-  const created = [];
-  try {
-    for (const status of ["READY", "ISSUE"]) {
-      await page.reload();
-      // Pin the explicit truck: live priority rankings may change while the
-      // acknowledgement is pending, but this card must keep its target.
-      await page
-        .locator('.truck-marker[aria-label^="T-047"]')
-        .first()
-        .evaluate((marker) => marker.click());
-      const card = page.getByTestId("action-card");
-      await expect(card.getByRole("button", { name: "Kirim rute ke sopir" })).toBeVisible({ timeout: 15000 });
-      const responsePromise = page.waitForResponse(
-        (response) => response.url().endsWith("/api/dispatch") && response.request().method() === "POST",
-      );
-      await card.getByRole("button", { name: "Kirim rute ke sopir" }).click();
-      const response = await responsePromise;
-      expect(response.status()).toBe(200);
-      const dispatch = await response.json();
-      created.push(dispatch.id);
-      await expect(card.getByTestId("action-card-sent")).toBeVisible();
-      const note = `E2E field ${status} ${Date.now()}`;
-      const confirm = await api.post(`${API}/dispatch/${dispatch.id}/confirm`, { data: { status, note } });
-      expect(confirm.ok()).toBeTruthy();
-      if (status === "READY") {
-        await expect(card.getByTestId("action-card-confirmed")).toBeVisible({ timeout: 25000 });
-        await expect(card.getByTestId("action-card-escalated")).toHaveCount(0);
-      } else {
-        await expect(card.getByTestId("action-card-escalated")).toContainText(note, { timeout: 25000 });
-        await expect(card.getByTestId("action-card-confirmed")).toHaveCount(0);
-      }
-    }
-  } finally {
-    for (const id of created) {
-      const response = await api.get(`${API}/dispatch/${id}/status`);
-      if (response.ok() && (await response.json()).field_status === "PENDING") {
-        await api.post(`${API}/dispatch/${id}/confirm`, { data: { status: "READY", note: "E2E cleanup" } });
-      }
-    }
     await api.dispose();
   }
 });
