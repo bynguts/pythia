@@ -1,12 +1,15 @@
 ﻿name: pythia-stack
 
-# Memory budget for a 2 vCPU / 4 GB server (OS itself takes ~0.5 GB):
-#   backend     1.2 GB   42 Prophet/XGBoost models, ~600 MB warmup peak
+# One-server deploy: backend (FastAPI), frontend (nginx serving the static build and
+# proxying /api), wa-gateway (Baileys). Settings come from deploy/.env (copy
+# deploy/.env.example); see deploy/README.md. Images build for the host's
+# architecture, so the same file works on amd64 and arm64 servers.
+#
+# Memory budget (caps), for a server with >= 4 GB:
+#   backend     1.5 GB   42 Prophet/XGBoost models (~600 MB warm-up peak) + AI engine
 #   frontend    64  MB   nginx serving a static build
 #   wa-gateway  384 MB   Baileys WhatsApp session
-#   scentinel   1.2 GB   gmsh mesh + case + API; the OpenFOAM solve runs in
-#                        its own container via the host engine socket
-#   caps total  2.85 GB  leaving ~1.6 GB headroom for the OpenFOAM solve
+#   scentinel   1.2 GB   optional profile; the OpenFOAM solve runs in its own container
 
 services:
   backend:
@@ -17,22 +20,28 @@ services:
         app: ../apps/api
         dataset: ../ml/data
     restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
     environment:
       PYTHIA_ALLOWED_ORIGINS: "${PYTHIA_ALLOWED_ORIGINS:-http://localhost}"
       # Durable stores live on the history volume, not the container's /tmp.
       PYTHIA_DB_PATH: /app/data/history/pythia_history.db
+      PYTHIA_DATA_DIR: /data
+      PYTHIA_AI_ENGINE: "${PYTHIA_AI_ENGINE:-on}"
+      # The gateway runs in its own container; the API never spawns a local one here.
       OPENWA_BASE_URL: "http://wa-gateway:2785/api"
-      OPENAI_BASE_URL: "${OPENAI_BASE_URL:-}"
-      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      PYTHIA_WA_AUTOSTART: "off"
     volumes:
       - pythia-history:/app/data/history
-    mem_limit: 1200m
+    mem_limit: 1500m
     cpus: 1.5
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
       interval: 30s
       timeout: 10s
-      start_period: 90s
+      # Model warm-up takes ~25 s on a laptop and several times that on a small ARM core.
+      start_period: 300s
       retries: 3
 
   frontend:
@@ -41,12 +50,17 @@ services:
       dockerfile: Dockerfile
       additional_contexts:
         app: ../apps/web
+      args:
+        VITE_PUBLIC_ORIGIN: "${VITE_PUBLIC_ORIGIN:-}"
+        VITE_CONTACT_URL: "${VITE_CONTACT_URL:-}"
     restart: unless-stopped
     depends_on:
       backend:
         condition: service_healthy
     ports:
-      - "80:80"
+      # Default 80 for a bare server. Behind a reverse proxy that already owns 80/443
+      # (Caddy, nginx), set PYTHIA_HTTP_BIND=127.0.0.1:8080 and proxy to it.
+      - "${PYTHIA_HTTP_BIND:-80}:80"
     mem_limit: 64m
     cpus: 0.3
 

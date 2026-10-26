@@ -11,6 +11,11 @@ RUN npm ci
 
 # Same-origin API: nginx proxies /api to the backend container.
 ENV VITE_API_URL=/api
+# Optional build-time settings from deploy/.env (see the root .env.example).
+ARG VITE_PUBLIC_ORIGIN=""
+ARG VITE_CONTACT_URL=""
+ENV VITE_PUBLIC_ORIGIN=$VITE_PUBLIC_ORIGIN \
+    VITE_CONTACT_URL=$VITE_CONTACT_URL
 
 COPY --from=app . .
 RUN npm run build

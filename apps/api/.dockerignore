@@ -1,0 +1,14 @@
+# The deploy image copies app/, knowledge/ and data/ only; keep secrets and local
+# state out of the build context anyway.
+.env
+.env.*
+users.json
+driver_contacts.json
+*.db
+*.db-*
+*.log
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.omc/
+tests/
