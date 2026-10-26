@@ -7,6 +7,8 @@ import { Button } from "../../shared/ui/Button.jsx";
 import { Card } from "../../shared/ui/Card.jsx";
 import { DataTable } from "../../shared/ui/DataTable.jsx";
 import { EmptyState } from "../../shared/ui/EmptyState.jsx";
+import { ErrorState } from "../../shared/ui/ErrorState.jsx";
+import { OfflineBanner } from "../../shared/ui/OfflineBanner.jsx";
 import { Kpi, KpiStrip } from "../../shared/ui/KpiStrip.jsx";
 import { Segmented } from "../../shared/ui/Segmented.jsx";
 import { Skeleton } from "../../shared/ui/Skeleton.jsx";
@@ -248,6 +250,10 @@ export function FleetScreen() {
   ];
 
   const dueList = due.data?.due || [];
+  const sources = [overview, damage, due, safety];
+  const noData = sources.every((source) => source.failed && !source.data);
+  const stale = !noData && sources.some((source) => source.failed && source.data);
+  const booting = sources.every((source) => !source.loaded);
 
   return (
     <div className="flt" data-testid="fleet-page">
@@ -279,196 +285,210 @@ export function FleetScreen() {
         </div>
       </div>
 
+      {stale && <OfflineBanner />}
       <p className="flt-notice" role="status" aria-live="polite" data-testid="fleet-notice">
         {notice}
       </p>
 
-      <KpiStrip label={t("s2_flt_kpis")} className="flt-kpis">
-        <Kpi
-          label={t("s2_kpi_roadworthy")}
-          value={stats.roadworthy == null ? "—" : `${stats.roadworthy} / ${total}`}
-          sub={damage.loaded ? fill(t("s2_kpi_roadworthy_sub"), { n: stats.openTruckCount }) : null}
-          testId="fleet-kpi-roadworthy"
+      {noData ? (
+        <ErrorState
+          title={t("s2_flt_error_title")}
+          reason={t("s2_error_reason")}
+          onRetry={refresh}
+          testId="fleet-error"
         />
-        <Kpi
-          label={t("s2_kpi_major")}
-          value={damage.loaded ? stats.majorCount : "—"}
-          sub={t("s2_kpi_major_sub")}
-          testId="fleet-kpi-major"
-        />
-        <Kpi
-          label={t("s2_kpi_service")}
-          value={due.data ? due.data.count : "—"}
-          sub={t("s2_kpi_service_sub")}
-          testId="fleet-kpi-service"
-        />
-        <Kpi
-          className={dutyAlerts ? "is-alert" : undefined}
-          label={t("s2_kpi_duty")}
-          value={dutyAlerts ?? "—"}
-          sub={
-            counts
-              ? fill(t("s2_kpi_duty_sub"), { n: counts.duty_blocked, h: Math.round(blockMin / 60) })
-              : null
-          }
-          testId="fleet-kpi-duty"
-        />
-      </KpiStrip>
+      ) : booting ? (
+        <Skeleton rows={5} />
+      ) : (
+        <>
+          <KpiStrip label={t("s2_flt_kpis")} className="flt-kpis">
+            <Kpi
+              label={t("s2_kpi_roadworthy")}
+              value={stats.roadworthy == null ? "—" : `${stats.roadworthy} / ${total}`}
+              sub={damage.loaded ? fill(t("s2_kpi_roadworthy_sub"), { n: stats.openTruckCount }) : null}
+              testId="fleet-kpi-roadworthy"
+            />
+            <Kpi
+              label={t("s2_kpi_major")}
+              value={damage.loaded ? stats.majorCount : "—"}
+              sub={t("s2_kpi_major_sub")}
+              testId="fleet-kpi-major"
+            />
+            <Kpi
+              label={t("s2_kpi_service")}
+              value={due.data ? due.data.count : "—"}
+              sub={t("s2_kpi_service_sub")}
+              testId="fleet-kpi-service"
+            />
+            <Kpi
+              className={dutyAlerts ? "is-alert" : undefined}
+              label={t("s2_kpi_duty")}
+              value={dutyAlerts ?? "—"}
+              sub={
+                counts
+                  ? fill(t("s2_kpi_duty_sub"), { n: counts.duty_blocked, h: Math.round(blockMin / 60) })
+                  : null
+              }
+              testId="fleet-kpi-duty"
+            />
+          </KpiStrip>
 
-      <div className="flt-grid">
-        <div className="flt-col">
-          <Card
-            title={t("s2_dmg_title")}
-            titleId="flt-dmg-title"
-            flush
-            actions={
-              <Segmented
-                label={t("s2_dmg_filter")}
-                value={tab}
-                onChange={setTab}
-                options={[
-                  {
-                    value: "open",
-                    label: t("s2_tab_open"),
-                    count: stats.open.length,
-                    testId: "damage-tab-open",
-                  },
-                  {
-                    value: "fixed",
-                    label: t("s2_tab_fixed"),
-                    count: stats.fixedThisWeek.length,
-                    testId: "damage-tab-fixed",
-                  },
-                ]}
-              />
-            }
-          >
-            {!damage.loaded ? (
-              <Skeleton rows={3} />
-            ) : (
-              <DataTable
-                testId="damage-table"
-                caption={t("s2_dmg_title")}
-                columns={damageColumns}
-                rows={rows}
-                rowKey={(r) => r.report_id}
-                empty={
-                  <EmptyState
-                    title={t(tab === "open" ? "s2_dmg_empty_title" : "s2_dmg_none_title")}
-                    body={t("s2_dmg_empty_body")}
+          <div className="flt-grid">
+            <div className="flt-col">
+              <Card
+                title={t("s2_dmg_title")}
+                titleId="flt-dmg-title"
+                flush
+                actions={
+                  <Segmented
+                    label={t("s2_dmg_filter")}
+                    value={tab}
+                    onChange={setTab}
+                    options={[
+                      {
+                        value: "open",
+                        label: t("s2_tab_open"),
+                        count: stats.open.length,
+                        testId: "damage-tab-open",
+                      },
+                      {
+                        value: "fixed",
+                        label: t("s2_tab_fixed"),
+                        count: stats.fixedThisWeek.length,
+                        testId: "damage-tab-fixed",
+                      },
+                    ]}
                   />
                 }
-              />
-            )}
-          </Card>
-
-          <Card title={t("s2_week_title")} titleId="flt-week-title" aside={t("s2_week_aside")} flush>
-            {!canHistory ? (
-              <p className="flt-empty">{t("s2_week_forbidden")}</p>
-            ) : !week.loaded ? (
-              <Skeleton rows={3} />
-            ) : week.failed && !week.data ? (
-              <p className="flt-empty">{t("s2_week_failed")}</p>
-            ) : (
-              <div className="flt-scroll">
-                <DataTable
-                  testId="drivers-week"
-                  caption={t("s2_week_title")}
-                  columns={weekColumns}
-                  rows={weekRows}
-                  rowKey={(d) => d.driver_name}
-                  sticky
-                  empty={<EmptyState title={t("s2_week_empty_title")} body={t("s2_week_empty_body")} />}
-                />
-              </div>
-            )}
-          </Card>
-        </div>
-
-        <div className="flt-col">
-          <Card
-            title={t("s2_duty_title")}
-            titleId="flt-duty-title"
-            aside={
-              warnMin
-                ? fill(t("s2_duty_aside"), {
-                    warn: Math.round(warnMin / 60),
-                    stop: Math.round(blockMin / 60),
-                  })
-                : null
-            }
-            flush
-          >
-            <ul
-              className="flt-duty"
-              data-testid="duty-hours"
-              data-provenance={dutySimulated ? "simulated" : undefined}
-              title={dutySimulated ? t("s2_prov_duty") : undefined}
-            >
-              {duty.length === 0 && (
-                <li className="flt-empty">{safety.loaded ? t("s2_duty_empty") : t("s2_loading")}</li>
-              )}
-              {duty.map((row) => {
-                const tone = row.state === "blocked" ? "danger" : row.state === "warn" ? "warn" : "ok";
-                return (
-                  <li key={row.truck_code}>
-                    <div className="flt-duty-line">
-                      <span className="flt-duty-name">{row.name}</span>
-                      {row.state === "blocked" && (
-                        <Tag tone="danger">
-                          {t(row.override ? "s2_duty_override_tag" : "s2_duty_blocked_tag")}
-                        </Tag>
-                      )}
-                      {row.state === "warn" && <Tag tone="warn">{t("s2_duty_relief")}</Tag>}
-                      <span className={`flt-duty-time is-${tone}`}>{formatDuty(row.minutes)}</span>
-                    </div>
-                    <Bar value={row.minutes} max={scaleMax} tone={tone}>
-                      <span
-                        className="flt-mark"
-                        style={{ left: `${(warnMin / scaleMax) * 100}%` }}
-                        aria-hidden="true"
+              >
+                {!damage.loaded ? (
+                  <Skeleton rows={3} />
+                ) : (
+                  <DataTable
+                    testId="damage-table"
+                    caption={t("s2_dmg_title")}
+                    columns={damageColumns}
+                    rows={rows}
+                    rowKey={(r) => r.report_id}
+                    empty={
+                      <EmptyState
+                        title={t(tab === "open" ? "s2_dmg_empty_title" : "s2_dmg_none_title")}
+                        body={t("s2_dmg_empty_body")}
                       />
-                      <span
-                        className="flt-mark is-stop"
-                        style={{ left: `${(blockMin / scaleMax) * 100}%` }}
-                        aria-hidden="true"
-                      />
-                    </Bar>
-                  </li>
-                );
-              })}
-            </ul>
-          </Card>
+                    }
+                  />
+                )}
+              </Card>
 
-          <Card title={t("s2_due_title")} titleId="flt-due-title" aside={t("s2_due_aside")} flush>
-            <ul className="flt-due" data-testid="service-due">
-              {dueList.length === 0 && (
-                <li className="flt-empty">{due.loaded ? t("s2_due_empty") : t("s2_loading")}</li>
-              )}
-              {dueList.map((item) => {
-                const tone = item.days_left < 0 ? "danger" : item.days_left <= 1 ? "warn" : "idle";
-                const label =
-                  item.days_left < 0
-                    ? t("s2_due_overdue")
-                    : item.days_left === 0
-                      ? t("s2_due_today")
-                      : item.days_left === 1
-                        ? t("s2_due_tomorrow")
-                        : dueLabel(item.next_due_date, locale);
-                return (
-                  <li key={`${item.truck_code}-${item.component}`}>
-                    <strong>{item.truck_code}</strong>
-                    <span className="flt-clip" title={item.component}>
-                      {item.component}
-                    </span>
-                    <StatusDot tone={tone}>{label}</StatusDot>
-                  </li>
-                );
-              })}
-            </ul>
-          </Card>
-        </div>
-      </div>
+              <Card title={t("s2_week_title")} titleId="flt-week-title" aside={t("s2_week_aside")} flush>
+                {!canHistory ? (
+                  <p className="flt-empty">{t("s2_week_forbidden")}</p>
+                ) : !week.loaded ? (
+                  <Skeleton rows={3} />
+                ) : week.failed && !week.data ? (
+                  <p className="flt-empty">{t("s2_week_failed")}</p>
+                ) : (
+                  <div className="flt-scroll">
+                    <DataTable
+                      testId="drivers-week"
+                      caption={t("s2_week_title")}
+                      columns={weekColumns}
+                      rows={weekRows}
+                      rowKey={(d) => d.driver_name}
+                      sticky
+                      empty={<EmptyState title={t("s2_week_empty_title")} body={t("s2_week_empty_body")} />}
+                    />
+                  </div>
+                )}
+              </Card>
+            </div>
+
+            <div className="flt-col">
+              <Card
+                title={t("s2_duty_title")}
+                titleId="flt-duty-title"
+                aside={
+                  warnMin
+                    ? fill(t("s2_duty_aside"), {
+                        warn: Math.round(warnMin / 60),
+                        stop: Math.round(blockMin / 60),
+                      })
+                    : null
+                }
+                flush
+              >
+                <ul
+                  className="flt-duty"
+                  data-testid="duty-hours"
+                  data-provenance={dutySimulated ? "simulated" : undefined}
+                  title={dutySimulated ? t("s2_prov_duty") : undefined}
+                >
+                  {duty.length === 0 && (
+                    <li className="flt-empty">{safety.loaded ? t("s2_duty_empty") : t("s2_loading")}</li>
+                  )}
+                  {duty.map((row) => {
+                    const tone = row.state === "blocked" ? "danger" : row.state === "warn" ? "warn" : "ok";
+                    return (
+                      <li key={row.truck_code}>
+                        <div className="flt-duty-line">
+                          <span className="flt-duty-name">{row.name}</span>
+                          {row.state === "blocked" && (
+                            <Tag tone="danger">
+                              {t(row.override ? "s2_duty_override_tag" : "s2_duty_blocked_tag")}
+                            </Tag>
+                          )}
+                          {row.state === "warn" && <Tag tone="warn">{t("s2_duty_relief")}</Tag>}
+                          <span className={`flt-duty-time is-${tone}`}>{formatDuty(row.minutes)}</span>
+                        </div>
+                        <Bar value={row.minutes} max={scaleMax} tone={tone}>
+                          <span
+                            className="flt-mark"
+                            style={{ left: `${(warnMin / scaleMax) * 100}%` }}
+                            aria-hidden="true"
+                          />
+                          <span
+                            className="flt-mark is-stop"
+                            style={{ left: `${(blockMin / scaleMax) * 100}%` }}
+                            aria-hidden="true"
+                          />
+                        </Bar>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Card>
+
+              <Card title={t("s2_due_title")} titleId="flt-due-title" aside={t("s2_due_aside")} flush>
+                <ul className="flt-due" data-testid="service-due">
+                  {dueList.length === 0 && (
+                    <li className="flt-empty">{due.loaded ? t("s2_due_empty") : t("s2_loading")}</li>
+                  )}
+                  {dueList.map((item) => {
+                    const tone = item.days_left < 0 ? "danger" : item.days_left <= 1 ? "warn" : "idle";
+                    const label =
+                      item.days_left < 0
+                        ? t("s2_due_overdue")
+                        : item.days_left === 0
+                          ? t("s2_due_today")
+                          : item.days_left === 1
+                            ? t("s2_due_tomorrow")
+                            : dueLabel(item.next_due_date, locale);
+                    return (
+                      <li key={`${item.truck_code}-${item.component}`}>
+                        <strong>{item.truck_code}</strong>
+                        <span className="flt-clip" title={item.component}>
+                          {item.component}
+                        </span>
+                        <StatusDot tone={tone}>{label}</StatusDot>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Card>
+            </div>
+          </div>
+        </>
+      )}
 
       <LogDamageDrawer
         open={form === "damage"}

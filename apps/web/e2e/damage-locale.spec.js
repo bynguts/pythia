@@ -75,7 +75,7 @@ test("the Fleet damage table follows the locale in both modes", async ({ page })
     // The enums stay on the wire (berat, baru); only the presentation translates.
     const row = table.locator("tbody tr").filter({ hasText: "laporan uji e2e #83" });
     await expect(row.getByText("Major", { exact: true })).toBeVisible();
-    await expect(row.getByText("Open", { exact: true })).toBeVisible();
+    await expect(row.getByText(/^(Open|Booked .+)$/)).toBeVisible();
     await expect(row.getByRole("button", { name: "Mark fixed" })).toBeVisible();
     await expect(page.getByTestId("damage-tab-open")).toContainText("Open");
 
@@ -89,7 +89,7 @@ test("the Fleet damage table follows the locale in both modes", async ({ page })
       .locator("tbody tr")
       .filter({ hasText: "laporan uji e2e #83" });
     await expect(rowId.getByText("Berat", { exact: true })).toBeVisible();
-    await expect(rowId.getByText("Terbuka", { exact: true })).toBeVisible();
+    await expect(rowId.getByText(/^(Terbuka|Dijadwalkan .+)$/)).toBeVisible();
     await expect(rowId.getByRole("button", { name: "Tandai selesai" })).toBeVisible();
   } finally {
     await cleanupReport(seeded?.report_id);

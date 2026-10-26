@@ -107,6 +107,7 @@ export const s2Id = {
   s2_prov_zone: "Zona berasal dari armada simulasi.",
   s2_prov_duty: "Jam tugas disimulasikan sampai pengemudi memulai shift di aplikasi.",
 
+  s2_flt_error_title: "Armada tidak termuat",
   s2_flt_title: "Armada & pengemudi",
   s2_flt_trucks: "{n} truk",
   s2_flt_on_shift: "{n} bertugas",

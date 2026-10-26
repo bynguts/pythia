@@ -109,6 +109,7 @@ export const s2En = {
   s2_prov_duty: "Duty hours are simulated until drivers start shifts in the app.",
 
   // Fleet & drivers
+  s2_flt_error_title: "Fleet didn't load",
   s2_flt_title: "Fleet & drivers",
   s2_flt_trucks: "{n} trucks",
   s2_flt_on_shift: "{n} on shift",
