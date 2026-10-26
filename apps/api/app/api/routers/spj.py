@@ -31,6 +31,7 @@ from app.api.state import _refresh_fleet_caches, history_store
 from app.core.auth import has_permission
 from app.core.storage import StorageError
 from app.field import timbangan_ocr
+from app.field.receipt_checks import checks_for
 from app.field.spj import (
     SPJ_STORE,
     arrival_geotag,
@@ -86,11 +87,13 @@ class SpjReceiptReviewBody(BaseModel):
     tare_weight_kg: float | None = Field(default=None, gt=0, le=MAX_RECEIPT_WEIGHT_KG, allow_inf_nan=False)
 
 
-def _receipt_payload(receipt) -> dict[str, Any] | None:
+def _receipt_payload(receipt, spj=None) -> dict[str, Any] | None:
     """Receipt projection: metadata plus a retrieval reference, never the bytes.
 
     The image is multi-megabyte and lives in its own table; clients fetch it
-    from the receipt-photo endpoint only when they display it.
+    from the receipt-photo endpoint only when they display it. With ``spj`` it
+    also carries ``checks``: rule checks of the receipt against its work order,
+    the truck capacity and the sealed audit trail (app.field.receipt_checks).
     """
     if receipt is None:
         return None
@@ -110,6 +113,7 @@ def _receipt_payload(receipt) -> dict[str, Any] | None:
         # MODEL OUTPUT suggestion (status pending | unavailable | unreviewed |
         # confirmed | corrected); the weights above are only what was recorded.
         "ocr": receipt.get("ocr"),
+        "checks": checks_for(SPJ_STORE, spj) if spj is not None else None,
     }
 
 
@@ -121,7 +125,7 @@ def _spj_payload(spj) -> dict[str, Any]:
     (GPS vs "Approximate, not GPS", accuracy, distance to the stop).
     """
     payload = _asdict(spj)
-    payload["receipt"] = _receipt_payload(payload.get("receipt"))
+    payload["receipt"] = _receipt_payload(payload.get("receipt"), spj)
     for stop_payload, stop in zip(payload["stops"], spj.stops, strict=True):
         for _slot, record in evidence_photo_slots(stop_payload.get("evidence") or {}):
             record.pop("photo_b64", None)  # belt and braces: the store keeps none
@@ -402,6 +406,22 @@ def spj_audit(
     return {"spj_id": spj_id, "audit": SPJ_STORE.audit_log(spj_id), "plan_events": _plan_events(spj)}
 
 
+@router.get("/api/spj/{spj_id}/integrity")
+def spj_integrity(
+    spj_id: str,
+    principal: dict = Depends(require_any_principal("dispatch:confirm", "dispatch:create", "history:read")),
+) -> dict[str, Any]:
+    """Re-verify the SPJ's sealed audit trail and its receipt on every read.
+
+    ``chain_ok`` is false when any audit row was edited, removed from the middle
+    or written without its seal; ``receipt_photo_ok`` / ``receipt_weights_ok`` are
+    false when the stored receipt no longer matches what was sealed (null without
+    a receipt, or for one recorded before sealing). ``problems`` names each failure.
+    """
+    _readable_spj(spj_id, principal)
+    return SPJ_STORE.verify(spj_id)
+
+
 def _plan_events(spj) -> list[dict[str, Any]]:
     from app.api.state import _OPERATIONS_PLAN_STORE
 
@@ -488,7 +508,7 @@ def spj_evidence_summary(
         "spj_id": spj_id,
         "weigh_on_site": spj.weigh_on_site,
         "stops": stops,
-        "receipt": _receipt_payload(spj.receipt) if spj.receipt else None,
+        "receipt": _receipt_payload(spj.receipt, spj) if spj.receipt else None,
         "complete": all(s["has_arrival"] for s in stops) and len(stops) > 0,
     }
 
@@ -506,7 +526,9 @@ def _run_receipt_ocr(spj_id: str) -> None:
         else:
             image = photo if photo.startswith("data:") else f"data:image/jpeg;base64,{photo}"
             result = timbangan_ocr.read_weight_from_photo(image)
-            if result.get("weight_kg") is not None:
+            if result.get("document") == "not_a_ticket":
+                ocr = receipt_ocr_record("unavailable", "the photo is not a weighbridge ticket", result)
+            elif result.get("gross_kg") is not None or result.get("weight_kg") is not None:
                 ocr = receipt_ocr_record("unreviewed", result=result)
             elif result.get("confidence") == "failed":
                 ocr = receipt_ocr_record(
@@ -552,7 +574,7 @@ def submit_spj_receipt(
     ocr = (
         receipt_ocr_record("pending")
         if ocr_ready
-        else receipt_ocr_record("unavailable", "OCR engine not configured (GUTS_API_KEY is not set)")
+        else receipt_ocr_record("unavailable", "no ticket OCR engine is configured on this server")
     )
     recorded = _spj_or_409(
         SPJ_STORE.record_receipt,

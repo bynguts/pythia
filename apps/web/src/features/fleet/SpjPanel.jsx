@@ -321,6 +321,12 @@ export function ReceiptReview({ spj, act, pendingAction, words }) {
   // Receipts recorded before H10 carry only the legacy total (= gross).
   const recordedGross = receipt.gross_weight_kg ?? receipt.total_weight_kg;
   const ocr = receipt.ocr;
+  // Rule checks + seal verdict from the server (receipt.checks); null on payloads without them.
+  const checks = receipt.checks;
+  const failing = (checks?.checks || []).filter((c) => c.state === "fail");
+  const sealBroken = failing.some((c) => c.id === "sealed");
+  const sealed = checks?.checks?.some((c) => c.id === "sealed" && c.state === "pass");
+  const sealHead = sealed ? checks.integrity?.head_sha256 : null;
   const status = ocr?.status || "none";
   const reviewed = RECEIPT_REVIEWED.includes(status);
   const allowed = mayReviewReceipt();
@@ -328,6 +334,22 @@ export function ReceiptReview({ spj, act, pendingAction, words }) {
   const path = `/spj/${encodeURIComponent(spj.spj_id)}/receipt/review`;
   const number = (n) => Number(n).toLocaleString(lang === "en" ? "en-US" : "id-ID");
   const kg = (n) => (n == null ? t("spj7_receipt_not_recorded") : `${number(n)} kg`);
+  // A check's sentence from sl_check_<id>_<state> filled with its numbers; the server's
+  // English detail when there is no key or a number the sentence needs is missing.
+  const checkText = (c) => {
+    const key = `sl_check_${c.id}_${c.state}`;
+    const template = t(key);
+    if (template === key) return c.detail;
+    let missing = false;
+    const text = template.replace(/\{(\w+)\}/g, (_m, name) => {
+      const value = c.numbers?.[name];
+      if (value == null || (Array.isArray(value) && value.length === 0)) missing = true;
+      else if (Array.isArray(value)) return value.map((o) => o?.spj_number || o?.spj_id || o).join(", ");
+      else if (typeof value === "number") return number(value);
+      return value == null ? "" : String(value);
+    });
+    return missing ? c.detail : text;
+  };
 
   // Weights the driver recorded (typed, or a phone OCR reading the driver accepted) are
   // labelled as the driver's, not as the reviewer-side OCR, whenever that OCR has no reading.
@@ -400,6 +422,30 @@ export function ReceiptReview({ spj, act, pendingAction, words }) {
             {t("spj7_receipt_tare")} {kg(receipt.tare_weight_kg)} · {t("spj7_receipt_net")}{" "}
             {kg(receipt.net_weight_kg)}
           </p>
+          {checks && (
+            <p className="spj-hint" data-testid="spj-receipt-seal">
+              <span className={sealBroken ? "pill danger" : "pill"}>
+                {sealBroken
+                  ? t("sl_seal_broken")
+                  : sealHead
+                    ? t("sl_seal_ok").replace("{hash}", `sha256:${sealHead.slice(7, 15)}`)
+                    : t("sl_seal_legacy")}
+              </span>
+            </p>
+          )}
+          {failing.length > 0 && (
+            <div data-testid="spj-receipt-checks">
+              <p className="spj-hint">{t("sl_checks_title")}</p>
+              <ul>
+                {failing.map((c) => (
+                  <li key={c.id} data-testid={`spj-receipt-check-${c.id}`}>
+                    <strong>{t(`sl_check_${c.id}`)}:</strong> {checkText(c)}
+                    {c.uses_ocr && ` (${t("sl_check_ocr")})`}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
       {!reviewed && !allowed && <p className="spj-hint">{t("spj7_receipt_readonly")}</p>}

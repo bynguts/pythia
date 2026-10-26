@@ -13,7 +13,10 @@ audited.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import copy
+import hashlib
 import json
 import logging
 import os
@@ -55,19 +58,24 @@ WORLD_LNG_RANGE = (-180.0, 180.0)
 RECEIPT_OCR_CLASSIFICATION = "MODEL_OUTPUT"
 RECEIPT_OCR_LABEL = "MODEL OUTPUT: weighbridge-ticket OCR suggestion, not a recorded weight"
 RECEIPT_OCR_REVIEWED = ("confirmed", "corrected")
+RECEIPT_OCR_TICKET_FIELDS = ("ticket_no", "plate", "weighed_in_at", "weighed_out_at", "site", "document")
 
 
 def receipt_ocr_record(status: str, reason: str | None = None, result: dict | None = None) -> dict:
     """The stored OCR block: status pending | unavailable | unreviewed (| confirmed | corrected).
 
-    ``result`` is the timbangan OCR answer. It reads the gross weight only, so
-    ``tare_kg`` and ``net_kg`` stay null rather than being guessed.
+    ``result`` is the timbangan OCR answer. Every ticket field it could not read
+    stays null rather than being guessed; ``gross_kg`` falls back to the older
+    single ``weight_kg`` reading. ``document`` says what the photo showed
+    (weighbridge_ticket | scale_display | not_a_ticket | unreadable).
     """
     result = result or {}
+    gross = result.get("gross_kg")
     return {
-        "gross_kg": result.get("weight_kg"),
-        "tare_kg": None,
-        "net_kg": None,
+        "gross_kg": gross if gross is not None else result.get("weight_kg"),
+        "tare_kg": result.get("tare_kg"),
+        "net_kg": result.get("net_kg"),
+        **{key: result.get(key) for key in RECEIPT_OCR_TICKET_FIELDS},
         "confidence": result.get("confidence"),
         "source": result.get("source"),
         "classification": RECEIPT_OCR_CLASSIFICATION,
@@ -78,6 +86,13 @@ def receipt_ocr_record(status: str, reason: str | None = None, result: dict | No
         "reviewed_by": None,
         "reviewed_at": None,
     }
+
+
+def normalize_ticket_no(value) -> str | None:
+    """A weighbridge ticket number compared on letters and digits only, upper-cased."""
+    if not isinstance(value, str | int):
+        return None
+    return "".join(ch for ch in str(value).upper() if ch.isalnum()) or None
 
 
 def demo_stop_name(name: str) -> str:
@@ -230,6 +245,65 @@ def _validate_evidence(evidence: dict, demo: bool = False, weigh_on_site: bool =
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+# The audit trail is an append-only hash chain per SPJ: each row carries the
+# previous row's digest (``prev_sha256``; the first sealed row uses this all-zero
+# sentinel) and its own (``entry_sha256``, over the canonical JSON of the row's
+# fields plus ``prev_sha256``). Editing or deleting a row in the middle breaks the
+# chain, which SpjStore.verify reports instead of hiding.
+SEAL_SENTINEL = "sha256:" + "0" * 64
+
+
+def _sha256_field(data: bytes) -> str:
+    return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def _canonical(entry: dict) -> bytes:
+    """Sorted keys, no whitespace, no NaN: the bytes ``entry_sha256`` is taken over."""
+    return json.dumps(
+        entry, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    ).encode("utf-8")
+
+
+def audit_entry_digest(
+    spj_id: str, action: str, actor: str, reason: str, payload: str, created_at: str, prev_sha256: str
+) -> str:
+    """Digest of one audit row; ``payload`` is the JSON text exactly as stored."""
+    return _sha256_field(
+        _canonical(
+            {
+                "spj_id": spj_id,
+                "action": action,
+                "actor": actor,
+                "reason": reason,
+                "payload": payload,
+                "created_at": created_at,
+                "prev_sha256": prev_sha256,
+            }
+        )
+    )
+
+
+# Problems that mean the chain itself does not verify (the receipt ones compare data to it).
+_CHAIN_PROBLEMS = ("unsealed_entry", "chain_broken", "entry_digest_mismatch", "payload_unreadable")
+
+
+def _same_weight(stored, sealed) -> bool:
+    if stored is None or sealed is None:
+        return stored is None and sealed is None
+    return abs(float(stored) - float(sealed)) < 1e-6
+
+
+def photo_sha256(photo_b64: str) -> str:
+    """Digest of the decoded photo bytes (a data URL or bare base64); the raw string if not base64."""
+    _header, sep, data = photo_b64.partition(",")
+    data = (data if sep else photo_b64).strip()
+    try:
+        raw = base64.b64decode(data + "=" * (-len(data) % 4), validate=True)
+    except (binascii.Error, ValueError):
+        raw = photo_b64.encode("utf-8")
+    return _sha256_field(raw)
 
 
 def _today() -> str:
@@ -471,12 +545,37 @@ class SpjStore:
                         actor TEXT NOT NULL,
                         reason TEXT NOT NULL DEFAULT '',
                         payload TEXT NOT NULL DEFAULT '{}',
-                        created_at TEXT NOT NULL
+                        created_at TEXT NOT NULL,
+                        prev_sha256 TEXT,
+                        entry_sha256 TEXT
                     )
                     """
                 )
+                self._migrate_audit_seal(connection)
                 self._migrate_receipt_columns(connection)
                 self._migrate_inline_photos(connection)
+
+    @staticmethod
+    def _migrate_audit_seal(connection: sqlite3.Connection) -> None:
+        """Existing databases gain the seal columns; rows written before stay unsealed (legacy).
+
+        ``spj_audit_seal`` remembers the first audit id written with sealing on, so
+        a row from then on with its digests wiped cannot pass as a legacy row.
+        """
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(spj_audit)")}
+        for col in ("prev_sha256", "entry_sha256"):
+            if col not in columns:
+                try:
+                    connection.execute(f"ALTER TABLE spj_audit ADD COLUMN {col} TEXT")
+                except sqlite3.OperationalError as exc:
+                    # Another worker opening the same old database added it first.
+                    if "duplicate column" not in str(exc):
+                        raise
+        connection.execute("CREATE TABLE IF NOT EXISTS spj_audit_seal (sealed_from_id INTEGER NOT NULL)")
+        connection.execute(
+            "INSERT INTO spj_audit_seal (sealed_from_id) SELECT COALESCE(MAX(id), 0) + 1 FROM spj_audit "
+            "WHERE NOT EXISTS (SELECT 1 FROM spj_audit_seal)"
+        )
 
     @staticmethod
     def _migrate_receipt_columns(connection: sqlite3.Connection) -> None:
@@ -564,9 +663,29 @@ class SpjStore:
         reason: str = "",
         payload: dict | None = None,
     ) -> None:
+        # Runs inside the mutation's BEGIN IMMEDIATE, so no other writer can slip
+        # a row between reading the last digest and appending this one.
+        last = connection.execute(
+            "SELECT entry_sha256 FROM spj_audit WHERE spj_id=? AND entry_sha256 IS NOT NULL "
+            "ORDER BY id DESC LIMIT 1",
+            (spj_id,),
+        ).fetchone()
+        prev = last["entry_sha256"] if last else SEAL_SENTINEL
+        stored = json.dumps(payload or {})
+        created_at = _utc_now()
         connection.execute(
-            "INSERT INTO spj_audit (spj_id, action, actor, reason, payload, created_at) VALUES (?,?,?,?,?,?)",
-            (spj_id, action, actor, reason, json.dumps(payload or {}), _utc_now()),
+            "INSERT INTO spj_audit (spj_id, action, actor, reason, payload, created_at, prev_sha256, "
+            "entry_sha256) VALUES (?,?,?,?,?,?,?,?)",
+            (
+                spj_id,
+                action,
+                actor,
+                reason,
+                stored,
+                created_at,
+                prev,
+                audit_entry_digest(spj_id, action, actor, reason, stored, created_at, prev),
+            ),
         )
 
     def audit_log(self, spj_id: str) -> list[dict]:
@@ -586,6 +705,150 @@ class SpjStore:
             }
             for r in rows
         ]
+
+    def verify(self, spj_id: str) -> dict:
+        """Re-verify the sealed audit chain of one SPJ and its receipt against it.
+
+        Nothing is hidden: every row is checked and each failure adds a short code
+        to ``problems``. Rows without digests (``legacy_unsealed``) are accepted
+        only when written before sealing existed and before the first sealed row.
+        ``receipt_photo_ok`` / ``receipt_weights_ok`` compare the stored receipt
+        with the latest sealed ``receipt`` / ``receipt_review`` entry; null when
+        there is no receipt or it was recorded before sealing.
+        """
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT id, spj_id, action, actor, reason, payload, created_at, prev_sha256, entry_sha256 "
+                "FROM spj_audit WHERE spj_id=? ORDER BY id",
+                (spj_id,),
+            ).fetchall()
+            sealed_from = connection.execute("SELECT MIN(sealed_from_id) FROM spj_audit_seal").fetchone()[0]
+            receipt = connection.execute(
+                "SELECT photo_b64, total_weight_kg, gross_weight_kg, tare_weight_kg, net_weight_kg "
+                "FROM spj_receipts WHERE spj_id=?",
+                (spj_id,),
+            ).fetchone()
+        problems: list[str] = []
+        prev = SEAL_SENTINEL
+        sealed = legacy = 0
+        sealed_photo = sealed_weights = None
+        legacy_receipt = False
+        for row in rows:
+            if row["entry_sha256"] is None and row["prev_sha256"] is None:
+                legacy += 1
+                if sealed or sealed_from is None or row["id"] >= sealed_from:
+                    problems.append("unsealed_entry")
+                legacy_receipt = legacy_receipt or row["action"] == "receipt"
+                continue
+            sealed += 1
+            if row["prev_sha256"] != prev:
+                problems.append("chain_broken")
+            expected = audit_entry_digest(
+                row["spj_id"],
+                row["action"],
+                row["actor"],
+                row["reason"],
+                row["payload"],
+                row["created_at"],
+                row["prev_sha256"] or "",
+            )
+            if expected != row["entry_sha256"]:
+                problems.append("entry_digest_mismatch")
+            prev = row["entry_sha256"]
+            if row["action"] not in ("receipt", "receipt_review"):
+                continue
+            try:
+                payload = json.loads(row["payload"])
+            except (TypeError, ValueError):
+                problems.append("payload_unreadable")
+                continue
+            if row["action"] == "receipt":
+                sealed_photo = payload.get("photo_sha256")
+                gross = payload.get("total_weight_kg")
+                sealed_weights = (gross, payload.get("tare_weight_kg"), payload.get("net_weight_kg"))
+            else:
+                recorded = payload.get("recorded") or {}
+                sealed_weights = (
+                    recorded.get("gross_weight_kg"),
+                    recorded.get("tare_weight_kg"),
+                    recorded.get("net_weight_kg"),
+                )
+        photo_ok = weights_ok = None
+        if receipt is not None:
+            if sealed_photo is not None:
+                photo_ok = photo_sha256(receipt["photo_b64"] or "") == sealed_photo
+            elif not legacy_receipt:
+                photo_ok = False  # a receipt the sealed trail never recorded
+            if sealed_weights is not None:
+                gross, tare, net = sealed_weights
+                weights_ok = all(
+                    _same_weight(stored, sealed)
+                    for stored, sealed in (
+                        (receipt["total_weight_kg"], gross),
+                        (receipt["gross_weight_kg"], gross),
+                        (receipt["tare_weight_kg"], tare),
+                        (receipt["net_weight_kg"], net),
+                    )
+                )
+            elif not legacy_receipt:
+                weights_ok = False
+            if photo_ok is False:
+                problems.append("receipt_photo_changed")
+            if weights_ok is False:
+                problems.append("receipt_weights_changed")
+        return {
+            "spj_id": spj_id,
+            "chain_ok": not any(p in problems for p in _CHAIN_PROBLEMS),
+            "sealed_entries": sealed,
+            "legacy_unsealed": legacy,
+            "receipt_photo_ok": photo_ok,
+            "receipt_weights_ok": weights_ok,
+            "receipt_photo_sha256": sealed_photo,
+            # The newest sealed digest: it commits to every sealed row before it.
+            "head_sha256": prev if sealed else None,
+            "problems": list(dict.fromkeys(problems)),
+        }
+
+    def sealed_receipt_photos(self) -> dict[str, list[dict]]:
+        """photo_sha256 -> the SPJs whose sealed ``receipt`` entry carries it."""
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT a.spj_id, s.spj_number, a.payload FROM spj_audit a JOIN spj s ON s.spj_id = a.spj_id "
+                "WHERE a.action='receipt' AND a.entry_sha256 IS NOT NULL ORDER BY a.id"
+            ).fetchall()
+        photos: dict[str, list[dict]] = {}
+        for row in rows:
+            try:
+                digest = json.loads(row["payload"]).get("photo_sha256")
+            except (TypeError, ValueError, AttributeError):
+                continue
+            if digest:
+                photos.setdefault(digest, []).append(
+                    {"spj_id": row["spj_id"], "spj_number": row["spj_number"]}
+                )
+        return photos
+
+    def receipt_ticket_numbers(self) -> dict[str, list[dict]]:
+        """Ticket number as the receipt OCR read it (MODEL OUTPUT) -> the SPJs whose receipt carries it.
+
+        Numbers are compared on letters and digits only, upper-cased.
+        """
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT r.spj_id, s.spj_number, r.ocr FROM spj_receipts r JOIN spj s ON s.spj_id = r.spj_id "
+                "WHERE r.ocr IS NOT NULL"
+            ).fetchall()
+        tickets: dict[str, list[dict]] = {}
+        for row in rows:
+            try:
+                ticket = normalize_ticket_no(json.loads(row["ocr"]).get("ticket_no"))
+            except (TypeError, ValueError, AttributeError):
+                continue
+            if ticket:
+                tickets.setdefault(ticket, []).append(
+                    {"spj_id": row["spj_id"], "spj_number": row["spj_number"]}
+                )
+        return tickets
 
     @staticmethod
     def _row_to_spj(spj_row: sqlite3.Row, stop_rows: list, receipt_row: sqlite3.Row | None = None) -> Spj:
@@ -1260,6 +1523,7 @@ class SpjStore:
                     "net_weight_kg": net_weight_kg,
                     "weight_source": weight_source,
                     "photo_name": photo_name,
+                    "photo_sha256": photo_sha256(photo_b64),
                     "operation_id": operation_id,
                 },
             )
@@ -1297,7 +1561,17 @@ class SpjStore:
                 "receipt_ocr",
                 "system:ocr",
                 payload={
-                    key: stored.get(key) for key in ("status", "gross_kg", "confidence", "source", "reason")
+                    key: stored.get(key)
+                    for key in (
+                        "status",
+                        "gross_kg",
+                        "tare_kg",
+                        "net_kg",
+                        *RECEIPT_OCR_TICKET_FIELDS,
+                        "confidence",
+                        "source",
+                        "reason",
+                    )
                 },
             )
 

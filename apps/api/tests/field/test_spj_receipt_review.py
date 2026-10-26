@@ -229,7 +229,7 @@ def test_unconfigured_ocr_is_unavailable_and_never_fails_the_post(api_client, au
     )
     assert res.status_code == 201, res.text
     ocr = res.json()["receipt"]["ocr"]
-    assert ocr["status"] == "unavailable" and "GUTS_API_KEY" in ocr["reason"]
+    assert ocr["status"] == "unavailable" and "OCR" in ocr["reason"]
     assert ocr["gross_kg"] is None
 
     # Nothing to confirm; the reviewer reads the photo and corrects instead.
