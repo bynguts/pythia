@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 // #49: role-specific install entry points. The web app manifest must offer
 // Field and Driver shortcuts so installed apps can jump straight into the
 // right workspace. #85: install metadata (name/description/shortcuts) is
-// localized — ID default, EN opt-in via pythia_lang.
+// localized — EN default (wave 13), ID opt-in via pythia_lang.
 test("both manifests serve valid metadata with field and driver shortcuts", async ({ request }) => {
   for (const [href, lang, name] of [
     ["/manifest.id.webmanifest", "id", "Pythia"],
@@ -37,21 +37,21 @@ test("both manifests serve valid metadata with field and driver shortcuts", asyn
   }
 });
 
-test("default (no language set) installs with the Indonesian manifest", async ({ page }) => {
+test("default (no language set) installs with the English manifest", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.removeItem("pythia_lang"));
   await page.reload();
   const href = await page.evaluate(() => document.querySelector('link[rel="manifest"]')?.href);
-  expect(href).toContain("/manifest.id.webmanifest");
-  expect(await page.evaluate(() => document.documentElement.lang)).toBe("id");
+  expect(href).toMatch(/\/manifest\.webmanifest$/);
+  expect(await page.evaluate(() => document.documentElement.lang)).toBe("en");
 });
 
-test("switching to EN swaps install metadata to the English manifest", async ({ page }) => {
+test("switching to ID swaps install metadata to the Indonesian manifest", async ({ page }) => {
   await page.goto("/");
-  await page.evaluate(() => localStorage.setItem("pythia_lang", "en"));
+  await page.evaluate(() => localStorage.setItem("pythia_lang", "id"));
   await page.reload();
   const href = await page.evaluate(() => document.querySelector('link[rel="manifest"]')?.href);
-  expect(href).toContain("/manifest.webmanifest");
-  expect(await page.evaluate(() => document.documentElement.lang)).toBe("en");
+  expect(href).toContain("/manifest.id.webmanifest");
+  expect(await page.evaluate(() => document.documentElement.lang)).toBe("id");
   await page.evaluate(() => localStorage.removeItem("pythia_lang"));
 });

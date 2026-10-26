@@ -3,7 +3,8 @@ import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
-// Stored language is Indonesian (the default), so English can only come from ?lang=en.
+// Wave 13: English is the default, so the stored language here is Indonesian and
+// English can only come from ?lang=en.
 async function signIn(page) {
   await page.goto("/");
   const response = await page.request.post(`${API}/auth/login`, {
@@ -19,45 +20,49 @@ async function signIn(page) {
   }, principal);
 }
 
-function nav(page, name) {
-  return page.getByTestId("workspace-navigation").getByRole("button", { name, exact: true });
+function nav(page, id) {
+  return page.getByTestId("workspace-navigation").getByTestId(`nav-${id}`);
 }
 
-// wave9 fleet composition: the twin's nav label is "3D City" / "Kota 3D".
-for (const path of ["/fleet", "/twin"]) {
+for (const path of ["/app/operations", "/app/tomorrow"]) {
   test(`${path}?lang=en renders English navigation and ?lang=id switches back`, async ({ page }) => {
     await signIn(page);
 
     await page.goto(`${path}?lang=en`);
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
-    await expect(nav(page, "3D City")).toBeVisible();
-    await expect(nav(page, "Fleet")).toBeVisible();
-    await expect(nav(page, "Forecast")).toBeVisible();
-    await expect(nav(page, "Kota 3D")).toHaveCount(0);
+    await expect(nav(page, "tomorrow")).toHaveText("Tomorrow");
+    await expect(nav(page, "fleet")).toHaveText("Fleet & drivers");
     expect(await page.evaluate(() => localStorage.getItem("pythia_lang"))).toBe("en");
 
     // The choice persists without the parameter.
     await page.goto(path);
-    await expect(nav(page, "3D City")).toBeVisible();
+    await expect(nav(page, "tomorrow")).toHaveText("Tomorrow");
 
     await page.goto(`${path}?lang=id`);
     await expect(page.locator("html")).toHaveAttribute("lang", "id");
-    await expect(nav(page, "Kota 3D")).toBeVisible();
-    await expect(nav(page, "Armada")).toBeVisible();
-    await expect(nav(page, "Prediksi")).toBeVisible();
+    await expect(nav(page, "tomorrow")).toHaveText("Besok");
+    await expect(nav(page, "fleet")).toHaveText("Armada & sopir");
     expect(await page.evaluate(() => localStorage.getItem("pythia_lang"))).toBe("id");
   });
 }
 
 test("an unknown ?lang value keeps the stored language", async ({ page }) => {
   await signIn(page);
-  await page.goto("/fleet?lang=fr");
+  await page.goto("/app/tomorrow?lang=fr");
   await expect(page.locator("html")).toHaveAttribute("lang", "id");
-  await expect(nav(page, "Armada")).toBeVisible();
+  await expect(nav(page, "tomorrow")).toHaveText("Besok");
 });
 
-test("?lang=en also applies on the signed-out login page", async ({ page }) => {
-  await page.goto("/fleet?lang=en");
+test("with no stored language the console opens in English", async ({ page }) => {
+  await signIn(page);
+  await page.evaluate(() => localStorage.removeItem("pythia_lang"));
+  await page.goto("/app/tomorrow");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await expect(page.getByRole("heading", { name: "Sign in to command center" })).toBeVisible();
+  await expect(nav(page, "tomorrow")).toHaveText("Tomorrow");
+});
+
+test("?lang=id also applies on the signed-out login gate", async ({ page }) => {
+  await page.goto("/app/tomorrow?lang=id");
+  await expect(page.locator("html")).toHaveAttribute("lang", "id");
+  await expect(page.locator('input[type="password"]')).toBeVisible();
 });

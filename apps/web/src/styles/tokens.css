@@ -1,30 +1,86 @@
 :root {
-  /* Forest palette (clean redesign): warm canvas, one forest accent. */
-  --ui-forest-900: #0f3b23;
-  --ui-forest-700: #16613a;
-  --ui-forest-500: #2fb36a;
-  --ui-forest-100: #ddf3e4;
-  --ui-cream: #f4ede3;
+  /* Wave 13 palette (docs/design/pythia-redesign.pen variables + export-handoff/html).
+     --f-* are the source of truth; the --ui-* names below are remapped onto them so
+     pre-redesign components inherit the new world. */
+  --f-white: #ffffff;
+  --f-paper: #f4f3ee;
+  --f-paper-2: #eae8df;
+  --f-sidebar: #f6f5f1;
+  --f-ink: #1c1b19;
+  --f-ink-2: #45433d;
+  /* Body copy on the console (design #3A3833) and icon stroke (#5B5850). */
+  --f-ink-3: #3a3833;
+  --f-icon: #5b5850;
+  --f-muted: #6b6860;
+  /* Design #8A867E fails AA for small text (3.6:1 on white); darkened to 5.1:1. */
+  --f-faint: #726e66;
+  /* Non-text decoration: separator dots, idle bullets. */
+  --f-dot: #b9b5ac;
+  --f-line: #dddad0;
+  --f-line-2: #e3e0d9;
+  --f-line-3: #ece9e2;
+  --f-border: #e6e3dc;
+  --f-control-line: #d8d5ce;
+  --f-head: #f7f6f2;
+  --f-hover: #f1efea;
+  --f-banner: #faf6ea;
+  --f-green: #1f6b45;
+  --f-green-2: #2a7f52;
+  --f-green-deep: #174f33;
+  --f-green-soft: #dcebdd;
+  --f-green-tint: #f1f7f2;
+  --f-green-live: #2a9d5c;
+  --f-green-bar: #a9d3b4;
+  --f-lime: #c9f27a;
+  --f-lime-2: #9fd45a;
+  --f-lime-soft: #e6f6c4;
+  --f-lime-ink: #3e6b12;
+  --f-orange: #e8772e;
+  --f-orange-pixel: #e8622a;
+  --f-amber: #9a5a0f;
+  --f-amber-soft: #f7e8cf;
+  --f-amber-ink: #8a5410;
+  --f-amber-pixel: #d9a441;
+  --f-red: #b83a2b;
+  --f-red-soft: #f6e1dc;
+  --f-red-ink: #b3381f;
+  --f-red-tint: #fbf4f2;
+  --f-blue: #2b5c9e;
+  --f-blue-soft: #e0e8f3;
+  --f-blue-ink: #2f5d8a;
+  --f-shadow-card: 0 1px 2px #1413120d, 0 8px 24px #1413120f;
+  --f-shadow-float: 0 8px 24px #1c1b1920, 0 1px 3px #1c1b1914;
+  --f-scrim: #edebe499;
+  --f-font-display: Archivo, ui-sans-serif, system-ui, sans-serif;
+  --f-font-body: Inter, ui-sans-serif, system-ui, sans-serif;
+  --f-sidebar-width: 248px;
+  --f-topbar-height: 56px;
 
-  --ui-primary: #1d2320;
-  --ui-primary-hover: #343c38;
-  --ui-accent: var(--ui-forest-700);
-  --ui-accent-hover: var(--ui-forest-900);
-  --ui-accent-strong: var(--ui-forest-900);
+  /* Legacy names, remapped. */
+  --ui-forest-900: var(--f-green-deep);
+  --ui-forest-700: var(--f-green);
+  --ui-forest-500: var(--f-green-live);
+  --ui-forest-100: var(--f-green-soft);
+  --ui-cream: var(--f-paper);
+
+  --ui-primary: var(--f-ink);
+  --ui-primary-hover: #2e2d2a;
+  --ui-accent: var(--f-green);
+  --ui-accent-hover: var(--f-green-deep);
+  --ui-accent-strong: var(--f-green-deep);
   --ui-accent-foreground: #ffffff;
-  --ui-accent-soft: var(--ui-forest-100);
-  --ui-canvas: #fbf9f5;
-  --ui-surface: #ffffff;
-  --ui-surface-muted: var(--ui-cream);
-  --ui-surface-dark: #1d2320;
-  --ui-border: #e6e0d6;
-  --ui-border-strong: #cdc5b8;
-  --ui-ink: #1d2320;
-  --ui-ink-soft: #4a524e;
-  /* Darkened from the mock's #6b736f so captions pass AA on cream (5.24:1). */
-  --ui-muted: #5c6460;
+  --ui-accent-soft: var(--f-green-soft);
+  --ui-canvas: var(--f-white);
+  --ui-surface: var(--f-white);
+  --ui-surface-muted: var(--f-paper);
+  --ui-surface-dark: var(--f-ink);
+  --ui-border: var(--f-border);
+  --ui-border-strong: var(--f-control-line);
+  --ui-ink: var(--f-ink);
+  --ui-ink-soft: var(--f-ink-2);
+  --ui-muted: var(--f-muted);
   --ui-on-dark: #ffffff;
-  --ui-on-dark-muted: #c9d6cf;
+  --ui-on-dark-muted: #d6d3cb;
   --fs-body: 15px;
   --fs-caption: 13px;
   --fs-kpi: 28px;
@@ -36,36 +92,36 @@
   --tap-min: 44px;
   /* Transparent ring inside a 44 px hit box: the drawn control is 34 px tall. */
   --tap-inset: 5px;
-  --ui-success: var(--ui-forest-700);
-  --ui-warning: #99500d;
-  --ui-warning-soft: #fff1de;
-  --ui-danger: #b42f2b;
-  --ui-danger-soft: #fbe7e5;
-  --ui-info: #1b6f84;
-  --ui-info-soft: #e2f0f3;
+  --ui-success: var(--f-green);
+  --ui-warning: var(--f-amber);
+  --ui-warning-soft: var(--f-amber-soft);
+  --ui-danger: var(--f-red);
+  --ui-danger-soft: var(--f-red-soft);
+  --ui-info: var(--f-blue);
+  --ui-info-soft: var(--f-blue-soft);
   /* Hairlines for status-tinted chips and notes (outlined, never filled heavy). */
-  --ui-success-line: #b7dcc4;
-  --ui-success-soft: #e8f3ec;
-  --ui-warning-line: #ebcb9f;
+  --ui-success-line: var(--f-green-bar);
+  --ui-success-soft: var(--f-green-tint);
+  --ui-warning-line: #eed9ae;
   --ui-danger-line: #efc2bf;
-  --ui-info-line: #b4d6df;
+  --ui-info-line: #c3d3ea;
   /* Provenance labels (design-system.png): SIMULATED / DEMO amber-brown, MODEL OUTPUT teal. */
   --ui-prov-sim: #98501b;
   --ui-prov-sim-line: #e2c09d;
-  --ui-radius: 10px;
-  --ui-radius-card: 16px;
-  --ui-radius-elevated: 20px;
-  --ui-radius-control: 10px;
+  --ui-radius: 8px;
+  --ui-radius-card: 10px;
+  --ui-radius-elevated: 12px;
+  --ui-radius-control: 6px;
   --ui-radius-pill: 999px;
-  --ui-shadow: 0 1px 2px rgba(29, 35, 32, 0.04);
-  --ui-shadow-hover: 0 10px 28px rgba(29, 35, 32, 0.08);
+  --ui-shadow: 0 1px 2px #1413120a;
+  --ui-shadow-hover: var(--f-shadow-card);
   /* Floating map HUD cards only: translucent white over the map. */
   --ui-glass: rgba(255, 255, 255, 0.9);
   --ui-glass-blur: blur(14px);
-  --ui-shadow-float: 0 1px 2px rgba(29, 35, 32, 0.06), 0 12px 32px rgba(29, 35, 32, 0.12);
-  --ui-scrim: rgba(29, 35, 32, 0.38);
-  --font-head: "Inter Tight", Inter, ui-sans-serif, system-ui, sans-serif;
-  --font-body: Inter, ui-sans-serif, system-ui, sans-serif;
+  --ui-shadow-float: var(--f-shadow-float);
+  --ui-scrim: var(--f-scrim);
+  --font-head: var(--f-font-display);
+  --font-body: var(--f-font-body);
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -74,11 +130,11 @@
   --space-6: 32px;
   --space-7: 40px;
   --space-8: 64px;
-  /* Top-nav shell: one 60 px bar, no sidebar. Phones add a 64 px bottom nav. */
-  --ui-topbar-height: 60px;
+  /* Wave 13 console: a 56 px top bar beside the sidebar. Phones add a 64 px bottom nav. */
+  --ui-topbar-height: var(--f-topbar-height);
   --ui-bottomnav-height: 64px;
   --ui-bottomnav-space: calc(var(--ui-bottomnav-height) + env(safe-area-inset-bottom, 0px) + 16px);
-  --ui-focus: 0 0 0 3px rgba(22, 97, 58, 0.35);
+  --ui-focus: 0 0 0 3px #1f6b4559;
   --z-dropdown: 20;
   --z-sticky: 30;
   --z-modal-backdrop: 40;

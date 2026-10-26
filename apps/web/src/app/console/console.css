@@ -1,4 +1,520 @@
-/* Wave 13 console frame (lane F). */
+/* Wave 13 console frame (lane F): sidebar + top bar, per docs/design/export-handoff/html/shell.html. */
+
+.cx {
+  display: grid;
+  grid-template-columns: var(--f-sidebar-width) minmax(0, 1fr);
+  min-height: 100dvh;
+  background: var(--f-white);
+  color: var(--f-ink);
+  font-family: var(--f-font-body);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+/* Old global element rules (base/system/redesign.css) must not leak into new pages. */
+.cx :where(h1, h2, h3, h4, h5, h6, p, figure, ul, ol, dl) {
+  margin: 0;
+}
+.cx :where(h1, h2, h3, h4, h5, h6) {
+  letter-spacing: 0;
+}
+.cx :where(textarea) {
+  margin-bottom: 0;
+}
+.cx ::selection {
+  background: var(--f-green-soft);
+  color: var(--f-green-deep);
+}
+
+/* The Ana drawer is portalled with the .cx root class for scoping, not for layout. */
+.cx.ui-drawer-layer {
+  display: block;
+  min-height: 0;
+  background: transparent;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────── */
+.cx-sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 100dvh;
+  padding: 16px 12px 14px;
+  overflow-y: auto;
+  border-right: 1px solid var(--f-border);
+  background: var(--f-sidebar);
+  scrollbar-width: thin;
+}
+.cx-org {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 8px;
+}
+.cx-org-name {
+  flex: 1 1 auto;
+  color: var(--f-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+.cx-org-chev {
+  color: var(--f-faint);
+}
+.cx-search {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  min-height: var(--tap-min);
+  margin: -4px 0 8px;
+  cursor: text;
+}
+.cx-search-face {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--f-line-2);
+  border-radius: 6px;
+  background: var(--f-white);
+  color: var(--f-faint);
+}
+.cx-search-face:focus-within {
+  border-color: var(--f-green);
+  box-shadow: 0 0 0 3px #1f6b4526;
+}
+.cx-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--f-ink);
+  font-size: 13px;
+  caret-color: var(--f-green);
+}
+.cx-search input::placeholder {
+  color: var(--f-faint);
+  opacity: 1;
+  text-overflow: ellipsis;
+}
+.cx-search input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.cx-search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+.cx-search kbd {
+  flex-shrink: 0;
+  padding: 1px 4px;
+  border: 1px solid var(--f-line-2);
+  border-radius: 4px;
+  color: var(--f-faint);
+  font-family: var(--f-font-body);
+  font-size: 11px;
+}
+.cx-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cx-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cx-nav-group-label {
+  padding: 6px 10px 4px;
+  color: var(--f-faint);
+  font-size: 12px;
+  font-weight: 500;
+}
+.cx-nav-item {
+  display: flex;
+  min-height: var(--tap-min);
+  margin-block: -3px;
+  color: var(--f-ink-3);
+  text-decoration: none;
+}
+.cx-nav-face {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  height: 38px;
+  margin-block: auto;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 400;
+}
+.cx-nav-face svg {
+  flex-shrink: 0;
+  color: var(--f-icon);
+}
+.cx-nav-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-nav-item:hover .cx-nav-face {
+  background: var(--f-hover);
+}
+.cx-nav-item[aria-current="page"] {
+  color: var(--f-ink);
+}
+.cx-nav-item[aria-current="page"] .cx-nav-face {
+  background: var(--f-white);
+  box-shadow:
+    inset 0 0 0 1px var(--f-line-2),
+    0 1px 2px #1413120f;
+  font-weight: 500;
+}
+.cx-nav-item:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.cx-nav-item:focus-visible .cx-nav-face {
+  outline: 2px solid var(--f-green);
+  outline-offset: 1px;
+}
+.cx-nav-sep {
+  display: block;
+  margin: 10px 6px;
+  border-top: 1px solid var(--f-line-2);
+}
+.cx-nav-empty {
+  padding: 6px 10px;
+  color: var(--f-faint);
+  font-size: 13px;
+}
+.cx-sidebar-spacer {
+  flex: 1 1 auto;
+  min-height: 16px;
+}
+.cx-sidebar .ui-daycycle {
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+.cx-supervisor {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap-min);
+  margin-block: -2px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--f-ink-3);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.cx-supervisor svg {
+  flex-shrink: 0;
+  color: var(--f-icon);
+}
+.cx-supervisor-label {
+  flex: 1 1 auto;
+}
+.cx-supervisor[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+.cx-supervisor[aria-disabled="true"] .cx-switch {
+  opacity: 0.55;
+}
+.cx-switch {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 18px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--f-control-line);
+}
+.cx-switch span {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--f-white);
+  box-shadow: 0 1px 2px #00000026;
+  transition: transform 160ms ease;
+}
+.cx-supervisor[aria-checked="true"] .cx-switch {
+  background: var(--f-green);
+}
+.cx-supervisor[aria-checked="true"] .cx-switch span {
+  transform: translateX(14px);
+}
+.cx-supervisor:focus-visible {
+  outline: 2px solid var(--f-green);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+.cx-user {
+  position: relative;
+  flex-shrink: 0;
+}
+.cx-user-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cx-user-button:hover {
+  background: var(--f-hover);
+}
+.cx-avatar {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--f-green);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+}
+.cx-user-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+.cx-user-text strong {
+  color: var(--f-ink);
+  font-size: 14px;
+  font-weight: 500;
+}
+.cx-user-text small {
+  overflow: hidden;
+  color: var(--f-faint);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-user-more {
+  flex-shrink: 0;
+  color: var(--f-faint);
+}
+.cx-menu {
+  position: absolute;
+  z-index: var(--z-dropdown);
+  right: 0;
+  bottom: calc(100% + 6px);
+  left: 0;
+  padding: 6px;
+  border: 1px solid var(--f-line-2);
+  border-radius: 10px;
+  background: var(--f-white);
+  box-shadow: var(--f-shadow-float);
+}
+.cx-menu [role^="menuitem"] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--f-ink-3);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.cx-menu [role^="menuitem"] > span {
+  flex: 1 1 auto;
+}
+.cx-menu [role^="menuitem"]:hover,
+.cx-menu [role^="menuitem"]:focus-visible {
+  background: var(--f-hover);
+  outline: none;
+  box-shadow: none;
+}
+.cx-menu [role="menuitemradio"] svg {
+  color: var(--f-green);
+}
+.cx-menu-sep {
+  display: block;
+  margin: 4px 6px;
+  border-top: 1px solid var(--f-line-3);
+}
+.cx-menu .cx-menu-logout {
+  color: var(--f-red-ink);
+}
+
+/* ── Main column ──────────────────────────────────────────────────────── */
+.cx-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.cx-topbar {
+  position: sticky;
+  z-index: var(--z-sticky);
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: var(--f-topbar-height);
+  padding: 0 24px 0 32px;
+  border-bottom: 1px solid var(--f-line-3);
+  background: var(--f-white);
+}
+.cx-crumb {
+  color: var(--f-ink-3);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.cx-crumb-dot {
+  flex-shrink: 0;
+  width: 3px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--f-dot);
+}
+.cx-crumb-sub {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--f-faint);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-sync {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border-radius: 20px;
+  background: var(--f-green-tint);
+  color: var(--f-green);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.cx-sync::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--f-green-live);
+}
+.cx-bell .ui-btn-face {
+  border-color: var(--f-line-2);
+  border-radius: 6px;
+}
+.cx-bell svg {
+  width: 16px;
+  height: 16px;
+}
+.cx-menu-toggle {
+  display: none;
+}
+.cx-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 24px 32px 32px;
+}
+/* Pages that run edge to edge (a full map) opt out of the padding. */
+.cx-content:has(> .cx-bleed),
+.cx-content:has(> .ui-bleed-page) {
+  padding: 0;
+}
+.cx-scrim {
+  display: none;
+}
+
+/* Narrow screens: the sidebar becomes an off-canvas panel behind a menu button. */
+@media (max-width: 920px) {
+  .cx {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cx-sidebar {
+    position: fixed;
+    z-index: var(--z-modal);
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(var(--f-sidebar-width), 86vw);
+    visibility: hidden;
+    transform: translateX(-100%);
+    transition:
+      transform 200ms ease,
+      visibility 0s linear 200ms;
+  }
+  .cx.is-nav-open .cx-sidebar {
+    visibility: visible;
+    transform: none;
+    transition: transform 200ms ease;
+  }
+  .cx.is-nav-open .cx-scrim {
+    position: fixed;
+    z-index: var(--z-modal-backdrop);
+    inset: 0;
+    display: block;
+    background: var(--f-scrim);
+  }
+  .cx-menu-toggle {
+    display: inline-flex;
+  }
+  .cx-topbar {
+    gap: 10px;
+    padding: 0 12px;
+  }
+  .cx-content {
+    padding: 16px;
+  }
+}
+@media (max-width: 520px) {
+  .cx-crumb-dot,
+  .cx-crumb-sub,
+  .cx-sync {
+    display: none;
+  }
+  .cx-crumb {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cx-ask .ui-btn-face {
+    padding: 0 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cx-sidebar,
+  .cx.is-nav-open .cx-sidebar,
+  .cx-switch span {
+    transition: none;
+  }
+}
 
 /* The briefing room runs full screen, without the console's top bar. */
 .twin-route {
