@@ -578,8 +578,6 @@ export const en = {
     "The prototype gateway uses Baileys, an unofficial WhatsApp Web client. A government pilot would use the WhatsApp Business Platform.",
   set_team_intro: "What each role can do. Access is enforced on the server.",
   set_team_you: "Your role",
-  set_team_accounts_note:
-    "Personal accounts come from the server's users file (PYTHIA_USERS_FILE), not from this page.",
   set_perm_dashboard_read: "View dashboards",
   set_perm_reports_read: "Read reports",
   set_perm_history_read: "View history",

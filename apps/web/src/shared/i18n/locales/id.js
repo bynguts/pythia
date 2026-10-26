@@ -583,8 +583,6 @@ export const id = {
     "Gateway prototipe memakai Baileys, klien WhatsApp Web tidak resmi. Pilot pemerintah akan memakai WhatsApp Business Platform.",
   set_team_intro: "Apa yang dapat dilakukan setiap peran. Hak akses ditegakkan di server.",
   set_team_you: "Peran Anda",
-  set_team_accounts_note:
-    "Akun pribadi dibuat di berkas pengguna server (PYTHIA_USERS_FILE), bukan dari halaman ini.",
   set_perm_dashboard_read: "Melihat dasbor",
   set_perm_reports_read: "Membaca laporan",
   set_perm_history_read: "Melihat riwayat",
