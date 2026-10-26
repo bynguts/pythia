@@ -181,6 +181,9 @@ test("Reports reads — for a day with no records, never 0", async ({ page }) =>
       },
     });
   });
+  // An empty day has no driver exceptions or damage reports either, whatever earlier specs wrote.
+  await page.route(/\/api\/driver\/exceptions/, (route) => route.fulfill({ json: { exceptions: [] } }));
+  await page.route(/\/api\/damage-reports$/, (route) => route.fulfill({ json: { reports: [] } }));
   await open(page, "/app/reports");
   await expect(page.getByTestId("recap-actual").locator(".rp-stat-v")).toHaveText("—", { timeout: 30000 });
   await expect(page.getByTestId("recap-trips").locator(".rp-stat-v")).toHaveText("—");

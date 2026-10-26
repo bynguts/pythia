@@ -84,9 +84,9 @@ test("dispatcher adds a DEMO stop at the device position and it is stored DEMO-l
     localStorage.setItem("pythia_token", token);
     localStorage.setItem("pythia_role", role);
   }, principal);
-  await page.reload({ waitUntil: "domcontentloaded" });
-
-  await page.getByRole("tab", { name: "Surat jalan (SPJ)" }).click(); // wave9 fleet composition: records tab
+  // Wave 13: a work order is drafted from Work orders → New work order.
+  await page.goto("/app/work-orders", { waitUntil: "domcontentloaded" });
+  await page.getByTestId("wo-new").click();
   const demo = page.getByTestId("spj-demo-stop");
   await expect(demo).toHaveText(/DEMO/);
   await expect(page.getByText(/Hanya DEMO: .*35 m/)).toBeVisible();

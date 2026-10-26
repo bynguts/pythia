@@ -258,6 +258,7 @@ test("pretrip with a TIDAK item auto-creates a damage report", async ({ page, co
 
 test("admin sees damage report and resolves it", async ({ page }) => {
   const headers = await signIn(page);
+  const note = `e2e admin panel note ${Date.now()}`;
   const create = await page.request.post(`${API}/damage-reports`, {
     headers,
     data: {
@@ -265,18 +266,21 @@ test("admin sees damage report and resolves it", async ({ page }) => {
       driver_name: "E2E Admin",
       component: "rem",
       severity: "berat",
-      note: "e2e admin panel note",
+      note,
     },
   });
   expect(create.status()).toBe(201);
   const rep = await create.json();
 
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await page.getByRole("tab", { name: "Laporan Kerusakan" }).click(); // wave9 fleet composition: records tab
-  await expect(page.getByText("e2e admin panel note").first()).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText("NON-OPERASIONAL").first()).toBeVisible();
-
-  await page.request.post(`${API}/damage-reports/${rep.report_id}/resolve`, { headers });
+  try {
+    // Wave 13: damage reports live in the Fleet & drivers damage table.
+    await page.goto("/app/fleet", { waitUntil: "domcontentloaded" });
+    const row = page.getByTestId("damage-table").locator("tbody tr").filter({ hasText: note });
+    await expect(row).toBeVisible({ timeout: 20000 });
+    await expect(row.getByText("Berat", { exact: true })).toBeVisible();
+  } finally {
+    await page.request.post(`${API}/damage-reports/${rep.report_id}/resolve`, { headers });
+  }
 });
 
 test("admin sees spj evidence summary after driver flow", async ({ page }) => {
@@ -319,7 +323,7 @@ test("admin sees spj evidence summary after driver flow", async ({ page }) => {
         weighing: [
           {
             fraction: "Residu",
-            weight_kg: 40.0,
+            weight_kg: 400.0,
             photo_name: "t.jpg",
             photo_b64: "data:image/jpeg;base64,BBB",
           },
@@ -329,9 +333,16 @@ test("admin sees spj evidence summary after driver flow", async ({ page }) => {
     },
   });
 
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await page.getByRole("tab", { name: "Surat jalan (SPJ)" }).click(); // wave9 fleet composition: records tab
-  await page.getByText(spj.spj_number).first().click();
-  await expect(page.getByText(/Petugas: Dicky/)).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText(/40(\.0)? kg/)).toBeVisible();
+  // Wave 13: the evidence summary is the Work orders detail pane.
+  await page.goto("/app/work-orders", { waitUntil: "domcontentloaded" });
+  await page.getByTestId("wo-search").fill(spj.spj_number);
+  const row = page.getByTestId("wo-row").filter({ hasText: spj.spj_number });
+  for (const tab of ["active", "proof", "closed"]) {
+    await page.getByTestId(`wo-tab-${tab}`).click();
+    if (await row.count()) break;
+  }
+  await row.click();
+  const detail = page.getByTestId("wo-detail");
+  await expect(detail).toContainText("Petugas tercatat + foto", { timeout: 15000 });
+  await expect(detail.locator(".wo-weight").filter({ hasText: "Residu" })).toContainText("0,4 t");
 });

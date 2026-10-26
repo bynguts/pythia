@@ -76,10 +76,13 @@ async function auditTransitions(page) {
 
 test("dispatcher app transitions never animate layout properties", async ({ page }) => {
   await signIn(page);
-  await page.getByRole("button", { name: "Prediksi", exact: true }).click();
-  await page.waitForTimeout(1500);
-  const bad = await auditTransitions(page);
-  expect(bad, `layout-property transitions: ${bad.join("; ")}`).toEqual([]);
+  for (const id of ["operations", "tomorrow", "work-orders"]) {
+    await page.goto(`/app/${id}`);
+    await expect(page.getByRole("main").getByRole("heading", { level: 1 })).toBeVisible({ timeout: 20000 });
+    await page.waitForTimeout(1500);
+    const bad = await auditTransitions(page);
+    expect(bad, `${id} layout-property transitions: ${bad.join("; ")}`).toEqual([]);
+  }
 });
 
 test("driver app progress bar animates without layout properties", async ({ page, context }) => {
@@ -123,6 +126,8 @@ test("driver app progress bar animates without layout properties", async ({ page
     // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
     await page.getByTestId("driver-truck-search").fill(TEST_TRUCK);
     await page.locator(`[data-testid="pick-${TEST_TRUCK}"]`).click();
+    // Wave 13: the pick is confirmed with "Start with T-…".
+    await page.getByTestId("driver-pick-start").click();
     await pretripLoaded;
     await page.waitForTimeout(800);
 
