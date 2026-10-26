@@ -56,3 +56,8 @@ def ensure_truck_access(principal: dict, truck_code: str | None) -> None:
     bound = principal.get("truck_code") if principal.get("role") == "driver" else None
     if bound and truck_code != bound:
         raise HTTPException(status_code=403, detail="This account may only read its own truck's records.")
+    if principal.get("role") == "driver":
+        # The driver app's truck-scoped calls are its heartbeat (GET /api/field/devices).
+        from app.field.devices import note_seen
+
+        note_seen(principal.get("username") or "driver", truck_code)

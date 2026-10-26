@@ -62,6 +62,7 @@ def create_app() -> FastAPI:
         gate_slots,
         health,
         operations,
+        ops,
         readiness,
         recap,
         safety,
@@ -98,6 +99,7 @@ def create_app() -> FastAPI:
         readiness,
         gate_slots,
         recap,
+        ops,
     ):
         application.include_router(module.router)
     return application
