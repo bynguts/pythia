@@ -329,21 +329,31 @@ export function ReceiptReview({ spj, act, pendingAction, words }) {
   const number = (n) => Number(n).toLocaleString(lang === "en" ? "en-US" : "id-ID");
   const kg = (n) => (n == null ? t("spj7_receipt_not_recorded") : `${number(n)} kg`);
 
+  // Weights the driver recorded (typed, or a phone OCR reading the driver accepted) are
+  // labelled as the driver's, not as the reviewer-side OCR, whenever that OCR has no reading.
+  const ocrReading = status === "unreviewed" && ocr.gross_kg != null;
+  const driverWeights =
+    !reviewed && !ocrReading && recordedGross != null && ["manual", "ocr"].includes(receipt.weight_source);
+
   const suggestion =
     status === "pending"
       ? t("drv_receipt_reading")
-      : status === "none"
-        ? t("spj7_receipt_ocr_none")
-        : ocr.gross_kg == null
-          ? t(ocr.confidence === "low" ? "drv_receipt_unreadable" : "drv_receipt_unavailable")
-          : t("drv_receipt_suggested")
-              .replace("{source}", ocr.source || "OCR")
-              .replace("{n}", number(ocr.gross_kg))
-              .replace("{extra}", reviewed ? "" : t("drv_receipt_confirm_hint"))
-              .trim();
+      : driverWeights
+        ? t("spj7_receipt_check_driver")
+        : status === "none"
+          ? t("spj7_receipt_ocr_none")
+          : ocr.gross_kg == null
+            ? t(ocr.confidence === "low" ? "drv_receipt_unreadable" : "drv_receipt_unavailable")
+            : t("drv_receipt_suggested")
+                .replace("{source}", ocr.source || "OCR")
+                .replace("{n}", number(ocr.gross_kg))
+                .replace("{extra}", reviewed ? "" : t("drv_receipt_confirm_hint"))
+                .trim();
   const badge = reviewed
     ? t(`spj7_receipt_badge_${status}`).replace("{who}", ocr.reviewed_by || "")
-    : t("spj7_receipt_badge_unreviewed");
+    : driverWeights
+      ? t(`spj7_receipt_badge_driver_${receipt.weight_source}`)
+      : t("spj7_receipt_badge_unreviewed");
 
   const startCorrecting = () => {
     setGross(String(recordedGross ?? ocr?.gross_kg ?? ""));
@@ -377,7 +387,7 @@ export function ReceiptReview({ spj, act, pendingAction, words }) {
       <div className="spj-receipt-body">
         {receipt.has_photo !== false && <ReceiptPhoto spjId={spj.spj_id} />}
         <div className="spj-receipt-text">
-          {status !== "none" && (
+          {(status !== "none" || driverWeights) && (
             <span className="pill info spj-receipt-badge" data-testid="spj-receipt-ocr-badge">
               {badge}
             </span>

@@ -1922,8 +1922,12 @@ export const en = {
   spj7_receipt_title: "Weighbridge receipt review",
   spj7_receipt_needs_review: "Receipt needs review",
   spj7_receipt_badge_unreviewed: "MODEL OUTPUT · not confirmed",
-  spj7_receipt_badge_confirmed: "MODEL OUTPUT · confirmed by {who}",
-  spj7_receipt_badge_corrected: "MODEL OUTPUT · corrected by {who}",
+  spj7_receipt_badge_confirmed: "OCR reading · confirmed by {who}",
+  spj7_receipt_badge_corrected: "Corrected by {who}",
+  spj7_receipt_badge_driver_manual: "Entered by driver · not confirmed",
+  spj7_receipt_badge_driver_ocr: "OCR reading accepted by driver · not confirmed",
+  spj7_receipt_check_driver:
+    "No automatic reading of this receipt. Check the driver's weights against the photo and correct them if they differ.",
   spj7_receipt_ocr_none:
     "No OCR suggestion for this receipt. Read the photo and correct the weights if needed.",
   spj7_receipt_recorded: "Recorded weights",

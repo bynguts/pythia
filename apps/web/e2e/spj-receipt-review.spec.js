@@ -148,7 +148,7 @@ test("a dispatcher confirms the OCR suggestion and the recorded gross follows it
 
   expect(state.reviews).toEqual([{ action: "confirm" }]);
   await expect(review.getByTestId("spj-receipt-ocr-badge")).toHaveText(
-    "MODEL OUTPUT · dikonfirmasi oleh dispatcher",
+    "Bacaan OCR · dikonfirmasi oleh dispatcher",
   );
   await expect(review.getByTestId("spj-receipt-recorded")).toContainText("Bruto 15.200 kg");
   await expect(review.getByRole("button", { name: "Cocok" })).toHaveCount(0);
@@ -172,9 +172,7 @@ test("a supervisor corrects the weights from the ticket photo", async ({ page })
 
   await review.getByTestId("spj-receipt-tare").fill("9100");
   await review.getByRole("button", { name: "Simpan koreksi" }).click();
-  await expect(review.getByTestId("spj-receipt-ocr-badge")).toHaveText(
-    "MODEL OUTPUT · dikoreksi oleh supervisor",
-  );
+  await expect(review.getByTestId("spj-receipt-ocr-badge")).toHaveText("Dikoreksi oleh supervisor");
   expect(state.reviews).toEqual([{ action: "correct", gross_weight_kg: 15100, tare_weight_kg: 9100 }]);
   await expect(review.getByTestId("spj-receipt-recorded")).toContainText("Bersih 6.000 kg");
 });
@@ -188,4 +186,40 @@ test("a role without dispatch:create sees the suggestion but no review buttons",
   await expect(review.getByRole("button", { name: "Cocok" })).toHaveCount(0);
   await expect(review.getByRole("button", { name: "Koreksi" })).toHaveCount(0);
   await expect(review).toContainText("Hanya dispatcher atau pengawas");
+});
+
+// #w14-walk: weights the driver typed are the driver's, not a MODEL OUTPUT, and the
+// dispatcher is asked to check them against the photo rather than to type them again.
+test("weights the driver typed read as entered by the driver, not as OCR output", async ({ page }) => {
+  const driverTyped = {
+    ...unreviewedReceipt,
+    total_weight_kg: 14820,
+    gross_weight_kg: 14820,
+    tare_weight_kg: 8100,
+    net_weight_kg: 6720,
+    weight_source: "manual",
+    ocr: ocrBlock({
+      gross_kg: null,
+      confidence: null,
+      source: null,
+      status: "unavailable",
+      reason: "OCR engine not configured",
+    }),
+  };
+  const state = { receipt: driverTyped, reviews: [], role: "dispatcher" };
+  await stubSpj(page, state);
+  const review = await openDetail(page, page.request, "dispatcher");
+
+  const badge = review.getByTestId("spj-receipt-ocr-badge");
+  await expect(badge).toHaveText("Diisi pengemudi · belum dikonfirmasi");
+  await expect(badge).not.toContainText("MODEL OUTPUT");
+  const hint = review.getByTestId("spj-receipt-ocr-suggestion");
+  await expect(hint).toContainText("Cocokkan berat dari pengemudi");
+  await expect(hint).not.toContainText("manual");
+  await expect(review.getByTestId("spj-receipt-recorded")).toContainText("Bruto 14.820 kg");
+
+  await review.getByRole("button", { name: "Koreksi" }).click();
+  await expect(review.getByTestId("spj-receipt-gross")).toHaveValue("14820");
+  await review.getByRole("button", { name: "Simpan koreksi" }).click();
+  await expect(badge).toHaveText("Dikoreksi oleh dispatcher");
 });
