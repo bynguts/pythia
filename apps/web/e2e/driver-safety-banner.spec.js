@@ -2,7 +2,8 @@
 // (contract owned by the safety agent; stubbed here): 10 h warns, 12 h holds
 // new SPJ work unless a supervisor override exists, a gate wait over 3 h says
 // the supervisor was told. The classification label stays visible; a 404 or
-// an error hides the banner.
+// an error hides the notices. Wave 13: the notices live behind the shield
+// toggle on the route map (an orange dot marks the toggle when one is up).
 import { expect, test } from "@playwright/test";
 import {
   apiLogin,
@@ -15,6 +16,13 @@ import {
 
 const TRUCK = "T-251";
 const STOP = { name: "TPS Aman E2E", kecamatan: "Cilandak", address: "Jl. E2E", lat: -6.29, lng: 106.79 };
+
+// Each reload closes the pop-over; open it again to read the notices.
+async function openSafety(page) {
+  const toggle = page.getByTestId("driver-safety-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  return page.getByTestId("driver-route-safety");
+}
 
 function payload(over) {
   return {
@@ -49,16 +57,20 @@ test("the safety banner follows the duty and gate states and holds new work at t
     await openDriver(page, request, { token, truck: TRUCK });
     const start = page.getByTestId("stop-0").getByTestId("stop-start");
     await expect(start).toBeEnabled({ timeout: 20000 });
-    await expect(page.getByTestId("driver-safety")).toHaveCount(0);
+    await expect(page.getByTestId("driver-safety-toggle")).not.toHaveClass(/is-alert/);
+    await expect(await openSafety(page)).toHaveText("Tidak ada peringatan jam kerja atau gerbang saat ini.");
 
     response = { status: 200, json: payload({ duty_minutes: 610, duty_state: "warn" }) };
     await page.reload();
+    await expect(page.getByTestId("driver-safety-toggle")).toHaveClass(/is-alert/);
+    await openSafety(page);
     await expect(page.getByTestId("driver-safety-warn")).toHaveText("Jam kerja 10 jam: istirahat segera");
     await expect(page.getByTestId("driver-safety-label")).toHaveText("SIMULASI");
     await expect(start).toBeEnabled();
 
     response = { status: 200, json: payload({ duty_minutes: 725, duty_state: "blocked" }) };
     await page.reload();
+    await openSafety(page);
     await expect(page.getByTestId("driver-safety-blocked")).toContainText(
       "Batas 12 jam: SPJ baru butuh izin pengawas",
     );
@@ -78,6 +90,7 @@ test("the safety banner follows the duty and gate states and holds new work at t
       }),
     };
     await page.reload();
+    await openSafety(page);
     await expect(page.getByTestId("driver-safety-override")).toHaveText("Izin pengawas: supervisor");
     await expect(start).toBeEnabled();
 
@@ -91,6 +104,7 @@ test("the safety banner follows the duty and gate states and holds new work at t
       }),
     };
     await page.reload();
+    await openSafety(page);
     await expect(page.getByTestId("driver-safety-gate")).toHaveText(
       "Antre > 3 jam: pengawas sudah diberi tahu",
     );
@@ -100,7 +114,7 @@ test("the safety banner follows the duty and gate states and holds new work at t
     response = { status: 500, json: { detail: "boom" } };
     await page.reload();
     await expect(start).toBeEnabled({ timeout: 20000 });
-    await expect(page.getByTestId("driver-safety")).toHaveCount(0);
+    await expect(page.getByTestId("driver-safety-toggle")).not.toHaveClass(/is-alert/);
   } finally {
     await cancelSpj(request, token, spj.spj_id);
   }
@@ -116,6 +130,7 @@ test("one tap reports the gate arrival with the device time, starting the gate-w
     await openDriver(page, request, { token, truck: "T-232" });
     await finishPretrip(page);
     await completeCurrentStop(page, 0);
+    await page.getByTestId("driver-tab-tpa").click();
     const delivery = page.getByTestId("delivery-card");
     await expect(delivery).toBeVisible({ timeout: 15000 });
 

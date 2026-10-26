@@ -1,7 +1,7 @@
 // #drv6-session: item 9. When the backend restarts and forgets the field
-// session, the next driver write says "Sesi berakhir, silakan masuk lagi" in
-// Indonesian (not the raw English server detail) and "Masuk lagi" opens the
-// driver sign-in in place.
+// session, the next driver write turns the app into "Masuk lagi" (wave 13,
+// D2vpX "Signed out"): no raw English server detail, the password signs in
+// again in place, and the deep link stays.
 import { expect, test } from "@playwright/test";
 import { API, apiLogin, authHeaders, openDriver } from "./lib/driverSpj.js";
 
@@ -26,10 +26,16 @@ test("an expired session is reported in Indonesian and leads back to the sign-in
 
   const expired = page.getByTestId("driver-session-expired");
   await expect(expired).toBeVisible();
-  await expect(expired).toContainText("Sesi berakhir, silakan masuk lagi");
+  await expect(expired.getByRole("heading", { name: "Masuk lagi" })).toBeVisible();
+  await expect(expired).toContainText("Sesi Anda berakhir");
   await expect(page.getByText(/invalid|expired token|not authenticated/i)).toHaveCount(0);
 
-  await expired.getByRole("button", { name: "Masuk lagi" }).click();
-  await expect(page.locator('input[autocomplete="username"]')).toHaveValue("driver");
-  await expect(page).toHaveURL(/\/driver$/);
+  await expired.getByLabel("Kata sandi").fill("dispatcher-demo-pass");
+  await expired.getByRole("button", { name: "Masuk", exact: true }).click();
+  await expect(expired).toHaveCount(0);
+  await expect(page.getByTestId("driver-tab-instruksi")).toBeVisible();
+  await expect(page).toHaveURL(/\/driver/);
+  expect(await page.evaluate(() => localStorage.getItem("pythia_field_token"))).not.toBe(
+    "token-from-before-restart",
+  );
 });

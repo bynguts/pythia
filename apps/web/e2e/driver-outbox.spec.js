@@ -84,31 +84,35 @@ test("offline stop submission queues durably, survives reload, and syncs on reco
     // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
     await page.getByTestId("driver-truck-search").fill(TEST_TRUCK);
     await page.locator(`[data-testid="pick-${TEST_TRUCK}"]`).click();
+    await page.getByTestId("driver-pick-start").click();
 
     // Pretrip online first (it gates the stop form) — only when today's
     // inspection has not been recorded yet (server-side daily gate).
-    const markRest = page.getByRole("button", { name: "Mark the rest as OK" });
-    // Wait until today's status resolves to either the form or the done card.
-    await expect(markRest.or(page.getByTestId("pretrip-done"))).toBeVisible({ timeout: 15000 });
-    if (await markRest.isVisible()) {
-      await expect(markRest).toBeEnabled();
-      await markRest.click();
-      const save = page.getByRole("button", { name: "Save inspection" });
-      await expect(save).toBeEnabled();
-      await save.click();
+    // Wave 13: the check lives on the Instructions tab.
+    await page.getByTestId("driver-tab-instruksi").click();
+    const done = page.getByTestId("pretrip-done");
+    const startCheck = page.getByTestId("driver-start-pretrip");
+    const restOk = page.getByTestId("pretrip-rest-ok");
+    await expect(done.or(startCheck).or(restOk)).toBeVisible({ timeout: 15000 });
+    if (await startCheck.isVisible()) await startCheck.click();
+    if (await restOk.isVisible()) {
+      await restOk.click();
+      await page.getByTestId("pretrip-submit").click();
     }
+    await expect(done).toBeVisible({ timeout: 15000 });
+    await page.getByTestId("driver-tab-rute").click();
     await expect(page.getByRole("heading", { name: /Stop 1: TPS Offline E2E/ })).toBeVisible({
       timeout: 20000,
     });
 
-    const startButton = page.getByRole("button", { name: "Start this stop" });
-    if (await startButton.count()) await startButton.click();
-    await expect(page.getByText("Arrival photo at the location")).toBeVisible();
+    // Wave 13: "I've arrived" on the route sheet opens the stop proof screen.
+    await page.getByTestId("stop-start").click();
+    await expect(page.getByTestId("stop-proof")).toBeVisible();
 
     // Kill the network while the page stays loaded.
     await context.setOffline(true);
 
-    // Step-gated form: arrival photo → weighing photo + weight → officer.
+    // Step-gated proof: arrival photo → scale photo + weight per fraction → officer.
     await page.locator('[data-testid="arrival-input"]').setInputFiles({
       name: "arrival.jpg",
       mimeType: "image/jpeg",
@@ -120,19 +124,23 @@ test("offline stop submission queues durably, survives reload, and syncs on reco
       mimeType: "image/jpeg",
       buffer: Buffer.from("fake-weighing"),
     });
-    await page.locator('input[id^="weight-"]').fill("1250");
-    await page.getByRole("button", { name: /add weighing|tambah timbangan/i }).click();
+    await page.getByTestId("weigh-kg-Residu").fill("1250");
     await expect(page.locator('[data-testid="officer-input"]')).toBeVisible();
     await page.locator('[data-testid="officer-input"]').setInputFiles({
       name: "officer.jpg",
       mimeType: "image/jpeg",
       buffer: Buffer.from("fake-officer"),
     });
-    await page.locator('input[id^="officer-name-"]').fill("Budi");
-    await page.getByRole("button", { name: /complete stop|selesaikan/i }).click();
+    await page.getByTestId("officer-name").fill("Budi");
+    await page.getByTestId("stop-finish").click();
 
-    // Durable queue indicator — not a dead error toast alone.
-    await expect(page.getByTestId("driver-queued-count")).toBeVisible({ timeout: 10000 });
+    // Durable queue indicator — not a dead error toast alone. Wave 13: the route
+    // map has no top bar; its trip card shows the offline chip with the count.
+    await expect(page.getByTestId("driver-trip-card").getByTestId("drt-sync")).toHaveAttribute(
+      "data-sync",
+      "offline",
+      { timeout: 10000 },
+    );
 
     // The queued record survives a full reload.
     await context.setOffline(false);

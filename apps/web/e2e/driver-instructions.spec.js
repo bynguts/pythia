@@ -1,6 +1,7 @@
 // #drv6-dispatch: audit gap 2 (D2). Dispatcher instructions and approved-plan
 // assignments reach /driver: the card polls /dispatch/{truck}, renders the
-// backend text as it arrives, and "Siap" is one tap (queued when offline).
+// backend text as it arrives, and "Terima instruksi" is one tap (queued when
+// offline). Wave 13: a plan with a gate slot leads with its departure time.
 import { expect, test } from "@playwright/test";
 import { API, apiLogin, authHeaders, openDriver } from "./lib/driverSpj.js";
 
@@ -18,7 +19,7 @@ async function dispatchStatus(request, token, id) {
   return (await res.json()).field_status;
 }
 
-test("a dispatcher instruction shows on /driver and one tap on Siap confirms it", async ({
+test("a dispatcher instruction shows on /driver and one tap on Terima instruksi confirms it", async ({
   page,
   request,
 }) => {
@@ -30,8 +31,8 @@ test("a dispatcher instruction shows on /driver and one tap on Siap confirms it"
   const item = page.getByTestId(`driver-instruction-${dispatch.id}`);
   await expect(item).toBeVisible({ timeout: 20000 });
   await expect(item).toContainText(text);
-  await expect(item).toContainText("Perintah dispatcher");
-  await expect(item).toContainText(/Diterima \d\d:\d\d/);
+  await expect(item).toContainText("Pesan dari dispatcher");
+  await expect(item).toContainText(/Baru \d\d:\d\d/);
 
   await item.getByTestId("driver-instruction-ready").click();
   await expect(item).toHaveCount(0);
@@ -64,7 +65,7 @@ test("an approved-plan assignment is labelled as a plan and renders the backend 
   await expect(item).toContainText("Angkut 18 t di Kebayoran Lama (rencana e2e)");
 });
 
-test("Siap tapped offline queues the confirmation and syncs it on reconnect", async ({
+test("an instruction accepted offline queues the confirmation and syncs it on reconnect", async ({
   page,
   context,
   request,
@@ -83,4 +84,65 @@ test("Siap tapped offline queues the confirmation and syncs it on reconnect", as
 
   await context.setOffline(false);
   await expect.poll(() => dispatchStatus(request, token, dispatch.id), { timeout: 30000 }).toBe("READY");
+});
+
+test("a plan instruction leads with the departure time and tags the modelled gate slot", async ({
+  page,
+  request,
+}) => {
+  const { token } = await apiLogin(request);
+  const created = new Date().toISOString();
+  await page.route("**/api/dispatch/T-245", (route) =>
+    route.fulfill({
+      json: [
+        {
+          id: "plan-e2e-slot",
+          truck_code: "T-245",
+          instruction:
+            "Rencana e2e\nBerangkat 05:30 · Slot gerbang TPST Bantargebang 10:00–10:15 (keluaran model)",
+          manager_id: "operations_optimizer",
+          field_status: "PENDING",
+          created_at: created,
+        },
+      ],
+    }),
+  );
+  await page.route("**/api/operations/instructions/T-245*", (route) =>
+    route.fulfill({
+      json: [
+        {
+          dispatch_id: "plan-e2e-slot",
+          plan_id: "P-E2E",
+          truck_code: "T-245",
+          stops: [
+            {
+              order: 1,
+              area: "kalideres",
+              kecamatan: "Kalideres",
+              window: "06:00–09:00",
+              facility: "TPST Bantargebang",
+              facility_display: "TPA Bantargebang",
+              tons: 8,
+            },
+          ],
+          gate_slot: { facility: "TPST Bantargebang", start: "10:00", end: "10:15", depart_at: "05:30" },
+          reason: { areas: [{ kecamatan: "Kalideres", forecast_tons: 41 }] },
+        },
+      ],
+    }),
+  );
+  await openDriver(page, request, { token, truck: "T-245", lang: "en" });
+  const item = page.getByTestId("driver-instruction-plan-e2e-slot");
+  await expect(item).toBeVisible({ timeout: 20000 });
+  await expect(item.getByTestId("driver-instruction-depart")).toContainText("Leave the depot at");
+  await expect(item.getByTestId("driver-instruction-depart")).toContainText("05:30");
+  await expect(item.getByTestId("driver-instruction-depart")).toContainText(
+    "Gate slot at TPA Bantargebang · 10:00–10:15",
+  );
+  await expect(item.getByTestId("driver-instruction-depart").getByText("Model")).toBeVisible();
+  await expect(item).toContainText("Kec. Kalideres");
+  await expect(item).toContainText("Trip plan · 1 trip");
+  // Problems go back with a reason instead of an acceptance.
+  await item.getByTestId("driver-instruction-cant").click();
+  await expect(item.getByTestId("driver-instruction-reason")).toBeVisible();
 });

@@ -22,6 +22,22 @@ const STOPS = [
   { name: "TPS Luring B", kecamatan: "Cilandak", address: "Jl. B", lat: -6.291, lng: 106.792 },
 ];
 
+// Wave 13: done stops are rows in the route's "Semua titik" sheet.
+async function expectQueuedStop(page) {
+  await page.getByTestId("driver-all-stops").click();
+  const row = page.getByTestId("driver-stops-sheet").getByTestId("stop-0");
+  await expect(row).toContainText("DI HP");
+  await expect(row.getByTestId("stop-queued-note")).toBeVisible();
+  await page.keyboard.press("Escape");
+}
+
+// Wave 13: the waiting-for-signal list (count and last sync time) is on the
+// Instructions tab; the top bar's pill carries the count elsewhere.
+async function openQueue(page) {
+  await page.getByTestId("driver-tab-instruksi").click();
+  return page.getByTestId("driver-sync-status");
+}
+
 async function serverStop(request, token, spjId, index) {
   const detail = await (await request.get(`${API}/spj/${spjId}`, { headers: authHeaders(token) })).json();
   return detail.stops[index];
@@ -37,23 +53,27 @@ test("a stop queued offline unlocks the next stop and survives a reload without 
   try {
     await openDriver(page, request, { token, truck: "T-243" });
     await finishPretrip(page);
-    await expect(page.getByTestId("driver-last-sync")).toHaveText(/^Terakhir sinkron \d\d:\d\d$/);
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("pythia_driver_last_sync")))
+      .not.toBeNull();
 
     await context.setOffline(true);
     await completeCurrentStop(page, 0);
     // Stop 1 is done on this phone; stop 2 is now the current stop.
-    await expect(page.getByTestId("stop-0")).toContainText("DI HP");
-    await expect(page.getByTestId("stop-0").getByTestId("stop-queued-note")).toBeVisible();
     await expect(page.getByTestId("stop-1").getByTestId("stop-start")).toBeEnabled();
+    await expectQueuedStop(page);
+    await openQueue(page);
     await expect(page.getByTestId("driver-pending-count")).toHaveText("1 menunggu kirim");
+    await page.getByTestId("driver-tab-rute").click();
 
     // Reload with the backend unreachable (no service worker under automation).
     // Block the API before going back online: the "online" event flushes the queue at once.
     await page.route("**/api/**", (route) => route.abort("internetdisconnected"));
     await context.setOffline(false);
     await page.reload();
-    await expect(page.getByTestId("stop-0")).toContainText("DI HP");
     await expect(page.getByTestId("stop-1").getByTestId("stop-start")).toBeEnabled();
+    await expectQueuedStop(page);
+    await openQueue(page);
     await expect(page.getByTestId("driver-pending-count")).toHaveText("1 menunggu kirim");
     await expect(page.getByTestId("driver-last-sync")).toHaveText(/^Terakhir sinkron \d\d:\d\d$/);
     expect((await serverStop(request, token, spj.spj_id, 0)).status).not.toBe("completed");
@@ -63,7 +83,8 @@ test("a stop queued offline unlocks the next stop and survives a reload without 
     await expect(async () => {
       expect((await serverStop(request, token, spj.spj_id, 0)).status).toBe("completed");
     }).toPass({ timeout: 30000 });
-    await expect(page.getByTestId("driver-pending-count")).toHaveText("Semua terkirim", { timeout: 15000 });
+    await expect(page.getByTestId("driver-sync-status")).toHaveCount(0, { timeout: 15000 });
+    await expect(page.getByTestId("driver-sync-pill")).toHaveText("Tersinkron");
     await expect(page.getByTestId("driver-needs-action")).toHaveCount(0);
   } finally {
     await page.unroute("**/api/**").catch(() => {});
@@ -83,6 +104,7 @@ test("a 409 replay is listed under Perlu tindakan with its reason and is never m
     await finishPretrip(page);
     await context.setOffline(true);
     await completeCurrentStop(page, 0);
+    await openQueue(page);
     await expect(page.getByTestId("driver-pending-count")).toHaveText("1 menunggu kirim");
 
     // The dispatcher cancels the SPJ while the phone is offline.
@@ -93,7 +115,7 @@ test("a 409 replay is listed under Perlu tindakan with its reason and is never m
     await expect(needs).toBeVisible({ timeout: 30000 });
     await expect(needs).toContainText("Perlu tindakan");
     await expect(needs.getByTestId("driver-rejected-item")).toContainText("Ditolak (409)");
-    await expect(page.getByTestId("driver-pending-count")).toHaveText("Semua terkirim");
+    await expect(page.getByTestId("driver-sync-status")).toHaveCount(0);
     await expect(page.getByText(/Tersinkron: \d+ aksi/)).toHaveCount(0);
     expect((await serverStop(request, token, spj.spj_id, 0)).status).not.toBe("completed");
 
@@ -159,19 +181,21 @@ test("a 16 h old queue and last-sync time survive a reload and still sync", asyn
     );
     await page.route("**/api/**", (route) => route.abort("internetdisconnected"));
     await page.goto("/driver");
-    await expect(page.getByTestId("driver-last-sync")).toHaveText(`Terakhir sinkron ${hhmm}`);
-    await expect(page.getByTestId("driver-pending-count")).toHaveText("1 menunggu kirim");
+    const pill = page.getByTestId("driver-sync-pill");
+    await expect(pill).toHaveAttribute("title", `Terakhir sinkron ${hhmm}`);
+    await expect(page.getByTestId("driver-queued-count")).toHaveText("1 menunggu");
     // wave11 driver: the only stop is done on this phone, so the app opens on its TPA
     // tab; the stop row (with its on-phone badge) is on the Rute tab.
     await expect(page.getByTestId("driver-tab-tpa")).toHaveAttribute("aria-current", "page");
     await page.getByTestId("driver-tab-rute").click();
-    await expect(page.getByTestId("stop-0")).toContainText("DI HP");
+    await expectQueuedStop(page);
 
     await page.unroute("**/api/**");
     await expect(async () => {
       expect((await serverStop(request, token, spj.spj_id, 0)).status).toBe("completed");
     }).toPass({ timeout: 30000 });
-    await expect(page.getByTestId("driver-last-sync")).not.toHaveText(`Terakhir sinkron ${hhmm}`);
+    await page.getByTestId("driver-tab-tpa").click();
+    await expect(pill).not.toHaveAttribute("title", `Terakhir sinkron ${hhmm}`);
   } finally {
     await page.unroute("**/api/**").catch(() => {});
     await cancelSpj(request, token, spj.spj_id);

@@ -81,25 +81,55 @@ export async function openDriver(page, request, { token, truck, lang = "id" }) {
   await expect(page.getByTestId("driver-app")).toBeVisible();
 }
 
-// Pre-trip in two taps when today's form is shown (R4); a no-op when done.
+// Pre-trip in two taps on the Instructions tab (R4); a no-op when done. The app
+// returns to the tab it was on, so a stop flow carries on where it was.
 export async function finishPretrip(page) {
+  const back = await page.locator('.driver-tab[aria-current="page"]').getAttribute("data-testid");
+  await page.getByTestId("driver-tab-instruksi").click();
   const done = page.getByTestId("pretrip-done");
-  const markRest = page.getByRole("button", { name: "Tandai Sisanya Baik" });
-  await expect(done.or(markRest)).toBeVisible({ timeout: 15000 });
-  if (await markRest.isVisible()) {
-    await markRest.click();
-    await page.getByRole("button", { name: "Simpan Inspeksi" }).click();
+  const start = page.getByTestId("driver-start-pretrip");
+  const restOk = page.getByTestId("pretrip-rest-ok");
+  await expect(done.or(start).or(restOk)).toBeVisible({ timeout: 15000 });
+  if (await start.isVisible()) await start.click();
+  if (await restOk.isVisible()) {
+    await restOk.click();
+    await page.getByTestId("pretrip-submit").click();
   }
   await expect(done).toBeVisible({ timeout: 15000 });
+  if (back && back !== "driver-tab-instruksi") await page.getByTestId(back).click();
 }
 
 // Arrival + officer evidence for the current stop (an SPJ without on-site weighing).
+// Wave 13: "I've arrived" on the route sheet opens the stop proof screen.
 export async function completeCurrentStop(page, stopIndex, { officer = "Petugas Uji" } = {}) {
+  const tab = page.getByTestId("driver-tab-rute");
+  if ((await tab.count()) && (await tab.getAttribute("aria-current")) !== "page") await tab.click();
   const card = page.getByTestId(`stop-${stopIndex}`);
   await card.getByTestId("stop-start").click();
-  await card.getByTestId("arrival-input").setInputFiles(PHOTO);
-  await expect(card.getByTestId("officer-input")).toBeVisible({ timeout: 10000 });
-  await card.getByTestId("officer-input").setInputFiles(PHOTO);
-  await card.getByLabel("Nama Petugas").fill(officer);
-  await card.getByRole("button", { name: "Selesaikan Titik" }).click();
+  const proof = card.getByTestId("stop-proof");
+  await proof.getByTestId("arrival-input").setInputFiles(PHOTO);
+  await expect(proof.getByTestId("arrival-geotag")).toBeVisible({ timeout: 10000 });
+  await proof.getByTestId("officer-input").setInputFiles(PHOTO);
+  await proof.getByTestId("officer-name").fill(officer);
+  await proof.getByTestId("stop-finish").click();
+}
+
+// The TPA tab's weigh ticket: "I'm at the gate" (when not yet reported), the ticket
+// photo, then the typed weights (no OCR engine in e2e) and "Send ticket".
+export async function sendReceipt(page, { gross = "", tare = "" } = {}) {
+  const tab = page.getByTestId("driver-tab-tpa");
+  if ((await tab.count()) && (await tab.getAttribute("aria-current")) !== "page") await tab.click();
+  const delivery = page.getByTestId("delivery-card");
+  await expect(delivery).toBeVisible({ timeout: 15000 });
+  const gate = delivery.getByTestId("gate-arrival");
+  if (await gate.isVisible()) await gate.click();
+  await delivery.getByTestId("receipt-input").setInputFiles(PHOTO);
+  const ticket = page.getByTestId("weigh-ticket");
+  await expect(ticket.getByTestId("receipt-send").or(ticket.getByTestId("weigh-fix"))).toBeVisible({
+    timeout: 20000,
+  });
+  if (await ticket.getByTestId("weigh-fix").isVisible()) await ticket.getByTestId("weigh-fix").click();
+  await ticket.getByTestId("receipt-gross").fill(gross);
+  await ticket.getByTestId("receipt-tare").fill(tare);
+  await ticket.getByTestId("receipt-send").click();
 }

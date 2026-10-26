@@ -68,7 +68,7 @@ test("a triple tap while offline enqueues exactly one confirmation and closes th
     button.click();
     button.click();
   });
-  await expect(page.getByTestId("driver-queued-count")).toHaveText("1 item menunggu sinyal");
+  await expect(page.getByTestId("driver-queued-count")).toHaveText("1 menunggu");
   const entries = await queuedFor(page, dispatch.id);
   expect(entries).toHaveLength(1);
   expect(entries[0].data.status).toBe("READY");
@@ -93,6 +93,7 @@ test("flush sends each queued operation exactly once and clears the queue", asyn
   await expect(item).toContainText(instruction, { timeout: 10000 });
 
   await context.setOffline(true);
+  await item.getByTestId("driver-instruction-cant").click();
   await item.getByTestId("driver-instruction-issue").click();
   await expect.poll(async () => (await queuedFor(page, dispatch.id)).length).toBe(1);
 

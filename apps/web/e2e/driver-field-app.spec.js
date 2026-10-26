@@ -59,13 +59,15 @@ async function expectTargets(page, selector, min) {
 test("the driver sign-in is titled for drivers and drops the command-centre story", async ({ page }) => {
   await freshPhone(page);
   await page.goto("/driver");
-  await expect(page.getByRole("heading", { name: "Masuk aplikasi sopir" })).toBeVisible();
+  // Wave 13 (F2CI6P): the driver app's own sign-in.
+  await expect(page.getByTestId("driver-login")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pythia Sopir" })).toBeVisible();
   await expect(page.getByText("Masuk ke Pythia")).toHaveCount(0);
   await expect(page.locator(".si-art")).toHaveCount(0);
   const username = page.locator('input[autocomplete="username"]');
   await expect(username).toHaveValue("driver");
-  await expect(username).toHaveAttribute("placeholder", "contoh: driver");
-  await expectTargets(page, ".login-language button", 44);
+  await expect(page.getByTestId("driver-login-stay")).toBeChecked();
+  await expectTargets(page, ".drv-login-lang button", 44);
 
   // The command centre keeps its own sign-in.
   await page.goto("/fleet");
@@ -76,7 +78,7 @@ test("/field redirects to the driver app's Instruksi tab behind the same sign-in
   await freshPhone(page);
   await page.goto("/field");
   await expect(page).toHaveURL(/\/driver\?tab=instruksi$/);
-  await expect(page.getByRole("heading", { name: "Masuk aplikasi sopir" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pythia Sopir" })).toBeVisible();
   await page.locator('input[autocomplete="current-password"]').fill("driver-demo-pass");
   await page.getByRole("button", { name: "Masuk" }).click();
 
@@ -260,7 +262,7 @@ for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 800 });
     await freshPhone(page);
     await page.goto("/driver");
-    await expect(page.getByRole("heading", { name: "Masuk aplikasi sopir" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Pythia Sopir" })).toBeVisible();
     await expectNoOverflow(page);
 
     const { token } = await apiLogin(request, "driver");

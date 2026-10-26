@@ -29,11 +29,10 @@ test("a truck-bound driver account opens straight on its own truck", async ({ pa
   });
   const app = page.getByTestId("driver-app");
   await expect(app).toBeVisible({ timeout: 15000 });
-  await expect(page.locator(".driver-brand small")).toHaveText("T-238");
-  await expect(page.locator(".driver-identity h1")).toContainText("Sopir Uji");
+  await expect(page.getByTestId("driver-truck-code")).toHaveText("T-238");
   await expect(page.locator('[data-testid^="pick-"]')).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Ganti" })).toHaveCount(0);
-  await expect(page.getByTestId("driver-identity-sim")).toHaveCount(0);
+  // A bound truck cannot be changed: the chip is a label, not a button.
+  await expect(page.getByTestId("driver-truck-chip")).toHaveJSProperty("tagName", "SPAN");
   // The session is cached so an offline start stays on the bound truck.
   const cached = await page.evaluate(() => JSON.parse(localStorage.getItem("pythia_driver_session")));
   expect(cached.truck_code).toBe("T-238");

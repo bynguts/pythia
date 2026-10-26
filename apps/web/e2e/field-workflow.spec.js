@@ -42,7 +42,7 @@ async function instructionOrder(page) {
   return page
     .locator('[data-testid^="driver-instruction-"]')
     .evaluateAll((nodes) =>
-      nodes.map((node) => node.dataset.testid).filter((id) => !/-(ready|issue|reason)$/.test(id)),
+      nodes.map((node) => node.dataset.testid).filter((id) => !/-(ready|issue|reason|cant|depart)$/.test(id)),
     );
 }
 
@@ -119,8 +119,8 @@ test("offline confirmation queues, reports a lost session, and recovers in ID an
 }) => {
   const { api, token } = await authenticatedApi();
   for (const [lang, copy] of [
-    ["id", { queued: "1 item menunggu sinyal", expired: "Sesi" }],
-    ["en", { queued: "1 queued, waiting for signal", expired: "session" }],
+    ["id", { queued: "1 menunggu", expired: "Sesi" }],
+    ["en", { queued: "1 waiting", expired: "session" }],
   ]) {
     const instruction = `E2E ${lang} offline ${Date.now()}`;
     const create = await api.post(`${API}/dispatch`, {
@@ -174,6 +174,10 @@ for (const [width, height] of [
     const item = page.getByTestId(`driver-instruction-${dispatch.id}`);
     await expect(item).toBeVisible({ timeout: 10000 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2)).toBe(true);
+    // Wave 13: a problem goes back through "Can't do this?", which reveals the reason field.
+    const cant = item.getByTestId("driver-instruction-cant");
+    await expectMinimumTouchTarget(cant);
+    await cant.click();
     for (const control of [
       item.getByTestId("driver-instruction-reason"),
       item.getByTestId("driver-instruction-ready"),

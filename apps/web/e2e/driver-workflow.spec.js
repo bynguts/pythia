@@ -79,44 +79,59 @@ test("driver runs full SPJ flow: pretrip, stop evidence, receipt", async ({ page
   // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
   await page.getByTestId("driver-truck-search").fill("T-220");
   await page.locator('[data-testid="pick-T-220"]').click();
+  await page.getByTestId("driver-pick-start").click();
   await pretripLoaded;
-  await expect(page.getByText(TEST_TRUCK, { exact: true }).first()).toBeVisible();
 
-  // ── Pre-trip (form on fresh day, SELESAI state on re-run) ──
-  // The form flips to SELESAI when /pretrip/today resolves — never hold a locator across that async boundary.
+  // ── Pre-trip (wave 13: on the Instructions tab; the done banner on a re-run) ──
+  // The form flips to done when /pretrip/today resolves — never hold a locator across that async boundary.
+  await page.getByTestId("driver-tab-instruksi").click();
+  // The route map has no header; the truck chip is on the other tabs.
+  await expect(page.getByTestId("driver-truck-code")).toHaveText(TEST_TRUCK);
   const doneBadge = page.getByTestId("pretrip-done");
-  const markRemaining = page.getByRole("button", { name: "Tandai Sisanya Baik" });
-  await expect(doneBadge.or(markRemaining)).toBeVisible({ timeout: 15000 });
-  if (await markRemaining.isVisible()) {
-    await markRemaining.click();
-    await page.getByRole("button", { name: /Simpan Inspeksi/i }).click();
+  const startCheck = page.getByTestId("driver-start-pretrip");
+  const restOk = page.getByTestId("pretrip-rest-ok");
+  await expect(doneBadge.or(startCheck).or(restOk)).toBeVisible({ timeout: 15000 });
+  if (await startCheck.isVisible()) await startCheck.click();
+  if (await restOk.isVisible()) {
+    await restOk.click();
+    await page.getByTestId("pretrip-submit").click();
   }
   await expect(doneBadge).toBeVisible({ timeout: 15000 });
 
-  // ── Stop evidence: arrival photo → weighing photo + weight → officer photo + name ──
-  await page.getByRole("button", { name: "Mulai Titik Ini" }).first().click();
+  // ── Stop proof (wave 13): "Saya sudah tiba" opens arrival photo → weight by type
+  // (one scale photo for the fractions) → officer name + photo → "Selesaikan titik" ──
+  await page.getByTestId("driver-tab-rute").click();
+  await page.getByRole("button", { name: "Saya sudah tiba" }).click();
+  const proof = page.getByTestId("stop-proof");
+  await proof.getByTestId("arrival-input").setInputFiles(PHOTO);
+  await expect(proof.getByText("Selesai", { exact: true })).toBeVisible({ timeout: 10000 });
 
-  await page.locator('[data-testid="arrival-input"]').setInputFiles(PHOTO);
-  await expect(page.getByText("Kedatangan", { exact: true })).toBeVisible({ timeout: 10000 });
+  await proof.getByTestId("weigh-input").setInputFiles(PHOTO);
+  await proof.getByLabel("Residu").fill("120");
 
-  await page.locator('[data-testid="weigh-input"]').setInputFiles(PHOTO);
-  await page.getByLabel("Berat (kg)").fill("120");
-  await page.getByRole("button", { name: "Tambah Timbangan" }).click();
-  await expect(page.getByText("Timbang Residu", { exact: true })).toBeVisible({ timeout: 10000 });
-
-  await page.locator('[data-testid="officer-input"]').setInputFiles(PHOTO);
-  await page.getByLabel("Nama Petugas").fill("Budi Petugas");
-  await page.getByRole("button", { name: "Selesaikan Titik" }).click();
-  // Only stop in the SPJ → SPJ becomes "selesai" and receipt card replaces stop cards.
+  await proof.getByTestId("officer-input").setInputFiles(PHOTO);
+  await proof.getByLabel("Nama petugas").fill("Budi Petugas");
+  await proof.getByRole("button", { name: "Selesaikan titik", exact: true }).click();
+  // Only stop in the SPJ → the app hands over to the TPA tab, which holds the gate.
+  await expect(page.getByTestId("driver-tab-tpa")).toHaveAttribute("aria-current", "page", {
+    timeout: 10000,
+  });
   await expect(page.locator('[data-testid="delivery-card"]')).toBeVisible({ timeout: 10000 });
 
   const afterStop = await (await page.request.get(`${API}/spj/${spj.spj_id}`, { headers })).json();
   expect(afterStop.stops[0].status).toBe("completed");
+  expect(afterStop.stops[0].evidence.weighing).toEqual([
+    expect.objectContaining({ fraction: "Residu", weight_kg: 120 }),
+  ]);
 
-  // ── Receipt: optional ticket weight first, then one camera tap submits ──
-  await page.getByLabel("Berat bruto di struk (kg, opsional)").fill("12450");
+  // ── Receipt: at the gate, then the weigh-ticket photo; no OCR engine in e2e, so the
+  // gross weight is typed from the paper and recorded as manual ──
+  await page.getByRole("button", { name: "Saya di gerbang" }).click();
   await page.locator('[data-testid="receipt-input"]').setInputFiles(PHOTO);
-  await expect(page.getByText("Tugas selesai")).toBeVisible({ timeout: 10000 });
+  const ticket = page.getByTestId("weigh-ticket");
+  await ticket.getByLabel("Berat bruto (kg)").fill("12450");
+  await ticket.getByRole("button", { name: "Kirim struk" }).click();
+  await expect(page.getByText("Kerja bagus hari ini")).toBeVisible({ timeout: 10000 });
   await expect(page.getByTestId("receipt-weight-gross")).toContainText("12.450 kg");
   const receipt = (await (await page.request.get(`${API}/spj/${spj.spj_id}`, { headers })).json()).receipt;
   expect(receipt.total_weight_kg).toBe(12450);
@@ -194,6 +209,7 @@ test("driver is offered the newest receipt-pending SPJ, not the oldest", async (
   // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
   await page.getByTestId("driver-truck-search").fill(TEST_TRUCK);
   await page.locator(`[data-testid="pick-${TEST_TRUCK}"]`).click();
+  await page.getByTestId("driver-pick-start").click();
   const card = page.getByTestId("delivery-card");
   await expect(card).toBeVisible({ timeout: 15000 });
   await expect(card).toHaveAttribute("data-spj-id", newer.spj_id);
@@ -222,12 +238,15 @@ test("pretrip with a TIDAK item auto-creates a damage report", async ({ page, co
   await page.getByTestId("driver-truck-search").fill(PRETTRIP_TRUCK);
   await page.locator(`[data-testid="pick-${PRETTRIP_TRUCK}"]`).click();
 
-  // Mark "Ban dan roda" TIDAK (ban → severity berat), fill mandatory note.
-  await page.getByRole("button", { name: "Tandai Sisanya Baik" }).click();
-  await page.locator('[data-testid="tidak-ban"]').click();
-  await page.getByLabel(/Catatan/i).fill("Ban belakang kanan bocor e2e");
-  await page.getByRole("button", { name: /Simpan Inspeksi/i }).click();
-  await expect(page.getByText("SELESAI").first()).toBeVisible({ timeout: 10000 });
+  await page.getByTestId("driver-pick-start").click();
+
+  // Mark tyres NO (ban → severity berat) with its mandatory note; the rest OK.
+  await page.getByTestId("driver-start-pretrip").click();
+  await page.getByTestId("pretrip-rest-ok").click();
+  await page.getByTestId("tidak-ban").click();
+  await page.getByTestId("pretrip-note-ban").fill("Ban belakang kanan bocor e2e");
+  await page.getByTestId("pretrip-submit").click();
+  await expect(page.getByTestId("pretrip-done")).toBeVisible({ timeout: 10000 });
 
   const reports = await (await page.request.get(`${API}/damage-reports?status=baru`, { headers })).json();
   const mine = (reports.reports || []).filter(

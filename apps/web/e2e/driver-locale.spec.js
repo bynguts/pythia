@@ -34,14 +34,14 @@ test("driver gate and brand follow the stored locale", async ({ page }) => {
     localStorage.removeItem("pythia_driver");
   }, principal.token);
   await page.goto("/driver");
-  await expect(page.getByRole("heading", { name: "Enter your truck code" })).toBeVisible();
-  await expect(page.getByText("Driver PWA")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Choose your truck" })).toBeVisible();
+  await expect(page.getByTestId("driver-pick-start")).toHaveText("Pick a truck");
 
   // Switch to Indonesian and reload: copy changes and persists.
   await page.evaluate(() => localStorage.setItem("pythia_lang", "id"));
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Masukkan kode truk" })).toBeVisible();
-  await expect(page.getByText("PWA Sopir")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pilih truk Anda" })).toBeVisible();
+  await expect(page.getByTestId("driver-pick-start")).toHaveText("Pilih truk");
 });
 
 test("driver pretrip, stop and receipt surfaces localize end to end", async ({ page, context }) => {
@@ -91,29 +91,33 @@ test("driver pretrip, stop and receipt surfaces localize end to end", async ({ p
     await page.goto("/driver");
     // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
     await page.getByTestId("driver-truck-search").fill(TEST_TRUCK);
-    await page.locator(`[data-testid="pick-${TEST_TRUCK}"]`).click();
+    await page.locator(`[data-testid="pick-${TEST_TRUCK}"] button`).click();
+    await page.getByTestId("driver-pick-start").click();
 
-    // Pretrip surface in English.
-    await expect(page.getByRole("heading", { name: "Pre-trip inspection" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Mark the rest as OK" })).toBeVisible();
+    // Pretrip surface in English (Instructions tab).
+    await page.getByTestId("driver-tab-instruksi").click();
+    await page.getByTestId("driver-start-pretrip").click();
+    await expect(page.getByRole("heading", { name: "Pre-trip check" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Rest are OK" })).toBeVisible();
     // Regression (#77 refactor follow-up): mark-rest-OK must answer ALL items
     // (a tuple-destructuring leftover left 5/7 answered with 0 active buttons).
-    await page.getByRole("button", { name: "Mark the rest as OK" }).click();
-    await expect(page.locator(".pretrip-choice.ok.active")).toHaveCount(7);
-    await expect(page.getByRole("button", { name: "Save inspection" })).toBeVisible();
+    await page.getByRole("button", { name: "Rest are OK" }).click();
+    await expect(page.locator(".drv-seg-btn.ok.active")).toHaveCount(7);
+    await expect(page.getByRole("button", { name: "Submit" })).toBeEnabled();
     await expect(page.getByText("Brakes")).toBeVisible();
     await expect(page.getByText("Engine")).toBeVisible();
-    await expect(page.getByText("Tyres & wheels")).toBeVisible();
+    await expect(page.getByText("Tyres")).toBeVisible();
+    await page.getByTestId("driver-tab-rute").click();
 
-    // Stop card appears once the active SPJ poll lands (8s interval).
+    // The route sheet appears once the active SPJ poll lands (8s interval).
     await expect(page.getByRole("heading", { name: /Stop 1: TPS E2E/ })).toBeVisible({ timeout: 20000 });
-    // The stop form reveals step-gated copy: step 1 is visible immediately.
-    const startButton = page.getByRole("button", { name: "Start this stop" });
-    if (await startButton.count()) await startButton.click();
-    await expect(page.getByText("Arrival photo at the location")).toBeVisible();
-    // Step list labels for weighing and officer are localized in the stepper.
-    await expect(page.getByText("Residue weighing")).toBeVisible();
-    await expect(page.getByText("Officer")).toBeVisible();
+    // Wave 13: "I've arrived" opens the stop proof; its three steps read in English.
+    await page.getByRole("button", { name: "I've arrived" }).click();
+    const proof = page.getByTestId("stop-proof");
+    await expect(proof.getByText("Arrival photo", { exact: true })).toBeVisible();
+    await expect(proof.getByText("Weight by type")).toBeVisible();
+    await expect(proof.getByText("TPS officer")).toBeVisible();
+    await expect(proof.getByTestId("stop-finish")).toHaveText(/^Finish stop/);
 
     // Receipt surface copy is unit-verified via the i18n catalog; the stop
     // flow above covers the step-gated localization.
