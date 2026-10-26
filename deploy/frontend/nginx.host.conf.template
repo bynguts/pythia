@@ -1,0 +1,46 @@
+server {
+    # Host-network variant (docker-compose.host.yml): loopback only.
+    listen 127.0.0.1:${PYTHIA_HOST_HTTP_PORT};
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # A stop completion carries several camera photos as base64 in one JSON body;
+    # nginx's 1 MB default would answer 413 for almost every real stop (gap 1).
+    client_max_body_size 25m;
+
+    # API proxied to the backend container
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+
+    # The service worker and the app shell must revalidate, or phones keep an old build.
+    location = /sw.js {
+        add_header Cache-Control "no-cache";
+        try_files $uri =404;
+    }
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+
+    # Hashed build assets never change under the same name.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    # SPA fallback — React router
+    location / {
+        add_header Cache-Control "no-cache";
+        try_files $uri $uri/ /index.html;
+    }
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+    gzip_min_length 1024;
+}

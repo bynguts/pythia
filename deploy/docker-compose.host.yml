@@ -1,0 +1,31 @@
+# Override for a server whose model gateway listens on the host's loopback behind a
+# strict host firewall (bridge traffic to it is dropped). All three containers join
+# the host network and bind to 127.0.0.1 only, so nothing new is exposed and no
+# firewall rule changes:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.host.yml up -d --build
+#
+# Then OPENAI_BASE_URL=http://127.0.0.1:<gateway port>/v1 in deploy/.env.
+# Host ports used: 127.0.0.1:8000 (backend), 127.0.0.1:2785 (wa-gateway) and
+# PYTHIA_HOST_HTTP_PORT on 127.0.0.1 (frontend, default 8080).
+
+services:
+  backend:
+    network_mode: host
+    extra_hosts: !reset []
+    environment:
+      OPENWA_BASE_URL: "http://127.0.0.1:2785/api"
+    command: ["python", "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000", "--workers", "1"]
+
+  frontend:
+    network_mode: host
+    ports: !reset []
+    environment:
+      PYTHIA_HOST_HTTP_PORT: "${PYTHIA_HOST_HTTP_PORT:-8080}"
+    volumes:
+      - ./frontend/nginx.host.conf.template:/etc/nginx/templates/default.conf.template:ro
+
+  wa-gateway:
+    network_mode: host
+    environment:
+      HOST: "127.0.0.1"

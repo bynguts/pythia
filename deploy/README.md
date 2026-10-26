@@ -58,6 +58,10 @@ server's own HTTPS setup.
   (any OpenAI-compatible gateway; the OCR needs a model that accepts images, or set
   `OPENAI_VISION_MODEL`). Without a key, Ana answers locally and says so, and drivers
   type the ticket weights.
+- **A gateway on the server's loopback** (behind a firewall that drops container
+  traffic): run with the host-network override, which binds every container to
+  127.0.0.1, and set `OPENAI_BASE_URL=http://127.0.0.1:<port>/v1`:
+  `docker compose -f docker-compose.yml -f docker-compose.host.yml up -d --build`.
 - **WhatsApp:** sign in as `dispatcher` or `administrator`, open Settings → WhatsApp and
   scan the QR code. The session survives restarts on the `wa-auth` volume.
 
