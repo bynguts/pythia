@@ -32,6 +32,9 @@ services:
       # The gateway runs in its own container; the API never spawns a local one here.
       OPENWA_BASE_URL: "http://wa-gateway:2785/api"
       PYTHIA_WA_AUTOSTART: "off"
+    # Lets OPENAI_BASE_URL point at a gateway on the host: http://host.docker.internal:<port>/v1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - pythia-history:/app/data/history
     mem_limit: 1500m
