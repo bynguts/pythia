@@ -87,6 +87,7 @@ export function OutlookSection() {
     : null;
   const monthLabel = (ym) =>
     isoDate(`${ym}-01`).toLocaleDateString(locale, { month: "short", year: "numeric" });
+  const learned = outlook?.learned_correction;
   const evidence =
     backtest?.mape_model_pct != null
       ? t("ol_evidence")
@@ -139,6 +140,11 @@ export function OutlookSection() {
                     </small>
                   </span>
                   <strong className="tmr-ol-value">{number(day.total_tons)} t</strong>
+                  {day.corrected_tons != null && (
+                    <span className="tmr-ol-corrected" data-testid="tmr-outlook-corrected">
+                      {t("ol_corrected").replace("{t}", number(day.corrected_tons))}
+                    </span>
+                  )}
                   <span className="tmr-ol-chips">
                     {dayChips(day, t, number).map((chip) => (
                       <span
@@ -156,6 +162,28 @@ export function OutlookSection() {
               );
             })}
           </ol>
+
+          {learned && (
+            <p
+              className="tmr-ol-note"
+              data-testid="tmr-outlook-learning"
+              data-active={learned.active ? "true" : "false"}
+              title={t("ol_learning_title").replace("{cap}", learned.clamp_pct ?? "—")}
+            >
+              {learned.active
+                ? t("ol_learning")
+                    .replace("{n}", number(learned.n_days))
+                    .replace("{pct}", signedPercent(learned.pct))
+                : [
+                    t("ol_learning_off").replace("{min}", learned.min_days ?? "—"),
+                    learned.n_days > 0
+                      ? t("ol_learning_so_far").replace("{n}", number(learned.n_days))
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+            </p>
+          )}
 
           <h3 className="tmr-ol-label">{t("ol_months")}</h3>
           {months.length ? (

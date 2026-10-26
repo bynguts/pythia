@@ -34,13 +34,22 @@ function day(offset, total, drivers, beyond = false) {
   };
 }
 
-function outlook({ backtest = true } = {}) {
+function withCorrection(correction, days) {
+  return days.map((d) => ({
+    ...d,
+    corrected_tons: correction.active ? Math.round(d.total_tons * correction.factor * 10) / 10 : null,
+  }));
+}
+
+function outlook({ backtest = true, learned = null } = {}) {
+  const correction = learned ?? { active: false, factor: 1, pct: 0, n_days: 1, min_days: 3, clamp_pct: 25 };
   return {
+    learned_correction: correction,
     generated_for: jakartaDay(0),
     inputs_auto: true,
     provenance: "MODEL OUTPUT",
     week: {
-      days: [
+      days: withCorrection(correction, [
         day(0, 8100, {}),
         day(1, 8640, { rain: 20, rainEffect: 640 }),
         day(2, 8200, { holiday: "Hari Uji" }),
@@ -48,7 +57,7 @@ function outlook({ backtest = true } = {}) {
         day(4, 8050, {}),
         day(5, 8000, {}, true),
         day(6, 8000, {}, true),
-      ],
+      ]),
     },
     monthly_intake: {
       available: true,
@@ -122,4 +131,25 @@ test("the live outlook agrees with tomorrow's forecast card", async ({ page }) =
   await expect(page.getByTestId("tmr-outlook-day")).toHaveCount(7);
   await expect(page.getByTestId("tmr-outlook-month")).toHaveCount(3);
   await expect(page.getByTestId("tmr-outlook-evidence")).toContainText(/Error [\d.]+% on real weighing data/);
+});
+
+test("the outlook says when it starts learning from the weighbridge", async ({ page }) => {
+  await page.route(/\/api\/forecast\/outlook$/, (route) => route.fulfill({ json: outlook() }));
+  await signIn(page, { lang: "en", path: "/app/tomorrow" });
+  const line = page.getByTestId("tmr-outlook-learning");
+  await expect(line).toHaveAttribute("data-active", "false");
+  await expect(line).toHaveText("Starts adjusting after 3 weighed days · 1 so far");
+  await expect(page.getByTestId("tmr-outlook-corrected")).toHaveCount(0);
+});
+
+test("an active correction shows its days and percent beside the raw model value", async ({ page }) => {
+  const learned = { active: true, factor: 1.069, pct: 6.9, n_days: 4, min_days: 3, clamp_pct: 25 };
+  await page.route(/\/api\/forecast\/outlook$/, (route) => route.fulfill({ json: outlook({ learned }) }));
+  await signIn(page, { lang: "id", path: "/app/tomorrow" });
+  await expect(page.getByTestId("tmr-outlook-learning")).toHaveText(
+    "Belajar dari 4 hari tertimbang · koreksi +6.9%",
+  );
+  const tomorrow = page.locator("[data-testid=tmr-outlook-day][data-when=tomorrow]");
+  await expect(tomorrow.locator(".tmr-ol-value")).toHaveText("8.640 t");
+  await expect(tomorrow.getByTestId("tmr-outlook-corrected")).toHaveText("Disesuaikan 9.236 t");
 });

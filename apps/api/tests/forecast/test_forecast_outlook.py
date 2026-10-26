@@ -120,3 +120,5 @@ def test_ana_answers_next_week_and_next_month_from_the_outlook(api_client, week_
     assert first["date"] in result["answer"] and "MODEL OUTPUT" in result["answer"]
     assert f"MAPE {outlook['monthly_intake']['backtest']['mape_model_pct']}%" in result["answer"]
     assert outlook["monthly_intake"]["months"][0]["month"] in result["answer"]
+    learned = outlook["learned_correction"]
+    assert learned["classification"] == "LEARNED_FROM_OBSERVED" and "hari tertimbang" in result["answer"]

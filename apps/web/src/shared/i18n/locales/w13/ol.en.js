@@ -26,4 +26,10 @@ export const olEn = {
   ol_loading: "Loading the outlook",
   ol_error: "The outlook couldn't load.",
   ol_unavailable: "—",
+  ol_learning: "Learning from {n} weighed days · correction {pct}",
+  ol_learning_off: "Starts adjusting after {min} weighed days",
+  ol_learning_so_far: "{n} so far",
+  ol_learning_title:
+    "Weighbridge tonnes of closed work-order days against the plan's forecast; a recent-weighted average, capped at ±{cap}%. The model value stays as it is.",
+  ol_corrected: "Adjusted {t} t",
 };

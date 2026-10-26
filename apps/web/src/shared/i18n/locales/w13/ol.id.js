@@ -27,4 +27,10 @@ export const olId = {
   ol_loading: "Memuat prakiraan ke depan",
   ol_error: "Prakiraan ke depan gagal dimuat.",
   ol_unavailable: "—",
+  ol_learning: "Belajar dari {n} hari tertimbang · koreksi {pct}",
+  ol_learning_off: "Mulai menyesuaikan setelah {min} hari tertimbang",
+  ol_learning_so_far: "baru {n}",
+  ol_learning_title:
+    "Tonase jembatan timbang pada hari SPJ yang sudah ditutup dibanding prakiraan rencana; rata-rata berbobot hari terbaru, dibatasi ±{cap}%. Nilai model tetap ditampilkan.",
+  ol_corrected: "Disesuaikan {t} t",
 };

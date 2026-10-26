@@ -888,6 +888,11 @@ def list_hybrid_models() -> list[dict[str, Any]]:
 # ═════════════════════════════════════════════════════════════════════
 
 
+# A model refitted at startup on newer real data (app/forecast/monthly_refit.py) and the
+# outcome of that check; empty until the check runs, when the artifact below serves.
+_MONTHLY_REFIT: dict[str, Any] = {}
+
+
 @lru_cache(maxsize=1)
 def _monthly_calendar_model() -> dict[str, Any] | None:
     """monthly_calendar_model.json from ml/scripts/train_models.py, or None if absent."""
@@ -938,9 +943,13 @@ def forecast_monthly_intake(months: int = 3, start_month: str | None = None) -> 
         "unit": "t/day",
         "daily_district_suitability": "not_supported_calibrated_synthetic",
     }
-    model = _monthly_calendar_model()
+    refit = _MONTHLY_REFIT.get("model")
+    model = refit or _monthly_calendar_model()
     if model is None:
         return {**base, "available": False, "months": [], "reason": "monthly_calendar_model.json missing"}
+    if _MONTHLY_REFIT.get("status"):
+        base["refit"] = _MONTHLY_REFIT["status"]
+    base["model_source"] = "startup_refit" if refit else "artifact"
 
     last = pd.Period(model["fitted_through"], freq="M")
     start = pd.Period(start_month, freq="M") if start_month else last + 1

@@ -200,6 +200,22 @@ def _outlook_answer(result: dict[str, Any], lang: str) -> str:
             + "."
             + error
         )
+    learned = result.get("learned_correction")
+    if learned:
+        if learned["active"]:
+            parts.append(
+                f"Learned from {learned['n_days']} weighed days: correction {learned['pct']:+}%."
+                if en
+                else f"Belajar dari {learned['n_days']} hari tertimbang: koreksi {learned['pct']:+}%."
+            )
+        else:
+            parts.append(
+                f"The weighbridge correction starts after {learned['min_days']} weighed days "
+                f"({learned['n_days']} so far)."
+                if en
+                else f"Koreksi dari jembatan timbang mulai setelah {learned['min_days']} hari tertimbang "
+                f"(baru {learned['n_days']})."
+            )
     return " ".join(parts)
 
 

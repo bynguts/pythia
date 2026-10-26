@@ -42,6 +42,16 @@ def warm_tpa_queue() -> None:
 def _warm_route_cache() -> None:
     """Warm OSRM caches (A* edges + per-truck map-truth routes) in a background
     thread so the first live demo request is fast, never blocking on cold OSRM."""
+    # A month DLH published after the monthly intake model was trained refits it here
+    # (main thread, before any request reads it); the outcome shows in /api/ml/monthly-intake.
+    try:
+        from app.forecast.monthly_refit import refit_monthly_model_if_stale
+
+        refit = refit_monthly_model_if_stale()
+        print(f"Monthly intake model: {refit['status']} (fitted through {refit['fitted_through']}).")
+    except Exception as e:
+        print("Monthly intake refit check failed:", e)
+
     print("Warming predictions on main thread...")
     try:
         from app.fleet.data import build_predictions

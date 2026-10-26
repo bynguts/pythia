@@ -58,3 +58,11 @@ SOURCES_DIR = DATA_DIR / "sources"
 # acceptance rules, each with its source and classification. Read per plan, so
 # editing the file changes the next plan without a deploy.
 OPERATIONS_RULES_FILE = DATA_DIR / "config" / "operations_rules.json"
+# The real Bantargebang weighing data the monthly intake model is fitted on, with its
+# correction table and the Idul Fitri dates; at startup the API refits the monthly model
+# in-process (app/forecast/monthly_refit.py) with the training script's own fitting code
+# when this dataset holds a month the committed artifact has not seen.
+BANTARGEBANG_CSV = REAL_DIR / "bantargebang_hasil_penimbangan.csv"
+BANTARGEBANG_CORRECTIONS = REAL_DIR / "bantargebang_corrections.json"
+IDUL_FITRI_DATES = REAL_DIR / "idul_fitri_dates.json"
+TRAIN_MODELS_SCRIPT = REPO_ROOT / "ml" / "scripts" / "train_models.py"

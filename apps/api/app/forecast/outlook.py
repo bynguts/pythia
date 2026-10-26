@@ -19,6 +19,7 @@ from app.core.env import today
 from app.forecast.baseline import build_outlook, day_drivers
 from app.forecast.engine import forecast_monthly_intake
 from app.forecast.forecast_metrics import monthly_backtest_metrics
+from app.forecast.learning import corrected, learned_correction
 
 OUTLOOK_DAYS = 7
 OUTLOOK_MONTHS = 3
@@ -113,11 +114,19 @@ def forecast_outlook() -> dict[str, Any]:
 
 
 def outlook_payload() -> dict[str, Any]:
-    """`forecast_outlook()` shared for 5 minutes per forecast date (the route and Ana's tool)."""
+    """`forecast_outlook()` shared for 5 minutes per forecast date (the route and Ana's tool),
+    with the weighbridge-learned correction (app/forecast/learning.py)."""
     key = today().isoformat()
     now = time.time()
     if _outlook_cache["key"] != key or now - _outlook_cache["ts"] >= _CACHE_TTL_S:
         _outlook_cache["payload"] = forecast_outlook()
         _outlook_cache["key"] = key
         _outlook_cache["ts"] = now
-    return _outlook_cache["payload"]
+    payload = _outlook_cache["payload"]
+    # The learned correction moves with every weighed day, so it is applied after the cache,
+    # next to (never instead of) each day's raw model value.
+    correction = learned_correction()
+    days = [
+        {**day, "corrected_tons": corrected(day["total_tons"], correction)} for day in payload["week"]["days"]
+    ]
+    return {**payload, "week": {**payload["week"], "days": days}, "learned_correction": correction}

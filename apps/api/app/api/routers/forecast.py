@@ -33,6 +33,7 @@ from app.forecast.forecast_metrics import (
     suitability_labels,
 )
 from app.forecast.impact import build_impact_report
+from app.forecast.learning import corrected, learned_correction
 from app.forecast.outlook import outlook_payload
 from app.forecast.real_data import (
     load_kecamatan_map,
@@ -204,12 +205,20 @@ def forecast_tomorrow(
 ) -> dict[str, Any]:
     """Tomorrow's forecast with its drivers (weather, events, holiday) filled and explained automatically.
 
-    `date` must fall inside the forecast week; the response includes submitted permits.
+    `date` must fall inside the forecast week; the response includes submitted permits and the
+    correction learned from weighed days (`learned_correction`, `corrected_total_t`) beside the
+    raw model total.
     """
     try:
-        return tomorrow_forecast(target_date.isoformat() if target_date else None)
+        payload = tomorrow_forecast(target_date.isoformat() if target_date else None)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    correction = learned_correction()
+    return {
+        **payload,
+        "learned_correction": correction,
+        "corrected_total_t": corrected(payload["total_tonnage_t"], correction),
+    }
 
 
 @router.get("/api/forecast/outlook")
