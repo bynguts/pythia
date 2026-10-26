@@ -233,28 +233,28 @@ export function LandingPage() {
             <Link className="land-logo" to="/" aria-label="Pythia">
               <Logo />
             </Link>
-            <nav aria-label={t("l_nav_label")}>
-              <ul>
-                <li>
-                  <a className="is-active" href="#product">
-                    {t("l_nav_product")}
-                  </a>
-                </li>
-                <li>
-                  <a href="#how">{t("l_nav_how")}</a>
-                </li>
-                <li>
-                  <a href="#honesty">{t("l_nav_honesty")}</a>
-                </li>
-                <li>
-                  <Link to="/driver">{t("l_nav_driver")}</Link>
-                </li>
-                <li>
-                  <a href="#faq">{t("l_nav_faq")}</a>
-                </li>
-              </ul>
-            </nav>
           </div>
+          <nav aria-label={t("l_nav_label")}>
+            <ul>
+              <li>
+                <a className="is-active" href="#product">
+                  {t("l_nav_product")}
+                </a>
+              </li>
+              <li>
+                <a href="#how">{t("l_nav_how")}</a>
+              </li>
+              <li>
+                <a href="#honesty">{t("l_nav_honesty")}</a>
+              </li>
+              <li>
+                <Link to="/driver">{t("l_nav_driver")}</Link>
+              </li>
+              <li>
+                <a href="#faq">{t("l_nav_faq")}</a>
+              </li>
+            </ul>
+          </nav>
           <div className="land-nav-right">
             <Link className="land-signin" to="/app" data-testid="landing-signin">
               {t("l_nav_signin")}
@@ -268,10 +268,6 @@ export function LandingPage() {
 
       <main id="main">
         <section className="land-hero land-wrap" id="product">
-          <p className="land-pill">
-            <Mascot size={20} />
-            <span>{t("l_hero_pill")}</span>
-          </p>
           <h1>
             {t("l_hero_h1_a")}
             <br />

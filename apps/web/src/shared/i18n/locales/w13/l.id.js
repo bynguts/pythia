@@ -12,7 +12,6 @@ export const lId = {
   l_nav_signin: "Masuk",
   l_book_demo: "Jadwalkan demo",
   l_open_console: "Buka konsol",
-  l_hero_pill: "Dibuat untuk kasus dinas kebersihan Jakarta · 42 kecamatan",
   l_hero_h1_a: "Operasional sampah,",
   l_hero_h1_b: "diputuskan sebelum subuh.",
   l_hero_sub:

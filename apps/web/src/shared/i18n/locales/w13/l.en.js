@@ -12,7 +12,6 @@ export const lEn = {
   l_nav_signin: "Sign in",
   l_book_demo: "Book a demo",
   l_open_console: "Open the console",
-  l_hero_pill: "Built for Jakarta's waste agency case · 42 districts",
   l_hero_h1_a: "Waste operations,",
   l_hero_h1_b: "decided before dawn.",
   l_hero_sub:

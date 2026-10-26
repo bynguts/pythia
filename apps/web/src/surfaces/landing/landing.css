@@ -216,9 +216,9 @@
 }
 
 .land-nav {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   min-height: 72px;
 }
 
@@ -228,11 +228,9 @@
   align-items: center;
 }
 
-.land-nav-left {
-  gap: 36px;
-}
-
 .land-nav-right {
+  grid-column: 3;
+  justify-self: end;
   gap: 10px;
 }
 
@@ -307,19 +305,6 @@
   padding-top: 88px;
   padding-bottom: 64px;
   text-align: center;
-}
-
-.land-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 12px 5px 6px;
-  border-radius: 20px;
-  background: #fff;
-  box-shadow: var(--l-shadow);
-  color: var(--l-ink-3);
-  font-size: 13px;
-  font-weight: 500;
 }
 
 .land-hero h1 {
