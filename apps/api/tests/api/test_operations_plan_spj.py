@@ -290,6 +290,24 @@ def test_the_modelled_slot_reads_back_as_departure_and_gate_window(api_client, a
         assert f"{slot['start']}–{slot['end']}" in line and line.endswith("(keluaran model)")
 
 
+def test_built_plan_says_whether_the_weighbridge_slots_can_take_its_trucks(api_client, auth_headers):
+    created = api_client.post("/api/operations/plan", headers=auth_headers("dispatcher"))
+    assert created.status_code == 200, created.text
+    plan = created.json()
+    capacity = plan["gate_capacity"]
+    assert capacity["classification"] == "MODEL_OUTPUT"
+    assert capacity["max_trucks_per_slot"] <= capacity["capacity_per_slot"]
+    per_slot = {}
+    for dispatch in plan["dispatches"]:
+        slot = dispatch["fields"]["gate_slot"]
+        if slot and slot["capacity_model"]:
+            key = (slot["date"], slot["start"])
+            per_slot[key] = per_slot.get(key, 0) + 1
+            assert slot["capacity_model"]["expected_wait_min"] >= 0
+    assert max(per_slot.values()) == capacity["max_trucks_per_slot"]
+    assert capacity["coverage"]["planned_gate_arrivals"] == sum(per_slot.values())
+
+
 def test_spj_audit_carries_the_plan_and_dispatch_events_of_its_plan(api_client, auth_headers):
     (a,) = _free_trucks(1)
     plan = save_plan({a: [("gambir", "TPST Bantargebang")]}, gate_slot=SLOT)

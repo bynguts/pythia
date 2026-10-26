@@ -338,6 +338,25 @@ function DistrictTable({ plan }) {
   );
 }
 
+// One plain line when the weighbridge slots can't take the plan as staggered: trucks left
+// without a slot, or a gate the rest of the day's (unstaggered) traffic already saturates.
+function gateCapacityLine(capacity, t, locale) {
+  if (!capacity) return null;
+  const number = (value) => Number(value).toLocaleString(locale, { maximumFractionDigits: 0 });
+  if (capacity.overflow_trucks?.length) {
+    return t("s3_gate_overflow")
+      .replace("{n}", number(capacity.overflow_trucks.length))
+      .replace("{cap}", number(capacity.capacity_per_slot));
+  }
+  if (capacity.saturated && capacity.saturated_slots?.length) {
+    return t("s3_gate_saturated")
+      .replace("{from}", capacity.saturated_slots[0])
+      .replace("{n}", number(capacity.coverage?.planned_gate_arrivals ?? 0))
+      .replace("{total}", number(capacity.coverage?.daily_arrivals ?? 0));
+  }
+  return null;
+}
+
 function GateTable({ plan, board }) {
   const { t, lang } = useLanguage();
   const locale = localeFor(lang);
@@ -345,8 +364,14 @@ function GateTable({ plan, board }) {
   const [open, setOpen] = useState(false);
   const shown = open ? rows : rows.slice(0, VISIBLE_ROWS);
   if (!rows.length) return <p className="tmr-empty-row">{t("s3_gate_empty")}</p>;
+  const capacityLine = gateCapacityLine(plan.gate_capacity, t, locale);
   return (
     <>
+      {capacityLine && (
+        <p className="tmr-empty-row" data-testid="tmr-gate-capacity" title={plan.gate_capacity?.basis}>
+          {capacityLine}
+        </p>
+      )}
       <div className="ui-table-wrap">
         <table className="ui-table tmr-table" data-testid="tmr-gate-table" data-provenance="model">
           <caption className="sr-only">{t("s3_view_gate")}</caption>
@@ -357,7 +382,10 @@ function GateTable({ plan, board }) {
               </th>
               <th scope="col">{t("s3_th_trucks")}</th>
               <th scope="col" className="tmr-col-gate">
-                {t("s3_th_wait")}
+                {t("s3_th_wait")}{" "}
+                <Tag tone="model" title={t("s3_wait_model_title")}>
+                  {t("s3_model")}
+                </Tag>
               </th>
             </tr>
           </thead>
@@ -370,13 +398,17 @@ function GateTable({ plan, board }) {
                   </strong>
                 </td>
                 <td>{row.trucks.join(", ")}</td>
-                <td className="tmr-why-cell">
-                  {row.wait != null
-                    ? t("s3_wait_min").replace(
-                        "{n}",
-                        Number(row.wait).toLocaleString(locale, { maximumFractionDigits: 1 }),
-                      )
-                    : "—"}
+                <td className="tmr-why-cell" data-testid="tmr-gate-wait">
+                  {row.wait != null ? (
+                    t("s3_wait_min").replace(
+                      "{n}",
+                      Number(row.wait).toLocaleString(locale, { maximumFractionDigits: 1 }),
+                    )
+                  ) : (
+                    <span title={t(row.noWait === "older" ? "s3_wait_none_older" : "s3_wait_none_facility")}>
+                      —
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}

@@ -119,11 +119,15 @@ export function districtRows(plan) {
     .sort((a, b) => b.tons - a.tons);
 }
 
-// The plan's trucks grouped by their modelled gate slot, with the slot board's expected
-// wait (model) when the board has that slot.
+// The plan's trucks grouped by their modelled gate slot, with the expected wait (model):
+// the slot board's once the plan is approved (the board sees every approved plan), else
+// the plan's own slot model. `noWait` says why a row has none: "facility" (no weighbridge
+// model, e.g. RDF) or "older" (a plan built before slot waits were modelled).
 export function gateRows(plan, board) {
   const waits = {};
-  for (const slot of board?.slots || []) waits[slot.start] = slot.expected_wait_min;
+  if (plan?.status === "approved") {
+    for (const slot of board?.slots || []) waits[`${slot.date} ${slot.start}`] = slot.expected_wait_min;
+  }
   const bySlot = new Map();
   for (const dispatch of plan?.dispatches || []) {
     const slot = dispatch.fields?.gate_slot;
@@ -133,10 +137,15 @@ export function gateRows(plan, board) {
       end: slot.end,
       trucks: [],
       over: false,
-      wait: waits[slot.start] ?? null,
+      wait: null,
+      noWait: "facility",
     };
     row.trucks.push(dispatch.truck_code);
     if (slot.capacity_model?.over_capacity) row.over = true;
+    if (row.wait == null && slot.capacity_model) {
+      row.wait = waits[`${slot.date} ${slot.start}`] ?? slot.capacity_model.expected_wait_min ?? null;
+      row.noWait = row.wait == null ? "older" : null;
+    }
     bySlot.set(slot.start, row);
   }
   return [...bySlot.values()].sort((a, b) => a.start.localeCompare(b.start));

@@ -359,7 +359,7 @@ function Kpis({ day, board, safety, recap, queue, t, lang, nowMin }) {
           tag={modelTag}
           value={mean == null ? "—" : minutes(mean, lang)}
           unit={mean == null ? null : t("s4_min")}
-          sub={t("s4_per_truck")}
+          sub={t("s4_day_mean")}
         />
         <Kpi
           testId="gate-kpi-planned"

@@ -28,7 +28,7 @@ from app.field import safety
 from app.field.permits import PERMIT_STORE
 from app.field.spj import SPJ_STORE
 from app.fleet.data import TRUCKS, events_permits_payload, tpa_queue_status_payload
-from app.fleet.gate_slots import assign_gate_slots
+from app.fleet.gate_slots import assign_gate_slots, plan_gate_capacity
 from app.fleet.operations_optimizer import Demand, Vehicle, build_operational_plan
 from app.fleet.operations_rules import PlanningRules, resolve_rules
 from app.fleet.queue_simulation import QUEUE_QUANTITIES, QUEUE_STAGE
@@ -383,6 +383,7 @@ def create_operations_plan(
         for a in plan.assignments
     ]
     by_area = {d.area: d for d in demands}
+    dispatches = _dispatch_instructions(plan.plan_id, plan_date, assignments, by_area, rules)
     payload = {
         "plan_id": plan.plan_id,
         "status": "proposed",
@@ -398,7 +399,10 @@ def create_operations_plan(
             "demand_classification": "MODEL_OUTPUT",
         },
         "assignments": assignments,
-        "dispatches": _dispatch_instructions(plan.plan_id, plan_date, assignments, by_area, rules),
+        "dispatches": dispatches,
+        # Whether the weighbridge slots can take the plan's trucks, and how much of the
+        # day's gate traffic the plan carries (the rest arrives unstaggered).
+        "gate_capacity": plan_gate_capacity(dispatches),
         "unmet_reasons": plan.unmet_reasons,
         "total_demand_tons": plan.total_demand_tons,
         "total_assigned_tons": plan.total_assigned_tons,

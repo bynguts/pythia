@@ -15,6 +15,13 @@ Placement, per truck in truck-code order:
 - Otherwise it takes the first slot with room within the metric's stagger window
   (`stagger_slot_count()` slots, the same spread the staggered headline assumes), so
   a plan that carries most of the day's trips spreads the way the headline does.
+- Either way a slot never holds more plan trucks than the weighbridges clear in it
+  (`CAPACITY_PER_SLOT`): a full slot is skipped and the truck spills to the next slot
+  of its shift with a place. A truck whose whole shift is full gets no slot, and
+  `plan_gate_capacity` lists it as overflow.
+
+Each Bantargebang slot carries `capacity_model.expected_wait_min`: the fluid model's
+wait in that slot with the background and every slotted plan truck of the day.
 
 A later slot is a later departure, not a wait at the gate: each slot carries
 `depart_at`, the slot start minus `COLLECTION_ROUND_MEAN_H` (the metric's mean
@@ -23,10 +30,11 @@ the stagger moved it from the unscheduled shift-start departure. Only the board'
 live recommendations carry `hold_minutes`, and those stay within an hour.
 
 Coherence with `queue_minutes_per_truck`: with no plan, the fluid model's mean wait
-over the background day is ~57.7 min against the simulation's 57.1 baseline; with a
-plan carrying all observed trips it is ~4.7 min against the 5.6 staggered figure.
-The fluid model has no random travel or weigh times, so it reads slightly low when
-slots run near capacity; the tests hold it within 2 minutes.
+over the background day is ~57.7 min against the simulation's 57.1 baseline (the tests
+hold it within 2 minutes). A plan carrying all observed trips fills both day shifts'
+slots to capacity and overflows ~27 trips; its mean is ~2.9 min against the 5.6
+staggered figure: the fluid model has no random travel or weigh times and never
+overfills a slot, so it reads low when slots run at capacity (held within 3 minutes).
 
 `occupied` only holds plans approved before this plan was proposed, so two plans
 proposed for the same date before either is approved can share slots. The board
@@ -199,7 +207,8 @@ def assign_gate_slots(dispatches: list[dict], plan_date: date, occupied: list[di
     of plans already approved for the same date. Deterministic: trucks are
     placed in truck-code order. A truck whose shift has no clock window gets no
     slot. When no slot in the search has room, the truck keeps the one with the
-    most room left and `capacity_model.over_capacity` says so.
+    most room left and `capacity_model.over_capacity` says so; a slot that already
+    holds `CAPACITY_PER_SLOT` plan trucks is never chosen.
     """
     taken = _occupied_counts(occupied)
     trucks = []
@@ -240,8 +249,14 @@ def assign_gate_slots(dispatches: list[dict], plan_date: date, occupied: list[di
             ] or [natural]
             first_hour = steps[:MAX_HOLD_SLOTS]
             saturated = all(CAPACITY_PER_SLOT - background_at(m) < 1 for m in first_hour)
+            search = first_hour if saturated else steps[:stagger_slots]
+            places = [m for m in search if taken[_key(m)] < CAPACITY_PER_SLOT] or [
+                m for m in steps if taken[_key(m)] < CAPACITY_PER_SLOT
+            ][:1]
+            if not places:
+                continue  # overflow: every slot of the shift already holds a full slot of plan trucks
             best: tuple[float, datetime] | None = None
-            for candidate in first_hour if saturated else steps[:stagger_slots]:
+            for candidate in places:
                 room = CAPACITY_PER_SLOT - background_at(candidate) - taken[_key(candidate)]
                 if best is None or room > best[0]:
                     best = (room, candidate)
@@ -271,7 +286,63 @@ def assign_gate_slots(dispatches: list[dict], plan_date: date, occupied: list[di
             "capacity_model": capacity_model,
             "classification": "MODEL_OUTPUT",
         }
+
+    waits: dict[str, list[float]] = {}
+    for slot in out.values():
+        if slot["capacity_model"] is None:
+            continue
+        day = slot["date"]
+        if day not in waits:
+            background = background_loads(planned_per_day[day])
+            waits[day] = expected_waits([background[i] + taken[(day, i)] for i in range(SLOTS_PER_DAY)])
+        slot["capacity_model"]["expected_wait_min"] = waits[day][slot["slot_index"]]
     return out
+
+
+def plan_gate_capacity(dispatches: list[dict]) -> dict[str, Any]:
+    """What a plan's Bantargebang gate slots say about the weighbridge capacity.
+
+    Read from each dispatch's `fields.gate_slot`: the most plan trucks in one slot,
+    the slots the background alone saturates or that run over capacity, and the
+    overflow (trucks whose shift had no slot with a place left, so they have none).
+    `coverage` is the share of the day's gate arrivals the plan carries: the rest
+    arrive unstaggered, which is why a small plan cannot reach the city-wide
+    staggered figure of the queue metric.
+    """
+    per_slot: dict[tuple[str, int], int] = defaultdict(int)
+    saturated: set[tuple[str, str]] = set()
+    over: set[tuple[str, str]] = set()
+    overflow = []
+    for dispatch in dispatches:
+        slot = (dispatch.get("fields") or {}).get("gate_slot")
+        stop = _first_stop(dispatch)
+        if not slot:
+            if (
+                stop
+                and is_bantargebang(stop.get("facility"))
+                and slot_index_of(stop.get("window")) is not None
+            ):
+                overflow.append(dispatch.get("truck_code"))
+            continue
+        model = slot.get("capacity_model")
+        if not is_bantargebang(slot.get("facility")) or not model:
+            continue
+        per_slot[(slot["date"], int(slot["slot_index"]))] += 1
+        if model.get("saturated"):
+            saturated.add((slot["date"], slot["start"]))
+        if model.get("over_capacity"):
+            over.add((slot["date"], slot["start"]))
+    return {
+        "capacity_per_slot": CAPACITY_PER_SLOT,
+        "max_trucks_per_slot": max(per_slot.values(), default=0),
+        "saturated": bool(saturated),
+        "saturated_slots": [start for _, start in sorted(saturated)],
+        "over_capacity_slots": [start for _, start in sorted(over)],
+        "overflow_trucks": sorted(overflow),
+        "coverage": coverage(sum(per_slot.values())),
+        "basis": WEIGHBRIDGE_ASSUMPTION,
+        "classification": "MODEL_OUTPUT",
+    }
 
 
 def _depart_at(slot_start: datetime) -> str:

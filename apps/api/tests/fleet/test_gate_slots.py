@@ -10,6 +10,7 @@ from app.fleet.gate_slots import (
     assign_gate_slots,
     background_loads,
     expected_waits,
+    plan_gate_capacity,
     slot_board,
 )
 from app.fleet.queue_simulation import (
@@ -25,6 +26,9 @@ from app.fleet.queue_simulation import (
 # The fluid slot model has no random travel or weigh times, so against the seeded
 # simulation of the headline metric it may differ by this much (minutes per truck).
 COHERENCE_TOLERANCE_MIN = 2.0
+# With every slot filled to capacity the fluid model, which never overfills a slot, reads
+# at most this much below the simulation, whose random travel times overfill some.
+FULL_SLOTS_TOLERANCE_MIN = 3.0
 
 DAY = date(2031, 3, 4)
 PAGI = ("pagi", "06:00-14:00")
@@ -163,9 +167,82 @@ def test_a_plan_spreads_its_own_trucks_over_the_stagger_window(background):
     slots = assign_gate_slots([_dispatch(f"T-{i:04d}") for i in range(trucks)], DAY)
     shifts = sorted(s["shift_from_unscheduled_minutes"] for s in slots.values())
     assert shifts[-1] == (window - 1) * STAGGER_SLOT_MINUTES
-    # One truck more than the window holds: it keeps the roomiest (first) slot, flagged.
-    over = [s for s in slots.values() if s["capacity_model"]["over_capacity"]]
-    assert len(over) == 1 and over[0]["start"] == "09:00" and over[0]["capacity_model"]["saturated"] is False
+    # One truck more than the window holds: no slot takes it past the weighbridge capacity.
+    assert len(slots) == trucks - 1
+    assert not any(s["capacity_model"]["over_capacity"] for s in slots.values())
+
+
+def _per_slot(slots):
+    counts = {}
+    for slot in slots.values():
+        counts[(slot["date"], slot["start"])] = counts.get((slot["date"], slot["start"]), 0) + 1
+    return counts
+
+
+def test_a_saturated_gate_never_takes_more_plan_trucks_in_a_slot_than_it_clears(background):
+    for hour in (8, 9, 10):
+        background[hour] = 400.0
+    trucks = int(CAPACITY_PER_SLOT) + 20
+    slots = assign_gate_slots([_dispatch(f"T-{i:03d}") for i in range(trucks)], DAY)
+    assert len(slots) == trucks
+    counts = _per_slot(slots)
+    assert max(counts.values()) <= CAPACITY_PER_SLOT
+    # The first slot fills to capacity, the rest spill to the next slot in truck-code order.
+    assert counts[(DAY.isoformat(), "09:00")] == CAPACITY_PER_SLOT
+    assert slots["T-029"]["start"] == "09:00" and slots["T-030"]["start"] != "09:00"
+    assert all(s["capacity_model"]["saturated"] for s in slots.values())
+
+    summary = plan_gate_capacity(_with_slots(slots))
+    assert summary["max_trucks_per_slot"] == CAPACITY_PER_SLOT
+    assert summary["saturated"] is True and summary["saturated_slots"][0] == "09:00"
+    assert summary["overflow_trucks"] == []
+
+
+def test_a_fifty_truck_plan_on_the_observed_gate_day_stays_within_slot_capacity():
+    # The observed day (no monkeypatch): its 08-09 h peak saturates the weighbridges.
+    slots = assign_gate_slots([_dispatch(f"T-{i:03d}") for i in range(50)], DAY)
+    assert len(slots) == 50
+    assert max(_per_slot(slots).values()) <= CAPACITY_PER_SLOT
+    summary = plan_gate_capacity(_with_slots(slots))
+    assert summary["saturated"] is True
+    assert summary["coverage"]["planned_gate_arrivals"] == 50
+    assert summary["coverage"]["share"] < 0.1  # the rest of the day's trips arrive unstaggered
+
+
+def test_a_shift_with_every_slot_full_overflows_and_the_plan_says_so(background):
+    window = stagger_slot_count()
+    trucks = int(CAPACITY_PER_SLOT) * window + 2
+    dispatches = [_dispatch(f"T-{i:04d}") for i in range(trucks)]
+    slots = assign_gate_slots(dispatches, DAY)
+    assert max(_per_slot(slots).values()) == CAPACITY_PER_SLOT
+    summary = plan_gate_capacity(_with_slots(slots, dispatches))
+    assert summary["overflow_trucks"] == [f"T-{i:04d}" for i in range(trucks - 2, trucks)]
+    assert summary["coverage"]["planned_gate_arrivals"] == trucks - 2
+
+
+def test_each_slot_carries_the_modelled_wait_the_board_shows(background):
+    for hour in (8, 9, 10):
+        background[hour] = 400.0
+    slots = assign_gate_slots([_dispatch(f"T-{i:03d}") for i in range(40)], DAY)
+    board = slot_board(DAY, [{"truck_code": t, "gate_slot": s} for t, s in slots.items()])
+    by_start = {s["start"]: s["expected_wait_min"] for s in board["slots"]}
+    for slot in slots.values():
+        assert slot["capacity_model"]["expected_wait_min"] == by_start[slot["start"]]
+    assert slots["T-000"]["capacity_model"]["expected_wait_min"] > 60
+
+
+def test_an_rdf_slot_has_no_modelled_wait_and_no_capacity_summary(background):
+    dispatches = [_dispatch("T-001", facility=RDF)]
+    slots = assign_gate_slots(dispatches, DAY)
+    assert slots["T-001"]["capacity_model"] is None
+    summary = plan_gate_capacity(_with_slots(slots, dispatches))
+    assert summary["max_trucks_per_slot"] == 0 and summary["overflow_trucks"] == []
+
+
+def _with_slots(slots, dispatches=None):
+    """Plan dispatches carrying their assigned `gate_slot`, as operations.py stores them."""
+    dispatches = dispatches or [_dispatch(code) for code in slots]
+    return [{**d, "fields": {**d["fields"], "gate_slot": slots.get(d["truck_code"])}} for d in dispatches]
 
 
 def _whole_day_plan(trips):
@@ -181,12 +258,18 @@ def test_without_a_plan_the_board_matches_the_baseline_metric():
 
 def test_a_plan_carrying_all_observed_trips_matches_the_staggered_metric():
     trips = bantargebang_daily_arrivals()[0]
-    slots = assign_gate_slots(_whole_day_plan(trips), DAY)
+    dispatches = _whole_day_plan(trips)
+    slots = assign_gate_slots(dispatches, DAY)
+    # A day shift's gate hours clear 30 trucks x 20 slots = 600: the trips above that are
+    # overflow, listed by the plan, not squeezed into full slots.
+    overflow = plan_gate_capacity(_with_slots(slots, dispatches))["overflow_trucks"]
+    assert len(overflow) == trips - len(slots) == trips - 2 * CAPACITY_PER_SLOT * stagger_slot_count()
     planned = [{"truck_code": t, "gate_slot": s} for t, s in slots.items() if s["date"] == DAY.isoformat()]
     board = slot_board(DAY, planned)
-    assert board["coverage"]["share"] == 1.0
+    assert board["coverage"]["share"] > 0.97
     staggered = queue_minutes_per_truck()["staggered_mean"]
-    assert abs(board["modelled_wait"]["mean_per_truck_min"] - staggered) <= COHERENCE_TOLERANCE_MIN
+    # With every slot at capacity the fluid model reads low (no random travel or weigh times).
+    assert 0 <= staggered - board["modelled_wait"]["mean_per_truck_min"] <= FULL_SLOTS_TOLERANCE_MIN
 
 
 def test_rdf_trucks_get_a_slot_without_using_weighbridge_capacity(background):
