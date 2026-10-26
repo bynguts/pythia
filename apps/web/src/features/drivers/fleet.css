@@ -46,14 +46,7 @@
   display: none;
 }
 
-/* The Fleet strip is white with a hairline (the Operations strip is paper) and has no bar. */
-.flt-kpis {
-  padding: 0;
-  overflow: hidden;
-  border: 1px solid var(--f-border);
-  border-radius: 8px;
-  background: var(--f-white);
-}
+/* The strip is the shared surface variant; only the Fleet sizes differ. */
 .flt-kpis .ui-kpi {
   gap: 6px;
   min-height: 110px;

@@ -14,6 +14,7 @@ import { Segmented } from "../../shared/ui/Segmented.jsx";
 import { Skeleton } from "../../shared/ui/Skeleton.jsx";
 import { StatusDot } from "../../shared/ui/StatusDot.jsx";
 import { Tag } from "../../shared/ui/Tag.jsx";
+import { formatDriverName } from "../../shared/format/driverName.js";
 import { driverTag, formatDuty } from "../readiness/clock.js";
 import { PRETRIP_ITEM_KEYS } from "../readiness/readinessModel.js";
 import { BookServiceDrawer, LogDamageDrawer } from "./FleetForms.jsx";
@@ -41,12 +42,18 @@ const SOURCE_KEYS = {
 };
 
 function DriverChip({ name }) {
+  const { t } = useLanguage();
+  const driver = formatDriverName(name, t);
   return (
-    <span className="flt-driver">
+    <span
+      className="flt-driver"
+      data-provenance={driver.simulated ? "simulated" : undefined}
+      title={driver.title}
+    >
       <span className="flt-chip" aria-hidden="true">
-        {driverTag(name)}
+        {driver.number ?? driverTag(name)}
       </span>
-      {name}
+      {driver.label}
     </span>
   );
 }
@@ -164,7 +171,9 @@ export function FleetScreen() {
         const source = SOURCE_KEYS[r.source] ? t(SOURCE_KEYS[r.source]) : r.source;
         return (
           <span className="flt-muted flt-clip">
-            {r.source === "pretrip" && r.driver_name ? `${source} · ${r.driver_name}` : source}
+            {r.source === "pretrip" && r.driver_name
+              ? `${source} · ${formatDriverName(r.driver_name, t).label}`
+              : source}
           </span>
         );
       },
@@ -301,7 +310,7 @@ export function FleetScreen() {
         <Skeleton rows={5} />
       ) : (
         <>
-          <KpiStrip label={t("s2_flt_kpis")} className="flt-kpis">
+          <KpiStrip label={t("s2_flt_kpis")} variant="surface" className="flt-kpis">
             <Kpi
               label={t("s2_kpi_roadworthy")}
               value={stats.roadworthy == null ? "—" : `${stats.roadworthy} / ${total}`}
@@ -431,7 +440,7 @@ export function FleetScreen() {
                     return (
                       <li key={row.truck_code}>
                         <div className="flt-duty-line">
-                          <span className="flt-duty-name">{row.name}</span>
+                          <span className="flt-duty-name">{formatDriverName(row.name, t).label}</span>
                           {row.state === "blocked" && (
                             <Tag tone="danger">
                               {t(row.override ? "s2_duty_override_tag" : "s2_duty_blocked_tag")}

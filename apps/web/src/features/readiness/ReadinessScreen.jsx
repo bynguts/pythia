@@ -11,6 +11,7 @@ import { OfflineBanner } from "../../shared/ui/OfflineBanner.jsx";
 import { Segmented } from "../../shared/ui/Segmented.jsx";
 import { Skeleton } from "../../shared/ui/Skeleton.jsx";
 import { StatusDot } from "../../shared/ui/StatusDot.jsx";
+import { formatDriverName } from "../../shared/format/driverName.js";
 import { clockTime, driverTag, formatDuty } from "./clock.js";
 import {
   PRETRIP_ITEM_KEYS,
@@ -389,7 +390,7 @@ export function ReadinessScreen() {
               {fill(t("s2_swap_body"), {
                 what: listFormat.format(what),
                 to: backup.truck_code,
-                driver: backup.driver_name || "—",
+                driver: formatDriverName(backup.driver_name, t).label,
                 from: truck.truck_code,
               })}
             </span>
@@ -489,17 +490,22 @@ export function ReadinessScreen() {
       key: "driver",
       label: t("s2_col_driver"),
       width: "15%",
-      render: (truck) =>
-        truck.driver_name ? (
-          <span className="rdy-driver">
+      render: (truck) => {
+        if (!truck.driver_name) return <span className="rdy-muted">—</span>;
+        const driver = formatDriverName(truck.driver_name, t);
+        return (
+          <span
+            className="rdy-driver"
+            data-provenance={driver.simulated ? "simulated" : undefined}
+            title={driver.title}
+          >
             <span className="rdy-chip" aria-hidden="true">
-              {driverTag(truck.driver_name)}
+              {driver.number ?? driverTag(truck.driver_name)}
             </span>
-            {truck.driver_name}
+            {driver.label}
           </span>
-        ) : (
-          <span className="rdy-muted">—</span>
-        ),
+        );
+      },
     },
     { key: "pretrip", label: t("s2_col_pretrip"), width: "15%", render: pretripCell },
     { key: "duty", label: t("s2_col_duty"), width: "14%", render: dutyCell },
