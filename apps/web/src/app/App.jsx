@@ -6,7 +6,6 @@ import { Navigate, Outlet, Route, Routes, useLocation, useParams } from "react-r
 // were static imports, so moving their code out of the main chunk does not
 // reorder the cascade.
 import DriverApp from "../surfaces/driver/DriverApp.jsx";
-import "../features/fleet/safety.css";
 import "../features/assistant/assistant.css";
 import "../features/audit/audit.css";
 import "../features/forecast/monthlyIntake.css";

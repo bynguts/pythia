@@ -255,6 +255,34 @@
   font-size: 14px;
 }
 
+.event-permit-marker {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  padding: 0;
+}
+
+.event-permit-marker::after {
+  background: #eab308;
+}
+
+.event-permit-marker span {
+  display: inline-flex;
+  width: 34px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #ffffff;
+  border-radius: 8px;
+  background: #eab308;
+  color: #3f2f00 !important;
+  box-shadow: 0 8px 18px rgba(120, 84, 0, 0.22);
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  text-shadow: none !important;
+}
+
 .map-controls {
   position: absolute;
   top: 12px;
