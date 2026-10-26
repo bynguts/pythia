@@ -14,7 +14,7 @@ const INDONESIAN_MARKERS = [
   "Belum ada",
 ];
 
-// Behaviour: with `?lang=en` every command-center workspace renders English chrome only.
+// Behaviour: with `?lang=en` every console page renders English chrome only.
 async function signInEnglish(page) {
   await page.goto("/");
   const response = await page.request.post(`${API}/auth/login`, {
@@ -42,29 +42,38 @@ test.describe("English mode has no Indonesian interface copy", () => {
     await signInEnglish(page);
   });
 
-  // wave9 settings: Settings (each section) replaced the audit workspace.
-  const paths = ["fleet", "twin", "forecast", "planning", "drivers", "settings", "settings?tab=team"];
-  for (const workspace of [...paths, "settings?tab=data"]) {
+  // Wave 13: every console page, its Settings sections and the twin briefing room.
+  const paths = [
+    "app/operations",
+    "app/readiness",
+    "app/gate",
+    "app/work-orders",
+    "app/tomorrow",
+    "app/fleet",
+    "app/reports",
+    "app/settings",
+    "app/settings?tab=team",
+    "app/settings?tab=data",
+    "twin",
+  ];
+  for (const workspace of paths) {
     test(`/${workspace} renders English only`, async ({ page }) => {
       const separator = workspace.includes("?") ? "&" : "?";
       await page.goto(`/${workspace}${separator}lang=en`, { waitUntil: "domcontentloaded" });
-      await expect(page.locator("main h1").first()).toBeVisible();
+      await expect(page.locator("main h1").first()).toBeVisible({ timeout: 20000 });
       await expect(page.locator("html")).toHaveAttribute("lang", "en");
       await expectNoIndonesianCopy(page, `/${workspace}`);
     });
   }
 
-  // wave9 fleet composition: unlicensed collectors are rows in "Needs action" now, so the
-  // check walks the three work-rail tabs instead of the old collector tab.
-  test("fleet work rail tabs render English only", async ({ page }) => {
-    await page.goto("/fleet?lang=en", { waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("fleet-rail-action")).toBeVisible();
-    await expectNoIndonesianCopy(page, "fleet needs-action tab");
-    await page.getByRole("tab", { name: "Trucks", exact: true }).click();
-    await expect(page.getByTestId("truck-list")).toBeVisible();
-    await expectNoIndonesianCopy(page, "fleet trucks tab");
-    await page.getByRole("tab", { name: /TPA Queue/ }).click();
-    await expect(page.getByTestId("fleet-queue-surface")).toBeVisible();
-    await expectNoIndonesianCopy(page, "fleet TPA queue tab");
+  // wave 13: the Ask Ana drawer is portalled outside <main>; it follows the locale too.
+  test("the Ask Ana drawer renders English only", async ({ page }) => {
+    await page.goto("/app/operations?ana=1&lang=en", { waitUntil: "domcontentloaded" });
+    const drawer = page.getByTestId("ana-drawer");
+    await expect(drawer).toBeVisible({ timeout: 20000 });
+    const text = await drawer.innerText();
+    for (const marker of INDONESIAN_MARKERS) {
+      expect(text, `Ask Ana shows Indonesian "${marker}" in English mode`).not.toContain(marker);
+    }
   });
 });

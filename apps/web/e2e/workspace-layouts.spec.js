@@ -20,69 +20,9 @@ async function signIn(page) {
 
 test.beforeEach(async ({ page }) => signIn(page));
 
-// wave9 fleet composition: the decision overlay, problem strip, "Status Armada" table and
-// document links were replaced by one metric strip, a three-tab work rail beside the map
-// and one "Dokumen armada" tablist (teardown v4 F1-F5).
-test("fleet opens as a map-led deck with the work rail beside the map", async ({ page }) => {
-  const map = page.getByTestId("fleet-map-stage");
-  const rail = page.getByTestId("fleet-rail");
-  await expect(map).toBeVisible();
-  await expect(rail).toBeVisible();
-  await expect(rail.getByRole("tab", { name: /Perlu tindakan/ })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByTestId("fleet-rail-action")).toBeVisible();
-
-  // The map keeps the larger share; the rail sits beside it, never over it.
-  // wave11 fleet: the approved design (docs/design/export/app-fleet.png) puts the rail
-  // on the left and lets the map run to the right edge.
-  const [mapBox, railBox] = await Promise.all([map.boundingBox(), rail.boundingBox()]);
-  expect(mapBox.x).toBeGreaterThanOrEqual(railBox.x + railBox.width - 2);
-  expect(mapBox.width).toBeGreaterThan(railBox.width);
-});
-
-test("metric strip opens the deviation queue and the TPA queue", async ({ page }) => {
-  await expect(page.getByTestId("metric-strip")).toBeVisible({ timeout: 15000 });
-  const deviation = page.locator("[data-metric=deviation]");
-  await deviation.click();
-  await expect(page.getByRole("tab", { name: /Perlu tindakan/ })).toHaveAttribute("aria-selected", "true");
-
-  const queue = page.locator("[data-metric=queue]");
-  if (await queue.count()) {
-    await queue.click();
-    await expect(page.getByTestId("fleet-queue-surface")).toBeVisible();
-  }
-});
-
-test("fleet document tabs reveal one surface and support keyboard selection", async ({ page }) => {
-  const tablist = page.getByRole("tablist", { name: "Dokumen armada" });
-  const spj = tablist.getByRole("tab", { name: "Surat jalan (SPJ)" });
-  const damage = tablist.getByRole("tab", { name: "Laporan Kerusakan" });
-  await expect(spj).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByTestId("fleet-spj-surface")).toBeVisible();
-  await damage.click();
-  await expect(damage).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByTestId("fleet-damage-surface")).toBeVisible();
-  await expect(page.getByTestId("fleet-spj-surface")).toBeHidden();
-
-  await damage.focus();
-  await page.keyboard.press("Home");
-  await expect(spj).toBeFocused();
-  await expect(spj).toHaveAttribute("aria-selected", "true");
-});
-
-test("mobile fleet stacks the work rail under the map without overflow", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const map = page.getByTestId("fleet-map-stage");
-  const rail = page.getByTestId("fleet-rail");
-  await expect(rail).toBeVisible();
-  const [mapBox, railBox] = await Promise.all([map.boundingBox(), rail.boundingBox()]);
-  expect(railBox.y).toBeGreaterThanOrEqual(mapBox.y + mapBox.height - 2);
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
-  expect(overflow).toBeLessThanOrEqual(2);
-  await expect(page.getByTestId("fleet-rail-action")).toBeVisible();
-});
-
-// #6 (gsc-2026 teardown): at 390 px the landfill tag ran off the canvas and the
-// controls dock covered the timeline.
+// Wave 13 retired the fleet deck (work rail, metric-strip queue links, "Dokumen armada" tabs,
+// deck layer panel) and the forecast/planning workspaces; Operations, Work orders and Tomorrow
+// replace them and carry their own specs; this file keeps their page-level layout checks.
 test("mobile twin keeps the landfill tag inside the canvas and the controls off the timeline", async ({
   page,
 }) => {
@@ -118,74 +58,52 @@ test("mobile twin keeps the landfill tag inside the canvas and the controls off 
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
-test("map layers panel opens inside the deck and lists controls", async ({ page }) => {
-  await page.getByTestId("deck-tools-toggle").click();
-  const panel = page.getByTestId("deck-tools-panel");
-  await expect(panel).toBeVisible();
-  await expect(panel.getByText("Lapisan referensi", { exact: true })).toBeVisible();
-  await expect(panel.locator(".map-controls-grid label").first()).toBeVisible();
+// wave 13: Tomorrow replaces the forecast and planning workspaces with one four-step flow.
+test("tomorrow presents forecast, facts, allocation and approval as one flow", async ({ page }) => {
+  await page.goto("/app/tomorrow", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("tomorrow-page")).toBeVisible({ timeout: 20000 });
+  await expect(page.getByTestId("tmr-title")).toBeVisible();
+  const steps = page.locator(".planning-progress");
+  await expect(steps).toHaveAttribute("aria-label", /.+/);
+  await expect(steps.locator("li")).toHaveCount(4);
 });
 
-test("forecast keeps district demand primary and horizon controls functional", async ({ page }) => {
-  await page.getByRole("button", { name: "Prediksi" }).click();
-  const primary = page.getByTestId("forecast-primary-analysis");
-  const context = page.locator(".forecast-context-rail");
-  await expect(primary).toBeVisible();
-  await expect(context).toBeVisible();
-  await expect(page.locator(".kec-list .kec-row").first()).toBeVisible({ timeout: 15000 });
-  expect(await page.locator(".kec-list .kec-row").count()).toBeLessThanOrEqual(8);
-
-  const selected = page.getByRole("button", { name: "7 hari" });
-  await expect(selected).toHaveAttribute("aria-pressed", "true");
-  const next = page.getByRole("button", { name: "14 hari" });
-  await next.click();
-  await expect(next).toHaveAttribute("aria-pressed", "true");
-
-  const [primaryBox, contextBox] = await Promise.all([primary.boundingBox(), context.boundingBox()]);
-  expect(primaryBox.width).toBeGreaterThan(contextBox.width);
-});
-
-test("planning presents scenario, allocation, and approval as one flow", async ({ page }) => {
-  await page.route("**/api/operations/plan?**", async (route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        plan_id: "PLAN-E2E",
-        status: "proposed",
-        assignments: [
-          {
-            truck_code: "T-001",
-            area: "tebet",
-            assigned_tons: 24,
-            evidence: { capacity_tons: 24, permit_compliant: true },
-          },
-        ],
-        unmet_reasons: [],
-        total_demand_tons: 24,
-        total_assigned_tons: 24,
-        scenario: { rainfall_mm: 42, event_attendance: 85000, is_weekend: true },
-      }),
-    });
-  });
-
-  await page.getByRole("button", { name: "Rencana" }).click();
-  await expect(page.locator(".planning-progress li")).toHaveCount(3);
-  // Teardown v4 R2: stage 1 starts from today's forecast; a scenario is opt-in.
-  for (const heading of ["Mulai dari prakiraan", "Susun alokasi", "Tinjau & setujui"]) {
-    await expect(page.getByRole("heading", { name: heading })).toBeVisible();
-  }
-  await page.getByRole("button", { name: "Susun Alokasi Armada" }).click();
-  await expect(page.getByText("ID rencana: PLAN-E2E")).toBeVisible();
-  await expect(page.getByText("Izin sesuai")).toBeVisible();
-});
-
-// wave9 settings: the audit content moved to Settings → Sumber data & model, collapsed.
 test("data sources section exposes provenance and model suitability evidence", async ({ page }) => {
-  await page.getByTestId("workspace-navigation").getByRole("button", { name: "Pengaturan" }).click();
-  await page.getByTestId("settings-tab-data").click();
+  await page.goto("/app/settings?tab=data");
   await expect(page.getByRole("heading", { name: "Sumber data & model" })).toBeVisible();
   await page.getByTestId("source-registry-disclosure").locator("summary").click();
   await expect(page.locator(".audit-table tbody tr").first()).toBeVisible({ timeout: 15000 });
   expect(await page.locator(".audit-table tbody tr").count()).toBeGreaterThan(0);
   await expect(page.getByRole("heading", { name: "Resolusi yang didukung" })).toBeVisible();
+});
+
+// wave 13: Operations is map-first. The KPI strip sits above the map, and the
+// "Needs you" queue sits on the map's left edge instead of in a rail beside it.
+test("operations opens map-first with the KPI strip and the needs-you queue", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.goto("/app/operations", { waitUntil: "domcontentloaded" });
+  const map = page.getByTestId("fleet-map-stage");
+  const queue = page.getByTestId("needs-you");
+  const kpis = page.getByTestId("metric-strip");
+  await expect(map).toBeVisible({ timeout: 20000 });
+  await expect(queue).toBeVisible();
+  await expect(kpis).toBeVisible();
+
+  // The map keeps the larger share and the KPI strip stays above it.
+  const [mapBox, queueBox, kpiBox] = await Promise.all([
+    map.boundingBox(),
+    queue.boundingBox(),
+    kpis.boundingBox(),
+  ]);
+  expect(mapBox.width).toBeGreaterThan(queueBox.width);
+  expect(kpiBox.y + kpiBox.height).toBeLessThanOrEqual(mapBox.y + 2);
+});
+
+test("mobile operations keeps the map and the needs-you queue without overflow", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/app/operations", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("fleet-map-stage")).toBeVisible({ timeout: 20000 });
+  await expect(page.getByTestId("needs-you")).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  expect(overflow).toBeLessThanOrEqual(2);
 });
