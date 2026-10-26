@@ -1,7 +1,8 @@
-// #drv7-receipt: the receipt is one camera tap. Ticket weights are optional and
-// typed first; the done screen shows gross, tare and net exactly as the server
-// recorded them (H10), an invalid tare blocks the camera, and a receipt queued
-// offline says its weights are pending until it syncs, then shows them.
+// #drv7-receipt / wave 13 weigh ticket: at the gate the driver photographs the
+// ticket; with no OCR engine (e2e) the gross and tare are typed from the paper.
+// The shift summary shows gross, tare and net exactly as the server recorded
+// them (H10), an invalid tare blocks sending, and a ticket queued offline says
+// its weights are pending until it syncs, then shows them.
 import { expect, test } from "@playwright/test";
 import {
   API,
@@ -13,6 +14,7 @@ import {
   finishPretrip,
   openDriver,
   PHOTO,
+  sendReceipt,
 } from "./lib/driverSpj.js";
 
 const STOP = { name: "TPS Struk E2E", kecamatan: "Cilandak", address: "Jl. E2E", lat: -6.29, lng: 106.79 };
@@ -21,6 +23,7 @@ async function openDelivery(page, request, token, truck) {
   await openDriver(page, request, { token, truck });
   await finishPretrip(page);
   await completeCurrentStop(page, 0);
+  await page.getByTestId("driver-tab-tpa").click();
   const delivery = page.getByTestId("delivery-card");
   await expect(delivery).toBeVisible({ timeout: 15000 });
   return delivery;
@@ -33,10 +36,8 @@ test("gross and tare on the ticket give a server-computed net on the done screen
   const { token } = await apiLogin(request);
   const spj = await createActiveSpj(request, token, "T-235", [STOP]);
   try {
-    const delivery = await openDelivery(page, request, token, "T-235");
-    await delivery.getByLabel("Berat bruto di struk (kg, opsional)").fill("12450");
-    await delivery.getByLabel("Tara truk kosong (kg, opsional)").fill("8200");
-    await delivery.getByTestId("receipt-input").setInputFiles(PHOTO);
+    await openDelivery(page, request, token, "T-235");
+    await sendReceipt(page, { gross: "12450", tare: "8200" });
 
     const weights = page.getByTestId("receipt-weights");
     await expect(weights).toBeVisible({ timeout: 15000 });
@@ -56,20 +57,23 @@ test("gross and tare on the ticket give a server-computed net on the done screen
   }
 });
 
-test("a tare at or above the gross weight blocks the receipt camera", async ({ page, request }) => {
+test("a tare at or above the gross weight blocks sending the ticket", async ({ page, request }) => {
   const { token } = await apiLogin(request);
   const spj = await createActiveSpj(request, token, "T-236", [STOP]);
   try {
     const delivery = await openDelivery(page, request, token, "T-236");
-    await delivery.getByLabel("Berat bruto di struk (kg, opsional)").fill("8000");
-    await delivery.getByLabel("Tara truk kosong (kg, opsional)").fill("8000");
-    await expect(delivery.getByTestId("receipt-weight-error")).toBeVisible();
-    await expect(delivery.getByTestId("receipt-input")).toBeDisabled();
+    await delivery.getByTestId("gate-arrival").click();
+    await delivery.getByTestId("receipt-input").setInputFiles(PHOTO);
+    const ticket = page.getByTestId("weigh-ticket");
+    await ticket.getByLabel("Berat bruto (kg)").fill("8000");
+    await ticket.getByLabel("Truk kosong (tara)").fill("8000");
+    await expect(ticket.getByTestId("receipt-weight-error")).toBeVisible();
+    await expect(ticket.getByTestId("receipt-send")).toBeDisabled();
 
     // A valid tare unblocks it again.
-    await delivery.getByLabel("Tara truk kosong (kg, opsional)").fill("7000");
-    await expect(delivery.getByTestId("receipt-weight-error")).toHaveCount(0);
-    await expect(delivery.getByTestId("receipt-input")).toBeEnabled();
+    await ticket.getByLabel("Truk kosong (tara)").fill("7000");
+    await expect(ticket.getByTestId("receipt-weight-error")).toHaveCount(0);
+    await expect(ticket.getByTestId("receipt-send")).toBeEnabled();
   } finally {
     await cancelSpj(request, token, spj.spj_id);
   }
@@ -84,9 +88,13 @@ test("a receipt photographed offline is queued and its weights show as pending",
   const spj = await createActiveSpj(request, token, "T-237", [STOP]);
   try {
     const delivery = await openDelivery(page, request, token, "T-237");
-    await delivery.getByLabel("Berat bruto di struk (kg, opsional)").fill("12450");
+    await delivery.getByTestId("gate-arrival").click();
+    await expect(delivery.getByTestId("gate-arrived")).toBeVisible();
     await context.setOffline(true);
     await delivery.getByTestId("receipt-input").setInputFiles(PHOTO);
+    const ticket = page.getByTestId("weigh-ticket");
+    await ticket.getByLabel("Berat bruto (kg)").fill("12450");
+    await ticket.getByTestId("receipt-send").click();
     await expect(page.getByTestId("receipt-weights-pending")).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId("driver-queued-count")).toBeVisible();
     // The queued receipt photo sits in IndexedDB, not in the localStorage index.

@@ -1,6 +1,6 @@
 // #drv6-lowend: R1, R2 and R4 for /driver on a 2 GB phone without ARCore.
 // AR is offered only after a capability check and never blocks a step;
-// primary driver controls are at least 56 px with no overflow at 320 px;
+// primary driver controls are at least 48 px (wave 13) with no overflow at 320 px;
 // pre-trip is two taps and an instruction one; the route downloads at most
 // 250 KB gzip of JS before the first interaction (no map, 3D or PDF chunks).
 import { gzipSync } from "node:zlib";
@@ -16,7 +16,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("a 2 GB phone without ARCore gets no AR button and finishes the stop with 56 px controls", async ({
+test("a 2 GB phone without ARCore gets no AR button and finishes the stop with 48 px controls", async ({
   page,
   request,
 }) => {
@@ -43,10 +43,11 @@ test("a 2 GB phone without ARCore gets no AR button and finishes the stop with 5
               );
             }
           });
-        check(".driver-btn", 56);
-        check(".pretrip-choice", 56);
-        check(".driver-file", 56);
-        check(".driver-link", 44);
+        // Wave 13: 48 px drawn buttons, 44 px icon and link hit boxes.
+        check(".drt-btn", 48);
+        check(".drt-icon-btn", 44);
+        check(".drt-chip-btn", 44);
+        check(".driver-tab", 44);
         return out;
       });
       expect(small, `controls below target at ${width}px`).toEqual([]);
@@ -58,12 +59,14 @@ test("a 2 GB phone without ARCore gets no AR button and finishes the stop with 5
 
     // Pre-trip: two taps; the stop flow runs with AR unavailable.
     await finishPretrip(page);
+    await page.getByTestId("driver-tab-rute").click();
     const card = page.getByTestId("stop-0");
     await card.getByTestId("stop-start").click();
     await card.getByTestId("arrival-input").setInputFiles(PHOTO);
     await card.getByTestId("officer-input").setInputFiles(PHOTO);
-    await card.getByLabel("Nama Petugas").fill("Petugas Ringan");
-    await card.getByRole("button", { name: "Selesaikan Titik" }).click();
+    await card.getByTestId("officer-name").fill("Petugas Ringan");
+    await card.getByTestId("stop-finish").click();
+    await page.getByTestId("driver-tab-tpa").click();
     await expect(page.getByTestId("delivery-card")).toBeVisible({ timeout: 15000 });
   } finally {
     await cancelSpj(request, token, spj.spj_id);

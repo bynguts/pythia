@@ -61,6 +61,7 @@ test("a camera-sized photo is shrunk to a 1280 px JPEG before upload and its siz
   try {
     await openDriver(page, request, { token, truck: "T-240" });
     await finishPretrip(page);
+    await page.getByTestId("driver-tab-rute").click();
     const card = page.getByTestId("stop-0");
     await card.getByTestId("stop-start").click();
 
@@ -76,10 +77,10 @@ test("a camera-sized photo is shrunk to a 1280 px JPEG before upload and its siz
     await card
       .getByTestId("officer-input")
       .setInputFiles({ name: "IMG_0002.jpg", mimeType: "image/jpeg", buffer: big });
-    await card.getByLabel("Nama Petugas").fill("Petugas Foto");
+    await card.getByTestId("officer-name").fill("Petugas Foto");
 
     const posted = page.waitForRequest((r) => r.url().includes(`/spj/${spj.spj_id}/stops/0/complete`));
-    await card.getByRole("button", { name: "Selesaikan Titik" }).click();
+    await card.getByTestId("stop-finish").click();
     const body = (await posted).postDataJSON();
     const arrival = body.evidence.arrival.photo_b64;
     expect(arrival.startsWith("data:image/jpeg")).toBe(true);
@@ -116,18 +117,19 @@ test("a full phone storage is reported in Indonesian and the stop form is kept",
   try {
     await openDriver(page, request, { token, truck: "T-241" });
     await finishPretrip(page);
+    await page.getByTestId("driver-tab-rute").click();
     const card = page.getByTestId("stop-0");
     await card.getByTestId("stop-start").click();
     await card.getByTestId("arrival-input").setInputFiles(PHOTO);
     await card.getByTestId("officer-input").setInputFiles(PHOTO);
-    await card.getByLabel("Nama Petugas").fill("Petugas Penuh");
+    await card.getByTestId("officer-name").fill("Petugas Penuh");
 
     await context.setOffline(true);
-    await card.getByRole("button", { name: "Selesaikan Titik" }).click();
+    await card.getByTestId("stop-finish").click();
     await expect(card.getByTestId("stop-storage-full")).toContainText("Memori HP penuh");
     // Not silent, not queued, not completed: the evidence is still in the form.
     await expect(page.getByTestId("driver-queued-count")).toHaveCount(0);
-    await expect(card.getByRole("button", { name: "Selesaikan Titik" })).toBeEnabled();
+    await expect(card.getByTestId("stop-finish")).toBeEnabled();
     await expect(card.getByTestId("stop-queued-note")).toHaveCount(0);
   } finally {
     await context.setOffline(false);
@@ -145,14 +147,15 @@ test("queued photos go to IndexedDB, the outbox index stays small, and the stop 
   try {
     await openDriver(page, request, { token, truck: "T-242" });
     await finishPretrip(page);
+    await page.getByTestId("driver-tab-rute").click();
     const card = page.getByTestId("stop-0");
     await card.getByTestId("stop-start").click();
     await card.getByTestId("arrival-input").setInputFiles(PHOTO);
     await card.getByTestId("officer-input").setInputFiles(PHOTO);
-    await card.getByLabel("Nama Petugas").fill("Petugas IDB");
+    await card.getByTestId("officer-name").fill("Petugas IDB");
 
     await context.setOffline(true);
-    await card.getByRole("button", { name: "Selesaikan Titik" }).click();
+    await card.getByTestId("stop-finish").click();
     await expect(page.getByTestId("driver-queued-count")).toBeVisible();
     const raw = await page.evaluate(() => localStorage.getItem("pythia_driver_outbox"));
     expect(raw).toContain('"$photo"');

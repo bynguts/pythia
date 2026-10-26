@@ -189,8 +189,7 @@ test.describe("AR navigator with camera + compass", () => {
     try {
       await openDriver(page, principal, truck);
       const stop0 = page.getByTestId("stop-0");
-      // wave10 driver-field-app (L4): AR is offered after arrival, inside the open stop form.
-      await stop0.getByTestId("stop-start").click();
+      // Wave 13: AR is a round button on the route sheet of the current stop.
       const open = stop0.getByTestId("ar-nav-open");
       await expect(open).toBeVisible({ timeout: 20000 });
       const box = await open.boundingBox();
@@ -269,11 +268,10 @@ test.describe("AR navigator with camera + compass", () => {
       // Camera tracks are released when the navigator closes.
       await expect(page.locator("video")).toHaveCount(0);
 
-      // The frame is now the stop's arrival photo inside the normal form.
+      // The frame is now the stop's arrival photo on the stop proof screen.
       const evidence = stop0.getByTestId("arrival-ar-evidence");
       await expect(evidence).toBeVisible({ timeout: 10000 });
       await expect(evidence).toContainText("Diambil di AR · GPS ±12 m");
-      await expect(stop0.getByText(/Foto terlampir: ar-stop1-.*\.jpg/)).toBeVisible();
       const img = await evidence
         .locator("img")
         .evaluate((el) => ({ src: el.src.slice(0, 23), w: el.naturalWidth }));
@@ -282,12 +280,11 @@ test.describe("AR navigator with camera + compass", () => {
 
       // Finish the stop through the existing flow; the server stores the AR fix.
       await stop0.getByTestId("weigh-input").setInputFiles(PHOTO);
-      await stop0.getByLabel("Berat (kg)").fill("85");
-      await stop0.getByRole("button", { name: "Tambah Timbangan" }).click();
+      await stop0.getByTestId("weigh-kg-Residu").fill("85");
       await stop0.getByTestId("officer-input").setInputFiles(PHOTO);
-      await stop0.getByLabel("Nama Petugas").fill("Petugas AR");
-      await stop0.getByRole("button", { name: "Selesaikan Titik" }).click();
-      await expect(stop0.getByText("SELESAI")).toBeVisible({ timeout: 15000 });
+      await stop0.getByTestId("officer-name").fill("Petugas AR");
+      await stop0.getByTestId("stop-finish").click();
+      await expect(page.getByTestId("stop-1").getByTestId("stop-start")).toBeVisible({ timeout: 15000 });
 
       const detail = await (await fetch(`${API}/spj/${spj.spj_id}`, { headers })).json();
       expect(detail.stops[0].status).toBe("completed");
@@ -327,8 +324,7 @@ test.describe("AR navigator with camera + compass", () => {
       await page.clock.install();
       await context.setGeolocation(ARRIVED);
       await openDriver(page, principal, truck, "en");
-      // wave10 driver-field-app (L4): AR is offered after arrival, inside the open stop form.
-      await page.getByTestId("stop-0").getByTestId("stop-start").click();
+      // Wave 13: AR is a round button on the route sheet of the current stop.
       await page.getByTestId("stop-0").getByTestId("ar-nav-open").click();
       const nav = page.getByTestId("ar-navigator");
       await expect(nav).toHaveAttribute("data-view", "camera", { timeout: 15000 });
@@ -377,8 +373,7 @@ test.describe("AR navigator fallbacks", () => {
     const { truck } = await createActiveSpj(headers);
     try {
       await openDriver(page, principal, truck, "en");
-      // wave10 driver-field-app (L4): AR is offered after arrival, inside the open stop form.
-      await page.getByTestId("stop-0").getByTestId("stop-start").click();
+      // Wave 13: AR is a round button on the route sheet of the current stop.
       await page.getByTestId("stop-0").getByTestId("ar-nav-open").click();
       const nav = page.getByTestId("ar-navigator");
       await expect(nav).toHaveAttribute("data-view", "compass");
@@ -443,8 +438,7 @@ test.describe("AR navigator fallbacks", () => {
     );
     // The /driver sign-in gate needs a valid field session even when the data is stubbed.
     await openDriver(page, await apiLogin(), truck);
-    // wave10 driver-field-app (L4): AR is offered after arrival, inside the open stop form.
-    await page.getByTestId("stop-0").getByTestId("stop-start").click();
+    // Wave 13: AR is a round button on the route sheet of the current stop.
     await page.getByTestId("stop-0").getByTestId("ar-nav-open").click();
     await expect(page.getByTestId("ar-no-coordinate")).toContainText("Titik ini belum punya koordinat");
     await expect(page.getByTestId("ar-arrow")).toHaveCount(0);
