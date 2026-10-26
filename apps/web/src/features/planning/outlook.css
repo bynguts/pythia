@@ -1,6 +1,20 @@
 /* Outlook on the Tomorrow page: the week ahead and the next three months. Same card,
    type and colour tokens as tomorrow.css; the highlight is a green outline, never a fill. */
 
+/* The header wraps on narrow screens so the Model tag stays inside the card. */
+.tmr-ol > .ui-card-head {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.tmr-ol .ui-card-aside {
+  min-width: 0;
+  white-space: normal;
+}
+@media (max-width: 760px) {
+  .tmr-ol > .ui-card-head {
+    padding-block: 10px;
+  }
+}
 .tmr-ol .ui-card-body {
   display: flex;
   flex-direction: column;
