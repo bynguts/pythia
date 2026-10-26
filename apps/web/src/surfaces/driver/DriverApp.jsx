@@ -306,6 +306,7 @@ export default function DriverApp() {
   const queuedCount = outboxItems.length;
   const safety = useDriverSafety(driver?.truck_code);
   const instructionFeed = useDispatchInstructions(driver?.truck_code);
+  const reloadInstructions = instructionFeed.reload;
   const planInstructions = useStructuredInstructions(driver?.truck_code);
   const blocked = safetyBlocksNewWork(safety);
   const arEnabled = useMemo(
@@ -512,11 +513,14 @@ export default function DriverApp() {
       } else if (result.flushed > 0) {
         say(t("drv_synced_n").replace("{n}", result.flushed));
       }
-      if (result.flushed > 0 || result.rejected.length > 0) loadSpj();
+      if (result.flushed > 0 || result.rejected.length > 0) {
+        loadSpj();
+        reloadInstructions();
+      }
     } finally {
       setFlushing(false);
     }
-  }, [loadSpj, say, t]);
+  }, [loadSpj, reloadInstructions, say, t]);
 
   useEffect(() => {
     adoptFieldOutbox().then((moved) => {
@@ -781,6 +785,8 @@ export default function DriverApp() {
                   onStartPretrip={() => setPretripOpen(true)}
                   say={say}
                   queuePanel={queuePanel}
+                  route={spjView && stopsLeft > 0 ? { left: stopsLeft } : null}
+                  onOpenRoute={() => selectTab("rute")}
                 />
               </>
             ))}
@@ -819,6 +825,29 @@ export default function DriverApp() {
                 onOpenInstructions={() => selectTab("instruksi")}
                 say={say}
               />
+            ) : deliverySpj ? (
+              // Every stop is done: the route is finished and the load goes to the TPA.
+              <section className="drv-screen drv-empty" data-testid="driver-route-finished">
+                <Mascot size={80} />
+                <h1 className="drv-h2">{t("d2_route_done_title")}</h1>
+                <p className="drv-muted">
+                  {t("d2_route_done_body").replace("{destination}", deliverySpj.destination || "TPA")}
+                </p>
+                <button
+                  type="button"
+                  className="drv-btn secondary"
+                  data-testid="driver-route-go-tpa"
+                  onClick={() => selectTab("tpa")}
+                >
+                  {t("d2_route_go_tpa")}
+                </button>
+              </section>
+            ) : history[0] && receiptDoneFor(history[0]) ? (
+              <section className="drv-screen drv-empty" data-testid="driver-route-finished">
+                <Mascot size={80} />
+                <h1 className="drv-h2">{t("d2_route_closed_title")}</h1>
+                <p className="drv-muted">{t("d2_route_closed_body")}</p>
+              </section>
             ) : (
               <section className="drv-screen drv-empty" data-testid="driver-no-spj">
                 <Mascot size={80} />

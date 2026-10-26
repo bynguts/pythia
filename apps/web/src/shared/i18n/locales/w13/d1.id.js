@@ -121,6 +121,13 @@ export const d1Id = {
   d1_empty_title: "Belum ada instruksi",
   d1_empty_body:
     "Setelah dispatcher menyetujui rencana, titik angkut Anda muncul di sini, juga lewat WhatsApp.",
+  d1_empty_accepted: "Instruksi diterima {time}",
+  d1_empty_accepted_body: "Titik angkut muncul di Rute setelah dispatcher mengaktifkan surat jalan.",
+  d1_empty_issue: "Kendala terkirim ke dispatcher {time}",
+  d1_empty_issue_body: "Dispatcher membalas di sini atau lewat WhatsApp.",
+  d1_empty_route_title: "Tidak ada instruksi baru",
+  d1_empty_route_body: "Sisa titik di rute hari ini: {n}",
+  d1_open_route: "Buka rute",
   d1_start_pretrip: "Mulai cek sebelum jalan",
   d1_queue_title: "{n} menunggu sinyal",
   d1_queue_title_one: "1 menunggu sinyal",

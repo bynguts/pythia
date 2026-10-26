@@ -138,6 +138,25 @@ export function useDispatchInstructions(truckCode) {
   // null while live; otherwise { at } (ISO, may be null when the age is unknown).
   const [cached, setCached] = useState(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  // The driver's latest answer on this phone ({ id, status, at }): the pending list
+  // drops it at once, so the tab badge and the empty state agree before the next poll.
+  const [lastAnswer, setLastAnswer] = useState(null);
+
+  const settle = useCallback(
+    (id, status) => {
+      setLastAnswer({ id, status, at: new Date().toISOString() });
+      setList((prev) => {
+        const next = prev.filter((d) => d.id !== id);
+        try {
+          localStorage.setItem(dispatchCacheKey(truckCode), JSON.stringify(next));
+        } catch {
+          // The cache is a convenience; the next live poll rewrites it.
+        }
+        return next;
+      });
+    },
+    [truckCode],
+  );
 
   const load = useCallback(async () => {
     if (!truckCode) return;
@@ -172,12 +191,18 @@ export function useDispatchInstructions(truckCode) {
   useEffect(() => {
     setList(readDispatchCache(truckCode));
     setCached(null);
+    setLastAnswer(null);
     load();
     const id = setInterval(load, DISPATCH_POLL_MS);
-    return () => clearInterval(id);
+    // Back online: reload at once instead of showing the offline failure until the next poll.
+    window.addEventListener("online", load);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("online", load);
+    };
   }, [truckCode, load]);
 
-  return { list, cached, loadFailed };
+  return { list, cached, loadFailed, lastAnswer, settle, reload: load };
 }
 
 export function cachedAgeMinutes(at) {

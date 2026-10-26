@@ -37,6 +37,12 @@ test("a dispatcher instruction shows on /driver and one tap on Terima instruksi 
   await item.getByTestId("driver-instruction-ready").click();
   await expect(item).toHaveCount(0);
   await expect.poll(() => dispatchStatus(request, token, dispatch.id)).toBe("READY");
+  // #w14-walk: the screen says the instruction was accepted and the tab badge drops
+  // at once, not "Belum ada instruksi" beside a badge of 1 until the next poll.
+  await expect(page.getByTestId("driver-instructions-empty-title")).toHaveText(
+    /^Instruksi diterima \d\d:\d\d$/,
+  );
+  await expect(page.getByTestId("driver-tab-instruksi-count")).toHaveCount(0, { timeout: 3000 });
 });
 
 test("an approved-plan assignment is labelled as a plan and renders the backend text as is", async ({
@@ -84,6 +90,11 @@ test("an instruction accepted offline queues the confirmation and syncs it on re
 
   await context.setOffline(false);
   await expect.poll(() => dispatchStatus(request, token, dispatch.id), { timeout: 30000 }).toBe("READY");
+  // #w14-walk: once synced the screen is live again, never "could not load" beside "Synced".
+  const title = page.getByTestId("driver-instructions-empty-title");
+  await expect(title).toHaveText(/^Instruksi diterima \d\d:\d\d$/);
+  await expect(page.getByTestId("driver-instructions-cached")).toHaveCount(0, { timeout: 10000 });
+  await expect(title).not.toContainText("gagal dimuat");
 });
 
 test("a plan instruction leads with the departure time and tags the modelled gate slot", async ({

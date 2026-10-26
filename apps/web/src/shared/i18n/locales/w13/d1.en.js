@@ -118,6 +118,13 @@ export const d1En = {
   // States (D2vpX)
   d1_empty_title: "No instruction yet",
   d1_empty_body: "When dispatch approves the plan, your stops arrive here, with a WhatsApp too.",
+  d1_empty_accepted: "Instruction accepted {time}",
+  d1_empty_accepted_body: "Your stops appear in Route once dispatch activates the work order.",
+  d1_empty_issue: "Problem sent to dispatch {time}",
+  d1_empty_issue_body: "Dispatch replies here or on WhatsApp.",
+  d1_empty_route_title: "No new instruction",
+  d1_empty_route_body: "Stops left on today's route: {n}",
+  d1_open_route: "Open route",
   d1_start_pretrip: "Start pre-trip check",
   d1_queue_title: "{n} waiting for signal",
   d1_queue_title_one: "1 waiting for signal",

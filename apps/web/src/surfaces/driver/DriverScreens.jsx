@@ -795,7 +795,7 @@ function InstructionCard({ dispatch, plan, cachedTag }) {
 // Accept (READY) or report a problem (ISSUE). One operation id per (instruction,
 // answer): repeated taps replace one queued entry, and every replay carries the
 // id the server's replay guard knows. Offline answers queue like every write.
-function useInstructionAnswer(say) {
+function useInstructionAnswer(say, onSettled) {
   const { t } = useLanguage();
   const [answered, setAnswered] = useState(() => new Set());
   const [busyId, setBusyId] = useState(null);
@@ -825,6 +825,7 @@ function useInstructionAnswer(say) {
       } catch {
         await enqueueDriverOperation({ path, data, label: t("d1_instr_today") });
         setAnswered((prev) => new Set(prev).add(dispatch.id));
+        onSettled?.(dispatch.id, status);
         say(t("drv_queued_offline"));
         return;
       }
@@ -839,6 +840,7 @@ function useInstructionAnswer(say) {
       }
       markDriverSynced();
       setAnswered((prev) => new Set(prev).add(dispatch.id));
+      onSettled?.(dispatch.id, status);
       say(t("drv6_instr_sent"));
     } catch (error) {
       say(error instanceof OutboxStorageFullError ? t("drv6_storage_full") : t("drv6_instr_failed"), 8000);
@@ -907,7 +909,8 @@ function InstructionActions({ dispatch, blocked, busy, onAnswer }) {
 }
 
 // yNOwN: greeting, the pre-trip banner, today's instruction and Accept. Without
-// a pending instruction it is the "No instruction yet" state (D2vpX).
+// a pending instruction it is the "No instruction yet" state (D2vpX), or, once
+// the driver answered or a route is under way, says so and leads to the route.
 export function InstructionsScreen({
   driver,
   feed,
@@ -918,9 +921,11 @@ export function InstructionsScreen({
   onStartPretrip,
   say,
   queuePanel,
+  route,
+  onOpenRoute,
 }) {
   const { t, lang } = useLanguage();
-  const { answered, busyId, answer } = useInstructionAnswer(say);
+  const { answered, busyId, answer } = useInstructionAnswer(say, feed.settle);
   const hidden = useMemo(() => {
     const ids = queuedDispatchIds(outboxItems);
     answered.forEach((id) => ids.add(id));
@@ -943,7 +948,28 @@ export function InstructionsScreen({
       {cachedAge === null ? t("d1_instr_cached") : t("drv10_instr_cached_age").replace("{n}", cachedAge)}
     </span>
   );
-  const failedEmpty = feed.loadFailed && feed.list.length === 0;
+  const lastAnswer = feed.lastAnswer || null;
+  // A failed reload is only "could not load" when nothing else is known: an answered
+  // instruction or a route under way is the state to show, labelled as a saved copy.
+  const failedEmpty = feed.loadFailed && feed.list.length === 0 && !lastAnswer && !route;
+  const emptyTitle = failedEmpty
+    ? navigator.onLine
+      ? t("drv10_instr_load_error")
+      : t("drv10_instr_offline")
+    : lastAnswer
+      ? fill(t(lastAnswer.status === "READY" ? "d1_empty_accepted" : "d1_empty_issue"), {
+          time: clockTime(lastAnswer.at) || "",
+        }).trim()
+      : route
+        ? t("d1_empty_route_title")
+        : t("d1_empty_title");
+  const emptyBody = failedEmpty
+    ? null
+    : route
+      ? fill(t("d1_empty_route_body"), { n: route.left })
+      : lastAnswer
+        ? t(lastAnswer.status === "READY" ? "d1_empty_accepted_body" : "d1_empty_issue_body")
+        : t("d1_empty_body");
   const name = formatDriverName(driver.driver_name, t);
 
   return (
@@ -1030,15 +1056,22 @@ export function InstructionsScreen({
       ) : (
         <div className="drv-empty">
           <Mascot size={80} />
-          <h2 className="drv-h2">
-            {failedEmpty
-              ? navigator.onLine
-                ? t("drv10_instr_load_error")
-                : t("drv10_instr_offline")
-              : t("d1_empty_title")}
+          <h2 className="drv-h2" data-testid="driver-instructions-empty-title">
+            {emptyTitle}
           </h2>
-          {!failedEmpty && <p className="drv-empty-body">{t("d1_empty_body")}</p>}
+          {emptyBody && <p className="drv-empty-body">{emptyBody}</p>}
           {cachedTag}
+          {route && onOpenRoute && (
+            <button
+              type="button"
+              className="drv-btn secondary"
+              data-testid="driver-open-route"
+              onClick={onOpenRoute}
+            >
+              <Route size={18} aria-hidden="true" />
+              {t("d1_open_route")}
+            </button>
+          )}
           {pretrip.done === false && (
             <button
               type="button"
