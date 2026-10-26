@@ -29,7 +29,7 @@ export function GateCard({ board, currentStart }) {
 
   return (
     <section
-      className="ops-gate"
+      className={`ops-gate${collapsed ? " is-folded" : ""}`}
       aria-labelledby="ops-gate-title"
       data-testid="gate-card"
       data-provenance="model"

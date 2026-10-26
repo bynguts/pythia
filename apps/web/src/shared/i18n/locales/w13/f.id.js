@@ -67,4 +67,8 @@ export const fId = {
   f_session_body:
     "Sesi berakhir setelah 12 jam. Masuk lagi dan Anda kembali ke halaman ini. Draf rencana Anda tetap tersimpan.",
   f_session_sign_in: "Masuk lagi",
+  f_bell_n: "Perlu tindakan Anda · {n} terbuka",
+  f_bell_empty: "Tidak ada yang perlu Anda tangani sekarang.",
+  f_bell_all: "Buka Operasi",
+  f_bell_all_n: "Lihat semua {n} di Operasi",
 };

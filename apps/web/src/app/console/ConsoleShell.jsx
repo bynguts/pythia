@@ -1,7 +1,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Bell,
   Check,
   ChevronsUpDown,
   Ellipsis,
@@ -23,6 +22,7 @@ import { ErrorBoundary } from "../../shared/ui/ErrorBoundary.jsx";
 import { Mascot } from "../../shared/ui/Mascot.jsx";
 import { Skeleton } from "../../shared/ui/Skeleton.jsx";
 import { Tag } from "../../shared/ui/Tag.jsx";
+import { BellMenu } from "./BellMenu.jsx";
 import { PAGES } from "./pages.js";
 import { ConsoleContext, dayPhase, SUPERVISOR_MODE_KEY } from "./useConsole.js";
 
@@ -454,15 +454,7 @@ export function ConsoleShell({ page, onLogout }) {
                   : t(devices.synced === 1 ? "f_sync_one" : "f_sync").replace("{n}", devices.synced)}
               </span>
             )}
-            <Button
-              variant="ghost"
-              iconOnly
-              icon={Bell}
-              className="cx-bell"
-              aria-label={t("f_bell")}
-              title={t("f_bell")}
-              onClick={() => navigate(workspacePath("operations"))}
-            />
+            <BellMenu />
             <Button
               variant="dark"
               icon={Sparkles}

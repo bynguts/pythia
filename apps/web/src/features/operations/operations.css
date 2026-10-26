@@ -369,6 +369,16 @@
 .ops-needs-content[hidden] {
   display: none;
 }
+/* Folded: just the title row, as short and narrow as its content. */
+.ops-needs:has(.ops-needs-content[hidden]) {
+  width: auto;
+}
+.ops-needs:has(.ops-needs-content[hidden]) .ops-needs-head {
+  padding: 8px 12px 8px 16px;
+}
+.ops-needs:has(.ops-needs-content[hidden]) .ops-needs-head h2 {
+  font-size: 15px;
+}
 .ops-needs-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -617,6 +627,11 @@ button.ops-item-title:focus-visible {
   border-radius: 12px;
   background: var(--f-white);
   box-shadow: var(--f-shadow-float);
+}
+.ops-gate.is-folded {
+  width: auto;
+  align-self: flex-end;
+  padding: 6px 10px 6px 14px;
 }
 .ops-gate-head {
   display: flex;

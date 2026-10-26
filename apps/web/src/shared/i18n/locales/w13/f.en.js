@@ -67,4 +67,8 @@ export const fEn = {
   f_session_body:
     "Sessions end after 12 hours. Sign in again and you'll land back on this page. Your draft plan is kept.",
   f_session_sign_in: "Sign in again",
+  f_bell_n: "Needs you · {n} open",
+  f_bell_empty: "Nothing needs you right now.",
+  f_bell_all: "Open Operations",
+  f_bell_all_n: "See all {n} in Operations",
 };

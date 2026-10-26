@@ -443,6 +443,125 @@
   width: 16px;
   height: 16px;
 }
+.cx-bell-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.cx-bell-count {
+  position: absolute;
+  top: 2px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--f-red);
+  color: var(--f-white);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.cx-bell-pop {
+  position: absolute;
+  z-index: var(--z-dropdown);
+  top: calc(100% + 8px);
+  right: -4px;
+  width: min(340px, calc(100vw - 32px));
+  padding: 6px;
+  border: 1px solid var(--f-line-2);
+  border-radius: 12px;
+  background: var(--f-white);
+  box-shadow: var(--f-shadow-float);
+}
+.cx-bell-head {
+  margin: 0;
+  padding: 8px 10px 6px;
+  color: var(--f-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.cx-bell-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cx-bell-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.cx-bell-item:hover,
+.cx-bell-item:focus-visible {
+  background: var(--f-hover);
+  outline: none;
+}
+.cx-bell-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--f-amber);
+}
+.cx-bell-dot.is-urgent {
+  background: var(--f-red);
+}
+.cx-bell-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cx-bell-text strong {
+  color: var(--f-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.cx-bell-text span {
+  overflow: hidden;
+  color: var(--f-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-bell-empty {
+  margin: 0;
+  padding: 6px 10px 10px;
+  color: var(--f-muted);
+  font-size: 13px;
+}
+.cx-bell-all {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--tap-min);
+  margin-top: 4px;
+  padding: 0 10px;
+  border: 0;
+  border-top: 1px solid var(--f-line-3);
+  border-radius: 0 0 8px 8px;
+  background: none;
+  color: var(--f-green);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cx-bell-all:hover,
+.cx-bell-all:focus-visible {
+  background: var(--f-hover);
+  outline: none;
+}
 .cx-menu-toggle {
   display: none;
 }

@@ -68,7 +68,8 @@ function list(items, lang) {
 }
 
 // Title, sub text, tag and the one action a row offers, by kind (bindings §1).
-function describe(item, { t, lang, alert }) {
+// Also used by the top bar's bell, which lists the same items in short.
+export function describe(item, { t, lang, alert }) {
   const facts = item.facts || {};
   const truck = item.truck_code || "—";
   const followUp = facts.follow_up;

@@ -184,6 +184,25 @@ test("the needs-you panel and the gate card fold to their headers to clear the m
   await expect(gate.locator(".ops-gate-note")).toBeVisible();
 });
 
+test("the bell counts open items and its popover lists them and opens Operations", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route(/\/api\/ops\/needs-you$/, (route) => route.fulfill({ json: FEED }));
+  await signIn(page);
+  await page.goto("/app/reports", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("bell-count")).toHaveText("6", { timeout: 30000 });
+  await page.getByTestId("bell").click();
+  const popover = page.getByTestId("bell-popover");
+  await expect(popover).toBeVisible();
+  await expect(popover.getByTestId("bell-item")).toHaveCount(6);
+  await expect(popover).toContainText("T-E2A");
+  await page.keyboard.press("Escape");
+  await expect(popover).toBeHidden();
+  await page.getByTestId("bell").click();
+  await popover.getByTestId("bell-item").first().click();
+  await expect(page).toHaveURL(/\/app\/operations/);
+  await expect(page.getByTestId("bell-popover")).toBeHidden();
+});
+
 test("every open item shows its one action; the chips count and filter the list", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.route(/\/api\/ops\/needs-you$/, (route) => route.fulfill({ json: FEED }));
