@@ -101,6 +101,79 @@ the thresholds are `DUTY_WARN_MIN`, `DUTY_BLOCK_MIN` and `GATE_ALERT_MIN` in
   bound to a truck gets 403 for any other truck. `GET /api/safety/overview` needs
   `dashboard:read`; `POST /api/safety/override` needs `spj:override`.
 
+### Dispatcher loop: plan, SPJ, gate, recap
+
+Pythia has two working surfaces: the dispatcher console and the driver app. The
+supervisor approves inside the console. The loop runs in this order:
+
+1. **Tomorrow (`GET /api/forecast/tomorrow`, `dashboard:read`).** Gives the forecast
+   for the plan day and the drivers behind it: weather (Open-Meteo), official events
+   (multi-day events count on every day they run), submitted permits, holiday and
+   weekday. Each driver carries `effect_classification`. An unknown effect is `null`,
+   never guessed. `total_tonnage_t` stays the no-event baseline, and
+   `with_events_total_t` is reported beside it. Nobody types in rain or attendance.
+2. **Plan and approval.** `POST /api/operations/plan` proposes and
+   `POST /api/operations/{plan_id}/approve` approves (`operations:approve`).
+   - Every approve ensures one **draft** SPJ per truck, dated the plan day. The draft
+     is labelled `Rencana {plan_id} (MODEL)` and has one planning-centroid stop per
+     kecamatan.
+   - A truck whose facility is unknown is reported in `spj_drafts`, never given a
+     default facility.
+   - Drafts are not checked against duty limits; activation is, so a human still
+     activates every SPJ.
+   - `GET /api/operations/plans/{plan_id}` returns the plan with its `spj_drafts`.
+     The console polls it so the dispatcher sees the approval without reloading.
+3. **Gate slot and departure.** `app/fleet/gate_slots.py` gives each truck a
+   15-minute weighbridge slot at TPST Bantargebang and a `depart_at` (the slot start
+   minus `COLLECTION_ROUND_MEAN_H`). The driver's instruction text ends with
+   `Berangkat HH:MM · Slot gerbang … (keluaran model)`.
+   - Capacity per slot comes from the weighbridge constants, minus the observed
+     arrivals not covered by plans.
+   - RDF Plant Jakarta (Rorotan) trucks use no Bantargebang capacity.
+   - `GET /api/gate/slots` lists live holds of at most 60 minutes, or says
+     `saturated` when no hold helps. Accepting a hold
+     (`POST /api/gate/slots/recommendations/{rec_id}/accept`, `dispatch:create`)
+     sends the driver one instruction.
+   - Every figure is `SIMULATED` / `MODEL_OUTPUT`.
+4. **Reassign (`POST /api/operations/{plan_id}/reassign`, `dispatch:create`).** Moves
+   a truck's draft SPJ, instruction and dispatch to another truck. The steps run in
+   order and resume after a failure, so a retry never creates a second dispatch.
+   The old dispatch becomes `REASSIGNED`, and a later READY from the old driver's
+   outbox gets 409. It refuses (409) a target that is damaged, duty-blocked or
+   already in the plan, and an SPJ that is already active.
+5. **Morning readiness (`GET /api/readiness`, `dashboard:read`).** Shows, per truck:
+   - today's pre-trip;
+   - duty state (simulated duty never blocks);
+   - instruction acknowledgement;
+   - SPJ status, including `spj_active_other`;
+   - open damage;
+   - service due within 7 days.
+6. **Close of day (`GET /api/recap/daily`).** Compares actual against planned:
+   - receipt net tonnes and trips;
+   - gate waits observed in the app;
+   - driver exceptions, damage and supervisor overrides.
+
+   A side with no data is `null`.
+
+Ana answers "who is not ready?" and "how did today go?" through the read-only tools
+`get_readiness` and `get_daily_recap`. Both drop person names before anything
+reaches the external model gateway.
+
+**ETA labels.** Every ETA carries `eta_source`: `osrm_duration` (road routing time
+from the public OSRM server), `fallback_estimate` (straight-line distance at a fixed
+speed) or `simulated`. An A* route is `fallback_estimate` if any leg fell back. ETAs
+are routing estimates, not AI predictions.
+
+**Queue calibration on real data.** `ml/scripts/calibrate_queue.py` writes
+`data/models/queue_calibration.json` from the Bantargebang weighing records. It
+reports:
+- arrivals of about 1,228 trips/day (12-month median);
+- about 5.95 t per trip, against the 18 t truck capacity used for planning;
+- an arrival backtest showing no skill over last month's value.
+
+`/api/tpa/queue-metric` exposes this as `calibration`. Gate waiting times are not in
+the records, so they stay `SIMULATED` (`wait_validation: "not_observed"`).
+
 ## Complete Demo Flow
 
 1. **Sign In:** Enter username `dispatcher` and password `dispatcher-demo-pass`.
