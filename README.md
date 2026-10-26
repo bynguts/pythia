@@ -118,8 +118,28 @@ Duty time per truck runs from the first pre-trip check or SPJ activation of the 
 - At 600 min (10 h) the console shows a warning.
 - From 720 min (12 h) no new SPJ can be created or activated until a supervisor
   records an override with a reason. Every override is written to the audit history.
+- The gate wait runs from the driver's gate-arrival tap to the weighbridge receipt. At
+  180 min (DLH's 3-hour gate-wait promise) one alert per wait is stored and sent to the
+  supervisor WhatsApp group when one is configured.
 
-The thresholds live in `app/core/units.py`.
+The numbers are classified `OBSERVED_APP_EVENTS` (pre-trip, SPJ, gate-arrival and receipt
+events recorded on this server). A server with no such events today shows a seeded
+scenario labelled SIMULATED, which never blocks an SPJ or sends an alert. The thresholds
+live in `app/core/units.py`.
+
+### Paperless SPJ and sealed weigh tickets
+
+- **Ticket OCR:** the driver photographs the weighbridge ticket and a vision model reads
+  gross, tare, net, ticket number, plate, weighing times and site, or says the photo is
+  not a ticket. The reading is labelled MODEL OUTPUT and prefills the form; it becomes a
+  recorded weight only when the driver or a reviewer confirms it.
+- **Seal:** every SPJ audit entry carries the SHA-256 of the previous one (canonical JSON),
+  and the receipt stores the photo's digest. `GET /api/spj/{id}/integrity` re-verifies the
+  chain, and the console shows "Sealed" or "Seal broken".
+- **Cross-checks** (rules, not AI): gross − tare = net on the ticket, net within the 18 t
+  truck capacity, OCR against the recorded gross, duplicate ticket numbers or photos, the
+  ticket plate against the SPJ truck. A failed check becomes a Needs-you item with a next
+  step and the rule it cites.
 
 ### Briefing room (`/twin`, `/xr`)
 
@@ -144,7 +164,11 @@ workflow and are not linked from the console.
   not field measurements. `ml/scripts/calibrate_queue.py` reproduces the arrival input.
 - **ETA:** an OSRM routing duration, or a labelled fallback estimate. It is not an AI
   prediction.
-- **Rules:** gate caps, RDF Rorotan intake and per-truck trip limits come from a dated
+- **Value per 1,000 gate trips** (Reports): truck-hours, driver duty hours and idle diesel
+  without and with staggered slots, in low, base and high cases. The waits come from the
+  queue simulation (SIMULATED); every other input is a labelled assumption with its range.
+- **Rules:** the daily plan (Rencana harian) is built with OR-Tools CP-SAT. Gate caps,
+  RDF Rorotan intake and per-truck trip limits come from a dated
   example rules file (`ml/data/config/operations_rules.json`, classified `EXAMPLE_CONFIG`,
   each rule with its source, to be confirmed with DLH).
 

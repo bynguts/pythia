@@ -22,8 +22,10 @@ const KB = 1024;
 /** Agreed budgets (raw bytes). Lazy chunks are allowed to be larger than
  * the startup path but still capped. */
 const BUDGETS = {
-  // Startup path: the main JS bundle must stay lean for field networks.
-  main: 700 * KB,
+  // Startup path: the main JS bundle must stay lean for field networks. Raised from
+  // 700 KB for the paperless-SPJ strings (both language catalogs ship in it); the
+  // /driver gzip cap below is what a driver's phone actually downloads.
+  main: 720 * KB,
   // Map stack: shipped as its own versioned vendor chunk, loaded only when
   // Fleet mounts (already lazy). Split from LiveFleetMap so the app shell
   // never downloads it twice across deploys.
