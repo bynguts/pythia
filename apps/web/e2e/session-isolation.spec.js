@@ -30,7 +30,7 @@ test("a driver signing in on a second tab keeps the supervisor's command-center 
   // Second tab, same browser profile: the driver signs in through the field gate.
   const driverTab = await context.newPage();
   await driverTab.goto("/driver");
-  await expect(driverTab.getByTestId("login-notice")).toBeVisible();
+  await expect(driverTab.locator('input[autocomplete="username"]')).toHaveValue("driver");
   await driverTab.locator('input[autocomplete="current-password"]').fill("driver-demo-pass");
   await driverTab.getByRole("button", { name: "Sign in" }).click();
   await expect(driverTab.getByTestId("driver-app")).toBeVisible();

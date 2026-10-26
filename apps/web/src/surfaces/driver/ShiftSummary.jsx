@@ -175,39 +175,41 @@ export function ShiftSummary({
           ) : (
             <ul>
               {todays.map((s) => {
-                const kg = receiptKg(s.spj_id === spjId && receipt ? receipt : s.receipt);
+                // H10: the order just delivered carries its ticket's gross, tare
+                // and net as recorded, or says they are still pending.
+                const current = Boolean(spjId) && s.spj_id === spjId;
+                const kg = receiptKg(current && receipt ? receipt : s.receipt);
                 const stops = s.stops?.length || 0;
+                const stopsText =
+                  stops === 1 ? t("d2_summary_stops_one") : t("d2_summary_stops_n").replace("{n}", stops);
                 return (
-                  <li key={s.spj_id} data-testid={`summary-spj-${s.spj_id}`}>
+                  <li
+                    key={s.spj_id}
+                    className={current ? "is-current" : undefined}
+                    data-testid={`summary-spj-${s.spj_id}`}
+                  >
                     <CircleCheck size={18} aria-hidden="true" />
                     <div className="drt-list-text is-bold">
                       <strong title={s.spj_number}>{shortSpjNumber(s.spj_number)}</strong>
                       <small>
-                        {[t("d2_summary_stops_n").replace("{n}", stops), kg === null ? null : `${fmt(kg)} kg`]
-                          .filter(Boolean)
-                          .join(" · ")}
+                        {[stopsText, kg === null ? null : `${fmt(kg)} kg`].filter(Boolean).join(" · ")}
                       </small>
                     </div>
                     <span className="drt-list-time">{clockTime(s.completed_at) || ""}</span>
+                    {current &&
+                      (receipt ? (
+                        <ReceiptWeights receipt={receipt} />
+                      ) : (
+                        <p className="drt-note is-small" data-testid="receipt-weights-pending">
+                          {t("drv7_receipt_weights_pending")}
+                        </p>
+                      ))}
                   </li>
                 );
               })}
             </ul>
           )}
         </section>
-
-        {spjId && (
-          <section className="drt-card" aria-label={t("drv_receipt_title")}>
-            <p className="drt-step-title">{t("d2_summary_this_ticket")}</p>
-            {receipt ? (
-              <ReceiptWeights receipt={receipt} />
-            ) : (
-              <p className="drt-note" data-testid="receipt-weights-pending">
-                {t("drv7_receipt_weights_pending")}
-              </p>
-            )}
-          </section>
-        )}
       </div>
 
       {onSignOut && (

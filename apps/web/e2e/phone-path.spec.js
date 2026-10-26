@@ -23,11 +23,11 @@ test("a fresh phone on /driver signs in as the driver in place and keeps the dee
   await freshPhone(page);
   await page.goto("/driver");
 
-  await expect(page.getByTestId("login-notice")).toHaveText(
-    "Sign in as the driver to complete stops and sync queued work.",
-  );
-  await expect(page.getByTestId("driver-app")).toHaveCount(0);
+  // F2CI6P: the driver sign-in carries no notice under its intro.
   const username = page.locator('input[autocomplete="username"]');
+  await expect(username).toBeVisible();
+  await expect(page.getByTestId("login-notice")).toHaveCount(0);
+  await expect(page.getByTestId("driver-app")).toHaveCount(0);
   await expect(username).toHaveValue("driver");
   await page.locator('input[autocomplete="current-password"]').fill("driver-demo-pass");
   await page.getByRole("button", { name: "Sign in" }).click();
@@ -48,7 +48,6 @@ test("a token the backend no longer knows brings the sign-in back on /field", as
   await page.goto("/field");
   await expect(page).toHaveURL(/\/driver\?tab=instruksi$/);
 
-  await expect(page.getByTestId("login-notice")).toBeVisible();
   await expect(page.locator('input[autocomplete="username"]')).toHaveValue("driver");
   expect(await page.evaluate(() => localStorage.getItem("pythia_field_token"))).toBeNull();
 });

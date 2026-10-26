@@ -11,7 +11,6 @@ export const en = {
   login_show_password: "Show password",
   login_hide_password: "Hide password",
   // gsc P0-2 phone login gate
-  role_gate_notice: "Sign in as the driver to complete stops and sync queued work.",
   drv11_tab_tpa: "TPA",
   drv11_stop_prefix: "Stop {n}:",
   drv11_next_stop: "Next stop",

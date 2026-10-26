@@ -139,6 +139,7 @@ export const d2Id = {
   d2_summary_duty_value: "{h} j {m}",
   d2_summary_stops: "Titik",
   d2_summary_stops_value: "{done} dari {total}",
+  d2_summary_stops_one: "1 titik",
   d2_summary_stops_n: "{n} titik",
   d2_summary_sent: "Semua sudah terkirim",
   d2_summary_sent_desc: "Foto, berat, dan struk · sinkron terakhir {time}",
@@ -147,6 +148,5 @@ export const d2Id = {
   d2_summary_pending_desc: "Terkirim sendiri saat ada sinyal. Biarkan aplikasi terbuka.",
   d2_summary_closed: "Surat jalan selesai hari ini",
   d2_summary_closed_empty: "Belum ada surat jalan yang selesai hari ini.",
-  d2_summary_this_ticket: "Struk timbangan ini",
   d2_summary_end: "Akhiri shift dan keluar",
 };

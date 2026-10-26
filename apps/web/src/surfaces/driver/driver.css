@@ -15,6 +15,8 @@
   /* Read by the trip screens (driver-trip.css) to size the map and layers. */
   --drv-tabbar-h: calc(var(--drv-tabs-height) + env(safe-area-inset-bottom, 0px));
   --drv-header-h: 56px;
+  /* A toast's height plus its gap; reserved under the content while one shows. */
+  --drv-toast-space: 0px;
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
@@ -28,7 +30,20 @@
 }
 
 .driver-shell.has-tabs {
-  padding-bottom: calc(var(--drv-tabs-height) + env(safe-area-inset-bottom, 0px) + var(--space-4));
+  padding-bottom: calc(
+    var(--drv-tabs-height) + env(safe-area-inset-bottom, 0px) + var(--space-4) + var(--drv-toast-space)
+  );
+}
+
+/* The toast floats above the tab bar; the content moves up out of its way
+   instead of sitting under it (yNOwN keeps the actions clear). */
+.driver-shell.has-toast {
+  --drv-toast-space: 56px;
+}
+
+/* Y1kCA: the 12 h duty block is full screen, without the tab bar. */
+.driver-shell.is-gate {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* One column, 16 px gutters, centred on wider screens. */

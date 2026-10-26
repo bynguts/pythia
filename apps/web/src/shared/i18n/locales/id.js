@@ -11,7 +11,6 @@ export const id = {
   login_show_password: "Tampilkan kata sandi",
   login_hide_password: "Sembunyikan kata sandi",
   // gsc P0-2 phone login gate
-  role_gate_notice: "Masuk sebagai sopir untuk menyelesaikan titik dan menyinkronkan antrean.",
   drv11_tab_tpa: "TPA",
   drv11_stop_prefix: "Titik {n}:",
   drv11_next_stop: "Titik berikutnya",

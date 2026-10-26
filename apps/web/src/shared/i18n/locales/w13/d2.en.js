@@ -139,6 +139,7 @@ export const d2En = {
   d2_summary_duty_value: "{h} h {m}",
   d2_summary_stops: "Stops",
   d2_summary_stops_value: "{done} of {total}",
+  d2_summary_stops_one: "1 stop",
   d2_summary_stops_n: "{n} stops",
   d2_summary_sent: "Everything is sent",
   d2_summary_sent_desc: "Photos, weights and tickets · last sync {time}",
@@ -147,6 +148,5 @@ export const d2En = {
   d2_summary_pending_desc: "They send by themselves when there is signal. Keep the app open.",
   d2_summary_closed: "Work orders closed today",
   d2_summary_closed_empty: "No work order closed yet today.",
-  d2_summary_this_ticket: "This weigh ticket",
   d2_summary_end: "End shift and sign out",
 };

@@ -92,7 +92,8 @@ export function RoleGate({ role = "driver", children }) {
       <DriverLogin
         onLogin={onLogin}
         initialUsername={role}
-        notice={forbidden ? t("role_gate_forbidden") : t("role_gate_notice")}
+        // F2CI6P: the driver sign-in has no notice under its intro; only a refusal shows one.
+        notice={forbidden ? t("role_gate_forbidden") : ""}
       />
     );
   }

@@ -708,6 +708,17 @@ export default function DriverApp() {
   const stopsLeft = stops.filter(stopOpen).length;
   const showPretripForm = pretripDone === false && pretripOpen;
   const routeMap = tab === "rute" && !sessionExpired && Boolean(spjView) && stops.length > 0;
+  // Y1kCA: the 12 h duty block fills the screen without the tab bar; its own
+  // button still leads to Report.
+  const gateScreen = tab === "instruksi" && blocked && !sessionExpired;
+  const shellClass = [
+    "driver-shell",
+    gateScreen ? "is-gate" : "has-tabs",
+    routeMap && "is-route-map",
+    toast && "has-toast",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const queuePanel = (
     <QueuePanel
@@ -719,7 +730,7 @@ export default function DriverApp() {
   );
 
   return (
-    <main className={`driver-shell has-tabs${routeMap ? " is-route-map" : ""}`} data-testid="driver-app">
+    <main className={shellClass} data-testid="driver-app">
       {/* sY4R6: the route map is full-bleed, without the app header. */}
       {!routeMap && (
         <DriverTopBar
@@ -846,7 +857,9 @@ export default function DriverApp() {
         </div>
       )}
 
-      {!sessionExpired && <DriverTabBar tab={tab} onSelect={selectTab} instructionCount={openInstructions} />}
+      {!sessionExpired && !gateScreen && (
+        <DriverTabBar tab={tab} onSelect={selectTab} instructionCount={openInstructions} />
+      )}
 
       <Toast message={toast} />
     </main>
