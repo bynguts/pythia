@@ -1,8 +1,9 @@
-/* Driver PWA (/driver). Wave 11: the approved world (warm canvas, white
-   surfaces, one forest accent, Inter Tight headings, mono labels) sized for a
-   gloved hand on a budget phone in direct sun. Primary controls are at least
-   56 px (64 px for the one action per screen), text is 15–17 px, ink on white.
-   Values come from styles/tokens.css. */
+/* Driver PWA (/driver). Wave 13: the founder's approved driver screens
+   (docs/design/export-handoff/drv_*.html, 390 px): warm paper canvas, white
+   panels with hairlines, one green, Archivo headings over Inter, 48 px buttons
+   with 15 px labels, sized for a gloved hand on a budget phone in direct sun.
+   Colours come from the --f-* tokens in styles/tokens.css. The older .driver-*
+   rules below still style the route, report and TPA content. */
 
 .driver-shell {
   --drv-tap: 56px;
@@ -10,31 +11,33 @@
   --drv-width: 560px;
   --drv-radius: var(--ui-radius-elevated);
   --drv-radius-control: 14px;
-  --drv-tabs-height: 72px;
+  --drv-tabs-height: 64px;
+  /* Read by the trip screens (driver-trip.css) to size the map and layers. */
+  --drv-tabbar-h: calc(var(--drv-tabs-height) + env(safe-area-inset-bottom, 0px));
+  --drv-header-h: 56px;
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   padding: 0 0 var(--space-6);
-  color: var(--ui-ink);
-  background: var(--ui-canvas);
-  font-family: var(--font-body);
+  color: var(--f-ink, #1c1b19);
+  background: var(--f-sidebar, #f6f5f1);
+  font-family: var(--f-font-body, var(--font-body));
   font-size: 16px;
 }
 
 .driver-shell.has-tabs {
-  padding-bottom: calc(var(--drv-tabs-height) + env(safe-area-inset-bottom, 0px) + var(--space-5));
+  padding-bottom: calc(var(--drv-tabs-height) + env(safe-area-inset-bottom, 0px) + var(--space-4));
 }
 
 /* One column, 16 px gutters, centred on wider screens. */
-.driver-shell > :not(.driver-header):not(.driver-tabs):not(.driver-toast) {
+.driver-shell > :not(.driver-header):not(.driver-tabs):not(.driver-toast):not(.drv-top):not(.drv-body) {
   width: min(var(--drv-width), calc(100% - 32px));
   margin-inline: auto;
   box-sizing: border-box;
 }
 
-/* Fixed bars must never cover what keyboard focus or scrollIntoView lands on. */
 html:has(.driver-shell.has-tabs) {
   scroll-padding-top: 72px;
   scroll-padding-bottom: calc(var(--ui-bottomnav-space, 96px) + 24px);
@@ -1428,7 +1431,8 @@ textarea.driver-input {
   color: var(--ui-forest-700);
 }
 
-/* ── Bottom tab bar: four sections, thumb reach, 72 px ── */
+/* ── Bottom tab bar: four sections (drv "Tab Bar": white, hairline top,
+   52 px items, the active one on a green tint) ── */
 
 .driver-tabs {
   position: fixed;
@@ -1438,16 +1442,15 @@ textarea.driver-input {
   z-index: var(--z-sticky);
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-1);
-  padding: 6px max(8px, calc((100% - var(--drv-width)) / 2)) calc(6px + env(safe-area-inset-bottom, 0px));
-  border-top: 1px solid var(--ui-border);
-  background: var(--ui-surface);
+  padding: 6px max(6px, calc((100% - var(--drv-width)) / 2)) calc(6px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--f-border, #e6e3dc);
+  background: var(--f-white, #fff);
   box-sizing: border-box;
 }
 
 .driver-tab {
   position: relative;
-  min-height: 60px;
+  min-height: 52px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1455,57 +1458,43 @@ textarea.driver-input {
   gap: 3px;
   padding: 0 2px;
   border: 0;
-  border-radius: 14px;
-  color: var(--ui-ink-soft);
+  border-radius: 10px;
+  color: var(--f-muted, #6b6860);
   background: transparent;
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-}
-
-.driver-tab-icon {
-  width: 56px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--ui-radius-pill);
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 
 .driver-tab.active {
-  color: var(--ui-ink);
-  font-weight: 700;
+  color: var(--f-green, #1f6b45);
+  background: var(--f-green-tint, #f1f7f2);
+  font-weight: 600;
 }
 
-.driver-tab.active .driver-tab-icon {
-  color: var(--ui-on-dark);
-  background: var(--ui-forest-900);
-}
-
-.driver-tab:not(.active):hover .driver-tab-icon {
-  background: var(--ui-cream);
+.driver-tab:not(.active):hover {
+  background: var(--f-hover, #f1efea);
 }
 
 .driver-tab-count {
   position: absolute;
   top: 2px;
-  left: calc(50% + 12px);
+  left: calc(50% + 8px);
   min-width: 20px;
   height: 20px;
   padding: 0 5px;
   box-sizing: border-box;
-  border: 2px solid var(--ui-surface);
-  border-radius: var(--ui-radius-pill);
-  color: var(--ui-on-dark);
-  background: var(--ui-danger);
-  font-family: var(--mono);
+  border: 2px solid var(--f-white, #fff);
+  border-radius: 10px;
+  color: var(--f-white, #fff);
+  background: var(--f-red-ink, #b3381f);
   font-size: 11px;
   font-weight: 700;
   line-height: 16px;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Toast: above the tab bar ── */
@@ -1549,19 +1538,1349 @@ textarea.driver-input {
   }
 
   .driver-tab {
-    font-size: 12px;
-  }
-
-  .driver-tab-icon {
-    width: 48px;
+    font-size: 11px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .driver-progress-fill,
   .driver-btn,
-  .driver-tab-icon,
+  .driver-tab,
   .driver-exception-btn {
+    transition: none;
+  }
+}
+
+/* ══ Wave 13 driver core (lane D1): .drv-* ═══════════════════════════════════ */
+
+.driver-tab svg {
+  color: var(--f-faint, #726e66);
+}
+
+.driver-tab.active svg {
+  color: var(--f-green, #1f6b45);
+}
+
+/* A drawn control smaller than 44 px keeps a 44 px hit box around it. */
+.drv-hit {
+  position: relative;
+}
+
+.drv-hit::after {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: max(100%, var(--tap-min, 44px));
+  height: max(100%, var(--tap-min, 44px));
+  transform: translate(-50%, -50%);
+}
+
+/* ── Top bar: mascot, truck chip, sync pill ── */
+
+.drv-top {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 8px max(16px, calc((100% - var(--drv-width)) / 2));
+  background: var(--f-sidebar, #f6f5f1);
+  box-sizing: border-box;
+}
+
+.drv-top-space {
+  flex: 1;
+}
+
+.drv-top-title {
+  margin: 0;
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--f-ink, #1c1b19);
+}
+
+.drv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  outline: 1px solid var(--f-line-2, #e3e0d9);
+  outline-offset: -1px;
+  color: var(--f-ink, #1c1b19);
+  background: var(--f-white, #fff);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.drv-chip svg {
+  color: var(--f-green, #1f6b45);
+}
+
+button.drv-chip {
+  cursor: pointer;
+}
+
+button.drv-chip:hover {
+  background: var(--f-hover, #f1efea);
+}
+
+.drv-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 20px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.drv-pill.is-synced {
+  color: var(--f-green, #1f6b45);
+  background: #e3f1e6; /* design "Synced" fill; no --f token */
+}
+
+.drv-pill.is-waiting {
+  color: var(--f-amber-ink, #8a5410);
+  background: var(--f-amber-soft, #f7e8cf);
+  cursor: pointer;
+}
+
+.drv-pill.is-offline {
+  color: var(--f-ink-2, #45433d);
+  background: var(--f-paper-2, #eae8df);
+}
+
+.drv-back {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  outline: 1px solid var(--f-line-2, #e3e0d9);
+  outline-offset: -1px;
+  color: var(--f-ink, #1c1b19);
+  background: var(--f-white, #fff);
+  cursor: pointer;
+}
+
+.drv-back:hover {
+  background: var(--f-hover, #f1efea);
+}
+
+/* ── Body: one column, the last block pushed to the bottom ── */
+
+.drv-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(var(--drv-width), 100%);
+  margin-inline: auto;
+  padding: 6px 16px 16px;
+  box-sizing: border-box;
+}
+
+/* The route map fills the screen above the tab bar (sY4R6, no header). */
+.driver-shell.is-route-map {
+  gap: 0;
+  padding-bottom: var(--drv-tabbar-h);
+}
+
+.drv-body.is-route {
+  width: 100%;
+  padding: 0;
+}
+
+.drv-body > * {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.drv-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.drv-push {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+/* ── Type ── */
+
+.drv-h1,
+.drv-h2,
+.drv-h3 {
+  margin: 0;
+  font-family: var(--f-font-display, var(--font-head));
+  font-weight: 600;
+  color: var(--f-ink, #1c1b19);
+  text-wrap: balance;
+}
+
+.drv-h1 {
+  font-size: 30px;
+  line-height: 33px;
+  letter-spacing: -1px;
+}
+
+.drv-h2 {
+  font-size: 26px;
+  line-height: 1.15;
+  letter-spacing: -0.8px;
+}
+
+.drv-h3 {
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+}
+
+.drv-lede {
+  margin: 0;
+  font-size: 15px;
+  line-height: 23px;
+  color: var(--f-muted, #6b6860);
+}
+
+.drv-muted {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--f-muted, #6b6860);
+}
+
+.drv-small {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--f-muted, #6b6860);
+  font-variant-numeric: tabular-nums;
+}
+
+.drv-error {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--f-red-ink, #b3381f);
+}
+
+/* ── Buttons: 48 px, 15 px labels (founder rule), gradient as designed ── */
+
+.drv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  width: 100%;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.drv-btn.primary {
+  color: var(--f-white, #fff);
+  background: linear-gradient(180deg, var(--f-green-2, #2a7f52) 0%, var(--f-green, #1f6b45) 100%);
+  outline: 1px solid #175236; /* design primary edge; no --f token */
+  outline-offset: -1px;
+  box-shadow:
+    inset 0 1px 0 #ffffff38,
+    0 1px 0 #144a2f,
+    0 2px 4px #14131214;
+}
+
+.drv-btn.primary:hover:not(:disabled) {
+  background: var(--f-green, #1f6b45);
+}
+
+.drv-btn.secondary {
+  color: var(--f-ink, #1c1b19);
+  background: linear-gradient(180deg, var(--f-white, #fff) 0%, #f0eee8 100%);
+  outline: 1px solid var(--f-control-line, #d8d5ce);
+  outline-offset: -1px;
+  box-shadow:
+    inset 0 1px 0 #ffffffe6,
+    0 1px 0 #c8c5be,
+    0 2px 4px #14131214;
+}
+
+.drv-btn.secondary:hover:not(:disabled) {
+  background: var(--f-hover, #f1efea);
+}
+
+.drv-btn.is-small {
+  width: auto;
+  min-height: 44px;
+  font-size: 14px;
+}
+
+.drv-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.drv-link {
+  align-self: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  color: var(--f-ink-2, #45433d);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.drv-btn:focus-visible,
+.drv-link:focus-visible,
+.drv-back:focus-visible,
+.drv-chip:focus-visible,
+.drv-pill:focus-visible,
+.drv-pick:focus-visible,
+.drv-seg-btn:focus-visible,
+.driver-tab:focus-visible {
+  outline: 3px solid var(--f-green, #1f6b45);
+  outline-offset: 2px;
+}
+
+.drv-actions-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+/* ── Fields ── */
+
+.drv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.drv-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--f-ink-3, #3a3833);
+}
+
+.drv-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 10px;
+  outline: 1px solid var(--f-control-line, #d8d5ce);
+  outline-offset: -1px;
+  background: var(--f-white, #fff);
+  box-sizing: border-box;
+}
+
+.drv-input-wrap svg {
+  flex: none;
+  color: var(--f-faint, #726e66);
+}
+
+.drv-input-wrap:focus-within {
+  outline: 2px solid var(--f-green, #1f6b45);
+  outline-offset: -2px;
+}
+
+.drv-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 46px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  color: var(--f-ink, #1c1b19);
+  background: transparent;
+  font: inherit;
+  font-size: 16px;
+}
+
+.drv-input::placeholder,
+.drv-note::placeholder {
+  color: var(--f-faint, #726e66);
+}
+
+.drv-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.drv-input.is-plain {
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 10px;
+  outline: 1px solid var(--f-control-line, #d8d5ce);
+  outline-offset: -1px;
+  background: var(--f-white, #fff);
+}
+
+.drv-input.is-plain:focus {
+  outline: 2px solid var(--f-green, #1f6b45);
+  outline-offset: -2px;
+}
+
+/* ── Lists: one white panel, hairline rows ── */
+
+.drv-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: 14px;
+  outline: 1px solid var(--f-border, #e6e3dc);
+  outline-offset: -1px;
+  background: var(--f-white, #fff);
+  overflow: hidden;
+}
+
+.drv-list > li + li {
+  border-top: 1px solid var(--f-line-3, #ece9e2);
+}
+
+.drv-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 14px;
+  outline: 1px solid var(--f-border, #e6e3dc);
+  outline-offset: -1px;
+  background: var(--f-white, #fff);
+}
+
+.drv-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--f-ink, #1c1b19);
+}
+
+.drv-panel-title svg {
+  flex: none;
+  color: var(--f-green, #1f6b45);
+}
+
+.drv-card {
+  border-radius: 14px;
+  outline: 1px solid var(--f-border, #e6e3dc);
+  outline-offset: -1px;
+  background: var(--f-white, #fff);
+  overflow: hidden;
+}
+
+/* ── Tags ── */
+
+.drv-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.drv-tag.is-new,
+.drv-tag.is-model {
+  color: var(--f-blue, #2b5c9e);
+  background: var(--f-blue-soft, #e0e8f3);
+}
+
+.drv-tag.is-neutral {
+  color: var(--f-ink-2, #45433d);
+  background: var(--f-paper-2, #eae8df);
+}
+
+/* ── Choose your truck ── */
+
+.drv-pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 68px;
+  padding: 0 16px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.drv-pick:hover {
+  background: var(--f-hover, #f1efea);
+}
+
+.drv-pick.is-on {
+  background: var(--f-green-tint, #f1f7f2);
+}
+
+.drv-pick-icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--f-icon, #5b5850);
+  background: var(--f-paper, #f4f3ee);
+}
+
+.drv-pick.is-on .drv-pick-icon {
+  color: var(--f-white, #fff);
+  background: var(--f-green, #1f6b45);
+}
+
+.drv-pick-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.drv-pick-text strong {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--f-ink, #1c1b19);
+}
+
+.drv-pick-text small {
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--f-faint, #726e66);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drv-pick.is-on .drv-pick-text small {
+  font-weight: 600;
+  color: var(--f-green, #1f6b45);
+}
+
+.drv-radio {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px #c9c5ba; /* design radio ring; no --f token */
+  background: var(--f-white, #fff);
+}
+
+.drv-pick.is-on .drv-radio {
+  box-shadow: inset 0 0 0 7px var(--f-green, #1f6b45);
+}
+
+/* ── Safety gate ── */
+
+.driver-shell:has(.drv-gate) {
+  background: var(--f-red-tint, #fbf4f2);
+}
+
+.driver-shell:has(.drv-gate) .drv-top {
+  background: var(--f-red-tint, #fbf4f2);
+}
+
+.drv-gate {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 10px;
+}
+
+.drv-gate-icon {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  color: var(--f-red-ink, #b3381f);
+  background: #f9e3de; /* design gate icon tile; no --f token */
+}
+
+.drv-gate-sub {
+  margin: 0;
+  font-size: 17px;
+  line-height: 26px;
+  color: #4e4a44; /* design body copy on the gate; no --f token */
+}
+
+.drv-duty {
+  gap: 10px;
+}
+
+.drv-duty-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--f-muted, #6b6860);
+}
+
+.drv-duty-row strong {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--f-red-ink, #b3381f);
+  font-variant-numeric: tabular-nums;
+}
+
+.drv-duty-track {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--f-line-3, #ece9e2);
+  overflow: hidden;
+}
+
+.drv-duty-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+  background: #c8432a; /* design duty fill; no --f token */
+  transform-origin: left center;
+}
+
+.drv-duty-mark {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: var(--f-white, #fff);
+}
+
+.drv-duty-ticks {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  font-size: 12px;
+  color: var(--f-faint, #726e66);
+}
+
+/* Thin notices (approaching the cap, an override, a long gate wait). */
+.drv-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--f-amber-soft, #f7e8cf);
+}
+
+.drv-notice-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--f-amber-ink, #8a5410);
+}
+
+.drv-notice-line svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.drv-notice-line.is-override {
+  color: var(--f-green, #1f6b45);
+}
+
+.drv-held {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--f-red-ink, #b3381f);
+  text-align: center;
+}
+
+/* ── Pre-trip check ── */
+
+.drv-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drv-head .drv-h2 {
+  font-size: 24px;
+}
+
+.drv-steps {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.drv-steps span {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--f-line-2, #e3e0d9);
+}
+
+.drv-steps span.is-done {
+  background: var(--f-green, #1f6b45);
+}
+
+.drv-check {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 14px;
+}
+
+.drv-check.is-failed {
+  padding-bottom: 12px;
+  background: var(--f-red-tint, #fbf4f2);
+}
+
+.drv-check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+}
+
+.drv-check-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--f-ink, #1c1b19);
+}
+
+.drv-seg {
+  flex: none;
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--f-hover, #f1efea);
+}
+
+/* 60 × 36 drawn; the hit box reaches 44 px into the row's padding. */
+.drv-seg-btn {
+  position: relative;
+  width: 60px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--f-muted, #6b6860);
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.drv-seg-btn::after {
+  content: "";
+  position: absolute;
+  inset: -4px -1px;
+}
+
+.drv-seg-btn.ok.active {
+  color: var(--f-white, #fff);
+  background: var(--f-green, #1f6b45);
+}
+
+.drv-seg-btn.no.active {
+  color: var(--f-white, #fff);
+  background: var(--f-red-ink, #b3381f);
+}
+
+.drv-note {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  outline: 1.5px solid var(--f-red-ink, #b3381f);
+  outline-offset: -1.5px;
+  color: var(--f-ink, #1c1b19);
+  background: var(--f-white, #fff);
+  font: inherit;
+  font-size: 15px;
+}
+
+.drv-note:focus {
+  outline-width: 2px;
+}
+
+.drv-check-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--f-amber-ink, #8a5410);
+}
+
+.drv-check-hint.is-serious {
+  font-weight: 600;
+  color: var(--f-red-ink, #b3381f);
+}
+
+/* ── Instructions ── */
+
+.drv-hi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.drv-hi-sub {
+  margin: 0;
+  font-size: 15px;
+  color: var(--f-muted, #6b6860);
+}
+
+.drv-done-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  color: var(--f-green, #1f6b45);
+  background: #e3f1e6; /* design "Pre-trip done" fill; no --f token */
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.drv-done-banner svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.drv-todo-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--f-amber-ink, #8a5410);
+  background: var(--f-amber-soft, #f7e8cf);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.drv-todo-banner span {
+  flex: 1;
+}
+
+.drv-todo-banner svg {
+  flex: none;
+}
+
+.drv-todo-banner:focus-visible {
+  outline: 3px solid var(--f-green, #1f6b45);
+  outline-offset: 2px;
+}
+
+.drv-done-banner.is-serious {
+  color: var(--f-red-ink, #b3381f);
+  background: var(--f-red-soft, #f6e1dc);
+}
+
+.drv-instr-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 16px 12px;
+}
+
+.drv-instr-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--f-faint, #726e66);
+}
+
+.drv-slot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  color: var(--f-white, #fff);
+  background: var(--f-green, #1f6b45);
+}
+
+.drv-slot > svg {
+  flex: none;
+  color: var(--f-lime, #c9f27a);
+}
+
+.drv-slot-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.drv-slot-text small {
+  font-size: 12px;
+  color: var(--f-green-soft, #dcebdd); /* design #C9C5BA is 4.2:1 on green */
+}
+
+.drv-slot-text strong {
+  font-family: var(--f-font-display, var(--font-head));
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.drv-slot-day {
+  font-family: var(--f-font-body, var(--font-body));
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.drv-slot .drv-tag.is-model {
+  align-self: flex-start;
+}
+
+.drv-stops {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.drv-stops li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 50px;
+  padding: 6px 16px;
+  border-top: 1px solid var(--f-line-3, #ece9e2);
+  box-sizing: border-box;
+}
+
+.drv-num {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: #55524b; /* design stop number; no --f token */
+  background: var(--f-hover, #f1efea);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.drv-stop-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--f-ink, #1c1b19);
+}
+
+.drv-stop-name small {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--f-muted, #6b6860);
+}
+
+.drv-stop-time {
+  flex: none;
+  font-size: 14px;
+  color: var(--f-muted, #6b6860);
+  font-variant-numeric: tabular-nums;
+}
+
+.drv-instr-text {
+  margin: 0;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--f-line-3, #ece9e2);
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--f-ink, #1c1b19);
+  white-space: pre-line;
+}
+
+.drv-why {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 16px;
+  border-top: 1px solid var(--f-line-3, #ece9e2);
+  background: var(--f-head, #f7f6f2);
+  font-size: 13px;
+  line-height: 19px;
+  color: #4e4a44; /* design "why" copy; no --f token */
+}
+
+.drv-why svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--f-muted, #6b6860);
+}
+
+.drv-instr-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drv-instr-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.drv-instr-wrap.is-main {
+  flex: 1;
+}
+
+/* ── States: no instruction, waiting for signal, signed out ── */
+
+.drv-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px 6px;
+  text-align: center;
+}
+
+.drv-empty .drv-h2 {
+  font-size: 24px;
+  letter-spacing: -0.6px;
+}
+
+.drv-empty-body {
+  max-width: 300px;
+  margin: 0;
+  font-size: 15px;
+  line-height: 23px;
+  color: var(--f-muted, #6b6860);
+}
+
+.drv-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.drv-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 12px;
+}
+
+.drv-banner.is-waiting {
+  color: var(--f-amber-ink, #8a5410);
+  background: #fbf3e2; /* design waiting banner; no --f token */
+}
+
+.drv-banner svg {
+  flex: none;
+}
+
+.drv-banner strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  color: #6b4310; /* design banner title; no --f token */
+}
+
+.drv-banner small {
+  display: block;
+  font-size: 13px;
+}
+
+.drv-queue-list li,
+.drv-list-plain li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.drv-queue-list li > svg {
+  flex: none;
+  color: var(--f-icon, #5b5850);
+}
+
+.drv-queue-list li > .drv-queue-timer {
+  color: var(--f-amber-ink, #8a5410);
+}
+
+.drv-queue-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.drv-queue-text strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--f-ink, #1c1b19);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drv-queue-text small {
+  font-size: 12px;
+  color: var(--f-faint, #726e66);
+  font-variant-numeric: tabular-nums;
+}
+
+.drv-list-plain {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.drv-list-plain li {
+  padding-inline: 0;
+}
+
+.drv-rejected {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+}
+
+.drv-rejected .drv-panel-title svg {
+  color: var(--f-red-ink, #b3381f);
+}
+
+.drv-signed-out {
+  justify-content: center;
+  gap: 14px;
+}
+
+.drv-icon-tile {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: var(--f-ink-3, #3a3833);
+  background: #efede8; /* design icon tile; no --f token */
+}
+
+@media (max-width: 360px) {
+  .drv-h1 {
+    font-size: 26px;
+    line-height: 30px;
+  }
+
+  .drv-seg-btn {
+    width: 52px;
+  }
+
+  .drv-check-name {
+    font-size: 16px;
+  }
+}
+
+/* ── Sign in (F2CI6P): white page, mascot, two fields, a switch, one button ── */
+
+.drv-login {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  width: min(var(--drv-width, 560px), 100%);
+  margin-inline: auto;
+  padding: 40px 24px 28px;
+  color: var(--f-ink, #1c1b19);
+  background: var(--f-white, #fff);
+  font-family: var(--f-font-body, var(--font-body));
+  box-sizing: border-box;
+}
+
+html:has(.drv-login),
+body:has(.drv-login) {
+  background: var(--f-white, #fff);
+}
+
+.drv-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.drv-login-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 0 10px;
+}
+
+.drv-login-title {
+  margin: 0;
+  font-family: var(--f-font-display, var(--font-head));
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -1px;
+}
+
+.drv-login-sub {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--f-muted, #6b6860);
+}
+
+.drv-switch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 15px;
+  color: var(--f-ink-3, #3a3833);
+  cursor: pointer;
+}
+
+.drv-switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.drv-switch-track {
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 28px;
+  border-radius: 14px;
+  background: var(--f-control-line, #d8d5ce);
+  transition: background-color 0.15s ease;
+}
+
+.drv-switch-track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--f-white, #fff);
+  box-shadow: 0 1px 2px #1413121f;
+  transition: transform 0.15s ease;
+}
+
+.drv-switch input:checked + .drv-switch-track {
+  background: var(--f-green, #1f6b45);
+}
+
+.drv-switch input:checked + .drv-switch-track::after {
+  transform: translateX(18px);
+}
+
+.drv-switch input:focus-visible + .drv-switch-track {
+  outline: 3px solid var(--f-green, #1f6b45);
+  outline-offset: 2px;
+}
+
+.drv-login-lang {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: auto;
+  padding-top: 24px;
+}
+
+.drv-login-lang button {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  color: var(--f-muted, #6b6860);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.drv-login-lang button.is-on {
+  font-weight: 600;
+  color: var(--f-ink, #1c1b19);
+}
+
+.drv-login-lang button:focus-visible {
+  outline: 3px solid var(--f-green, #1f6b45);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drv-switch-track,
+  .drv-switch-track::after {
     transition: none;
   }
 }
