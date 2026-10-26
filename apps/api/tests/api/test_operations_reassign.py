@@ -321,3 +321,28 @@ def test_two_identical_concurrent_reassigns_make_exactly_one_new_dispatch(api_cl
     assert [d["id"] for d in _plan_dispatches_for(target, plan["plan_id"])] == [results[0][1]["dispatch_id"]]
     assert history_store.get_dispatch(plan["dispatch_ids"][0])["field_status"] == "REASSIGNED"
     assert len(_reassigned_events(plan["plan_id"])) == 1
+
+
+def test_a_storage_failure_while_recording_the_reassign_is_503_and_the_retry_completes(
+    api_client, auth_headers, monkeypatch
+):
+    a, target = _free_trucks(2)
+    plan = _approved_plan(api_client, auth_headers, [a])
+    headers = auth_headers("dispatcher")
+
+    def boom(*args, **kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(_OPERATIONS_PLAN_STORE, "claim_reassign", boom)
+    failed = _reassign(api_client, headers, plan["plan_id"], a, target)
+    assert failed.status_code == 503
+    assert "kirim ulang" in failed.json()["detail"]
+    assert _plan_dispatches_for(target, plan["plan_id"]) == []
+    assert history_store.get_dispatch(plan["dispatch_ids"][0])["field_status"] == "PENDING"
+    monkeypatch.undo()
+
+    retried = _reassign(api_client, headers, plan["plan_id"], a, target)
+    assert retried.status_code == 200, retried.text
+    assert [d["id"] for d in _plan_dispatches_for(target, plan["plan_id"])] == [retried.json()["dispatch_id"]]
+    # The SPJ moved in the failed attempt; the retry does not move or audit it twice.
+    assert len([e for e in SPJ_STORE.audit_log(retried.json()["spj_id"]) if e["action"] == "reassign"]) == 1

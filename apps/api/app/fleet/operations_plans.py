@@ -6,6 +6,12 @@ twice created a duplicate dispatch set every time. This store keeps the
 plan payload in SQLite (WAL) and makes approval at-most-once — the plan
 status transition and its dispatch ids commit in ONE transaction, so
 concurrent or retried approvals observe the first result.
+
+A truck reassign (operations_plan_reassign) spans the SPJ, dispatch and plan
+databases, so it is ordered and resumable, not atomic. Known window: after a
+failure between saving the new truck's dispatch and marking the old one
+REASSIGNED, both trucks hold a PENDING dispatch for the same work until the
+same reassign request is resent, which finishes the remaining steps.
 """
 
 from __future__ import annotations

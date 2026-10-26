@@ -538,9 +538,9 @@ def reassign_operations_truck(
             raise HTTPException(
                 status_code=409, detail=f"Truk {from_truck} sudah dialihkan ke Truk {record['to_truck']}."
             )
-        if record is None:
-            record = _start_reassign(plan, from_truck, to_truck, trucks, payload.reason, _role)
         try:
+            if record is None:
+                record = _start_reassign(plan, from_truck, to_truck, trucks, payload.reason, _role)
             new_dispatch = history_store.save_dispatch(
                 to_truck,
                 record["item"]["text"],
