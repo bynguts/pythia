@@ -1,91 +1,52 @@
+// #21, wave13 Tomorrow: the plan derives from the inputs on the page. Field facts are the only
+// manual input: a fact that keeps a truck in the workshop takes it out of the rebuilt plan,
+// the plan records the fact it applied, and the trucks KPI names the held truck. Removing
+// the fact and rebuilding brings the truck back into the solver's fleet.
 import { expect, test } from "@playwright/test";
+import { API, freeDay, signIn } from "./lib/tomorrow.js";
 
-const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
+test("a workshop fact takes its truck out of the rebuilt plan", async ({ page }) => {
+  test.setTimeout(180000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const day = await freeDay(page.request, [4, 5]);
+  const token = await signIn(page, { path: `/app/tomorrow?date=${day}` });
+  await expect(page.getByTestId("plan-total")).toBeVisible({ timeout: 60000 });
 
-// #21: the planning review (stage 03 executive summary) must derive from the
-// ACTIVE outlook — changing the what-if inputs must change the review's numbers.
-// Teardown v4 R2: Rencana opens on today's baseline (/api/baseline/scenario without
-// rain or crowd, kind "baseline"); a hand-off what-if is labelled "Skenario".
-// NOTE: ExecutiveSummary picks its headline kecamatan by the LARGEST ABSOLUTE ton
-// increase over its normal day among those at risk (high/critical) — mirror that here.
-async function signIn(page, lang = "id") {
-  await page.goto("/");
-  const response = await page.request.post(`${API}/auth/login`, {
-    data: { username: "dispatcher", password: "dispatcher-demo-pass" },
+  const build = async (testId) => {
+    const built = page.waitForResponse(
+      (res) => res.url().includes("/operations/plan?") && res.request().method() === "POST",
+      { timeout: 120000 },
+    );
+    await page.getByTestId(testId).click();
+    return (await built).json();
+  };
+  const first = await build("tmr-build");
+  const truck = first.assignments[0].truck_code;
+
+  await page.getByTestId("tmr-fact-input").fill(`${truck} stays in the workshop`);
+  await expect(page.getByTestId("tmr-fact-hold")).toBeChecked();
+  const saved = page.waitForResponse((res) => res.url().endsWith("/field-facts") && res.status() === 201);
+  await page.getByTestId("tmr-fact-input").press("Enter");
+  const fact = await (await saved).json();
+  expect(fact.effect).toEqual({ kind: "truck_unavailable", truck_code: truck });
+  await expect(page.getByTestId("tmr-fact").filter({ hasText: truck })).toContainText("left out of the plan");
+  await expect(page.locator(".planning-progress li").nth(1)).toContainText("1 added");
+
+  const second = await build("tmr-rebuild");
+  expect(second.plan_id).not.toBe(first.plan_id);
+  expect(second.assignments.map((a) => a.truck_code)).not.toContain(truck);
+  expect(second.scenario.auto_inputs.field_facts_applied).toEqual([{ fact_id: fact.id, truck_code: truck }]);
+  await expect(page.locator(`[data-testid=tmr-truck-row][data-truck="${truck}"]`)).toHaveCount(0);
+  await expect(page.getByTestId("tmr-kpis")).toContainText(`${truck} in workshop`);
+
+  // The rebuilt plan replaced the first one: it was withdrawn, never left for the approver.
+  const old = await page.request.get(`${API}/operations/plans/${first.plan_id}`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
-  const principal = await response.json();
-  await page.evaluate(
-    ({ token, role, lang }) => {
-      localStorage.setItem("pythia_auth", "true");
-      localStorage.setItem("pythia_lang", lang);
-      localStorage.setItem("pythia_token", token);
-      localStorage.setItem("pythia_role", role);
-    },
-    { ...principal, lang },
-  );
-  // Parallel suites register the PWA service worker on this origin; its fetch
-  // handler would serve stale caches to this suite. Unregister every worker and
-  // clear caches so this page talks to the live backend only.
-  await page.evaluate(async () => {
-    const regs = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(regs.map((r) => r.unregister()));
-    const keys = await caches.keys();
-    await Promise.all(keys.map((k) => caches.delete(k)));
-  });
-  await page.reload({ waitUntil: "domcontentloaded" });
-}
+  expect((await old.json()).status).toBe("withdrawn");
 
-const AT_RISK = ["high", "critical"]; // engine.spike_risk, AT_RISK_LEVELS
-
-function peakKecamatan(outlook) {
-  const atRisk = (outlook.kecamatan || []).filter((k) => AT_RISK.includes(k.risk_level));
-  return atRisk.reduce(
-    (best, k) =>
-      !best || k.predicted_tons - k.normal_tons > best.predicted_tons - best.normal_tons ? k : best,
-    null,
-  );
-}
-
-const outlookResponse = (attendance) => (res) =>
-  res.url().includes("/baseline/scenario") &&
-  res.url().includes(`event_attendance=${attendance}&`) &&
-  res.status() === 200;
-
-test("planning review derives from the active outlook", async ({ page }) => {
-  await signIn(page);
-  // Attach the listener BEFORE opening the workspace: the outlook loads on mount.
-  const baselinePromise = page.waitForResponse(outlookResponse(0), { timeout: 30000 });
-  await page.locator(".command-nav").getByRole("button", { name: "Rencana", exact: true }).click();
-  await expect(page.getByTestId("planning-workspace")).toBeVisible();
-  const baseline = await (await baselinePromise).json();
-  expect(baseline.kind).toBe("baseline");
-  await expect(page.getByTestId("plan-outlook")).toHaveAttribute("data-kind", "baseline");
-
-  const headline = page.getByTestId("exec-headline");
-  const baselinePeak = peakKecamatan(baseline);
-  if (baselinePeak) {
-    await expect(headline).toContainText(baselinePeak.kecamatan, { timeout: 15000 });
-  } else {
-    await expect(headline).toHaveText(/Tidak ada wilayah/, { timeout: 15000 });
-  }
-
-  // wave12: Rencana has no sliders; a large crowd arrives as a hand-off (?scenario=…) →
-  // the outlook reruns as a scenario and the review must re-derive from the NEW response.
-  await expect(page.getByTestId("manual-whatif")).toHaveCount(0);
-  const scenarioPromise = page.waitForResponse(outlookResponse(200000), { timeout: 30000 });
-  await page.goto("/planning?scenario=event&attendance=200000", { waitUntil: "domcontentloaded" });
-  const scenario = await (await scenarioPromise).json();
-  expect(scenario.kind).toBe("scenario");
-  const scenarioPeak = peakKecamatan(scenario);
-  expect(scenarioPeak).toBeTruthy();
-
-  await expect(page.getByTestId("plan-scenario-badge")).toBeVisible();
-  await expect(headline).toContainText(scenarioPeak.kecamatan, { timeout: 15000 });
-  await expect(page.locator(".planning-summary .exec-scenario-note")).toContainText("Skenario");
-
-  // One reset returns to the day's own forecast.
-  const resetPromise = page.waitForResponse(outlookResponse(0), { timeout: 30000 });
-  await page.getByTestId("plan-scenario-reset").click();
-  expect((await (await resetPromise).json()).kind).toBe("baseline");
-  await expect(page.getByTestId("plan-scenario-reset")).toHaveCount(0);
+  await page.getByRole("button", { name: `Remove fact: ${truck} stays in the workshop` }).click();
+  await expect(page.getByTestId("tmr-fact")).toHaveCount(0);
+  const third = await build("tmr-rebuild");
+  expect(third.scenario.auto_inputs.field_facts_applied).toEqual([]);
 });

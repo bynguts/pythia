@@ -1,181 +1,48 @@
-// wave11 planning: Rencana reads as one flow (a stepper that follows the real state,
-// three full-width stages, input beside result, at most one primary action per stage,
-// a plain 7-day table and no manual what-if), and Prediksi leads with district demand
-// (no kickers, ranked flat rows, every headline number labelled with its source).
+// wave11 planning, wave13 Tomorrow: product, not lab. The page has no sliders or number
+// inputs (the field-fact box is the only thing typed), the stepper follows the real state,
+// one primary action shows at a time, and every modelled or simulated figure carries its
+// thin label: a Model tag where the design shows one, data-provenance plus a tooltip.
 import { expect, test } from "@playwright/test";
+import { freeDay, signIn } from "./lib/tomorrow.js";
 
-const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
-
-async function signIn(page, path) {
-  await page.goto("/");
-  const response = await page.request.post(`${API}/auth/login`, {
-    data: { username: "dispatcher", password: "dispatcher-demo-pass" },
-  });
-  const principal = await response.json();
-  await page.evaluate(({ token, role }) => {
-    localStorage.setItem("pythia_auth", "true");
-    localStorage.setItem("pythia_lang", "id");
-    localStorage.setItem("pythia_token", token);
-    localStorage.setItem("pythia_role", role);
-  }, principal);
-  await page.goto(path, { waitUntil: "domcontentloaded" });
-}
-
-const visiblePrimaryCount = (stage) =>
-  stage.evaluate(
-    (el) =>
-      [...el.querySelectorAll(".primary-button")].filter((button) => {
-        const box = button.getBoundingClientRect();
-        return box.width > 0 && box.height > 0;
-      }).length,
-  );
-
-test("planning stages run full width with input beside result and one primary each", async ({ page }) => {
+test("tomorrow has no manual what-if and follows the plan's state", async ({ page }) => {
+  test.setTimeout(180000);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.route("**/api/operations/plan?**", (route) =>
-    route.fulfill({
-      json: {
-        plan_id: "PLAN-W11",
-        status: "proposed",
-        assignments: [
-          {
-            truck_code: "T-001",
-            area: "tebet",
-            assigned_tons: 24,
-            evidence: { capacity_tons: 24, permit_compliant: true },
-          },
-        ],
-        unmet_reasons: [],
-        total_demand_tons: 24,
-        total_assigned_tons: 24,
-      },
-    }),
-  );
-  // A live 7-day outlook (the AI engine is off under test) fills the side column.
-  await page.route("**/api/ai/event-forecast", (route) =>
-    route.fulfill({
-      json: {
-        outlook: [
-          { date: "2026-10-27", rainfall_mm: 12, events: [], volume_delta_pct: 14 },
-          { date: "2026-10-28", rainfall_mm: 0, events: [], volume_delta_pct: 2 },
-        ],
-      },
-    }),
-  );
-  await signIn(page, "/planning");
-  await expect(page.getByTestId("plan-total")).toBeVisible({ timeout: 30000 });
+  const day = await freeDay(page.request, [4, 5]);
+  await signIn(page, { lang: "id", path: `/app/tomorrow?date=${day}` });
+  await expect(page.getByTestId("plan-total")).toBeVisible({ timeout: 60000 });
 
-  // The stepper follows state: forecast done, allocation is the current step.
+  // No sliders anywhere; the one text input is the field fact.
+  await expect(page.locator(".tmr input[type=range], .tmr input[type=number], .tmr select")).toHaveCount(0);
+  await expect(page.locator(".tmr input[type=text], .tmr textarea")).toHaveCount(1);
+  await expect(page.getByTestId("tmr-fact-input")).toBeVisible();
+
+  // Before a plan: forecast done, field facts is the current step; one primary action.
   const steps = page.locator(".planning-progress li");
-  await expect(steps).toHaveCount(3);
-  await expect(steps.nth(0)).toHaveAttribute("data-state", "done");
+  await expect(steps.nth(0)).toHaveClass(/is-done/);
   await expect(steps.nth(1)).toHaveAttribute("aria-current", "step");
-  await expect(steps.nth(2)).toHaveAttribute("data-state", "next");
+  await expect(page.locator(".tmr .ui-btn-primary:visible")).toHaveCount(1);
 
-  // Stages stack full width: no stage sits beside a longer neighbour.
-  const stage1 = page.locator(".planning-stage-card.stage-01");
-  const stage2 = page.locator(".planning-stage-card.stage-02");
-  const [box1, box2] = [await stage1.boundingBox(), await stage2.boundingBox()];
-  expect(box2.y).toBeGreaterThanOrEqual(box1.y + box1.height - 1);
-  expect(Math.abs(box1.width - box2.width)).toBeLessThanOrEqual(1);
+  // The day's drivers are model output; the weekday is always among them.
+  const forecast = page.getByTestId("tmr-forecast");
+  await expect(forecast).toHaveAttribute("data-provenance", "model");
+  await expect(forecast.locator(".ui-tag-model")).toHaveText("Model");
+  await expect(page.locator("[data-testid=plan-driver][data-kind=weekday], [data-kind=holiday]")).toHaveCount(
+    1,
+  );
 
-  // Inside step 01 the input and the 7-day table sit side by side.
-  const main = await stage1.locator(".plan-stage-main").boundingBox();
-  const side = await stage1.locator(".plan-stage-side").boundingBox();
-  expect(side.x).toBeGreaterThanOrEqual(main.x + main.width - 1);
+  await page.getByTestId("tmr-build").click();
+  await expect(page.getByTestId("tmr-truck-table")).toBeVisible({ timeout: 120000 });
+  await expect(steps.nth(2)).toContainText(/CP-SAT/);
+  await expect(page.locator(".tmr .ui-btn-primary:visible")).toHaveCount(
+    await page.getByTestId("tmr-submit").count(),
+  );
 
-  // The 7-day outlook is a plain table, not a tinted box, and is labelled as model output.
-  const outlook = stage1.locator(".ai-outlook");
-  expect(await outlook.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
-  await expect(outlook.getByTestId("prov")).toHaveText("HASIL MODEL");
-
-  // wave12: the inputs fill themselves; Rencana has no manual what-if sliders.
-  await expect(page.getByTestId("manual-whatif")).toHaveCount(0);
-  await expect(page.locator('input[type="range"]')).toHaveCount(0);
-  // Instead the day's drivers are listed as model output, the weekday always among them.
-  const drivers = stage1.getByTestId("plan-drivers");
-  await expect(drivers.locator('[data-kind="weather"]')).toBeVisible({ timeout: 30000 });
-  await expect(drivers.locator('[data-kind="weekday"]')).toHaveText(/^(Hari kerja|Akhir pekan)$/);
-  await expect(drivers.getByTestId("prov")).toHaveText("HASIL MODEL");
-
-  // One primary action per stage at most.
-  const stage3 = page.locator(".planning-approval-stage");
-  expect(await visiblePrimaryCount(stage1)).toBe(0);
-  expect(await visiblePrimaryCount(stage2)).toBe(1);
-  expect(await visiblePrimaryCount(stage3)).toBe(0);
-
-  await stage2.getByRole("button", { name: "Susun Alokasi Armada" }).click();
-  await expect(stage2.getByText("ID rencana: PLAN-W11")).toBeVisible();
-  await expect(steps.nth(1)).toHaveAttribute("data-state", "done");
-  await expect(steps.nth(2)).toHaveAttribute("aria-current", "step");
-  expect(await visiblePrimaryCount(stage2)).toBe(0);
-  // A dispatcher proposes; the approval belongs to a supervisor, so step 03 waits.
-  expect(await visiblePrimaryCount(stage3)).toBe(0);
-  await expect(stage3.getByTestId("plan-awaiting-approval")).toBeVisible();
-});
-
-test("forecast leads with ranked district demand and labels every headline number", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await signIn(page, "/forecast");
-  const workspace = page.getByTestId("forecast-workspace");
-  await expect(workspace.locator(".kec-row").first()).toBeVisible({ timeout: 30000 });
-
-  await expect(workspace.locator(".workspace-kicker, .surface-kicker")).toHaveCount(0);
-
-  const primary = page.getByTestId("forecast-primary-analysis");
-  const context = page.locator(".forecast-context-rail");
-  const [primaryBox, contextBox] = [await primary.boundingBox(), await context.boundingBox()];
-  expect(primaryBox.x).toBeLessThan(contextBox.x);
-  expect(primaryBox.width).toBeGreaterThan(contextBox.width * 2);
-
-  // Ranked, flat rows: rank 01 first, no bordered card per row.
-  const first = primary.locator(".kec-row").first();
-  await expect(first.locator(".kec-rank")).toHaveText("01");
-  expect(await first.evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("0px");
-
-  // Every metric in the strip carries a provenance label.
-  const cells = workspace.getByTestId("metric-cell");
-  const count = await cells.count();
-  expect(count).toBeGreaterThan(0);
-  for (let i = 0; i < count; i++) {
-    await expect(cells.nth(i).getByTestId("prov")).toBeVisible();
-  }
-});
-
-for (const width of [320, 390]) {
-  test(`planning and forecast hold at ${width} px without sideways scroll`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 844 });
-    await signIn(page, "/planning");
-    await expect(page.getByTestId("plan-total")).toBeVisible({ timeout: 30000 });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(
-      0,
-    );
-    // A built plan brings the quota table: it scrolls inside its wrap, never widens the page.
-    test.setTimeout(150000);
-    await page.getByRole("button", { name: "Susun Alokasi Armada" }).click();
-    await expect(page.getByTestId("quota-usage")).toBeVisible({ timeout: 120000 });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(
-      0,
-    );
-    await page.goto("/forecast", { waitUntil: "domcontentloaded" });
-    await expect(page.locator(".kec-row").first()).toBeVisible({ timeout: 30000 });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(
-      0,
-    );
-  });
-}
-
-test("an empty 7-day outlook stacks under the day's numbers instead of leaving a hole", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.route("**/api/ai/event-forecast", (route) => route.fulfill({ json: { outlook: [] } }));
-  await signIn(page, "/planning");
-  const stage1 = page.locator(".planning-stage-card.stage-01");
-  await expect(stage1.getByTestId("plan-total")).toBeVisible({ timeout: 30000 });
-  await expect(stage1.locator(".plan-stage-split.is-stacked")).toHaveCount(1);
-  const main = await stage1.locator(".plan-stage-main").boundingBox();
-  const side = await stage1.locator(".plan-stage-side").boundingBox();
-  expect(side.y).toBeGreaterThanOrEqual(main.y + main.height - 1);
-  await expect(stage1.locator(".plan-stage-side").getByTestId("prov")).toHaveText("HASIL MODEL");
-  // The at-risk count keeps the number in the value and "of 42" as its unit.
-  await expect(stage1.locator(".plan-outlook-unit")).toHaveText(/^dari \d+$/);
+  // Thin labels: simulated fleet figures say so in a tooltip, the queue model is tagged.
+  const trucks = page.getByTestId("tmr-kpi-trucks").locator("..");
+  await expect(trucks).toHaveAttribute("data-provenance", "simulated");
+  await expect(trucks).toHaveAttribute("title", "Armada pilot simulasi");
+  await expect(page.getByTestId("tmr-kpi-queue").locator("..").locator(".ui-tag-model")).toHaveText("Model");
+  await expect(page.locator(".tmr")).not.toContainText(/SIMULASI|SIMULATED/);
+  await expect(page.locator(".tmr")).not.toContainText(/\blive\b|langsung/i);
 });

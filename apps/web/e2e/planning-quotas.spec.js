@@ -1,9 +1,9 @@
-// #R7-R8: the day plan treats kecamatan rit quotas, gate caps and dated facility
-// rules as hard limits, shows quota use per district and states an infeasible
-// remainder; the plan date (not a fixed flag) sets weekday or weekend; /field
-// lists the fleet and shows plan dispatches from the Indonesian template; the
-// trip history and profile carry honest labels (H2, H5, H12).
+// #R7-R8, wave13 Tomorrow: the day plan treats kecamatan rit quotas, gate caps and dated
+// facility rules as hard limits, and the page states what the plan leaves short instead of
+// hiding it; the plan day (not a fixed flag) sets weekday or weekend; the driver app shows
+// an approved plan's dispatch from the Indonesian template; the profile carries the role.
 import { expect, test } from "@playwright/test";
+import { freeDay, planDay, signIn as signInTomorrow } from "./lib/tomorrow.js";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
@@ -108,95 +108,86 @@ const STUB_PLAN = {
   scenario: {},
 };
 
-test("plan date sets weekday or weekend for the forecast and the plan", async ({ page }) => {
-  await signIn(page);
-  await page.getByRole("button", { name: "Rencana", exact: true }).click();
-  const dateInput = page.getByTestId("plan-date");
-  await expect(dateInput).toBeVisible();
-
-  // Teardown v4 R2: the outlook is /api/baseline/scenario for the chosen day (the backend
-  // derives weekday or weekend from the date); the next Saturday and Monday stay inside
-  // its 30-day horizon whatever day the suite runs.
-  const { saturday: sat, monday: mon } = await page.evaluate(() => {
-    const iso = (d) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const next = (weekday) => {
-      const d = new Date();
-      d.setDate(d.getDate() + ((weekday - d.getDay() + 7) % 7 || 7));
-      return iso(d);
-    };
-    return { saturday: next(6), monday: next(1) };
-  });
-  const saturday = page.waitForRequest(
-    (req) => req.url().includes("/baseline/scenario") && req.url().includes(`date=${sat}`),
+test("the plan day sets weekday or weekend for the forecast and the plan", async ({ page }) => {
+  // The first Saturday or Sunday of the forecast week the page can open (tomorrow + 0..5).
+  const offset = [0, 1, 2, 3, 4, 5].find((k) =>
+    [0, 6].includes(new Date(`${planDay(k)}T12:00:00Z`).getUTCDay()),
   );
-  await dateInput.fill(sat);
-  await saturday;
-  await expect(page.getByTestId("plan-day-kind")).toHaveText("Akhir pekan");
-  await expect(page.getByTestId("plan-outlook")).toContainText(sat);
-
-  const monday = page.waitForRequest(
-    (req) => req.url().includes("/baseline/scenario") && req.url().includes(`date=${mon}`),
+  const weekend = planDay(offset);
+  const weekday = planDay(
+    [0, 1, 2, 3, 4, 5].find((k) => ![0, 6].includes(new Date(`${planDay(k)}T12:00:00Z`).getUTCDay())),
   );
-  await dateInput.fill(mon);
-  await monday;
-  // A Monday a week out falls in the 30-day window, whose first build takes ~9 s cold.
-  await expect(page.getByTestId("plan-day-kind")).toHaveText("Hari kerja", { timeout: 30000 });
-  await expect(page.getByTestId("plan-outlook")).toContainText(mon, { timeout: 30000 });
 
-  const planRequest = page.waitForRequest((req) => req.url().includes("/operations/plan?"));
-  await page.getByRole("button", { name: "Susun Alokasi Armada" }).click();
-  const url = (await planRequest).url();
-  expect(url).toContain(`plan_date=${mon}`);
-  expect(url).not.toContain("is_weekend");
+  await signInTomorrow(page, { lang: "id", path: `/app/tomorrow?date=${weekend}` });
+  await expect(page.getByTestId("tmr-forecast")).toHaveAttribute("data-date", weekend, { timeout: 60000 });
+  await expect(page.locator("[data-testid=plan-driver][data-kind=weekday]")).toContainText("Akhir pekan");
+
+  await page.goto(`/app/tomorrow?date=${weekday}`);
+  await expect(page.getByTestId("tmr-forecast")).toHaveAttribute("data-date", weekday, { timeout: 60000 });
+  await expect(page.locator("[data-testid=plan-driver][data-kind=weekday]")).toContainText(
+    "Hari kerja biasa",
+  );
+  await expect(
+    page.locator(".tmr input[type=range], .tmr input[type=number], .tmr input[type=date]"),
+  ).toHaveCount(0);
 });
 
-test("quota use per district and an infeasible remainder are shown, not hidden", async ({ page }) => {
+test("districts the plan leaves short are stated before submit, not hidden", async ({ page }) => {
+  const day = await freeDay(page.request, [5]);
   await page.route("**/api/operations/plan?**", (route) =>
-    route.fulfill({ contentType: "application/json", body: JSON.stringify(STUB_PLAN) }),
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...STUB_PLAN,
+        status: "draft",
+        plan_date: day,
+        created_at: new Date().toISOString(),
+        solve_seconds: 1.4,
+      }),
+    }),
   );
-  // wave11 plan approval handoff: a dispatcher may build but not approve (separation of
-  // duties), so step 03 shows them a waiting state; the administrator holds both
-  // permissions and still sees the approve button this test checks.
-  await signIn(page, "id", "administrator");
-  await page.getByRole("button", { name: "Rencana", exact: true }).click();
-  await page.getByRole("button", { name: "Susun Alokasi Armada" }).click();
+  await signInTomorrow(page, { lang: "id", path: `/app/tomorrow?date=${day}` });
+  await expect(page.getByTestId("plan-total")).toBeVisible({ timeout: 60000 });
+  await page.getByTestId("tmr-build").click();
 
-  await expect(page.getByTestId("plan-scope")).toContainText("Rencana harian 2026-10-26");
-  await expect(page.getByTestId("plan-shortfall")).toContainText("Tidak layak: 148 t tidak teralokasi.");
-  const cakung = page.getByTestId("quota-row-cakung");
-  await expect(cakung).toContainText("14 / 14");
-  await expect(cakung).toContainText("Kuota kecamatan habis");
-  await expect(cakung).toContainText("Asumsi");
-  await expect(page.getByTestId("quota-row-tebet")).toContainText("2 / 14");
-  await expect(page.getByText("Kuota kecamatan habis: cakung")).toBeVisible();
-
-  const rules = page.getByTestId("plan-rules");
-  await rules.locator("summary").click();
-  await expect(rules).toContainText("Porsi residu olahan 25%");
-  await expect(rules).toContainText("Dilaporkan");
-  await expect(rules.getByRole("link", { name: /Sumber: beritajakarta\.id/ })).toBeVisible();
-
-  // A quota shortfall does not block the feasible trips; it is stated instead.
-  await expect(page.getByTestId("approval-shortfall-note")).toContainText("148 t tetap tidak teralokasi");
-  await expect(page.getByRole("button", { name: "Setujui & kirim rencana" })).toBeVisible();
+  const flags = page.getByTestId("tmr-flag");
+  await expect(flags.filter({ hasText: "Cakung kurang 9 rit" })).toHaveCount(1);
+  await expect(flags.filter({ hasText: "Tebet" })).toHaveCount(0);
+  await expect(page.getByTestId("tmr-kpi-trips")).toHaveText("1");
+  await expect(page.getByTestId("tmr-kpis")).toContainText("282 t direncanakan");
+  await expect(page.locator(".planning-progress li").nth(2)).toContainText("CP-SAT · 1,4 dtk");
+  // A shortfall does not block the trips that fit: the draft can still be submitted.
+  await expect(page.getByTestId("tmr-submit")).toBeVisible();
 });
 
 test("a real day plan never uses more rit than a district quota", async ({ page }) => {
-  await signIn(page);
-  await page.getByRole("button", { name: "Rencana", exact: true }).click();
+  test.setTimeout(120000);
+  const day = await freeDay(page.request, [4, 5]);
+  await signInTomorrow(page, { lang: "id", path: `/app/tomorrow?date=${day}` });
+  await expect(page.getByTestId("plan-total")).toBeVisible({ timeout: 60000 });
   const planResponse = page.waitForResponse((res) => res.url().includes("/operations/plan?"), {
     timeout: 60000,
   });
-  await page.getByRole("button", { name: "Susun Alokasi Armada" }).click();
-  const plan = await (await planResponse).json();
-
-  await expect(page.getByTestId("quota-usage")).toBeVisible();
+  await page.getByTestId("tmr-build").click();
+  const response = await planResponse;
+  const url = response.request().url();
+  expect(url).toContain(`plan_date=${day}`);
+  expect(url).toContain("auto_inputs=true");
+  for (const slider of ["is_weekend", "rainfall_mm", "event_attendance"]) expect(url).not.toContain(slider);
+  const plan = await response.json();
+  await expect(page.getByTestId("tmr-truck-table")).toBeVisible();
   for (const row of plan.quota_usage) {
     if (row.quota_rit_per_day != null) expect(row.rit_used).toBeLessThanOrEqual(row.quota_rit_per_day);
-    await expect(page.getByTestId(`quota-row-${row.area}`)).toBeVisible();
   }
-  if (!plan.feasible) await expect(page.getByTestId("plan-shortfall")).toBeVisible();
+  const short = plan.quota_usage.filter((row) => row.unassigned_tons > 0);
+  if (short.length) {
+    await expect(page.locator("[data-testid=tmr-flag][data-kind=short]")).toHaveCount(1);
+    if (short.length > 1) {
+      await expect(page.locator("[data-testid=tmr-flag][data-kind=short_more]")).toContainText(
+        `${short.length - 1} kecamatan lain kurang`,
+      );
+    }
+  }
 });
 
 // wave10 driver-field-app: /field merged into /driver; the plan instruction shows in its Instruksi tab.
@@ -227,9 +218,10 @@ test("the driver app finds a simulated truck and shows its approved plan dispatc
   }, driver.token);
   await page.goto("/field");
 
-  await expect(page.getByTestId("driver-roster-sim")).toHaveText("SIMULASI");
+  await expect(page.getByTestId("driver-roster-sim")).toContainText("simulasi");
   await page.getByTestId("driver-truck-search").fill(first.truck_code);
   await page.getByTestId(`pick-${first.truck_code}`).click();
+  await page.getByTestId("driver-pick-start").click();
   await expect(page.getByTestId("driver-tab-instruksi")).toHaveAttribute("aria-current", "page");
   const card = page.getByTestId("driver-instructions");
   await expect(card).toContainText(`Rencana ${plan.plan_id}`, { timeout: 15000 });
@@ -244,25 +236,9 @@ test("the driver app finds a simulated truck and shows its approved plan dispatc
   expect(items[0].fields.stops.length).toBeGreaterThan(0);
 });
 
-// wave9 fleet composition: trip history moved from a fleet tab into the truck drawer
-// (Truk → row → Riwayat), per truck instead of a fleet-wide list.
-test("trip history says it is a model reconstruction, in both languages", async ({ page }) => {
-  for (const [lang, tab, badge, note] of [
-    ["id", "Truk", "REKONSTRUKSI MODEL", "bukan arsip telemetri AVL"],
-    ["en", "Trucks", "MODEL RECONSTRUCTION", "not archived AVL telemetry"],
-  ]) {
-    await signIn(page, lang);
-    await page.getByRole("tab", { name: tab, exact: true }).click();
-    await page.getByTestId("truck-row").first().click();
-    await page.getByTestId("truck-drawer-history").click();
-    const surface = page.getByTestId("fleet-history-surface");
-    await expect(surface.getByTestId("history-record-note")).toContainText(badge);
-    await expect(surface.getByTestId("history-record-note")).toContainText(note);
-  }
-});
-
-test("profile shows the signed-in role and the shared demo account", async ({ page }) => {
+test("profile shows the signed-in role", async ({ page }) => {
   await signIn(page);
+  await page.goto("/app/tomorrow");
   await expect(page.getByTestId("profile-role")).toHaveText("Pengatur armada");
-  await expect(page.getByTestId("profile-account")).toHaveText("Akun demo bersama: dispatcher");
+  await expect(page.getByTestId("profile-account")).toHaveAttribute("title", "Akun demo bersama: dispatcher");
 });

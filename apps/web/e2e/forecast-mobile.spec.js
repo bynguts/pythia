@@ -1,41 +1,23 @@
 import { expect, test } from "@playwright/test";
+import { API, freeDay, signIn } from "./lib/tomorrow.js";
 
-const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
-
-// #71: the Forecast workspace must not force page-level horizontal overflow
-// from 320px through tablet widths; wide prediction data stays inside a
-// contained scroller.
-async function signIn(page, lang = "id") {
-  await page.goto("/");
-  const response = await page.request.post(`${API}/auth/login`, {
-    data: { username: "dispatcher", password: "dispatcher-demo-pass" },
-  });
-  const principal = await response.json();
-  await page.evaluate(
-    ({ token, role, lang }) => {
-      localStorage.setItem("pythia_auth", "true");
-      localStorage.setItem("pythia_lang", lang);
-      localStorage.setItem("pythia_token", token);
-      localStorage.setItem("pythia_role", role);
-    },
-    { ...principal, lang },
+// #71, wave13: the Tomorrow page never forces page-level horizontal overflow from 320 px to
+// the 1024 px console minimum, with a built plan on screen; the allocation table scrolls
+// inside its own wrap.
+test("tomorrow never overflows the page at mobile and tablet widths", async ({ page }) => {
+  test.setTimeout(180000);
+  const day = await freeDay(page.request, [4, 5]);
+  const token = await signIn(page, { lang: "id" });
+  const built = await page.request.post(
+    `${API}/operations/plan?plan_date=${day}&auto_inputs=true&top_n=42&draft=true`,
+    { headers: { Authorization: `Bearer ${token}` } },
   );
-  await page.reload({ waitUntil: "domcontentloaded" });
-}
-
-async function openForecast(page) {
-  // Works across sidebar (desktop) and bottom-bar (mobile) navigation.
-  const forecastButton = page.getByRole("button", { name: "Prediksi", exact: true });
-  await forecastButton.click();
-  await expect(page.getByTestId("forecast-workspace")).toBeVisible();
-  await expect(page.locator(".kec-row").first()).toBeVisible({ timeout: 20000 });
-}
-
-test("forecast never overflows the page at mobile and tablet widths", async ({ page }) => {
-  await signIn(page);
-  for (const width of [320, 375, 390, 768]) {
+  expect(built.ok()).toBeTruthy();
+  for (const width of [320, 375, 390, 768, 1024]) {
     await page.setViewportSize({ width, height: 844 });
-    await openForecast(page);
+    await page.goto(`/app/tomorrow?date=${day}`);
+    await expect(page.getByTestId("plan-total")).toBeVisible({ timeout: 60000 });
+    await expect(page.getByTestId("tmr-truck-table")).toBeVisible({ timeout: 30000 });
     const overflow = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,

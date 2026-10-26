@@ -1,59 +1,44 @@
 import { expect, test } from "@playwright/test";
+import { signIn } from "./lib/tomorrow.js";
 
-const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
+// #68, wave13: the Tomorrow page's headings, cards and inputs follow the selected locale
+// (English by default, Indonesian selectable).
+const COPY = {
+  en: {
+    title: /^Tomorrow, \w{3} \d{1,2} \w{3}$/,
+    forecast: "City-wide waste tomorrow",
+    why: "Why it moved",
+    resources: "What it takes, city-wide",
+    facts: "Field facts",
+    placeholder: "Add a fact, e.g. road closed",
+    allocation: "Pilot fleet allocation",
+    steps: ["Forecast ready", "Field facts", "Allocation", "Approval"],
+  },
+  id: {
+    title: /^Besok, \w{3} \d{1,2} \w{3}$/,
+    forecast: "Sampah se-kota besok",
+    why: "Mengapa berubah",
+    resources: "Kebutuhan se-kota",
+    facts: "Fakta lapangan",
+    placeholder: "Tambah fakta, mis. jalan ditutup",
+    allocation: "Alokasi armada pilot",
+    steps: ["Prakiraan siap", "Fakta lapangan", "Alokasi", "Persetujuan"],
+  },
+};
 
-// #68: Forecast headings, controls, section intros, and context rail labels
-// follow the selected locale.
-async function signIn(page, lang) {
-  await page.goto("/");
-  const response = await page.request.post(`${API}/auth/login`, {
-    data: { username: "dispatcher", password: "dispatcher-demo-pass" },
+for (const lang of ["en", "id"]) {
+  test(`tomorrow copy follows the locale (${lang})`, async ({ page }) => {
+    const copy = COPY[lang];
+    await signIn(page, { lang, path: "/app/tomorrow" });
+    await expect(page.getByTestId("plan-total")).toBeVisible({ timeout: 60000 });
+    await expect(page.getByTestId("tmr-title")).toHaveText(copy.title);
+    await expect(page.locator("#tmr-fc-title")).toHaveText(copy.forecast);
+    await expect(page.getByTestId("plan-drivers")).toContainText(copy.why);
+    await expect(page.locator("#tmr-res-title")).toHaveText(copy.resources);
+    await expect(page.locator("#tmr-facts-title")).toHaveText(copy.facts);
+    await expect(page.getByTestId("tmr-fact-input")).toHaveAttribute("placeholder", copy.placeholder);
+    await expect(page.locator("#tmr-alloc-title")).toHaveText(copy.allocation);
+    const labels = page.locator(".planning-progress .ui-progress4-label");
+    await expect(labels).toHaveText(copy.steps);
   });
-  const principal = await response.json();
-  await page.evaluate(
-    ({ token, role, lang }) => {
-      localStorage.setItem("pythia_auth", "true");
-      localStorage.setItem("pythia_lang", lang);
-      localStorage.setItem("pythia_token", token);
-      localStorage.setItem("pythia_role", role);
-    },
-    { ...principal, lang },
-  );
-  await page.reload({ waitUntil: "domcontentloaded" });
 }
-
-async function openForecast(page) {
-  await page.locator(".command-nav").getByRole("button", { name: "Forecast", exact: true }).click();
-  await expect(page.getByTestId("forecast-workspace")).toBeVisible();
-}
-
-test("forecast section copy follows the locale", async ({ page }) => {
-  await signIn(page, "en");
-  await openForecast(page);
-
-  // wave11 forecast: the approved design drops eyebrow kickers above headings, so the
-  // heading itself carries the copy; no kicker is left to localise.
-  await expect(page.locator(".forecast-workspace .workspace-kicker")).toHaveCount(0);
-  await expect(page.locator(".forecast-horizon-control .control-label")).toContainText("Analysis range");
-  await expect(page.locator("#forecast-analysis-title")).toHaveText("Service demand map");
-  await expect(page.locator(".forecast-primary-analysis .section-intro p")).toContainText(
-    "Rank districts by predicted load",
-  );
-  await expect(page.locator(".forecast-context-rail")).toHaveAccessibleName("Forecast drivers");
-  await expect(page.locator(".forecast-context-rail h2").first()).toHaveText("Trigger factors");
-  await expect(page.locator("#forecast-evidence-title")).toHaveText("Forecast detail");
-  await expect(page.locator(".forecast-evidence-section .section-intro p")).toContainText(
-    "validate districts",
-  );
-
-  // Horizon control labels localize.
-  await expect(page.locator(".forecast-horizon-control button").first()).toContainText("7 days");
-
-  await page.getByTestId("lang-switch-id").click();
-  await expect(page.locator("#forecast-title")).toHaveText("Prediksi timbulan sampah");
-  await expect(page.locator(".forecast-horizon-control .control-label")).toContainText("Rentang analisis");
-  await expect(page.locator("#forecast-analysis-title")).toHaveText("Peta kebutuhan layanan");
-  await expect(page.locator(".forecast-context-rail")).toHaveAccessibleName("Faktor pemicu prediksi");
-  await expect(page.locator("#forecast-evidence-title")).toHaveText("Rincian prediksi");
-  await expect(page.locator(".forecast-horizon-control button").first()).toContainText("7 hari");
-});

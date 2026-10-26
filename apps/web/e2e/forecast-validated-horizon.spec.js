@@ -1,5 +1,5 @@
 // #forecast-honesty: the one forecast backtested on real data (Bantargebang monthly intake)
-// is on the Forecast workspace, and every month says whether it is inside the backtested
+// is under Settings → Data and provenance (wave13), and every month says whether it is inside the backtested
 // 1–3-month horizon. The exported PDF states the assumed current-practice baseline, its
 // band and the SIMULATED class instead of "all trucks at peak".
 import { expect, test } from "@playwright/test";
@@ -38,7 +38,7 @@ test("forecast workspace shows the backtested monthly intake with each month's h
   expect(api.fitted_through).toBe("2026-04");
 
   await signIn(page, "en");
-  await page.goto("/forecast?lang=en", { waitUntil: "domcontentloaded" });
+  await page.goto("/app/settings?tab=data&lang=en", { waitUntil: "domcontentloaded" });
   const strip = page.getByTestId("monthly-intake-strip");
   await expect(strip).toBeVisible({ timeout: 15000 });
   await expect(strip.locator("h2")).toHaveText("Bantargebang intake, monthly forecast");
@@ -90,7 +90,7 @@ test("monthly intake badges follow the API flag in Indonesian", async ({ page })
     }),
   );
   await signIn(page, "id");
-  await page.goto("/forecast?lang=id", { waitUntil: "domcontentloaded" });
+  await page.goto("/app/settings?tab=data&lang=id", { waitUntil: "domcontentloaded" });
   const strip = page.getByTestId("monthly-intake-strip");
   await expect(strip.getByTestId("monthly-intake-note")).toContainText("Data hingga Apr 2026 (data.go.id)", {
     timeout: 15000,

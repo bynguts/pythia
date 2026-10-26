@@ -1,45 +1,18 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { signIn } from "./lib/tomorrow.js";
 
-const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
-
-// #37: Planning headings follow a contiguous outline (h1 → h2 → h3, no
+// #37, wave13: the Tomorrow page's headings follow a contiguous outline (h1 → h2 → h3, no
 // skipped levels) independent of visual styling.
-async function signIn(page, lang = "id") {
-  await page.goto("/");
-  const response = await page.request.post(`${API}/auth/login`, {
-    data: { username: "dispatcher", password: "dispatcher-demo-pass" },
-  });
-  const principal = await response.json();
-  await page.evaluate(
-    ({ token, role, lang }) => {
-      localStorage.setItem("pythia_auth", "true");
-      localStorage.setItem("pythia_lang", lang);
-      localStorage.setItem("pythia_token", token);
-      localStorage.setItem("pythia_role", role);
-    },
-    { ...principal, lang },
-  );
-  await page.reload({ waitUntil: "domcontentloaded" });
-}
+test("tomorrow headings follow a contiguous outline and pass axe", async ({ page }) => {
+  await signIn(page, { lang: "id", path: "/app/tomorrow" });
+  await expect(page.getByTestId("plan-total")).toBeVisible({ timeout: 60000 });
+  await expect(page.getByTestId("tmr-alloc-loading")).toHaveCount(0, { timeout: 30000 });
 
-test("planning headings follow a contiguous outline and pass axe", async ({ page }) => {
-  await signIn(page);
-  await page.getByRole("button", { name: "Rencana", exact: true }).click();
-  await expect(page.getByTestId("planning-workspace")).toBeVisible();
-
-  const headings = await page
-    .locator(
-      ".planning-workspace h1, .planning-workspace h2, .planning-workspace h3, .planning-workspace h4, .planning-workspace h5, .planning-workspace h6",
-    )
-    .all();
-  const levels = [];
-  for (const heading of headings) {
-    levels.push(Number((await heading.evaluate((el) => el.tagName)).slice(1)));
-  }
-  expect(levels.length).toBeGreaterThan(0);
-
-  // Contiguous outline: first is h1 and each heading steps at most +1.
+  const levels = await page
+    .locator(".tmr h1, .tmr h2, .tmr h3, .tmr h4, .tmr h5, .tmr h6")
+    .evaluateAll((nodes) => nodes.map((node) => Number(node.tagName.slice(1))));
+  expect(levels.length).toBeGreaterThan(1);
   expect(levels[0]).toBe(1);
   for (let i = 1; i < levels.length; i++) {
     expect(levels[i], `heading ${i} jumps from h${levels[i - 1]} to h${levels[i]}`).toBeLessThanOrEqual(
@@ -47,9 +20,6 @@ test("planning headings follow a contiguous outline and pass axe", async ({ page
     );
   }
 
-  const results = await new AxeBuilder({ page })
-    .include(".planning-workspace")
-    .withRules(["heading-order"])
-    .analyze();
+  const results = await new AxeBuilder({ page }).include(".tmr").withRules(["heading-order"]).analyze();
   expect(results.violations).toEqual([]);
 });
