@@ -1,0 +1,233 @@
+/* Morning readiness (lane S2). Scoped with .rdy-; built on the --f-* tokens. */
+.rdy {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.rdy-titlerow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 20px;
+}
+.rdy-titles {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.rdy-titles h1 {
+  margin: 0;
+  color: var(--f-ink);
+  font-family: var(--f-font-display);
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -1.2px;
+  line-height: 36px;
+}
+.rdy-titles p {
+  margin: 0;
+  color: var(--f-muted);
+  font-size: 15px;
+}
+.rdy-titles .rdy-scope {
+  font-size: 13px;
+}
+.rdy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.rdy-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  justify-content: space-between;
+}
+.rdy-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rdy-notice {
+  min-height: 0;
+  margin: -8px 0 0;
+  color: var(--f-ink-2);
+  font-size: 13px;
+}
+.rdy-notice:empty {
+  display: none;
+}
+.rdy-notice.is-ok {
+  color: var(--f-green);
+}
+.rdy-notice.is-warn {
+  color: var(--f-amber-ink);
+}
+.rdy-notice.is-danger {
+  color: var(--f-red-ink);
+}
+
+.rdy-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--f-border);
+  border-radius: 10px;
+  background: var(--f-white);
+}
+.rdy-table .ui-table {
+  min-width: 920px;
+}
+.rdy-table .ui-table tr:not(.ui-table-expanded) td:last-child {
+  white-space: nowrap;
+}
+.rdy-table .ui-table td {
+  white-space: nowrap;
+}
+.rdy-table .ui-table-expanded td {
+  white-space: normal;
+}
+.rdy-truck {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rdy-truck strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.rdy-truck small {
+  color: var(--f-muted);
+  font-size: 12px;
+}
+.rdy-driver {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.rdy-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--f-hover);
+  color: var(--f-ink-2);
+  font-size: 11px;
+  font-weight: 500;
+}
+.rdy-muted {
+  color: var(--f-faint);
+}
+.rdy-check {
+  color: var(--f-green-live);
+}
+.rdy-service-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--f-amber-pixel);
+  vertical-align: middle;
+}
+.rdy-table .ui-table .ui-status {
+  font-size: 13.5px;
+}
+
+.rdy-table tr.is-danger + .ui-table-expanded td {
+  background: var(--f-red-tint);
+}
+.rdy-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--f-border);
+  border-radius: 8px;
+  background: var(--f-white);
+}
+.rdy-panel-icon {
+  flex-shrink: 0;
+  color: var(--f-green);
+}
+.rdy-panel-text {
+  display: flex;
+  flex: 1 1 360px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13.5px;
+}
+.rdy-panel-text strong {
+  color: var(--f-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+.rdy-panel-text span {
+  color: var(--f-ink-2);
+}
+.rdy-panel-actions {
+  display: flex;
+  gap: 6px;
+}
+.rdy-input {
+  width: 100%;
+  min-height: 36px;
+  margin: 4px 0;
+  padding: 0 10px;
+  border: 1px solid var(--f-control-line);
+  border-radius: 6px;
+  background: var(--f-white);
+  color: var(--f-ink);
+  font: inherit;
+}
+.rdy-input:focus-visible {
+  outline: 2px solid var(--f-green);
+  outline-offset: 1px;
+}
+
+.rdy-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 20px;
+  border-top: 1px solid var(--f-line-3);
+  color: var(--f-faint);
+  font-size: 13px;
+}
+.rdy-link {
+  min-height: var(--tap-min);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--f-green);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+.rdy-link:hover {
+  text-decoration: underline;
+}
+.rdy-link:focus-visible {
+  outline: 2px solid var(--f-green);
+  outline-offset: 2px;
+}
+
+/* sr-only header text is absolutely positioned: keep it inside the scrolling wrapper. */
+.rdy .ui-table-wrap {
+  position: relative;
+}

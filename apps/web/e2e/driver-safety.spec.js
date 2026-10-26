@@ -1,5 +1,6 @@
-// #safety: R5/R6 driver-safety panel — duty hours against the 10 h / 12 h marks, gate wait against the
-// 3 h mark, p50/p90, classification label, and a reasoned override that needs spj:override.
+// #safety (w13 S2): the Fleet & drivers "Duty hours today" card and its alert tile read the duty hours
+// against the 10 h / 12 h marks from /safety/overview and keep the simulated provenance. The reasoned
+// override that needs spj:override now lives on Morning readiness (readiness-board.spec.js).
 import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
@@ -54,7 +55,7 @@ function overview({ canOverride = true, overrideFor = null } = {}) {
   };
 }
 
-async function signIn(page, { role = "supervisor", lang = "id", path = "/pengawas" } = {}) {
+async function signIn(page, { role = "dispatcher", lang = "en", path = "/app/fleet" } = {}) {
   await page.goto("/");
   const response = await page.request.post(`${API}/auth/login`, {
     data: { username: role, password: `${role}-demo-pass` },
@@ -73,83 +74,41 @@ async function signIn(page, { role = "supervisor", lang = "id", path = "/pengawa
   await page.goto(path, { waitUntil: "domcontentloaded" });
 }
 
-test("supervisor sees trucks by risk with duty and gate marks, p50/p90 and the SIMULATED label", async ({
-  page,
-}) => {
+test("duty hours today lists the longest shifts with the Blocked and Plan relief tags", async ({ page }) => {
   await page.route("**/api/safety/overview", (route) => route.fulfill({ json: overview() }));
+  await page.setViewportSize({ width: 1440, height: 960 });
   await signIn(page);
-  const panel = page.getByTestId("safety-panel");
-  await expect(panel.getByRole("heading", { name: "Keselamatan sopir" })).toBeVisible();
-  await expect(panel.getByTestId("safety-classification")).toHaveText("SIMULASI");
-  await expect(panel.getByTestId("safety-basis")).toContainText("Skenario simulasi");
-  await expect(panel.getByTestId("safety-p50")).toHaveText("2 j 12 mnt");
-  await expect(panel.getByTestId("safety-p90")).toHaveText("3 j 10 mnt");
-
-  const rows = panel.getByTestId("safety-row");
-  await expect(rows).toHaveCount(6); // collapsed: the riskiest six first
-  await expect(rows.first()).toHaveAttribute("data-duty-state", "blocked");
-  await expect(rows.nth(1)).toHaveAttribute("data-gate-state", "alert");
-  // Duty bar carries the 10 h and 12 h marks; the gate bar the 3 h mark.
-  await expect(rows.nth(1).getByTestId("safety-gauge-mark")).toHaveCount(3);
-  await expect(rows.first().getByRole("meter", { name: "Jam tugas T-201" })).toHaveAttribute(
-    "aria-valuenow",
-    "745",
-  );
-
-  await panel.getByRole("button", { name: "Tampilkan semua 9 truk" }).click();
-  await expect(rows).toHaveCount(9);
+  const card = page.getByTestId("duty-hours");
+  await expect(card.locator("li").first()).toBeVisible({ timeout: 20000 });
+  await expect(card).toHaveAttribute("data-provenance", "simulated");
+  await expect(page.getByText("Warn 10 h · stop 12 h")).toBeVisible();
+  const rows = card.locator("li");
+  await expect(rows).toHaveCount(6);
+  await expect(rows.first()).toContainText("12 h 25");
+  await expect(rows.first()).toContainText("Blocked");
+  await expect(rows.nth(1)).toContainText("10 h 40");
+  await expect(rows.nth(1)).toContainText("Plan relief");
+  await expect(rows.nth(2)).toContainText("7 h");
 });
 
-test("override needs a reason of 10+ characters and posts it for the blocked truck", async ({ page }) => {
-  let posted = null;
-  let overridden = false;
-  await page.route("**/api/safety/overview", (route) =>
-    route.fulfill({ json: overview({ overrideFor: overridden ? "T-201" : null }) }),
-  );
-  await page.route("**/api/safety/override", async (route) => {
-    posted = route.request().postDataJSON();
-    overridden = true;
-    await route.fulfill({ status: 201, json: truck("T-201", 745, null) });
-  });
+test("the alert tile counts warn and blocked drivers", async ({ page }) => {
+  await page.route("**/api/safety/overview", (route) => route.fulfill({ json: overview() }));
+  await page.setViewportSize({ width: 1440, height: 960 });
   await signIn(page);
-  const panel = page.getByTestId("safety-panel");
-  await panel.getByTestId("safety-override-open").click();
-  const dialog = page.getByTestId("safety-override-dialog");
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("heading", { name: "Izinkan SPJ baru untuk T-201" })).toBeVisible();
-
-  await dialog.getByTestId("safety-override-submit").click();
-  await expect(dialog.getByRole("alert")).toHaveText("Tulis alasan minimal 10 karakter.");
-  expect(posted).toBeNull();
-
-  await dialog.getByTestId("safety-override-reason").fill("Sopir pengganti belum tiba");
-  await dialog.getByTestId("safety-override-submit").click();
-  await expect(dialog).toBeHidden();
-  expect(posted).toEqual({ truck_code: "T-201", reason: "Sopir pengganti belum tiba" });
-  await expect(panel.getByTestId("safety-override-note")).toContainText("Override oleh supervisor");
+  const tile = page.getByTestId("fleet-kpi-duty");
+  await expect(tile).toContainText("Duty-hour alerts", { timeout: 20000 });
+  await expect(tile).toContainText("2");
+  await expect(tile).toContainText("1 blocked at 12 h");
 });
 
-test("a role without spj:override sees no override action", async ({ page }) => {
-  await page.route("**/api/safety/overview", (route) =>
-    route.fulfill({ json: overview({ canOverride: false }) }),
-  );
-  await signIn(page, { role: "dispatcher" });
-  await expect(page.getByTestId("safety-row").first()).toBeVisible();
-  await expect(page.getByTestId("safety-override-open")).toHaveCount(0);
-});
-
-test("English locale, 44 px targets and no horizontal overflow at 390 px", async ({ page }) => {
+test("Indonesian copy, 44 px targets and no horizontal overflow at 390 px", async ({ page }) => {
   await page.route("**/api/safety/overview", (route) => route.fulfill({ json: overview() }));
   await page.setViewportSize({ width: 390, height: 844 });
-  await signIn(page, { lang: "en" });
-  const panel = page.getByTestId("safety-panel");
-  await expect(panel.getByRole("heading", { name: "Driver safety" })).toBeVisible();
-  await expect(panel.getByTestId("safety-classification")).toHaveText("SIMULATED");
-  await expect(panel.getByTestId("safety-p50")).toHaveText("2 h 12 min");
-  await expect(panel.getByRole("button", { name: "Override for T-201" })).toBeVisible();
-
+  await signIn(page, { lang: "id" });
+  await expect(page.getByRole("heading", { name: "Jam tugas hari ini" })).toBeVisible({ timeout: 20000 });
+  await expect(page.getByTestId("duty-hours").getByText("Terblokir")).toBeVisible();
   const geometry = await page.evaluate(() => {
-    const small = [...document.querySelectorAll(".safety-panel button")]
+    const small = [...document.querySelectorAll(".flt button")]
       .map((el) => el.getBoundingClientRect())
       .filter((r) => r.width > 0 && (r.width < 44 || r.height < 44));
     return { small: small.length, overflow: document.documentElement.scrollWidth - innerWidth };
@@ -158,24 +117,17 @@ test("English locale, 44 px targets and no horizontal overflow at 390 px", async
   expect(geometry.overflow).toBeLessThanOrEqual(2);
 });
 
-// wave9 fleet composition: the problem strip is gone; the attention count rides on the
-// "Keselamatan sopir" document tab and the panel inside carries the SIMULASI badge.
-test("fleet workspace safety tab counts drivers needing attention and opens the panel", async ({ page }) => {
-  await page.route("**/api/safety/overview", (route) => route.fulfill({ json: overview() }));
-  await signIn(page, { role: "dispatcher", path: "/fleet" });
-  const tab = page.getByRole("tab", { name: /Keselamatan sopir/ });
-  await expect(tab.getByTestId("safety-tab-count")).toHaveText("2"); // one blocked + one gate alert
-  await tab.click();
-  const surface = page.getByTestId("fleet-safety-surface");
-  await expect(surface.getByTestId("safety-panel")).toBeVisible();
-  await expect(surface.getByTestId("safety-classification")).toHaveText("SIMULASI");
-});
-
-test("live backend overview keeps one classification and a matching badge", async ({ page }) => {
+test("live backend overview: the card carries simulated provenance exactly when the API says so", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 960 });
   await signIn(page);
-  const badge = page.getByTestId("safety-classification");
-  await expect(badge).toBeVisible({ timeout: 20000 });
-  const classification = await badge.getAttribute("data-classification");
-  expect(["SIMULATED", "OBSERVED_APP_EVENTS"]).toContain(classification);
-  await expect(badge).toHaveText(classification === "SIMULATED" ? "SIMULASI" : "EVENT APLIKASI");
+  const token = await page.evaluate(() => localStorage.getItem("pythia_token"));
+  const live = await (
+    await page.request.get(`${API}/safety/overview`, { headers: { Authorization: `Bearer ${token}` } })
+  ).json();
+  await expect(page.getByTestId("fleet-kpi-duty")).toBeVisible({ timeout: 20000 });
+  const card = page.getByTestId("duty-hours");
+  if (live.classification === "SIMULATED") await expect(card).toHaveAttribute("data-provenance", "simulated");
+  else await expect(card).not.toHaveAttribute("data-provenance", "simulated");
 });

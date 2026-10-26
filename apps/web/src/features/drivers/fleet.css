@@ -1,0 +1,346 @@
+/* Fleet & drivers (lane S2). Scoped with .flt-; built on the --f-* tokens. */
+.flt {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.flt-titlerow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 20px;
+}
+.flt-titles {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.flt-titles h1 {
+  margin: 0;
+  color: var(--f-ink);
+  font-family: var(--f-font-display);
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -1.2px;
+  line-height: 36px;
+}
+.flt-titles p {
+  margin: 0;
+  color: var(--f-muted);
+  font-size: 15px;
+}
+.flt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.flt-notice {
+  margin: -8px 0 0;
+  color: var(--f-green);
+  font-size: 13px;
+}
+.flt-notice:empty {
+  display: none;
+}
+
+/* The Fleet strip is white with a hairline (the Operations strip is paper) and has no bar. */
+.flt-kpis {
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--f-border);
+  border-radius: 8px;
+  background: var(--f-white);
+}
+.flt-kpis .ui-kpi {
+  gap: 6px;
+  min-height: 110px;
+  padding: 16px 20px;
+  border-right-color: var(--f-line-3);
+}
+.flt-kpis .ui-kpi-bar {
+  display: none;
+}
+.flt-kpis .ui-kpi-label {
+  color: var(--f-muted);
+  font-size: 14px;
+  font-weight: 400;
+}
+.flt-kpis .ui-kpi-value strong {
+  font-size: 30px;
+  letter-spacing: -0.9px;
+}
+.flt-kpis .ui-kpi-sub {
+  color: var(--f-faint);
+  font-size: 13px;
+}
+.flt-kpis .ui-kpi.is-alert .ui-kpi-value strong {
+  color: var(--f-red);
+}
+
+.flt-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  align-items: start;
+  gap: 20px;
+}
+.flt-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.flt-grid .ui-card-title {
+  font-family: var(--f-font-display);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+.flt-scroll {
+  max-height: 340px;
+  overflow-y: auto;
+}
+.flt-clip {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flt-muted {
+  color: var(--f-muted);
+}
+.flt-amber {
+  color: var(--f-amber-ink);
+}
+.flt-empty {
+  margin: 0;
+  padding: 20px;
+  color: var(--f-muted);
+  font-size: 13.5px;
+}
+.flt .ui-table td {
+  height: 44px;
+  padding-block: 8px;
+}
+.flt .ui-table .ui-status {
+  font-size: 13.5px;
+}
+
+.flt-driver {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.flt-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--f-hover);
+  color: var(--f-ink-2);
+  font-size: 11px;
+  font-weight: 500;
+}
+.flt-ontime {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Bars are drawn with transform, never with a width transition. */
+.flt-track {
+  position: relative;
+  display: block;
+  width: 70px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--f-line-3);
+}
+.flt-track > .flt-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  background: var(--f-green);
+  transform-origin: left center;
+}
+.flt-fill.is-warn {
+  background: var(--f-amber-pixel);
+}
+.flt-fill.is-danger {
+  background: #c8432a;
+}
+
+.flt-duty,
+.flt-due {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.flt-duty li {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 20px 14px;
+  border-bottom: 1px solid var(--f-line-3);
+}
+.flt-duty li:last-child,
+.flt-due li:last-child {
+  border-bottom: 0;
+}
+.flt-duty .flt-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+}
+.flt-duty .flt-track > .flt-fill {
+  border-radius: 3px;
+}
+.flt-duty-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.flt-duty-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--f-ink);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flt-duty-time {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.flt-duty-time.is-danger {
+  color: var(--f-red-ink);
+}
+.flt-duty-time.is-warn {
+  color: var(--f-amber-ink);
+}
+.flt-mark {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 1px;
+  background: var(--f-dot);
+}
+.flt-mark.is-stop {
+  background: #c8432a;
+}
+
+.flt-due li {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 6px 20px;
+  border-bottom: 1px solid var(--f-line-3);
+  font-size: 14px;
+}
+.flt-due strong {
+  font-weight: 600;
+}
+.flt-due .ui-status {
+  color: var(--f-ink-2);
+  font-size: 12.5px;
+}
+
+/* Drawer forms */
+.flt-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+}
+.flt-form label,
+.flt-form legend {
+  margin-top: 6px;
+  color: var(--f-ink-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+.flt-input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--f-control-line);
+  border-radius: 6px;
+  background: var(--f-white);
+  color: var(--f-ink);
+  font: inherit;
+  font-size: 14px;
+}
+.flt-input:focus-visible {
+  outline: 2px solid var(--f-green);
+  outline-offset: 1px;
+}
+.flt-radios {
+  display: flex;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.flt-radios legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+}
+.flt-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap-min);
+  margin: 0;
+  color: var(--f-ink);
+  font-size: 14px;
+  font-weight: 400;
+}
+.flt-hint {
+  margin: 0;
+  color: var(--f-amber-ink);
+  font-size: 12.5px;
+}
+.flt-form-error {
+  margin: 0;
+  color: var(--f-red-ink);
+  font-size: 13px;
+}
+.flt-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+@media (max-width: 1100px) {
+  .flt-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 720px) {
+  .flt-kpis {
+    flex-wrap: wrap;
+    row-gap: 14px;
+  }
+  .flt-kpis .ui-kpi {
+    flex: 1 1 45%;
+    border-right: 0;
+  }
+  .flt-grid .ui-table-wrap {
+    overflow-x: auto;
+  }
+}
+
+/* sr-only header text is absolutely positioned: keep it inside the scrolling wrapper. */
+.flt .ui-table-wrap {
+  position: relative;
+}

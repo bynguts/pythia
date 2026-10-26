@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
-// #83: the damage-report operator panel follows ID/EN for headings, counts,
-// columns, severity/status presentation, actions, and empty states.
+// #83 (w13 S2): the Fleet & drivers damage table follows ID/EN for headings, columns,
+// severity/status presentation and actions.
 // Raw API enums stay untouched; only presentation translates.
 async function signIn(page, lang) {
   await page.goto("/");
@@ -60,44 +60,37 @@ async function cleanupReport(reportId) {
   }).catch(() => {});
 }
 
-test("damage report panel follows the locale in both modes", async ({ page }) => {
+test("the Fleet damage table follows the locale in both modes", async ({ page }) => {
   const seeded = await seedReport();
   try {
+    await page.setViewportSize({ width: 1440, height: 960 });
     await signIn(page, "en");
-    // wave9 fleet composition: damage reports are a "Fleet documents" tab, not a link button.
-    await page.getByRole("tab", { name: "Damage reports" }).click();
-    await expect(page.locator(".damage-panel .panel-head h3")).toBeVisible({ timeout: 20000 });
-    await expect(page.locator(".damage-panel .panel-head h3")).toHaveText("Damage Reports");
-    await expect(page.locator(".damage-panel .panel-head .pill").first()).toContainText("report");
-    await expect(page.locator(".damage-panel thead")).toContainText("Time");
-    await expect(page.locator(".damage-panel thead")).toContainText("Component");
-    await expect(page.locator(".damage-panel thead")).toContainText("Severity");
-    await expect(page.locator(".damage-panel thead")).toContainText("Status");
-    await expect(page.locator(".damage-panel thead")).toContainText("Action");
-    // Enum translated at presentation: berat → Severe, unresolved severe shows NON-OPERATIONAL.
-    await expect(page.locator(".damage-panel").getByText("Severe", { exact: true }).first()).toBeVisible();
-    await expect(page.locator(".damage-panel").getByText("NON-OPERATIONAL").first()).toBeVisible();
-    await expect(page.locator(".damage-panel").getByText("New", { exact: true }).first()).toBeVisible();
-    await expect(
-      page.locator(".damage-panel").getByRole("button", { name: "Resolve", exact: true }).first(),
-    ).toBeVisible();
-    await expect(page.locator(".damage-panel .table-wrap")).toHaveAccessibleName("Damage report list");
+    await page.goto("/app/fleet");
+    const table = page.getByTestId("damage-table");
+    await expect(table).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole("heading", { name: "Damage and workshop" })).toBeVisible();
+    await expect(table.locator("thead")).toContainText("Issue");
+    await expect(table.locator("thead")).toContainText("Severity");
+    await expect(table.locator("thead")).toContainText("Status");
+    // The enums stay on the wire (berat, baru); only the presentation translates.
+    const row = table.locator("tbody tr").filter({ hasText: "laporan uji e2e #83" });
+    await expect(row.getByText("Major", { exact: true })).toBeVisible();
+    await expect(row.getByText("Open", { exact: true })).toBeVisible();
+    await expect(row.getByRole("button", { name: "Mark fixed" })).toBeVisible();
+    await expect(page.getByTestId("damage-tab-open")).toContainText("Open");
 
-    await page.getByTestId("lang-switch-id").click();
-    await expect(page.getByRole("tab", { name: "Laporan Kerusakan" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await expect(page.locator(".damage-panel .panel-head h3")).toHaveText("Laporan Kerusakan");
-    await expect(page.locator(".damage-panel .panel-head .pill").first()).toContainText("laporan");
-    await expect(page.locator(".damage-panel thead")).toContainText("Waktu");
-    await expect(page.locator(".damage-panel thead")).toContainText("Komponen");
-    await expect(page.locator(".damage-panel").getByText("Berat", { exact: true }).first()).toBeVisible();
-    await expect(page.locator(".damage-panel").getByText("Baru", { exact: true }).first()).toBeVisible();
-    await expect(
-      page.locator(".damage-panel").getByRole("button", { name: "Selesaikan", exact: true }).first(),
-    ).toBeVisible();
-    await expect(page.locator(".damage-panel .table-wrap")).toHaveAccessibleName("Daftar laporan kerusakan");
+    await page.evaluate(() => localStorage.setItem("pythia_lang", "id"));
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Kerusakan dan bengkel" })).toBeVisible({
+      timeout: 20000,
+    });
+    const rowId = page
+      .getByTestId("damage-table")
+      .locator("tbody tr")
+      .filter({ hasText: "laporan uji e2e #83" });
+    await expect(rowId.getByText("Berat", { exact: true })).toBeVisible();
+    await expect(rowId.getByText("Terbuka", { exact: true })).toBeVisible();
+    await expect(rowId.getByRole("button", { name: "Tandai selesai" })).toBeVisible();
   } finally {
     await cleanupReport(seeded?.report_id);
   }
