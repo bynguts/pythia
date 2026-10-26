@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.api.deps import require_permission
 from app.api.state import _OPERATIONS_PLAN_STORE
 from app.core.env import local_today
 from app.field.devices import devices_payload
+from app.field.drivers_week import MAX_DAYS, drivers_week
 from app.field.needs_you import needs_you
 
 router = APIRouter()
@@ -37,3 +38,13 @@ def get_field_devices(_role: str = Depends(require_permission("dashboard:read"))
         if d.get("truck_code")
     }
     return devices_payload(len(trucks) or None)
+
+
+# A per-driver performance table names people, so it follows /api/compliance/drivers (history:read).
+@router.get("/api/fleet/drivers-week")
+def get_drivers_week(
+    days: int = Query(7, ge=1, le=MAX_DAYS),
+    _role: str = Depends(require_permission("history:read")),
+) -> dict[str, Any]:
+    """Per driver over the last ``days`` local days: trips, proof, gate punctuality and duty (field records)."""
+    return drivers_week(days, local_today())

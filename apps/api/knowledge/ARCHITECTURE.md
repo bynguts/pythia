@@ -288,3 +288,28 @@ npm run build   # required: the preview server serves dist/ — a stale dist cau
 npx playwright test --workers 1
 ```
 *(The suite covers the current end-to-end workflows.)*
+
+## Wave 13 console endpoints
+
+Each figure carries its provenance (`classification`: FIELD, MODEL_OUTPUT or SIMULATED);
+a value with no source is `null` with a `reason`.
+
+- `GET /api/ops/needs-you`: one feed of open items (simulated corridor deviations, today's
+  driver exceptions, open heavy damage, unaccepted gate holds, duty alerts from observed
+  events only). An item's `id` is its follow-up key; a RESOLVED follow-up drops it.
+- `GET /api/field/devices`: trucks whose driver app called this server in the last 30 min.
+- `GET/POST/DELETE /api/field-facts`: the dispatcher's field facts, the only manual plan
+  input. Only `truck_unavailable` changes a plan; other facts are recorded, not modelled.
+- `POST /api/operations/plan?auto_inputs=true`: rain, the largest located event and the
+  holiday come from the forecast; field facts take trucks out. Plans carry `solve_seconds`.
+- `POST /api/operations/plans/{id}/return` (approver, with a note), `/withdraw` (planner),
+  `/swap` (exchange two trucks' work before approval; logged in `edits`).
+- `GET /api/fleet/drivers-week`: trips, proof, gate punctuality and duty per driver from
+  field records (history:read).
+- `GET /api/driver/trip/{truck}`: next stop and TPA drive time from the phone's position
+  (OSRM), today's gate slot and the modelled queue of the next two hours.
+- `POST /api/spj/{id}/stops/{i}/skip`: dispatch skips a stop; it is never counted as collected.
+- Additions to existing reads: recap `planned_trips`, gate wait mean/max and
+  `summary_lines`; readiness `first_departure`, `backup_candidates`, per-truck `zone` and
+  `gate_slot`; gate board `impact`; SPJ audit `plan_events`; driver exceptions carry their
+  follow-up status and a driver may read its own truck's reports.

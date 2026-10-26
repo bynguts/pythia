@@ -288,7 +288,7 @@ class SpjStop:
     lat: float
     lng: float
     location_type: str = "Pemukiman Kelas Menengah"
-    status: str = "pending"  # pending | completed
+    status: str = "pending"  # pending | completed | skipped (dispatch decided not to collect)
     completed_at: str | None = None
     evidence: dict | None = None
     override: dict | None = None  # supervisor override that closed this stop
@@ -1079,9 +1079,11 @@ class SpjStore:
                 raise ValueError(f"stop index {index} out of range")
             if stops[index]["status"] == "completed":
                 return  # idempotent
+            if stops[index]["status"] == "skipped":
+                raise ValueError(f"stop {index} was skipped by dispatch; it is not collected")
             # #55 (PR #90): route order is a server-side invariant — a
             # stop cannot complete while an earlier stop is still open.
-            earlier_open = [s["idx"] for s in stops[:index] if s["status"] != "completed"]
+            earlier_open = [s["idx"] for s in stops[:index] if s["status"] not in ("completed", "skipped")]
             if earlier_open and override is None:
                 raise ValueError(
                     f"stop {index} cannot complete before earlier stop(s) "
@@ -1119,13 +1121,50 @@ class SpjStore:
                     (_utc_now(), json.dumps(stored), spj_id, index),
                 )
                 self._audit(connection, spj_id, "complete_stop", who, payload={"stop_index": index})
-            pending = connection.execute(
-                "SELECT COUNT(*) FROM spj_stops WHERE spj_id=? AND status != 'completed'", (spj_id,)
-            ).fetchone()[0]
-            if pending == 0:
-                connection.execute(
-                    "UPDATE spj SET status='selesai', completed_at=? WHERE spj_id=?", (_utc_now(), spj_id)
-                )
+            self._close_when_no_stop_is_open(connection, spj_id)
+
+        return self._mutate(spj_id, mutate)
+
+    @staticmethod
+    def _close_when_no_stop_is_open(connection: sqlite3.Connection, spj_id: str) -> None:
+        pending = connection.execute(
+            "SELECT COUNT(*) FROM spj_stops WHERE spj_id=? AND status NOT IN ('completed', 'skipped')",
+            (spj_id,),
+        ).fetchone()[0]
+        if pending == 0:
+            connection.execute(
+                "UPDATE spj SET status='selesai', completed_at=? WHERE spj_id=?", (_utc_now(), spj_id)
+            )
+
+    def skip_stop(self, spj_id: str, index: int, reason: str, actor: str) -> Spj:
+        """Dispatch decides a stop of an active SPJ is not collected (e.g. the TPS was empty).
+
+        The stop becomes ``skipped``: never completed, never counted as collected
+        or as missing proof. Audited as ``skip_stop`` with the reason; skipping it
+        again is a no-op; a completed stop cannot be skipped. When no open stop is
+        left the SPJ closes as it does after the last completed stop.
+        """
+        if len(reason.strip()) < 3:
+            raise ValueError("a skip needs a reason")
+
+        def mutate(connection):
+            row = self._fetch_status(connection, spj_id)
+            if row["status"] != "aktif":
+                raise ValueError("stops can only be skipped on an active SPJ")
+            stops = connection.execute(
+                "SELECT idx, status FROM spj_stops WHERE spj_id=? ORDER BY idx", (spj_id,)
+            ).fetchall()
+            if not 0 <= index < len(stops):
+                raise ValueError(f"stop index {index} out of range")
+            if stops[index]["status"] == "skipped":
+                return  # idempotent
+            if stops[index]["status"] == "completed":
+                raise ValueError(f"stop {index} is already completed")
+            connection.execute(
+                "UPDATE spj_stops SET status='skipped' WHERE spj_id=? AND idx=?", (spj_id, index)
+            )
+            self._audit(connection, spj_id, "skip_stop", actor, reason.strip(), payload={"stop_index": index})
+            self._close_when_no_stop_is_open(connection, spj_id)
 
         return self._mutate(spj_id, mutate)
 
@@ -1349,8 +1388,9 @@ class SpjStore:
             row = self._fetch_status(connection, spj_id)
             if row["status"] != "aktif":
                 raise ValueError(f"cannot complete SPJ in status '{row['status']}'")
+            # A skipped stop was decided by dispatch: it needs no evidence and stays skipped.
             unevidenced = connection.execute(
-                "SELECT COUNT(*) FROM spj_stops WHERE spj_id=? "
+                "SELECT COUNT(*) FROM spj_stops WHERE spj_id=? AND status != 'skipped' "
                 "AND (status != 'completed' OR evidence IS NULL)",
                 (spj_id,),
             ).fetchone()[0]
@@ -1367,20 +1407,15 @@ class SpjStore:
                 # Mark the forced stops so compliance reports (not charges)
                 # them as supervisor decisions.
                 connection.execute(
-                    "UPDATE spj_stops SET status='completed', completed_at=? "
-                    "WHERE spj_id=? AND status != 'completed'",
-                    (now, spj_id),
-                )
-                connection.execute(
-                    "UPDATE spj_stops SET override=? WHERE spj_id=? AND evidence IS NULL",
+                    "UPDATE spj_stops SET override=? WHERE spj_id=? AND evidence IS NULL "
+                    "AND status != 'skipped'",
                     (json.dumps(checked), spj_id),
                 )
-            else:
-                connection.execute(
-                    "UPDATE spj_stops SET status='completed', completed_at=? "
-                    "WHERE spj_id=? AND status != 'completed'",
-                    (now, spj_id),
-                )
+            connection.execute(
+                "UPDATE spj_stops SET status='completed', completed_at=? "
+                "WHERE spj_id=? AND status NOT IN ('completed', 'skipped')",
+                (now, spj_id),
+            )
             connection.execute(
                 "UPDATE spj SET status='selesai', completed_at=? WHERE spj_id=?", (now, spj_id)
             )

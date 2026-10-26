@@ -149,13 +149,19 @@ def _deviations(active: dict[str, str]) -> list[dict[str, Any]]:
     return items
 
 
-def _stop_name(spj_id: str | None, stop_index: int | None) -> str | None:
+def _stop(spj_id: str | None, stop_index: int | None) -> tuple[str | None, str | None, bool]:
+    """(stop name, stop status, whether dispatch may still skip it)."""
     if not spj_id or stop_index is None:
-        return None
+        return None, None, False
     spj = SPJ_STORE.get(spj_id)
     if spj is None or not 0 <= stop_index < len(spj.stops):
-        return None
-    return spj.stops[stop_index].name
+        return None, None, False
+    stop = spj.stops[stop_index]
+    return stop.name, stop.status, spj.status == "aktif" and stop.status == "pending"
+
+
+def _stop_name(spj_id: str | None, stop_index: int | None) -> str | None:
+    return _stop(spj_id, stop_index)[0]
 
 
 def _exceptions(day: str, follow_ups: dict[str, dict[str, Any]]) -> tuple[list[dict[str, Any]], set[str]]:
@@ -209,6 +215,9 @@ def _exceptions(day: str, follow_ups: dict[str, dict[str, Any]]) -> tuple[list[d
         item_id = f"tps-empty:{first.spj_id}:{first.stop_index}" if len(key) == 2 else key[0]
         if (follow_ups.get(item_id) or {}).get("status") == "RESOLVED":
             continue
+        name, stop_status, skippable = _stop(first.spj_id, first.stop_index)
+        if stop_status == "skipped":
+            continue  # dispatch already decided
         items.append(
             _item(
                 item_id,
@@ -219,12 +228,13 @@ def _exceptions(day: str, follow_ups: dict[str, dict[str, Any]]) -> tuple[list[d
                 facts={
                     "reports": len(reports),
                     "stop_index": first.stop_index,
-                    "stop_name": _stop_name(first.spj_id, first.stop_index),
+                    "stop_name": name,
+                    "stop_status": stop_status,
                     "truck_codes": sorted({r.truck_code for r in reports}),
                     "exception_ids": [r.exception_id for r in reports],
                     "notes": [r.note for r in reports if r.note],
                 },
-                actions=["mark_handled"],
+                actions=["skip_stop", "mark_handled"] if skippable else ["mark_handled"],
                 classification="FIELD",
             )
         )

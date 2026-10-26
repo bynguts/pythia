@@ -288,3 +288,36 @@ def test_the_modelled_slot_reads_back_as_departure_and_gate_window(api_client, a
         line = dispatch["text"].splitlines()[-1]
         assert line.startswith(f"Berangkat {slot['depart_at']} · Slot gerbang ")
         assert f"{slot['start']}–{slot['end']}" in line and line.endswith("(keluaran model)")
+
+
+def test_spj_audit_carries_the_plan_and_dispatch_events_of_its_plan(api_client, auth_headers):
+    (a,) = _free_trucks(1)
+    plan = save_plan({a: [("gambir", "TPST Bantargebang")]}, gate_slot=SLOT)
+    body = _approve(api_client, auth_headers, plan["plan_id"])
+    entry = body["spj_drafts"][0]
+    dispatch_id = body["dispatch_ids"][0]
+    confirm = api_client.post(
+        f"/api/dispatch/{dispatch_id}/confirm", json={"status": "READY"}, headers=auth_headers("driver")
+    )
+    assert confirm.status_code == 200, confirm.text
+    audit = api_client.get(f"/api/spj/{entry['spj_id']}/audit", headers=auth_headers("supervisor")).json()
+    actions = [e["action"] for e in audit["plan_events"]]
+    assert actions == ["plan_proposed", "plan_approved", "dispatch_sent", "dispatch_confirmed"]
+    assert {e["plan_id"] for e in audit["plan_events"]} == {plan["plan_id"]}
+    assert audit["plan_events"][1]["actor"] == "supervisor"
+    assert audit["plan_events"][3]["status"] == "READY"
+    assert isinstance(audit["audit"], list)
+
+
+def test_spj_not_from_a_plan_has_no_plan_events(api_client, auth_headers):
+    spj = SPJ_STORE.create(
+        driver_name="Driver 01",
+        truck_code=f"AUD-{uuid4().hex[:6]}",
+        destination="TPST Bantargebang",
+        weigh_on_site=False,
+        priority="normal",
+        note="manual",
+        created_by="dispatcher",
+    )
+    audit = api_client.get(f"/api/spj/{spj.spj_id}/audit", headers=auth_headers("supervisor")).json()
+    assert audit["plan_events"] == []

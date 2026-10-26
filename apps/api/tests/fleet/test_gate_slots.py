@@ -310,3 +310,21 @@ def test_board_reports_background_load_and_the_derived_capacity(background):
 def test_empty_board_has_no_slots(background):
     board = slot_board(DAY, [])
     assert board["slots"] == [] and board["recommendations"] == []
+
+
+def test_impact_compares_the_worst_waits_without_and_with_the_holds(background):
+    board = slot_board(DAY, _planned(int(CAPACITY_PER_SLOT) + 5))
+    impact = board["impact"]
+    assert impact["holds_applied"] == 5 and impact["classification"] == "SIMULATED"
+    nine = next(s for s in board["slots"] if s["start"] == "09:00")
+    assert impact["peak_wait_before"] == max(s["expected_wait_min"] for s in board["slots"])
+    assert impact["longest_wait_before"] == nine["expected_wait_min"]
+    assert impact["peak_wait_after"] < impact["peak_wait_before"]
+    assert impact["longest_wait_after"] < impact["longest_wait_before"]
+
+
+def test_impact_without_holds_is_unchanged_and_empty_board_has_none(background):
+    impact = slot_board(DAY, _planned(10))["impact"]
+    assert impact["peak_wait_before"] == impact["peak_wait_after"] == 0.0
+    assert impact["longest_wait_before"] == impact["longest_wait_after"] == 0.0
+    assert slot_board(DAY, [])["impact"] is None

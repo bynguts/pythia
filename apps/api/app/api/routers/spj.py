@@ -285,6 +285,35 @@ def activate_spj(
     return result
 
 
+class SpjStopSkipBody(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+@router.post("/api/spj/{spj_id}/stops/{index}/skip")
+def skip_spj_stop(
+    spj_id: str,
+    index: int,
+    body: SpjStopSkipBody,
+    principal: dict = Depends(require_any_principal("dispatch:create")),
+) -> dict[str, Any]:
+    """Dispatch skips a stop it will not collect (wave 13), e.g. a TPS reported empty.
+
+    The stop becomes ``skipped``: not collected and never counted as completed.
+    409 when the stop is already completed or the SPJ is not active.
+    """
+    result = _spj_or_409(SPJ_STORE.skip_stop, spj_id, index, body.reason, principal["username"])
+    history_store.record_event(
+        "spj_stop_skipped",
+        {
+            "spj_id": spj_id,
+            "stop_index": index,
+            "actor": principal["username"],
+            "reason": body.reason.strip(),
+        },
+    )
+    return result
+
+
 @router.post("/api/spj/{spj_id}/stops/{index}/complete")
 def complete_spj_stop(
     spj_id: str,
@@ -363,9 +392,51 @@ def spj_audit(
     spj_id: str,
     principal: dict = Depends(require_any_principal("dispatch:confirm", "dispatch:create", "history:read")),
 ) -> dict[str, Any]:
-    """Audit trail for one SPJ: lifecycle actions and supervisor overrides."""
-    _readable_spj(spj_id, principal)
-    return {"spj_id": spj_id, "audit": SPJ_STORE.audit_log(spj_id)}
+    """Audit trail for one SPJ: lifecycle actions and supervisor overrides.
+
+    `plan_events` (wave 13) adds, for an SPJ drafted from a plan, the plan's
+    proposal and approval and its dispatch to the truck (sent, confirmed), from
+    the plan and dispatch stores; it is empty for any other SPJ.
+    """
+    spj = _readable_spj(spj_id, principal)
+    return {"spj_id": spj_id, "audit": SPJ_STORE.audit_log(spj_id), "plan_events": _plan_events(spj)}
+
+
+def _plan_events(spj) -> list[dict[str, Any]]:
+    from app.api.state import _OPERATIONS_PLAN_STORE
+
+    link = next(
+        (
+            row
+            for plan_id in [spj.note[len("Rencana ") :].split(" ", 1)[0]]
+            if spj.note.startswith("Rencana ")
+            for row in _OPERATIONS_PLAN_STORE.spj_links(plan_id)
+            if row["spj_id"] == spj.spj_id
+        ),
+        None,
+    )
+    if link is None:
+        return []
+    plan = _OPERATIONS_PLAN_STORE.get(link["plan_id"]) or {}
+    events = [
+        {"action": "plan_proposed", "actor": plan.get("proposed_by"), "created_at": plan.get("created_at")},
+        {"action": "plan_approved", "actor": plan.get("approved_by"), "created_at": plan.get("approved_at")},
+    ]
+    dispatch = history_store.get_dispatch(link["dispatch_id"]) if link.get("dispatch_id") else None
+    if dispatch:
+        events.append(
+            {"action": "dispatch_sent", "actor": "operations_optimizer", "created_at": dispatch["created_at"]}
+        )
+        if dispatch.get("confirmed_at"):
+            events.append(
+                {
+                    "action": "dispatch_confirmed",
+                    "actor": spj.truck_code,
+                    "created_at": dispatch["confirmed_at"],
+                    "status": dispatch["field_status"],
+                }
+            )
+    return [{**e, "plan_id": link["plan_id"]} for e in events if e["created_at"]]
 
 
 @router.post("/api/spj/{spj_id}/cancel")

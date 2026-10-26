@@ -374,6 +374,7 @@ def slot_board(slot_date: date, planned: list[dict[str, Any]]) -> dict[str, Any]
                     saturated_slots.append(slot_clock(index)[0])
 
     planned_indexes = sorted(by_slot)
+    impact = _impact(by_slot, recommendations, base_waits, waits, planned_indexes)
     slots = []
     if planned_indexes:
         last = min(SLOTS_PER_DAY - 1, planned_indexes[-1] + MAX_HOLD_SLOTS)
@@ -416,10 +417,38 @@ def slot_board(slot_date: date, planned: list[dict[str, Any]]) -> dict[str, Any]
         "slots": slots,
         "other_facilities": others,
         "recommendations": recommendations,
+        "impact": impact,
         "saturated": bool(saturated_slots),
         "saturated_slots": saturated_slots,
         "wait_method": WAIT_METHOD,
         "capacity_basis": WEIGHBRIDGE_ASSUMPTION,
         "classification": "SIMULATED",
         "source": SOURCE,
+    }
+
+
+def _impact(
+    by_slot: dict[int, list[str]],
+    recommendations: list[dict[str, Any]],
+    base_waits: list[float],
+    final_waits: list[float],
+    planned_indexes: list[int],
+) -> dict[str, Any] | None:
+    """The board's worst modelled waits as planned and with every recommended hold applied.
+
+    ``peak_wait`` is the worst slot of the board window; ``longest_wait`` the worst
+    wait any planned truck meets in its own slot. None when no truck is planned.
+    """
+    if not planned_indexes:
+        return None
+    window = range(planned_indexes[0], min(SLOTS_PER_DAY, planned_indexes[-1] + MAX_HOLD_SLOTS + 1))
+    moved = {(r["truck_code"], int(r["id"].rsplit("-", 1)[1])): r["to_slot_index"] for r in recommendations}
+    trucks = [(truck, index) for index, codes in by_slot.items() for truck in codes]
+    return {
+        "peak_wait_before": max(base_waits[i] for i in window),
+        "peak_wait_after": max(final_waits[i] for i in window),
+        "longest_wait_before": max(base_waits[i] for _, i in trucks),
+        "longest_wait_after": max(final_waits[moved.get((t, i), i)] for t, i in trucks),
+        "holds_applied": len(recommendations),
+        "classification": "SIMULATED",
     }
