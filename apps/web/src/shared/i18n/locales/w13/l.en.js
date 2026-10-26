@@ -2,7 +2,7 @@
 export const lEn = {
   // Landing: announcement, nav, hero
   l_announce_new: "New",
-  l_announce_text: "Ana, Pythia's AI assistant, now reads tomorrow's forecast, trucks and gate slots for you",
+  l_announce_text: "Pythia now forecasts 7 days and 3 months ahead, and learns from weighbridge tickets",
   l_nav_label: "Main",
   l_nav_product: "Product",
   l_nav_how: "How it works",

@@ -1,7 +1,8 @@
 // Wave 13 lane l strings (id). Keys are prefixed "l_"; only lane l edits this file.
 export const lId = {
   l_announce_new: "Baru",
-  l_announce_text: "Ana, asisten AI Pythia, kini membaca prakiraan, truk, dan slot gerbang besok untukmu",
+  l_announce_text:
+    "Pythia kini memprakirakan 7 hari dan 3 bulan ke depan, serta belajar dari tiket jembatan timbang",
   l_nav_label: "Utama",
   l_nav_product: "Produk",
   l_nav_how: "Cara kerja",
