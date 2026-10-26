@@ -318,11 +318,12 @@ export function LandingPage() {
             <div className="land-problem-top">
               <div className="land-problem-head">
                 <h2>
-                  <span>{t("l_problem_a")}</span>
+                  <span title={t("l_problem_note")} data-provenance="modelled">
+                    {t("l_problem_a")}
+                  </span>
                   <span className="is-lime">{t("l_problem_b")}</span>
                 </h2>
                 <p>{t("l_problem_p")}</p>
-                <p className="land-problem-note">{t("l_problem_note")}</p>
               </div>
               <ul className="land-signals" aria-label={t("l_sig_title")} title={t("l_sig_title")}>
                 {signals.map(({ icon: Icon, k }) => (

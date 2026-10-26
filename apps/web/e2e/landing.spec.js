@@ -15,8 +15,10 @@ test("landing renders its story with one main landmark", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Waste operations,");
   await expect(page.getByRole("main")).toHaveCount(1);
   for (const id of ["product", "how", "honesty", "faq"]) await expect(page.locator(`#${id}`)).toHaveCount(1);
-  // The modelled citywide figure is labelled as a model estimate, never presented as measured.
-  await expect(page.getByText("8,500 t is Pythia's modelled estimate")).toBeVisible();
+  // The modelled citywide figure carries its provenance, never presented as measured.
+  const citywide = page.locator('#main [data-provenance="modelled"]').first();
+  await expect(citywide).toContainText("8,500");
+  await expect(citywide).toHaveAttribute("title", /modelled estimate/);
   await expect(page.getByText("Live GPS tracking is coming soon.").first()).toBeAttached();
 });
 

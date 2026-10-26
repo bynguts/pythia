@@ -578,12 +578,6 @@
   line-height: 27px;
 }
 
-.land-problem-head .land-problem-note {
-  font-size: 13px;
-  line-height: 18px;
-  color: #a19d93;
-}
-
 .land-signals {
   display: flex;
   flex: none;
@@ -935,8 +929,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  width: min(235px, calc(100% - 60px));
-  translate: -56% 0;
+  width: min(250px, calc(100% - 40px));
+  translate: -50% 0;
   padding: 10px 14px 10px 12px;
   border-radius: 10px;
   background: #fff;
@@ -1077,7 +1071,6 @@
 .land-day1 {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  align-items: start;
   gap: 20px;
   margin-top: 24px;
 }
@@ -1153,7 +1146,6 @@
 .land-hon-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  align-items: start;
   gap: 20px;
   margin-top: 48px;
 }
