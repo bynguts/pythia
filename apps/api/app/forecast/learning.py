@@ -34,7 +34,7 @@ _cache: dict[str, Any] = {"ts": 0.0, "payload": None}
 
 BASIS = (
     "weighbridge net tonnes of closed SPJ days (pilot fleet) against the approved plan's forecast "
-    "tonnes for the same day, pro-rated to the trips weighed; EWMA (alpha 0.3) of actual / forecast "
+    "demand tonnes (not its truck capacity) for the same day, pro-rated to the trips weighed; EWMA (alpha 0.3) of actual / forecast "
     "over the last 14 weighed days, clamped to +/-25 %, applied to the city-wide forecast as a factor"
 )
 
@@ -72,7 +72,9 @@ def sync_closed_days() -> int:
         spj = recap["actual"]["spj"]
         if spj["draft"] or spj["aktif"] or recap["delta"]["tons"] is None:
             continue  # still open, no plan, or a receipt without a net weight
-        planned = recap["forecast"]["planned_tons"]
+        # The plan's forecast demand, not its assigned truck capacity (18 t per trip): a
+        # capacity ratio would learn how full the trucks run, not how wrong the forecast was.
+        planned = recap["forecast"]["forecast_tons"]
         actual = recap["actual"]["receipt_tons"]
         trips = recap["forecast"]["planned_trips"]
         weighed = recap["actual"]["receipts"]

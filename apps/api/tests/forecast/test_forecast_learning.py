@@ -84,7 +84,8 @@ def test_only_the_last_14_weighed_days_count():
 
 def _recap(spj=None, planned=100.0, actual=90.0, trips=4, receipts=4, delta=-10.0):
     return {
-        "forecast": {"planned_tons": planned, "planned_trips": trips},
+        # Assigned capacity (18 t a trip) is deliberately far from the forecast demand.
+        "forecast": {"forecast_tons": planned, "planned_tons": trips * 18.0 * 3, "planned_trips": trips},
         "actual": {
             "receipt_tons": actual,
             "receipts": receipts,
@@ -116,6 +117,18 @@ def test_only_closed_fully_weighed_days_before_today_are_recorded(store, monkeyp
     assert rows[day(4)]["forecast_t"] == pytest.approx(50.0) and rows[day(4)]["ratio"] == pytest.approx(1.0)
     assert rows[day(1)]["actual_classification"] == "OBSERVED_IN_APP"
     assert learning.sync_closed_days() == 0  # stored days are not recounted
+
+
+def test_the_ratio_is_against_forecast_demand_not_truck_capacity(store, monkeypatch):
+    # Real trips carry ~6 t on 18 t trucks: dividing by capacity would read as a -67 % forecast error.
+    yesterday = (learning.local_today() - timedelta(days=1)).isoformat()
+    recap = _recap(planned=24.0, actual=23.8, trips=4, receipts=4)
+    recap["forecast"]["planned_tons"] = 72.0
+    monkeypatch.setattr(spj_module.SPJ_STORE, "list", lambda: [SimpleNamespace(date=yesterday)])
+    monkeypatch.setattr(recap_module, "daily_recap", lambda d: recap)
+
+    assert learning.sync_closed_days() == 1
+    assert store.all()[0]["ratio"] == pytest.approx(23.8 / 24.0, abs=1e-4)
 
 
 # ── The endpoints carry it beside the raw value ───────────────────────────
