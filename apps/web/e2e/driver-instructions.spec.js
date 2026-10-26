@@ -132,6 +132,8 @@ test("a plan instruction leads with the departure time and tags the modelled gat
     }),
   );
   await openDriver(page, request, { token, truck: "T-245", lang: "en" });
+  // T-245 may still owe a receipt from another spec, which opens the app on TPA.
+  await page.getByTestId("driver-tab-instruksi").click();
   const item = page.getByTestId("driver-instruction-plan-e2e-slot");
   await expect(item).toBeVisible({ timeout: 20000 });
   await expect(item.getByTestId("driver-instruction-depart")).toContainText("Leave the depot at");
