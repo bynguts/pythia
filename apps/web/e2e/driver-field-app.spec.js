@@ -225,6 +225,15 @@ test("the TPA gate screen shows the modelled wait and queue labelled as model ou
   await page.route("**/api/safety/gate-arrival", (route) =>
     route.fulfill({ status: 201, json: { truck_code: TRUCK, classification: "OBSERVED_APP_EVENTS" } }),
   );
+  // No approved plan holds a slot for this truck, whatever plans earlier specs approved:
+  // no plan instruction in the feed and no gate slot on the trip.
+  await page.route(`**/api/dispatch/${TRUCK}`, (route) => route.fulfill({ json: [] }));
+  await page.route(new RegExp(`/api/driver/trip/${TRUCK}`), async (route) => {
+    const response = await route.fetch();
+    if (!response.ok()) return route.fulfill({ response });
+    const { gate_slot: _slot, ...trip } = await response.json();
+    await route.fulfill({ response, json: trip });
+  });
   await openDriver(page, token);
 
   // wave11 driver: every stop is done, so the app opens on its TPA tab; the route
