@@ -27,8 +27,8 @@ function tareKey(truckCode) {
 // lteU7: the weighbridge ticket. The photo goes to the ticket OCR first; the
 // driver confirms its reading ("Correct", recorded as ocr) or types the number
 // ("Fix number", recorded as manual). No signal or no reading: typed only.
-// The OCR reads the GROSS weight; the tare (pre-filled from this phone) gives
-// the net, which only the server computes.
+// The OCR reads the whole ticket: gross, plus the tare when printed (otherwise
+// the tare is pre-filled from this phone); only the server computes the net.
 export function WeighTicket({ spj, photo, online, pending, flushing, onBack, onDone, say }) {
   const { t, lang } = useLanguage();
   // reading | read | manual
@@ -61,11 +61,23 @@ export function WeighTicket({ spj, photo, online, pending, flushing, onBack, onD
       .then((body) => {
         if (cancelled) return;
         const kg = Number(body?.weight_kg);
-        if (body?.weight_kg !== null && Number.isFinite(kg) && kg > 0) {
-          setOcr({ state: "read", kg });
+        const hasGross = body?.weight_kg !== null && Number.isFinite(kg) && kg > 0;
+        const tareKg = Number(body?.tare_kg);
+        // The model reads the whole ticket: the tare it read replaces this phone's
+        // last tare; ticket number and plate are shown for the driver to check.
+        if (body?.tare_kg !== null && Number.isFinite(tareKg) && tareKg > 0 && (!hasGross || tareKg < kg)) {
+          setTare(String(tareKg));
+        }
+        const ticket = {
+          ticketNo: typeof body?.ticket_no === "string" ? body.ticket_no : null,
+          plate: typeof body?.plate === "string" ? body.plate : null,
+          notTicket: body?.document === "not_a_ticket",
+        };
+        if (hasGross) {
+          setOcr({ state: "read", kg, ...ticket });
           setGross(String(kg));
         } else {
-          setOcr({ state: "manual", kg: null });
+          setOcr({ state: "manual", kg: null, ...ticket });
           setEditing(true);
         }
       })
@@ -222,9 +234,27 @@ export function WeighTicket({ spj, photo, online, pending, flushing, onBack, onD
             </div>
           )}
 
-          {ocr.state === "manual" && online && (
-            <p className="drt-note" data-testid="weigh-ocr-none">
-              {t("d2_weigh_ocr_none")}
+          {ocr.state === "manual" &&
+            online &&
+            (ocr.notTicket ? (
+              <p className="drt-error" role="alert" data-testid="weigh-not-ticket">
+                {t("oc_weigh_not_ticket")}
+              </p>
+            ) : (
+              <p className="drt-note" data-testid="weigh-ocr-none">
+                {t("d2_weigh_ocr_none")}
+              </p>
+            ))}
+
+          {(ocr.ticketNo || ocr.plate) && (
+            <p className="drt-note" data-testid="weigh-ticket-read" title={t("d2_weigh_ocr_tip")}>
+              {t("oc_weigh_ticket_read")}{" "}
+              {[
+                ocr.ticketNo && `${t("oc_weigh_ticket_no")} ${ocr.ticketNo}`,
+                ocr.plate && `${t("oc_weigh_plate")} ${ocr.plate}`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </p>
           )}
 
