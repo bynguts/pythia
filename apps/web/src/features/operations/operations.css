@@ -1,0 +1,773 @@
+/* Wave 13 lane S1: Operations (U0H9au). Values follow docs/design/export-handoff/html/
+   operations.html; colours come from the --f-* tokens. Scoped under .ops. */
+
+.ops {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  height: calc(100dvh - var(--f-topbar-height) - 56px);
+  min-height: 760px;
+}
+
+/* ── Page head ────────────────────────────────────────────────────────── */
+.ops-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+}
+.ops-head-text {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.ops-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--f-faint);
+  font-size: 13px;
+}
+.ops-head h1 {
+  margin: 0;
+  color: var(--f-ink);
+  font-family: var(--f-font-display);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.6px;
+  line-height: 1.2;
+}
+.ops-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* ── Stage: the map with its floating panels ──────────────────────────── */
+.ops-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.ops-map {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  outline: 1px solid var(--f-border);
+  outline-offset: -0.5px;
+  background: var(--f-paper);
+}
+.ops-map .maplibre-shell {
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+}
+.ops-map-loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--f-muted);
+  font-size: 13px;
+}
+
+/* Map chrome (drawn by LiveFleetMap variant="console"). */
+.ops-map-soon {
+  position: absolute;
+  z-index: 3;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 10px 0 6px;
+  border-radius: 15px;
+  background: var(--f-white);
+  box-shadow: 0 1px 4px #1c1b1929;
+  color: var(--f-ink-3);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ops-map-zoom {
+  position: absolute;
+  z-index: 3;
+  top: 58px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  width: 34px;
+  border-radius: 8px;
+  background: var(--f-white);
+  box-shadow: 0 1px 4px #1c1b1929;
+}
+/* 44 px hit boxes around the 34 px drawn cells. */
+.ops-map-zoom button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--f-ink);
+  cursor: pointer;
+}
+.ops-map-zoom button + button::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  left: 5px;
+  height: 1px;
+  background: var(--f-line-3);
+}
+.ops-map-zoom button:hover {
+  color: var(--f-green);
+}
+.ops-map-zoom button:focus-visible {
+  outline: 2px solid var(--f-green);
+  outline-offset: -6px;
+  border-radius: 8px;
+}
+.ops-map-legend {
+  position: absolute;
+  z-index: 3;
+  bottom: 16px;
+  left: 432px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 432px - 322px);
+  overflow: hidden;
+  margin: 0;
+  padding: 5px 10px;
+  border-radius: 13px;
+  background: #ffffffe6;
+  color: var(--f-ink-3);
+  font-size: 11px;
+  list-style: none;
+}
+.ops-map-legend li {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.ops-map-legend li + li::before {
+  content: "";
+  width: 1px;
+  height: 12px;
+  margin-right: 4px;
+  background: var(--f-control-line);
+}
+.ops-swatch-route {
+  width: 16px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--f-green);
+}
+.ops-swatch-corridor {
+  display: inline-flex;
+  gap: 2px;
+  width: 16px;
+}
+.ops-swatch-corridor b {
+  width: 4px;
+  height: 3px;
+  background: var(--f-faint);
+}
+.ops-map-legend-fleet {
+  flex-shrink: 1;
+  min-width: 0;
+  color: var(--f-muted);
+}
+.ops-map-legend-fleet span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ops-map .map-follow-chip {
+  top: auto;
+  bottom: 56px;
+  left: 432px;
+}
+
+/* Pins: a pill with a glyph and the truck code. Overrides the classic marker look. */
+.ops-map .truck-marker.ops-pin,
+.ops-map .map-zoom-low .truck-marker.ops-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: auto;
+  min-width: 0;
+  height: 24px;
+  min-height: 0;
+  padding: 0 8px 0 6px;
+  border: 0;
+  border-radius: 15px;
+  outline: 1px solid var(--f-control-line);
+  outline-offset: -0.5px;
+  background: var(--f-white);
+  box-shadow: 0 1px 4px #1c1b1929;
+  color: var(--f-ink);
+  font-family: var(--f-font-body);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+.ops-map .truck-marker.ops-pin::after,
+.ops-map .truck-marker.ops-pin::before {
+  content: none;
+}
+.ops-map .truck-marker.ops-pin > span {
+  display: inline;
+}
+.ops-map .truck-marker.ops-pin svg {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+}
+.ops-map .truck-marker.ops-pin-selected,
+.ops-map .map-zoom-low .truck-marker.ops-pin-selected {
+  z-index: 2;
+  gap: 5px;
+  height: 30px;
+  padding: 0 11px 0 9px;
+  outline: 3px solid var(--f-lime);
+  outline-offset: -1.5px;
+  background: var(--f-green);
+  color: var(--f-white);
+  font-size: 13px;
+}
+.ops-map .truck-marker.ops-pin-selected svg {
+  width: 14px;
+  height: 14px;
+}
+.ops-map .truck-marker.ops-pin-danger,
+.ops-map .map-zoom-low .truck-marker.ops-pin-danger {
+  outline: 0;
+  background: var(--f-red-ink);
+  color: var(--f-white);
+}
+.ops-map .truck-marker.ops-pin-warn,
+.ops-map .map-zoom-low .truck-marker.ops-pin-warn {
+  outline: 0;
+  background: #f2c46b;
+  color: #4a3208;
+}
+.ops-map .truck-marker.ops-pin-off,
+.ops-map .map-zoom-low .truck-marker.ops-pin-off {
+  background: #eceae4;
+  color: var(--f-icon);
+}
+.ops-map .truck-marker.ops-pin:focus-visible {
+  outline: 3px solid var(--f-green);
+  outline-offset: 2px;
+}
+
+/* ── Needs you ────────────────────────────────────────────────────────── */
+.ops-needs {
+  position: absolute;
+  z-index: 4;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  width: 400px;
+  max-height: calc(100% - 32px);
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--f-white);
+  box-shadow: var(--f-shadow-float);
+}
+.ops-needs-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 16px 10px;
+}
+.ops-needs-head h2 {
+  margin: 0;
+  color: var(--f-ink);
+  font-family: var(--f-font-display);
+  font-size: 18px;
+  font-weight: 600;
+}
+.ops-needs-count.ui-tag-soon {
+  font-size: 11px;
+  font-weight: 600;
+}
+.ops-needs-spacer {
+  flex: 1 1 auto;
+}
+.ops-needs-urgent {
+  color: var(--f-red-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+.ops-needs-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 16px 12px;
+  border-bottom: 1px solid var(--f-line-3);
+}
+.ops-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
+  margin-block: -9px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.ops-chip > span {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  background: var(--f-paper);
+  color: var(--f-icon);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ops-chip:hover > span {
+  background: var(--f-paper-2);
+}
+.ops-chip[aria-pressed="true"] > span {
+  background: #e3f1e6;
+  color: var(--f-green);
+  font-weight: 600;
+}
+.ops-chip:focus-visible {
+  outline: none;
+}
+.ops-chip:focus-visible > span {
+  outline: 2px solid var(--f-green);
+  outline-offset: 1px;
+}
+.ops-needs-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.ops-needs-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ops-item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--f-line-3);
+}
+.ops-item:last-child {
+  border-bottom: 0;
+}
+.ops-item.is-open {
+  padding: 14px 16px;
+  background: var(--f-green-tint);
+}
+.ops-item-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ops-item.is-open .ops-item-top {
+  align-items: flex-start;
+}
+.ops-sev {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+}
+.ops-sev-red {
+  background: var(--f-red-soft);
+  color: var(--f-red-ink);
+}
+.ops-sev-amber {
+  background: var(--f-amber-soft);
+  color: var(--f-amber-ink);
+}
+.ops-sev-blue {
+  background: var(--f-blue-soft);
+  color: var(--f-blue-ink);
+}
+.ops-sev-grey {
+  background: var(--f-hover);
+  color: var(--f-ink-2);
+}
+.ops-item-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ops-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.ops-item-title {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--f-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+button.ops-item-title {
+  min-height: var(--tap-min);
+  margin-block: -14px;
+  cursor: pointer;
+}
+button.ops-item-title:hover {
+  color: var(--f-green);
+}
+button.ops-item-title:focus-visible {
+  outline: 2px solid var(--f-green);
+  outline-offset: -10px;
+  border-radius: 4px;
+}
+.ops-item.is-open .ops-item-title {
+  font-size: 14px;
+}
+.ops-item-when {
+  margin-left: auto;
+  color: var(--f-faint);
+  font-size: 11px;
+}
+.ops-item-sub {
+  margin: 0;
+  color: var(--f-muted);
+  font-size: 12px;
+  line-height: 17px;
+}
+.ops-item-note {
+  margin: 4px 0 0;
+  color: var(--f-green);
+  font-size: 12px;
+  font-weight: 500;
+}
+.ops-item-note.is-error {
+  color: var(--f-red-ink);
+}
+.ops-needs .ui-btn-sm .ui-btn-face {
+  height: 30px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.ops-suggest {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  outline: 1px solid var(--f-green-soft);
+  outline-offset: -0.5px;
+  background: var(--f-white);
+  color: var(--f-green);
+}
+.ops-suggest svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.ops-suggest-key {
+  color: var(--f-green);
+  font-size: 11px;
+  font-weight: 600;
+}
+.ops-suggest p {
+  margin: 2px 0 0;
+  color: var(--f-ink-3);
+  font-size: 13px;
+  line-height: 19px;
+}
+.ops-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 44px;
+}
+.ops-link {
+  min-height: var(--tap-min);
+  margin: -7px 0 -7px auto;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--f-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.ops-link:hover {
+  color: var(--f-ink);
+}
+.ops-link:focus-visible {
+  outline: 2px solid var(--f-green);
+  outline-offset: -8px;
+  border-radius: 6px;
+}
+.ops-link:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.ops-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--f-banner);
+}
+.ops-confirm p {
+  margin: 0;
+  color: var(--f-ink);
+  font-size: 13px;
+  line-height: 19px;
+}
+.ops-confirm .ops-item-actions {
+  padding-left: 0;
+}
+.ops-needs-none {
+  padding: 16px;
+  color: var(--f-muted);
+  font-size: 13px;
+}
+.ops-needs-empty {
+  padding: 28px 24px 32px;
+}
+.ops-needs-empty .ui-empty-body {
+  max-width: 300px;
+}
+.ops-needs-skeleton {
+  padding: 4px 0;
+}
+.ops-needs-error {
+  margin: 12px 16px 16px;
+}
+
+/* ── Bottom-right: attribution over the gate card ─────────────────────── */
+.ops-corner {
+  position: absolute;
+  z-index: 3;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  width: 290px;
+}
+.ops-attrib {
+  margin: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #ffffffcc;
+  color: var(--f-muted);
+  font-size: 9px;
+}
+.ops-attrib a {
+  color: inherit;
+  text-decoration: none;
+}
+.ops-attrib a:hover {
+  text-decoration: underline;
+}
+.ops-gate {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--f-white);
+  box-shadow: var(--f-shadow-float);
+}
+.ops-gate-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--f-ink);
+}
+.ops-gate-head h2 {
+  flex: 1 1 auto;
+  margin: 0;
+  font-family: var(--f-font-body);
+  font-size: 13px;
+  font-weight: 600;
+}
+.ops-gate-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 40px;
+}
+.ops-gate-bar {
+  flex: 1 1 0;
+  min-width: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--f-green-soft);
+}
+.ops-gate-bar.is-now {
+  background: var(--f-green);
+}
+.ops-gate-bar.is-peak {
+  background: var(--f-amber-pixel);
+}
+.ops-gate-axis {
+  display: flex;
+  justify-content: space-between;
+  color: var(--f-faint);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.ops-gate-note {
+  margin: 0;
+  color: var(--f-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* ── New instruction drawer form ──────────────────────────────────────── */
+.ops-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+.ops-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  color: var(--f-ink-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+.ops-field select,
+.ops-field textarea {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 10px 12px;
+  border: 1px solid var(--f-control-line);
+  border-radius: 8px;
+  background: var(--f-white);
+  color: var(--f-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+}
+.ops-field textarea {
+  resize: vertical;
+}
+.ops-field select:focus-visible,
+.ops-field textarea:focus-visible {
+  outline: 2px solid var(--f-green);
+  outline-offset: 1px;
+}
+.ops-form-note {
+  margin: 0;
+  color: var(--f-green);
+  font-size: 13px;
+}
+.ops-form-note.is-error {
+  color: var(--f-red-ink);
+}
+
+/* ── Narrower stages: the panels follow the map instead of covering it ── */
+@media (max-width: 1100px) {
+  .ops {
+    height: auto;
+    min-height: 0;
+  }
+  .ops-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .ops-map {
+    position: relative;
+    inset: auto;
+    height: min(62vh, 560px);
+    min-height: 360px;
+  }
+  .ops-needs,
+  .ops-corner {
+    position: static;
+    width: 100%;
+    max-height: none;
+  }
+  .ops-needs {
+    box-shadow: none;
+    outline: 1px solid var(--f-border);
+    outline-offset: -0.5px;
+  }
+  .ops-corner {
+    align-items: stretch;
+  }
+  .ops-attrib {
+    align-self: flex-end;
+  }
+  .ops-gate {
+    box-shadow: none;
+    outline: 1px solid var(--f-border);
+    outline-offset: -0.5px;
+  }
+  .ops-map-legend,
+  .ops-map .map-follow-chip {
+    left: 12px;
+    max-width: calc(100% - 24px);
+  }
+}
+@media (max-width: 760px) {
+  .ops-kpis.ui-kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 16px;
+  }
+  .ops-kpis .ui-kpi:nth-child(2n) {
+    border-right: 0;
+  }
+  .ops-kpis .ui-kpi {
+    padding: 0 14px;
+  }
+}
+@media (max-width: 520px) {
+  .ops-head h1 {
+    font-size: 24px;
+  }
+  .ops-map-soon {
+    top: 12px;
+    right: 12px;
+  }
+  .ops-map-zoom {
+    top: 54px;
+    right: 12px;
+  }
+}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Compass, Info } from "lucide-react";
+import { Compass, Info, LocateFixed, Minus, Plus } from "lucide-react";
 import { translate, useLanguage } from "../../shared/i18n/index.jsx";
 import { apiFetch } from "../../shared/api/client.js";
 import { fleetDenominator } from "../../shared/hooks/useBaseline.js";
@@ -115,6 +115,54 @@ function mapVisibleTrucks(trucks, focusCode = null) {
     .sort((a, b) => rank(a.truck) - rank(b.truck) || a.index - b.index)
     .slice(0, MAP_TRUCK_CAP)
     .map(({ truck }) => truck);
+}
+
+// Wave 13 Operations pins (console variant): a pill with a lucide glyph and the truck
+// code. DOM markers cannot hold React icons, so the glyphs are lucide's own SVG nodes.
+const PIN_GLYPHS = {
+  truck: [
+    ["path", "M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"],
+    ["path", "M15 18H9"],
+    ["path", "M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"],
+    ["circle", "17 18 2"],
+    ["circle", "7 18 2"],
+  ],
+  siren: [
+    ["path", "M7 18v-6a5 5 0 1 1 10 0v6"],
+    ["path", "M5 21a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2z"],
+    ["path", "M21 12h1"],
+    ["path", "M18.5 4.5 18 5"],
+    ["path", "M2 12h1"],
+    ["path", "M12 2v1"],
+    ["path", "m4.929 4.929.707.707"],
+    ["path", "M12 12v6"],
+  ],
+  wrench: [
+    [
+      "path",
+      "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z",
+    ],
+  ],
+  timer: [
+    ["line", "10 2 14 2"],
+    ["line", "12 14 15 11"],
+    ["circle", "12 14 8"],
+  ],
+};
+const PIN_TONE_GLYPH = { normal: "truck", selected: "truck", danger: "siren", warn: "timer", off: "wrench" };
+
+function pinGlyph(tone) {
+  const nodes = PIN_GLYPHS[PIN_TONE_GLYPH[tone] || "truck"];
+  const body = nodes
+    .map(([tag, value]) => {
+      if (tag === "path") return `<path d="${value}"/>`;
+      const [a, b, c, d] = value.split(" ");
+      return tag === "circle"
+        ? `<circle cx="${a}" cy="${b}" r="${c}"/>`
+        : `<line x1="${a}" y1="${b}" x2="${c}" y2="${d}"/>`;
+    })
+    .join("");
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
 }
 
 function referenceLayerBefore(map) {
@@ -391,8 +439,17 @@ export function LiveFleetMap({
   focusRequest = null,
   // Teardown v4 M3: the selected decision's one route, drawn only while it is selected.
   decisionRoute = null,
+  // Wave 13 Operations: "console" draws the designed chrome (pill pins, own zoom buttons,
+  // Coming-soon chip, one-line legend) instead of the classic search row and controls.
+  variant = "classic",
+  // console: truck code -> pin tone ("selected" | "danger" | "warn" | "off" | "normal").
+  pinTones = null,
+  // console: fitBounds padding that keeps the fleet clear of the page's floating panels.
+  fitPadding = null,
 }) {
   const { lang, t } = useLanguage();
+  const isConsole = variant === "console";
+  const consoleRef = useRef(isConsole);
   const tRef = useRef(t);
   tRef.current = t;
   const containerRef = useRef(null);
@@ -595,25 +652,31 @@ export function LiveFleetMap({
     };
     window.addEventListener("online", retryStreets);
 
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
-    map.addControl(new maplibregl.FullscreenControl(), "top-right");
-    // Reset view sits with the other map controls; React renders the button into it.
-    const resetControlHost = document.createElement("div");
-    resetControlHost.className = "maplibregl-ctrl maplibregl-ctrl-group";
-    map.addControl({ onAdd: () => resetControlHost, onRemove: () => resetControlHost.remove() }, "top-right");
-    setResetHost(resetControlHost);
     // e2e reads layer visibility from the live map; never exposed outside automation.
     if (IS_AUTOMATION) window.__pythiaMap = map;
-    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-right");
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
-    // Compact attribution opens expanded; fold it once the tiles are in so its
-    // text never sits on the route card. The (i) button still expands it.
-    map.once("idle", () => {
-      map
-        .getContainer()
-        .querySelector(".maplibregl-ctrl-attrib")
-        ?.classList.remove("maplibregl-compact-show");
-    });
+    // The console variant draws its own zoom/locate buttons and the page shows the attribution.
+    if (!consoleRef.current) {
+      map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+      map.addControl(new maplibregl.FullscreenControl(), "top-right");
+      // Reset view sits with the other map controls; React renders the button into it.
+      const resetControlHost = document.createElement("div");
+      resetControlHost.className = "maplibregl-ctrl maplibregl-ctrl-group";
+      map.addControl(
+        { onAdd: () => resetControlHost, onRemove: () => resetControlHost.remove() },
+        "top-right",
+      );
+      setResetHost(resetControlHost);
+      map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-right");
+      map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+      // Compact attribution opens expanded; fold it once the tiles are in so its
+      // text never sits on the route card. The (i) button still expands it.
+      map.once("idle", () => {
+        map
+          .getContainer()
+          .querySelector(".maplibregl-ctrl-attrib")
+          ?.classList.remove("maplibregl-compact-show");
+      });
+    }
     map.on("style.load", () => setStyleTick((t) => t + 1));
     setMapInstance(map);
 
@@ -823,10 +886,16 @@ export function LiveFleetMap({
           id: "assigned-routes-line",
           type: "line",
           source: "assigned-routes",
+          // Console: the planned corridor is the design's grey dashed line.
           paint: {
-            "line-color": ["case", ["==", ["get", "kind"], "astar-abandoned"], "#b42318", "#176b54"],
+            "line-color": [
+              "case",
+              ["==", ["get", "kind"], "astar-abandoned"],
+              "#b42318",
+              consoleRef.current ? tokenColor("--f-faint", "#726e66") : "#176b54",
+            ],
             "line-width": ["case", ["==", ["get", "kind"], "astar-abandoned"], 4, 3],
-            "line-dasharray": [1.5, 1],
+            "line-dasharray": consoleRef.current ? [1.2, 1.2] : [1.5, 1],
             "line-opacity": 0.82,
           },
         });
@@ -840,6 +909,8 @@ export function LiveFleetMap({
           id: "actual-routes-line",
           type: "line",
           source: "actual-routes",
+          // Console: no breadcrumb trails; the design shows the corridor and the suggestion.
+          layout: { visibility: consoleRef.current ? "none" : "visible" },
           paint: {
             "line-color": [
               "case",
@@ -860,8 +931,8 @@ export function LiveFleetMap({
       // Digital Twin Interpolation Logic
       const nextMarkers = {};
 
-      // Crowd event permit markers
-      eventPermits.forEach((ev) => {
+      // Crowd event permit markers (the console map shows the fleet and its decisions only)
+      (consoleRef.current ? [] : eventPermits).forEach((ev) => {
         const key = "event-" + ev.id;
         let existing = activeMarkersRef.current[key];
 
@@ -907,7 +978,13 @@ export function LiveFleetMap({
           : [truck.latest_position.lng, truck.latest_position.lat];
         const key = truck.truck_code;
         const isAnomalous = truck.deviation?.violated;
-        const statusClass = isAnomalous ? "is-critical" : truck.is_damaged ? "is-warning" : "is-normal";
+        const tone = consoleRef.current ? pinTones?.[key] || (truck.is_damaged ? "off" : "normal") : null;
+        const statusClass =
+          (isAnomalous ? "is-critical" : truck.is_damaged ? "is-warning" : "is-normal") +
+          (tone ? ` ops-pin ops-pin-${tone}` : "");
+        const pinHtml = tone
+          ? `${pinGlyph(tone)}<span>${truck.truck_code}</span>`
+          : `<span>${truck.truck_code}</span>`;
 
         let existing = activeMarkersRef.current[key];
 
@@ -918,7 +995,12 @@ export function LiveFleetMap({
           element.className = `truck-marker ${statusClass}`;
           element.type = "button";
           element.setAttribute("aria-label", `${truck.truck_code} ${truck.assigned_zone}`);
-          element.innerHTML = `<span>${truck.truck_code}</span>`;
+          element.innerHTML = pinHtml;
+          if (consoleRef.current) {
+            // Positions are simulated: machine-readable and in the tooltip, never "live".
+            element.dataset.provenance = "simulated";
+            element.title = `${truck.truck_code} · ${tRef.current("s1_pin_simulated")}`;
+          }
           const headingEl = null;
 
           const geomFirst =
@@ -989,6 +1071,7 @@ export function LiveFleetMap({
         } else {
           if (existing.statusClass !== statusClass) {
             existing.element.className = `truck-marker ${statusClass}`;
+            if (tone) existing.element.innerHTML = pinHtml;
             existing.statusClass = statusClass;
           }
 
@@ -1129,7 +1212,18 @@ export function LiveFleetMap({
     return () => {
       cancelled = true;
     };
-  }, [trucks, astarData, eventPermits, mapInstance, breadcrumbs, mapTruth, styleTick, lang, focusCode]);
+  }, [
+    trucks,
+    astarData,
+    eventPermits,
+    mapInstance,
+    breadcrumbs,
+    mapTruth,
+    styleTick,
+    lang,
+    focusCode,
+    pinTones,
+  ]);
 
   useEffect(() => {
     const map = mapInstance;
@@ -1438,7 +1532,7 @@ export function LiveFleetMap({
         m.marker?.remove();
       });
       unlicensedMarkersRef.current = [];
-      (unlicensed || []).forEach((a) => {
+      (consoleRef.current ? [] : unlicensed || []).forEach((a) => {
         if (a.lat == null || a.lng == null) return;
         const el = document.createElement("div");
         el.className = "unlicensed-marker";
@@ -2183,7 +2277,7 @@ export function LiveFleetMap({
         [Math.min(...lngs), Math.min(...lats)],
         [Math.max(...lngs), Math.max(...lats)],
       ],
-      { padding: { top, bottom, left: 40, right: 72 }, maxZoom: 12, duration },
+      { padding: fitPadding || { top, bottom, left: 40, right: 72 }, maxZoom: 12, duration },
     );
     return true;
   }
@@ -2270,6 +2364,79 @@ export function LiveFleetMap({
       ],
     },
   ];
+
+  if (isConsole) {
+    const zoomBy = (delta) => mapInstance?.zoomTo(mapInstance.getZoom() + delta, { duration: 300 });
+    return (
+      <div className="maplibre-shell ops-map-shell">
+        <div ref={containerRef} className="maplibre-container" />
+
+        <div className="ops-map-soon" data-testid="map-gps-soon">
+          <span className="ui-tag ui-tag-soon">{t("s1_soon")}</span>
+          <span>{t("s1_live_gps")}</span>
+        </div>
+
+        <div className="ops-map-zoom" role="group" aria-label={t("s1_map_controls")}>
+          <button
+            type="button"
+            onClick={() => zoomBy(1)}
+            aria-label={t("s1_zoom_in")}
+            title={t("s1_zoom_in")}
+          >
+            <Plus size={15} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => zoomBy(-1)}
+            aria-label={t("s1_zoom_out")}
+            title={t("s1_zoom_out")}
+          >
+            <Minus size={15} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="map-reset-btn"
+            onClick={resetView}
+            aria-label={t("s1_locate")}
+            title={t("s1_locate")}
+            data-testid="map-locate"
+          >
+            <LocateFixed size={15} aria-hidden="true" />
+          </button>
+        </div>
+
+        <ul className="ops-map-legend" data-testid="map-legend" aria-label={t("s1_legend")}>
+          {decisionRoute && (
+            <li data-testid="map-legend-row" data-layer="osrm">
+              <i className="ops-swatch-route" aria-hidden="true" />
+              {t("s1_legend_suggested")}
+            </li>
+          )}
+          <li data-testid="map-legend-row" data-layer="corridor">
+            <i className="ops-swatch-corridor" aria-hidden="true">
+              <b />
+              <b />
+              <b />
+            </i>
+            {t("s1_legend_corridor")}
+          </li>
+          <li className="ops-map-legend-fleet" data-provenance="simulated" title={t("s1_pin_simulated")}>
+            <span data-testid="map-fleet-denominator">
+              {t("s1_fleet_shown")
+                .replace("{n}", fleetShown)
+                .replace("{total}", (trucks || []).length)}
+            </span>
+          </li>
+        </ul>
+
+        {followTruck && (
+          <button className="map-follow-chip" onClick={() => setFollowTruck(null)}>
+            {t("s1_following").replace("{code}", followTruck)}
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="maplibre-shell">
