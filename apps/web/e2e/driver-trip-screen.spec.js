@@ -179,6 +179,23 @@ test("the TPA screen shows the slot's modelled wait, the drive and the queue bar
   await expect(page.getByText("Antrean di gerbang, 2 jam ke depan")).toBeVisible();
 });
 
+// #w14-walk: before the "leave at" time the arrival follows that departure, not the
+// current clock ("Leave at 08:30 · you'll arrive ~03:30" at 03:00).
+test.describe("before the departure time", () => {
+  test.use({ timezoneId: "Asia/Jakarta" });
+
+  test("the TPA arrival is counted from the advised departure", async ({ page, request }) => {
+    await page.clock.setFixedTime(new Date("2026-10-26T06:00:00+07:00"));
+    await openWith(page, request, fakeSpj(["completed", "completed"]), tripPayload(), {
+      path: "/driver?tab=tpa",
+    });
+    const advice = page.getByTestId("destination-maps");
+    await expect(advice).toContainText("Berangkat pukul 09:20", { timeout: 15000 });
+    // 09:20 + the 34 min road drive.
+    await expect(advice).toContainText("~34 mnt perjalanan · tiba ~09:54");
+  });
+});
+
 test("a skipped stop is closed in the stops sheet and never the next stop", async ({ page, request }) => {
   await openWith(page, request, fakeSpj(["completed", "skipped", "pending"]), tripPayload({ stops: [] }));
   // The app's own next-stop pick lives in DriverApp; here the sheet shows the skip.

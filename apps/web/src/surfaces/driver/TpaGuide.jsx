@@ -170,6 +170,8 @@ export function TpaScreen({
   const ahead = Number.isFinite(Number(queue?.queue_trucks_mean))
     ? Math.round(queue.queue_trucks_mean)
     : null;
+  // The modelled hour's longest queue: the gate board's "waiting" figure, shown beside the mean.
+  const most = Number.isFinite(Number(queue?.queue_trucks_max)) ? Math.round(queue.queue_trucks_max) : null;
   const hour = Number.isInteger(queue?.modelled_hour) ? String(queue.modelled_hour).padStart(2, "0") : null;
   const waited = gateAt ? wholeMinutes((now - Date.parse(gateAt)) / 60000) : null;
   const slotStart = todayAt(gateSlot?.start);
@@ -177,7 +179,9 @@ export function TpaScreen({
   const leaveBy =
     departAt || (slotStart && drive ? new Date(slotStart.getTime() - drive.minutes * 60000) : null);
   const leaveNow = !leaveBy || leaveBy.getTime() <= now;
-  const arriveAt = drive ? clockTime(new Date(now + drive.minutes * 60000).toISOString()) : null;
+  // Arrival follows the advised departure: now when leaving now, else the "leave at" time.
+  const setOff = leaveNow ? now : leaveBy.getTime();
+  const arriveAt = drive ? clockTime(new Date(setOff + drive.minutes * 60000).toISOString()) : null;
   const mapsHref = mapsDirectionsUrl({ lat: point.lat, lng: point.lng, name: trip.destination });
 
   const arriveAtGate = async () => {
@@ -338,9 +342,10 @@ export function TpaScreen({
           <p className="drt-note" data-testid="tpa-queue-ahead" data-provenance="simulated">
             {ahead === null
               ? "—"
-              : t("d2_tpa_queue_peak")
+              : t(most === null ? "d2_tpa_queue_peak" : "d2_tpa_queue_peak_max")
                   .replace("{hour}", hour || "—")
-                  .replace("{n}", ahead.toLocaleString(localeFor(lang)))}
+                  .replace("{n}", ahead.toLocaleString(localeFor(lang)))
+                  .replace("{max}", (most ?? 0).toLocaleString(localeFor(lang)))}
           </p>
         ) : (
           <p className="drt-note">{t("d2_tpa_queue_none")}</p>
