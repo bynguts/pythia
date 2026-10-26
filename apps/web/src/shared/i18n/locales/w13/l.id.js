@@ -205,7 +205,6 @@ export const lId = {
   l_foot_fleet: "Armada",
   l_foot_planning: "Perencanaan",
   l_foot_forecast: "Prakiraan",
-  l_foot_twin: "Kota 3D",
   l_foot_driver: "Aplikasi sopir",
   l_foot_data: "Data",
   l_foot_sources: "Sumber data",

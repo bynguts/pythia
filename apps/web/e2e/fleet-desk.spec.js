@@ -156,6 +156,34 @@ test("the strip has four KPIs and the panels float on the map: needs-you left, g
   expect(corner.x).toBeGreaterThan(stage.x + stage.width / 2);
 });
 
+test("the needs-you panel and the gate card fold to their headers to clear the map", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route(/\/api\/ops\/needs-you$/, (route) => route.fulfill({ json: FEED }));
+  await signIn(page);
+  const needs = page.getByTestId("needs-you");
+  await expect(needs.getByTestId("action-queue")).toBeVisible({ timeout: 30000 });
+  const tall = (await needs.boundingBox()).height;
+
+  const toggle = page.getByTestId("needs-you-toggle");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(needs.getByTestId("action-queue")).toBeHidden();
+  await expect(needs.getByTestId("needs-filter-all")).toBeHidden();
+  expect((await needs.boundingBox()).height).toBeLessThan(tall / 2);
+  await toggle.click();
+  await expect(needs.getByTestId("action-queue")).toBeVisible();
+
+  const gate = page.getByTestId("gate-card");
+  const gateToggle = page.getByTestId("gate-card-toggle");
+  await expect(gate.locator(".ops-gate-note")).toBeVisible({ timeout: 30000 });
+  await gateToggle.click();
+  await expect(gateToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(gate.locator(".ops-gate-note, .ops-gate-bars")).toHaveCount(0);
+  await gateToggle.click();
+  await expect(gate.locator(".ops-gate-note")).toBeVisible();
+});
+
 test("every open item shows its one action; the chips count and filter the list", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.route(/\/api\/ops\/needs-you$/, (route) => route.fulfill({ json: FEED }));

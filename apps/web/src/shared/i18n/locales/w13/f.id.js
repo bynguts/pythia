@@ -41,7 +41,6 @@ export const fId = {
   f_bell: "Perlu tindakan Anda",
   f_ask_ana: "Tanya Ana",
   f_ana_title: "Ana",
-  f_ana_subtitle: "Membaca data yang sama dengan Anda · alat baca-saja",
   f_close: "Tutup",
   f_landing_title: "Pythia",
   f_landing_open_console: "Buka konsol",

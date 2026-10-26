@@ -140,4 +140,6 @@ export const s1En = {
   s1_gate_peak_hold: "Peak {from}–{to} · hold {n} trucks to flatten it",
   s1_gate_peak_hold_one: "Peak {from}–{to} · hold 1 truck to flatten it",
   s1_gate_empty: "No gate slots planned today. They appear once a plan is approved.",
+  s1_collapse: "Collapse {name}",
+  s1_expand: "Expand {name}",
 };

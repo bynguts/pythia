@@ -487,7 +487,6 @@ export function ConsoleShell({ page, onLogout }) {
           open={anaOpen}
           onClose={() => setAna(false)}
           title={t("f_ana_title")}
-          subtitle={t("f_ana_subtitle")}
           avatar={<Mascot size={24} />}
           initialFocus="#assistant-question"
           testId="ana-drawer"

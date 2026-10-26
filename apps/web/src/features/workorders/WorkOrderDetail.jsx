@@ -265,9 +265,7 @@ export function WorkOrderDetail({ spj, state, onChanged }) {
           )}
           {["draft", "aktif"].includes(spj.status) && canDispatch && (
             <Button
-              variant="ghost"
-              size="sm"
-              className="wo-cancel"
+              variant="secondary"
               onClick={() => run(() => apiPost(`${base}/cancel`))}
               disabled={busy}
               data-testid="wo-cancel"

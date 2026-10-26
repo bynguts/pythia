@@ -360,6 +360,15 @@
 }
 /* No overscroll-behavior here: with `contain`, Chrome left a stale 390 x 195 px patch of
    the map's paper ground below the panel (seen over the map and behind the Ana drawer). */
+.ops-needs-content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+.ops-needs-content[hidden] {
+  display: none;
+}
 .ops-needs-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -512,7 +521,6 @@ button.ops-item-title:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-left: 44px;
 }
 .ops-link {
   min-height: var(--tap-min);
@@ -661,6 +669,7 @@ button.ops-item-title:focus-visible {
   flex-direction: column;
   align-items: flex-start;
   gap: 16px;
+  padding: 20px 18px;
 }
 .ops-field {
   display: flex;

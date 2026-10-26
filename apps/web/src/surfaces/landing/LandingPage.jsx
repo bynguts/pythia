@@ -32,7 +32,8 @@ import { PixelBand } from "../../shared/ui/PixelBand.jsx";
 import "./landing.css";
 
 // Where "Book a demo" and "Contact the team" go. The agency decides the contact; until a
-// deployment sets VITE_CONTACT_URL the buttons point at the FAQ's contact block.
+// deployment sets VITE_CONTACT_URL the buttons point at the FAQ's contact block, which then
+// hides its own "Contact the team" button.
 const CONTACT_URL = import.meta.env.VITE_CONTACT_URL || "#contact";
 
 const BAND_TOP_ROWS = [
@@ -195,7 +196,6 @@ export function LandingPage() {
         ["foot_fleet", "/app/operations"],
         ["foot_planning", "/app/tomorrow"],
         ["foot_forecast", "/app/tomorrow"],
-        ["foot_twin", "/twin"],
         ["foot_driver", "/driver"],
       ],
     ],
@@ -594,12 +594,12 @@ export function LandingPage() {
               {t("l_faq_h2_b")}
             </h2>
             <p>{t("l_faq_p")}</p>
-            <LinkButton
-              href={CONTACT_URL === "#contact" ? "#top" : CONTACT_URL}
-              icon={<Mail size={16} aria-hidden="true" />}
-            >
-              {t("l_faq_contact")}
-            </LinkButton>
+            {/* Without a configured contact the button would only scroll the page. */}
+            {CONTACT_URL !== "#contact" && (
+              <LinkButton href={CONTACT_URL} icon={<Mail size={16} aria-hidden="true" />}>
+                {t("l_faq_contact")}
+              </LinkButton>
+            )}
           </div>
           <ul className="land-faq-list">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (

@@ -171,11 +171,6 @@
   align-items: center;
   gap: 8px;
 }
-/* Cancel stays available but quiet: a muted text action after the primary ones. */
-.wo-detail-actions .wo-cancel .ui-btn-face {
-  color: var(--f-muted);
-  font-size: 13px;
-}
 .wo-meta {
   display: flex;
   flex-wrap: wrap;
@@ -451,9 +446,11 @@
   }
 }
 
+/* Wraps on narrow screens instead of scrolling: a scroll box clips the 44 px hit
+   areas and draws a scrollbar with arrows. */
 .wo-head-actions .ui-segmented {
   max-width: 100%;
-  overflow-x: auto;
+  flex-wrap: wrap;
 }
 @media (max-width: 1100px) {
   .wo-detail-head {

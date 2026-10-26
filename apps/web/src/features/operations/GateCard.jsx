@@ -1,5 +1,7 @@
-import { Warehouse } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, ChevronUp, Warehouse } from "lucide-react";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { Button } from "../../shared/ui/Button.jsx";
 import { Tag } from "../../shared/ui/Tag.jsx";
 
 // A slot this close to the day's worst modelled wait is drawn as part of the peak.
@@ -14,6 +16,8 @@ const BAR_MAX_PX = 40;
  */
 export function GateCard({ board, currentStart }) {
   const { t } = useLanguage();
+  // Folded to its header so the card stops covering the map.
+  const [collapsed, setCollapsed] = useState(false);
   const slots = board?.slots || [];
   const waits = slots.map((slot) => Number(slot.expected_wait_min) || 0);
   const max = Math.max(0, ...waits);
@@ -35,8 +39,18 @@ export function GateCard({ board, currentStart }) {
         <Warehouse size={14} aria-hidden="true" />
         <h2 id="ops-gate-title">{t("s1_gate_card_title")}</h2>
         <Tag tone="model">{t("s1_model")}</Tag>
+        <Button
+          variant="ghost"
+          size="sm"
+          iconOnly
+          icon={collapsed ? ChevronUp : ChevronDown}
+          aria-expanded={!collapsed}
+          aria-label={t(collapsed ? "s1_expand" : "s1_collapse").replace("{name}", t("s1_gate_card_title"))}
+          data-testid="gate-card-toggle"
+          onClick={() => setCollapsed((value) => !value)}
+        />
       </header>
-      {slots.length ? (
+      {collapsed ? null : slots.length ? (
         <>
           <div className="ops-gate-bars" role="img" aria-label={t("s1_gate_chart_label")}>
             {slots.map((slot, index) => {

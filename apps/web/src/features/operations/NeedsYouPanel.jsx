@@ -1,6 +1,18 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Construction, Hourglass, Package, Route, Send, Siren, Sparkles, Timer, Wrench } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Construction,
+  Hourglass,
+  Package,
+  Route,
+  Send,
+  Siren,
+  Sparkles,
+  Timer,
+  Wrench,
+} from "lucide-react";
 import { apiPost } from "../../shared/api/client.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { Button } from "../../shared/ui/Button.jsx";
@@ -179,6 +191,8 @@ export function NeedsYouPanel({ feed, alerts, openId, onSelect, onFocusTruck, tr
   const [filter, setFilter] = useState("all");
   const [rowState, setRowState] = useState({});
   const [confirming, setConfirming] = useState(null);
+  // Folded to its header so the dispatcher can see the map underneath.
+  const [collapsed, setCollapsed] = useState(false);
 
   const data = feed.data;
   const counts = data?.counts || {};
@@ -441,26 +455,39 @@ export function NeedsYouPanel({ feed, alerts, openId, onSelect, onFocusTruck, tr
             {fill(t("s1_urgent"), { n: counts.urgent })}
           </span>
         )}
+        <Button
+          variant="ghost"
+          size="sm"
+          iconOnly
+          icon={collapsed ? ChevronDown : ChevronUp}
+          aria-expanded={!collapsed}
+          aria-controls="ops-needs-content"
+          aria-label={fill(t(collapsed ? "s1_expand" : "s1_collapse"), { name: t("s1_needs_title") })}
+          data-testid="needs-you-toggle"
+          onClick={() => setCollapsed((value) => !value)}
+        />
       </header>
-      {data && (data.items || []).length > 0 && (
-        <div className="ops-needs-filters" role="group" aria-label={t("s1_filter_label")}>
-          {FILTERS.map((id) => (
-            <button
-              key={id}
-              type="button"
-              className="ops-chip"
-              aria-pressed={filter === id}
-              data-testid={`needs-filter-${id}`}
-              onClick={() => setFilter(id)}
-            >
-              <span>
-                {t(`s1_filter_${id}`)} {counts[id] ?? 0}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="ops-needs-body">{body}</div>
+      <div id="ops-needs-content" className="ops-needs-content" hidden={collapsed}>
+        {data && (data.items || []).length > 0 && (
+          <div className="ops-needs-filters" role="group" aria-label={t("s1_filter_label")}>
+            {FILTERS.map((id) => (
+              <button
+                key={id}
+                type="button"
+                className="ops-chip"
+                aria-pressed={filter === id}
+                data-testid={`needs-filter-${id}`}
+                onClick={() => setFilter(id)}
+              >
+                <span>
+                  {t(`s1_filter_${id}`)} {counts[id] ?? 0}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="ops-needs-body">{body}</div>
+      </div>
     </section>
   );
 }

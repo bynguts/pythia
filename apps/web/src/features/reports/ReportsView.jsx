@@ -1,15 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  CalendarCheck,
-  Camera,
-  Download,
-  FileText,
-  Glasses,
-  MessageCircle,
-  Send,
-  Wrench,
-} from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { CalendarCheck, Camera, Download, FileText, MessageCircle, Send, Wrench } from "lucide-react";
 import { apiPost } from "../../shared/api/client.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { Button } from "../../shared/ui/Button.jsx";
@@ -34,7 +24,6 @@ function fill(template, values) {
 export function ReportsView() {
   const { t, lang } = useLanguage();
   const { setSubtitle } = useConsole();
-  const navigate = useNavigate();
   const locale = localeFor(lang);
   const [data, setData] = useState(null);
   const [failed, setFailed] = useState(false);
@@ -236,9 +225,6 @@ export function ReportsView() {
           <p>{t("s5_rp_sub")}</p>
         </div>
         <div className="rp-title-actions">
-          <Button icon={Glasses} onClick={() => navigate("/twin")} data-testid="reports-briefing">
-            {t("s5_rp_briefing")}
-          </Button>
           <Button
             variant="primary"
             icon={Send}

@@ -4,7 +4,6 @@ export const s5Id = {
   s5_rp_title: "Hari ini, selesai",
   s5_rp_sub: "Yang kami rencanakan, yang terjadi, dan artinya untuk besok.",
   s5_rp_crumb: "Tutup hari · {date}",
-  s5_rp_briefing: "Ruang briefing",
   s5_rp_send: "Kirim ringkasan",
   s5_rp_kpis_label: "Angka hari ini",
   s5_rp_loading: "Memuat angka hari ini",

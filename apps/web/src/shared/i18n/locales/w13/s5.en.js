@@ -4,7 +4,6 @@ export const s5En = {
   s5_rp_title: "Today, closed",
   s5_rp_sub: "What we planned, what happened, and what it means for tomorrow.",
   s5_rp_crumb: "Day close · {date}",
-  s5_rp_briefing: "Briefing room",
   s5_rp_send: "Send summary",
   s5_rp_kpis_label: "Figures for the day",
   s5_rp_loading: "Loading the day's figures",

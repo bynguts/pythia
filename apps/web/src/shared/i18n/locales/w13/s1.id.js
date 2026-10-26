@@ -140,4 +140,6 @@ export const s1Id = {
   s1_gate_peak_hold: "Puncak {from}–{to} · tahan {n} truk untuk meratakannya",
   s1_gate_peak_hold_one: "Puncak {from}–{to} · tahan 1 truk untuk meratakannya",
   s1_gate_empty: "Belum ada slot gerbang hari ini. Slot muncul setelah rencana disetujui.",
+  s1_collapse: "Ciutkan {name}",
+  s1_expand: "Bentangkan {name}",
 };

@@ -43,7 +43,6 @@ export function TeamAccess({ role }) {
           </tbody>
         </table>
       </div>
-      <p className="settings-provenance">{t("set_team_accounts_note")}</p>
     </section>
   );
 }

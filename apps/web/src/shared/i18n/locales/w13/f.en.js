@@ -41,7 +41,6 @@ export const fEn = {
   f_bell: "Needs you",
   f_ask_ana: "Ask Ana",
   f_ana_title: "Ana",
-  f_ana_subtitle: "Reads the same data you see · read-only tools",
   f_close: "Close",
   f_landing_title: "Pythia",
   f_landing_open_console: "Open the console",

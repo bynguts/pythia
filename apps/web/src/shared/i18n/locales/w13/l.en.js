@@ -213,7 +213,6 @@ export const lEn = {
   l_foot_fleet: "Fleet",
   l_foot_planning: "Planning",
   l_foot_forecast: "Forecast",
-  l_foot_twin: "3D City",
   l_foot_driver: "Driver app",
   l_foot_data: "Data",
   l_foot_sources: "Data sources",
