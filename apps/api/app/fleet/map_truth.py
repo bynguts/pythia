@@ -207,7 +207,7 @@ def build_map_truth(truck: dict[str, Any]) -> dict[str, Any]:
         if assigned_line
         else 0.0
     )
-    from app.fleet.deviation_state import DEMO_SUPPRESSION_MESSAGE, apply_hysteresis, deviation_suppression
+    from app.fleet.deviation_state import SUPPRESSION_MESSAGES, apply_hysteresis, deviation_suppression
 
     suppressed = deviation_suppression(code)
     violated = deviation_m > DEVIATION_THRESHOLD_M
@@ -220,7 +220,7 @@ def build_map_truth(truck: dict[str, Any]) -> dict[str, Any]:
 
     breadcrumbs = latest_breadcrumbs(code)
     if suppressed:
-        recommendation = DEMO_SUPPRESSION_MESSAGE
+        recommendation = SUPPRESSION_MESSAGES[suppressed]
     else:
         recommendation = "Redirect to assigned corridor." if violated else "On corridor; no action."
     extra = {"deviation_suppressed": suppressed} if suppressed else {}

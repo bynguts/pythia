@@ -305,13 +305,14 @@ def _truck(
 ) -> dict[str, Any]:
     lat, lng, speed = get_dynamic_position(truck_code)
     deviation = detect_route_deviation(_assigned_reference_path(truck_code), (lat, lng), speed_kmh=speed)
-    from app.fleet.deviation_state import DEMO_SUPPRESSION_MESSAGE, apply_hysteresis, deviation_suppression
+    from app.fleet.deviation_state import SUPPRESSION_MESSAGES, apply_hysteresis, deviation_suppression
 
     suppressed = deviation_suppression(truck_code)
     if suppressed:
-        # gsc C1: the active SPJ has DEMO stops at an operator's phone, far from
-        # this simulated truck. Deviation is not measured (no alert, no replay),
-        # and the reason is labelled instead of silently reading "on route".
+        # gsc C1: the active SPJ has DEMO stops at an operator's phone, or no GPS
+        # position recorded on it yet; either way the simulated truck is not on
+        # that path. Deviation is not measured (no alert, no replay), and the
+        # reason is labelled instead of silently reading "on route".
         deviation = {
             **deviation,
             "violated": False,
@@ -319,7 +320,7 @@ def _truck(
             "rule_flags": [],
             "severity": "normal",
             "deviation_suppressed": suppressed,
-            "message": DEMO_SUPPRESSION_MESSAGE,
+            "message": SUPPRESSION_MESSAGES[suppressed],
         }
         latched = False
     else:

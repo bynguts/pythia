@@ -1616,6 +1616,24 @@ def active_spj_is_demo(truck_code: str) -> bool | None:
     return spj is not None and any(stop.location_type == DEMO_LOCATION_TYPE for stop in spj.stops)
 
 
+def active_spj_has_position(truck_code: str) -> bool | None:
+    """Whether a GPS position has been recorded on the truck's active SPJ.
+
+    The map position is the simulated feed, which never drives an SPJ path, so
+    until a stop is checked in with a device fix there is nothing real to
+    measure the SPJ corridor against. None when there is no active SPJ or the
+    lookup failed.
+    """
+    try:
+        spj = SPJ_STORE.active_for_truck(truck_code)
+    except Exception:  # noqa: BLE001
+        logger.exception("active_spj_has_position(%s) failed", truck_code)
+        return None
+    if spj is None:
+        return None
+    return any((arrival_geotag(stop) or {}).get("status") == "gps" for stop in spj.stops)
+
+
 def destination_provenance(destination: str) -> dict:
     """Provenance record for one destination (surfaced by the API)."""
     return provenance_payload(destination)

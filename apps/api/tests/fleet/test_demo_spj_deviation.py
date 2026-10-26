@@ -22,7 +22,12 @@ FAR = [(37.5045, 126.9571), (37.5145, 126.9671)]
 TRUCK = "T-001"
 
 
-def _active_spj(location_type: str, truck_code: str = TRUCK) -> Spj:
+def _active_spj(location_type: str, truck_code: str = TRUCK, gps_fix: bool = True) -> Spj:
+    stop = SpjStop("DEMO · Stop", "Gambir", "Demo address", *FAR[0], location_type=location_type)
+    if gps_fix:
+        # A check-in with a device fix: a real position recorded on this SPJ.
+        stop.status = "completed"
+        stop.evidence = {"arrival": {"lat": FAR[0][0], "lng": FAR[0][1], "approx": False}}
     return Spj(
         spj_id="SPJ-TEST",
         spj_number="SPJ/TEST/1",
@@ -30,7 +35,7 @@ def _active_spj(location_type: str, truck_code: str = TRUCK) -> Spj:
         driver_name="Pengemudi Sim",
         truck_code=truck_code,
         destination="TPST Bantargebang",
-        stops=[SpjStop("DEMO · Stop", "Gambir", "Demo address", *FAR[0], location_type=location_type)],
+        stops=[stop],
         status="aktif",
         route_geometry=list(FAR),
         route_source="FALLBACK_DEGRADED",
@@ -57,6 +62,34 @@ def test_ordinary_far_spj_still_flags_a_deviation():
     truck = _truck_with(_active_spj("Pemukiman Kelas Menengah"))
     assert truck["deviation"]["violated"] is True
     assert "deviation_suppressed" not in truck["deviation"]
+
+
+def test_spj_without_a_recorded_position_is_not_measured_yet():
+    # Just activated: the simulated map position is not on the SPJ path, so no
+    # "left its corridor" alert until a GPS position is recorded on that SPJ.
+    truck = _truck_with(_active_spj("Pemukiman Kelas Menengah", gps_fix=False))
+    deviation = truck["deviation"]
+    assert deviation["violated"] is False
+    assert deviation["deviation_suppressed"] == "awaiting_spj_position"
+    assert "no GPS position" in deviation["message"]
+    assert truck["status"] != "deviation"
+
+
+def test_an_approximate_check_in_is_not_a_position():
+    spj = _active_spj("Pemukiman Kelas Menengah", gps_fix=False)
+    spj.stops[0].status = "completed"
+    spj.stops[0].evidence = {"arrival": {"lat": FAR[0][0], "lng": FAR[0][1], "approx": True}}
+    truck = _truck_with(spj)
+    assert truck["deviation"]["deviation_suppressed"] == "awaiting_spj_position"
+
+
+def test_needs_you_raises_no_corridor_item_for_a_just_activated_spj():
+    from app.field import needs_you
+
+    spj = _active_spj("Pemukiman Kelas Menengah", gps_fix=False)
+    with mock.patch("app.field.spj.SPJ_STORE.active_for_truck", return_value=spj):
+        items = needs_you._deviations({TRUCK: spj})
+    assert TRUCK not in {item["truck_code"] for item in items}
 
 
 def test_demo_spj_suppresses_deviation_with_a_label():
