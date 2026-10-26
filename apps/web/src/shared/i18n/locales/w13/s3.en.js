@@ -12,6 +12,7 @@ export const s3En = {
   s3_sub_supervisor: "{who} submitted this plan at {time}. Review it and send it to the drivers.",
   s3_sub_supervisor_none: "Nothing is waiting for your approval. Tomorrow's forecast is below.",
   s3_export_pdf: "Export PDF",
+  s3_export_error: "The PDF couldn't be made. Try again.",
   s3_export_name: "pythia-tomorrow-{date}",
 
   // Progress

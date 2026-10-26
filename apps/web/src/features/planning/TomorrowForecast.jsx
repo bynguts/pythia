@@ -202,7 +202,7 @@ export function ResourcesCard({ forecast }) {
       key: "bins",
       label: t("s3_res_bins"),
       value: sum("bins_required"),
-      note: binTons != null ? t("s3_res_bin_note").replace("{t}", binTons) : null,
+      note: binTons != null ? t("s3_res_bin_note").replace("{t}", binTons.toLocaleString(locale)) : null,
     },
   ];
   return (

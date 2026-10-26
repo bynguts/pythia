@@ -13,6 +13,7 @@ export const s3Id = {
   s3_sub_supervisor: "{who} mengirim rencana ini pukul {time}. Tinjau, lalu kirim ke para sopir.",
   s3_sub_supervisor_none: "Belum ada rencana yang menunggu persetujuan Anda. Prakiraan besok ada di bawah.",
   s3_export_pdf: "Ekspor PDF",
+  s3_export_error: "PDF gagal dibuat. Coba lagi.",
   s3_export_name: "pythia-besok-{date}",
 
   // Progress

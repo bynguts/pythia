@@ -81,6 +81,7 @@ export function TomorrowPage() {
   const [actionError, setActionError] = useState(null);
   const [returning, setReturning] = useState(false);
   const [note, setNote] = useState("");
+  const [exportFailed, setExportFailed] = useState(false);
   const planRequest = useRef(0);
 
   useEffect(() => {
@@ -378,17 +379,22 @@ export function TomorrowPage() {
       plan,
       rows,
     });
-    const { default: html2pdf } = await import("html2pdf.js");
-    await html2pdf()
-      .set({
-        margin: 12,
-        filename: `${t("s3_export_name").replace("{date}", date)}.pdf`,
-        image: { type: "jpeg", quality: 0.95 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-      })
-      .from(node)
-      .save();
+    setExportFailed(false);
+    try {
+      const { default: html2pdf } = await import("html2pdf.js");
+      await html2pdf()
+        .set({
+          margin: 12,
+          filename: `${t("s3_export_name").replace("{date}", date)}.pdf`,
+          image: { type: "jpeg", quality: 0.95 },
+          html2canvas: { scale: 2 },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        })
+        .from(node)
+        .save();
+    } catch {
+      setExportFailed(true);
+    }
   }
 
   // ── Allocation card body by state ───────────────────────────────────────
@@ -648,6 +654,11 @@ export function TomorrowPage() {
           <p className="tmr-sub" data-testid="tmr-subtitle">
             {subtitle}
           </p>
+          {exportFailed && (
+            <p className="tmr-inline-error" role="alert">
+              {t("s3_export_error")}
+            </p>
+          )}
         </div>
         <Button icon={Download} data-testid="tmr-export" onClick={exportPdf}>
           {t("s3_export_pdf")}
