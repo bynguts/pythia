@@ -132,11 +132,18 @@ def test_a_failed_spawn_is_503(api_client, auth_headers, gateway, monkeypatch):
     assert "could not be started" in res.json()["detail"]
 
 
-def test_start_needs_an_administrator(api_client, auth_headers, gateway):
+def test_start_needs_a_dispatcher_or_administrator(api_client, auth_headers, gateway):
     assert api_client.post(START).status_code == 401
-    for role in ("dispatcher", "supervisor", "driver"):
-        assert api_client.post(START, headers=auth_headers(role)).status_code == 403
+    for role in ("supervisor", "driver"):
+        assert api_client.post(START, headers=auth_headers(role)).status_code == 403, role
     assert gateway["spawned"] == []
+
+
+def test_a_dispatcher_starts_the_gateway_from_settings(api_client, auth_headers, gateway):
+    res = api_client.post(START, headers=auth_headers("dispatcher"))
+    assert res.status_code == 200, res.text
+    assert res.json() == {"started": True, "state": "starting"}
+    assert len(gateway["spawned"]) == 1
 
 
 def test_stop_terminates_only_the_process_it_started(gateway):

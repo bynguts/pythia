@@ -538,7 +538,7 @@ export const id = {
   set_wa_offline_body:
     "Peringatan WhatsApp tidak terkirim sampai gateway berjalan di server. Jalankan dari sini, lalu pindai kode QR dengan ponsel operasional.",
   set_wa_offline_admin_only:
-    "Peringatan WhatsApp tidak terkirim sampai gateway berjalan di server. Minta administrator menghubungkan WhatsApp dari halaman ini.",
+    "Peringatan WhatsApp tidak terkirim sampai gateway berjalan di server. Minta pengatur armada atau administrator menghubungkan WhatsApp dari halaman ini.",
   set_wa_connect: "Hubungkan WhatsApp",
   set_wa_connecting: "Menjalankan gateway…",
   set_wa_connect_failed: "Gateway WhatsApp tidak dapat dijalankan. Coba lagi.",
@@ -550,7 +550,8 @@ export const id = {
   set_wa_qr_alt: "Kode QR untuk menautkan WhatsApp ke Pythia",
   set_wa_qr_waiting: "Menunggu kode QR dari gateway…",
   set_wa_qr_refresh: "Kode diperbarui otomatis.",
-  set_wa_admin_only_pairing: "Hanya administrator yang dapat memindai kode QR untuk menautkan WhatsApp.",
+  set_wa_admin_only_pairing:
+    "Hanya pengatur armada atau administrator yang dapat memindai kode QR untuk menautkan WhatsApp.",
   set_wa_linked_account: "Nomor tertaut",
   set_wa_linked_unknown: "Tidak dilaporkan oleh gateway",
   set_wa_group_label: "Grup peringatan",
@@ -577,7 +578,7 @@ export const id = {
   set_wa_logout_done: "WhatsApp diputus. Pindai kode QR baru untuk menautkan lagi.",
   set_wa_logout_failed: "WhatsApp gagal diputus. Coba lagi.",
   set_wa_readonly:
-    "Mode baca: hanya administrator yang dapat menautkan, memutus, atau mengubah grup peringatan.",
+    "Mode baca: hanya pengatur armada atau administrator yang dapat menautkan, memutus, atau mengubah grup peringatan.",
   set_wa_no_access: "Peran Anda tidak dapat melihat status WhatsApp.",
   set_wa_unofficial:
     "Gateway prototipe memakai Baileys, klien WhatsApp Web tidak resmi. Pilot pemerintah akan memakai WhatsApp Business Platform.",

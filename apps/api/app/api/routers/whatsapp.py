@@ -158,6 +158,13 @@ def get_truck_info(truck_code: str) -> dict:
     return {"driver_name": "Supir Pythia", "plate_number": "B 1234 CD"}
 
 
+# The pairing QR links a WhatsApp account to this gateway and the group list
+# exposes chat IDs: the dispatcher (who runs the alerts) and the administrator.
+# operations:plan, not dispatch:create, because the supervisor holds that too.
+# Driver contacts are personal data and stay administrator only.
+PAIRING_PERMISSIONS = ("admin:manage", "operations:plan")
+
+
 @router.get("/api/whatsapp/contacts")
 def get_whatsapp_contacts(_role: str = Depends(require_permission("admin:manage"))):
     return load_contacts()
@@ -232,8 +239,8 @@ def whatsapp_status(
 
 
 @router.post("/api/whatsapp/gateway/start")
-def whatsapp_gateway_start(principal: dict = Depends(require_any_principal("admin:manage"))) -> dict:
-    """Start the local gateway so an administrator can pair from Settings without a terminal.
+def whatsapp_gateway_start(principal: dict = Depends(require_any_principal(*PAIRING_PERMISSIONS))) -> dict:
+    """Start the local gateway so a dispatcher or administrator can pair from Settings without a terminal.
 
     409 when the gateway is not this machine's to start (not configured, or managed
     externally as in docker), 503 when it cannot start here (no Node.js, spawn failed).
@@ -249,15 +256,13 @@ def whatsapp_gateway_start(principal: dict = Depends(require_any_principal("admi
     return result
 
 
-# The pairing QR links a WhatsApp account to this gateway and the group list
-# exposes chat IDs: administrator only.
 @router.get("/api/whatsapp/qr")
-def whatsapp_qr(_role: str = Depends(require_permission("admin:manage"))) -> dict:
+def whatsapp_qr(_role: str = Depends(require_any_permission(*PAIRING_PERMISSIONS))) -> dict:
     return OpenWAClient.from_env().qr()
 
 
 @router.get("/api/whatsapp/groups")
-def whatsapp_groups(_role: str = Depends(require_permission("admin:manage"))) -> dict:
+def whatsapp_groups(_role: str = Depends(require_any_permission(*PAIRING_PERMISSIONS))) -> dict:
     payload = OpenWAClient.from_env().groups()
     current, _source = alert_group()
     payload["groups"] = [
@@ -272,7 +277,7 @@ class AlertGroupRequest(BaseModel):
 
 @router.post("/api/whatsapp/alert-group")
 def set_whatsapp_alert_group(
-    payload: AlertGroupRequest, principal: dict = Depends(require_any_principal("admin:manage"))
+    payload: AlertGroupRequest, principal: dict = Depends(require_any_principal(*PAIRING_PERMISSIONS))
 ) -> dict:
     """Persist the alert group in the local contacts file (git-ignored), keeping its drivers."""
     data = load_contacts() if CONTACTS_FILE.exists() else {"send_to_group": True, "send_to_driver": True}
@@ -295,7 +300,7 @@ TEST_MESSAGE = (
 
 
 @router.post("/api/whatsapp/test")
-def whatsapp_test_message(principal: dict = Depends(require_any_principal("admin:manage"))) -> dict:
+def whatsapp_test_message(principal: dict = Depends(require_any_principal(*PAIRING_PERMISSIONS))) -> dict:
     """Send one fixed test text to the alert group only (never to drivers)."""
     jid, source = alert_group()
     if source == "placeholder":
@@ -342,7 +347,7 @@ def whatsapp_summary(
 
 
 @router.post("/api/whatsapp/logout")
-def whatsapp_logout(_role: str = Depends(require_permission("admin:manage"))) -> dict:
+def whatsapp_logout(_role: str = Depends(require_any_permission(*PAIRING_PERMISSIONS))) -> dict:
     return OpenWAClient.from_env().logout()
 
 

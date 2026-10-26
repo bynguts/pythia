@@ -535,7 +535,7 @@ export const en = {
   set_wa_offline_body:
     "WhatsApp alerts are not delivered until the gateway runs on the server. Start it here, then scan the QR code with the operations phone.",
   set_wa_offline_admin_only:
-    "WhatsApp alerts are not delivered until the gateway runs on the server. Ask an administrator to connect WhatsApp from this page.",
+    "WhatsApp alerts are not delivered until the gateway runs on the server. Ask a dispatcher or administrator to connect WhatsApp from this page.",
   set_wa_connect: "Connect WhatsApp",
   set_wa_connecting: "Starting the gateway…",
   set_wa_connect_failed: "The WhatsApp gateway could not be started. Try again.",
@@ -547,7 +547,7 @@ export const en = {
   set_wa_qr_alt: "QR code to link WhatsApp to Pythia",
   set_wa_qr_waiting: "Waiting for a QR code from the gateway…",
   set_wa_qr_refresh: "The code refreshes automatically.",
-  set_wa_admin_only_pairing: "Only an administrator can scan the QR code to link WhatsApp.",
+  set_wa_admin_only_pairing: "Only a dispatcher or administrator can scan the QR code to link WhatsApp.",
   set_wa_linked_account: "Linked number",
   set_wa_linked_unknown: "Not reported by the gateway",
   set_wa_group_label: "Alert group",
@@ -572,7 +572,8 @@ export const en = {
   set_wa_cancel: "Cancel",
   set_wa_logout_done: "WhatsApp disconnected. Scan a new QR code to link again.",
   set_wa_logout_failed: "Could not disconnect WhatsApp. Try again.",
-  set_wa_readonly: "Read-only: only an administrator can link, disconnect or change the alert group.",
+  set_wa_readonly:
+    "Read-only: only a dispatcher or administrator can link, disconnect or change the alert group.",
   set_wa_no_access: "Your role cannot view the WhatsApp status.",
   set_wa_unofficial:
     "The prototype gateway uses Baileys, an unofficial WhatsApp Web client. A government pilot would use the WhatsApp Business Platform.",

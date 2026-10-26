@@ -159,11 +159,23 @@ for (const [code, detail] of [
   });
 }
 
-test("a dispatcher sees the gateway offline without a Connect button", async ({ page }) => {
+// The dispatcher pairs WhatsApp without an administrator; the supervisor still cannot.
+test("a dispatcher sees the gateway offline with a Connect button", async ({ page }) => {
   await signIn(page, "dispatcher");
   await stubStatus(page, status("offline"));
   await page.goto("/settings?tab=whatsapp", { waitUntil: "domcontentloaded" });
-  await expect(page.getByTestId("settings-wa-offline")).toContainText("Minta administrator menghubungkan");
+  await expect(page.getByTestId("settings-wa-connect")).toBeVisible();
+  await expect(page.getByTestId("settings-wa-readonly")).toHaveCount(0);
+  await expect(page.getByTestId("settings-wa-offline")).not.toContainText("Minta");
+});
+
+test("a supervisor sees the gateway offline without a Connect button", async ({ page }) => {
+  await signIn(page, "supervisor");
+  await stubStatus(page, status("offline"));
+  await page.goto("/settings?tab=whatsapp", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("settings-wa-offline")).toContainText(
+    "Minta pengatur armada atau administrator menghubungkan",
+  );
   await expect(page.getByTestId("settings-wa-connect")).toHaveCount(0);
 });
 
@@ -269,8 +281,8 @@ test("connected: masked number, group picker, test send and confirmed disconnect
   await expect(page.getByTestId("settings-wa-qr")).toBeVisible();
 });
 
-test("a dispatcher sees WhatsApp read-only", async ({ page }) => {
-  await signIn(page, "dispatcher");
+test("a supervisor sees WhatsApp read-only", async ({ page }) => {
+  await signIn(page, "supervisor");
   await stubStatus(page, status("connected", { state: "open" }));
   let privileged = 0;
   await page.route(/\/whatsapp\/(groups|qr)$/, (route) => {
@@ -279,14 +291,16 @@ test("a dispatcher sees WhatsApp read-only", async ({ page }) => {
   });
   await page.goto("/settings?tab=whatsapp", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("settings-wa-status")).toHaveText("Terhubung");
-  await expect(page.getByTestId("settings-wa-readonly")).toContainText("hanya administrator");
+  await expect(page.getByTestId("settings-wa-readonly")).toContainText(
+    "hanya pengatur armada atau administrator",
+  );
   await expect(page.getByTestId("settings-wa-manage")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Putuskan" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Kirim pesan uji" })).toHaveCount(0);
   expect(privileged).toBe(0);
 
   await page.getByTestId("settings-tab-team").click();
-  await expect(page.getByTestId("settings-role-dispatcher")).toContainText("Peran Anda");
+  await expect(page.getByTestId("settings-role-supervisor")).toContainText("Peran Anda");
   await expect(page.getByTestId("settings-role-administrator")).toContainText("Mengelola integrasi & kontak");
 });
 

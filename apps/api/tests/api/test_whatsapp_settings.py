@@ -45,13 +45,26 @@ def gateway(monkeypatch):
     ("path", "body"),
     [("/api/whatsapp/alert-group", {"group_jid": GROUP}), ("/api/whatsapp/test", None)],
 )
-def test_changing_whatsapp_settings_is_administrator_only(
+def test_changing_whatsapp_settings_is_for_the_dispatcher_and_administrator(
     api_client, auth_headers, contacts_file, gateway, path, body
 ):
     assert api_client.post(path, json=body).status_code == 401
-    for role in ("driver", "dispatcher", "supervisor"):
+    for role in ("driver", "supervisor"):
         assert api_client.post(path, json=body, headers=auth_headers(role)).status_code == 403, role
     assert gateway["sent"] == []
+
+
+def test_a_dispatcher_picks_the_alert_group_and_sends_a_test(
+    api_client, auth_headers, contacts_file, gateway
+):
+    headers = auth_headers("dispatcher")
+    res = api_client.post("/api/whatsapp/alert-group", json={"group_jid": GROUP}, headers=headers)
+    assert res.status_code == 200, res.text
+    assert json.loads(contacts_file.read_text(encoding="utf-8"))["group_jid"] == GROUP
+    res = api_client.post("/api/whatsapp/test", headers=headers)
+    assert res.status_code == 200, res.text
+    assert res.json()["sent"] is True
+    assert [chat for chat, _text in gateway["sent"]] == [GROUP]
 
 
 @pytest.mark.parametrize(

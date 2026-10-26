@@ -110,13 +110,32 @@ def test_driver_cannot_create_dispatch_but_can_confirm(api_client, auth_headers)
 
 
 @pytest.mark.parametrize("path", ["/api/whatsapp/qr", "/api/whatsapp/groups"])
-def test_whatsapp_pairing_endpoints_are_administrator_only(api_client, auth_headers, path):
+def test_whatsapp_pairing_endpoints_are_for_the_dispatcher_and_administrator(api_client, auth_headers, path):
     assert api_client.get(path).status_code == 401
-    assert api_client.get(path, headers=auth_headers("dispatcher")).status_code == 403
-    assert api_client.get(path, headers=auth_headers("supervisor")).status_code == 403
-    res = api_client.get(path, headers=auth_headers("administrator"))
-    assert res.status_code == 200, res.text[:200]
-    assert isinstance(res.json(), dict)
+    for role in ("supervisor", "driver"):
+        assert api_client.get(path, headers=auth_headers(role)).status_code == 403, role
+    for role in ("dispatcher", "administrator"):
+        res = api_client.get(path, headers=auth_headers(role))
+        assert res.status_code == 200, f"{role}: {res.text[:200]}"
+        assert isinstance(res.json(), dict)
+
+
+def test_whatsapp_logout_is_for_the_dispatcher_and_administrator(api_client, auth_headers):
+    for role in ("supervisor", "driver"):
+        assert api_client.post("/api/whatsapp/logout", headers=auth_headers(role)).status_code == 403, role
+    res = api_client.post("/api/whatsapp/logout", headers=auth_headers("dispatcher"))
+    assert res.status_code not in (401, 403), res.text[:200]
+
+
+@pytest.mark.parametrize("method", ["get", "post"])
+def test_driver_contacts_stay_administrator_only(api_client, auth_headers, method):
+    # Driver phone numbers are personal data: pairing rights do not extend to them.
+    kwargs = {"json": {"drivers": {"X": "6281234567890@c.us"}}} if method == "post" else {}
+    for role in ("dispatcher", "supervisor", "driver"):
+        res = getattr(api_client, method)("/api/whatsapp/contacts", headers=auth_headers(role), **kwargs)
+        assert res.status_code == 403, f"{role}: {res.status_code}"
+    res = api_client.get("/api/whatsapp/contacts", headers=auth_headers("administrator"))
+    assert res.status_code == 200
 
 
 def test_whatsapp_status_requires_an_operator_session(api_client, auth_headers):

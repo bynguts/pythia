@@ -46,7 +46,9 @@ export function SettingsWorkspace() {
 
   const role = session?.role || storedRole();
   const permissions = session?.permissions || ROLE_PERMISSIONS[role] || [];
-  const canManage = permissions.includes("admin:manage");
+  // WhatsApp pairing is for the dispatcher and the administrator (the API gates it on
+  // admin:manage or operations:plan; the supervisor also holds dispatch:create).
+  const canManage = permissions.includes("admin:manage") || permissions.includes("operations:plan");
 
   function select(id) {
     const next = new URLSearchParams(params);
