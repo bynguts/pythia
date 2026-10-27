@@ -1,4 +1,4 @@
-// wave9 settings: Settings (Pengaturan) replaces the audit workspace in the rail and is where an
+// Settings (Pengaturan) replaces the audit workspace in the rail and is where an
 // operator connects WhatsApp. Every gateway answer here is stubbed with page.route, and the
 // writes (alert group, test send, logout, gateway start) never reach a real gateway.
 import { expect, test } from "@playwright/test";
@@ -284,6 +284,26 @@ test("connected: masked number, group picker, test send and confirmed disconnect
   await expect(page.getByTestId("settings-wa-notice")).toContainText("WhatsApp diputus");
   expect(loggedOut).toBe(1);
   await expect(page.getByTestId("settings-wa-qr")).toBeVisible();
+});
+
+// #live-demo: the public demo publishes the dispatcher login, so the server keeps linking with
+// the administrator; the dispatcher still picks the message language.
+test("on a public demo a dispatcher sees WhatsApp linked but cannot unlink or relink it", async ({
+  page,
+}) => {
+  await signIn(page, "dispatcher", "en");
+  await stubStatus(page, status("connected", { state: "open", can_link: false }));
+  let privileged = 0;
+  await page.route(/\/whatsapp\/(groups|qr)$/, (route) => {
+    privileged += 1;
+    return route.abort();
+  });
+  await page.goto("/settings?tab=whatsapp", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("settings-wa-status")).toHaveText("Connected");
+  await expect(page.getByTestId("settings-wa-readonly")).toContainText("only the administrator");
+  await expect(page.getByTestId("settings-wa-manage")).toHaveCount(0);
+  await expect(page.getByTestId("settings-wa-lang-en")).toBeVisible();
+  expect(privileged).toBe(0);
 });
 
 test("a supervisor sees WhatsApp read-only", async ({ page }) => {

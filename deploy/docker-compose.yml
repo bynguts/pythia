@@ -101,11 +101,12 @@ services:
       SCENTINEL_HOME: /data/scentinel-home
     volumes:
       - scentinel-data:/data
+      # The Docker socket is root on the host: run this profile only on a machine you trust it with.
       - /var/run/docker.sock:/var/run/docker.sock
     mem_limit: 1200m
     cpus: 1.5
     ports:
-      - "8090:8090"
+      - "127.0.0.1:8090:8090"
 
 networks:
   default:

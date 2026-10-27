@@ -127,6 +127,43 @@ def test_whatsapp_logout_is_for_the_dispatcher_and_administrator(api_client, aut
     assert res.status_code not in (401, 403), res.text[:200]
 
 
+def test_a_public_demo_keeps_the_whatsapp_link_with_the_administrator(api_client, auth_headers, monkeypatch):
+    # The live demo publishes the dispatcher login; it must not be able to unlink or relink WhatsApp.
+    monkeypatch.setenv("PYTHIA_WA_LINK_ADMIN_ONLY", "on")
+    for path in ("/api/whatsapp/qr", "/api/whatsapp/groups"):
+        assert api_client.get(path, headers=auth_headers("dispatcher")).status_code == 403, path
+        assert api_client.get(path, headers=auth_headers("administrator")).status_code == 200, path
+    for path in ("/api/whatsapp/logout", "/api/whatsapp/gateway/start"):
+        assert api_client.post(path, headers=auth_headers("dispatcher")).status_code == 403, path
+    group = {"group_jid": "6281234567890-1620000000@g.us"}
+    assert (
+        api_client.post(
+            "/api/whatsapp/alert-group", json=group, headers=auth_headers("dispatcher")
+        ).status_code
+        == 403
+    )
+    assert (
+        api_client.get("/api/whatsapp/status", headers=auth_headers("dispatcher")).json()["can_link"] is False
+    )
+    assert (
+        api_client.get("/api/whatsapp/status", headers=auth_headers("administrator")).json()["can_link"]
+        is True
+    )
+    # The message language stays the dispatcher's choice.
+    res = api_client.post("/api/whatsapp/language", json={"lang": "id"}, headers=auth_headers("dispatcher"))
+    assert res.status_code == 200, res.text[:200]
+
+
+def test_dispatchers_link_whatsapp_by_default(api_client, auth_headers, monkeypatch):
+    monkeypatch.delenv("PYTHIA_WA_LINK_ADMIN_ONLY", raising=False)
+    assert (
+        api_client.get("/api/whatsapp/status", headers=auth_headers("dispatcher")).json()["can_link"] is True
+    )
+    assert (
+        api_client.get("/api/whatsapp/status", headers=auth_headers("supervisor")).json()["can_link"] is False
+    )
+
+
 @pytest.mark.parametrize("method", ["get", "post"])
 def test_driver_contacts_stay_administrator_only(api_client, auth_headers, method):
     # Driver phone numbers are personal data: pairing rights do not extend to them.

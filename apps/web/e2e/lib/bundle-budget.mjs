@@ -23,9 +23,10 @@ const KB = 1024;
  * the startup path but still capped. */
 const BUDGETS = {
   // Startup path: the main JS bundle must stay lean for field networks. Raised from
-  // 700 KB for the paperless-SPJ strings (both language catalogs ship in it); the
-  // /driver gzip cap below is what a driver's phone actually downloads.
-  main: 720 * KB,
+  // 700 KB for the paperless-SPJ strings and to 760 KB for full English and Indonesian
+  // copy (both language catalogs ship in it); the /driver gzip cap below is what a
+  // driver's phone actually downloads.
+  main: 760 * KB,
   // Map stack: shipped as its own versioned vendor chunk, loaded only when
   // Fleet mounts (already lazy). Split from LiveFleetMap so the app shell
   // never downloads it twice across deploys.

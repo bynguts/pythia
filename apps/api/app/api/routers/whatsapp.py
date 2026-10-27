@@ -6,12 +6,18 @@ import json
 import logging
 import re
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from app.api.deps import require_any_permission, require_any_principal, require_permission
+from app.api.deps import (
+    _principal_or_raise,
+    require_any_permission,
+    require_any_principal,
+    require_permission,
+)
 from app.api.schemas import WhatsAppAlertRequest
 from app.api.state import history_store
+from app.core.auth import has_permission
 from app.core.env import getenv
 from app.core.paths import DRIVER_CONTACTS_EXAMPLE_FILE, DRIVER_CONTACTS_FILE
 from app.core.storage import StorageError
@@ -161,7 +167,7 @@ def get_truck_info(truck_code: str) -> dict:
     for t in get_dynamic_trucks():
         if t["truck_code"] == truck_code:
             return t
-    return {"driver_name": "Supir Pythia", "plate_number": "B 1234 CD"}
+    return {"driver_name": "Sopir Pythia", "plate_number": "B 1234 CD"}
 
 
 # The pairing QR links a WhatsApp account to this gateway and the group list
@@ -169,6 +175,21 @@ def get_truck_info(truck_code: str) -> dict:
 # operations:plan, not dispatch:create, because the supervisor holds that too.
 # Driver contacts are personal data and stay administrator only.
 PAIRING_PERMISSIONS = ("admin:manage", "operations:plan")
+
+
+def link_permissions() -> tuple[str, ...]:
+    """Who may link, unlink or retarget the WhatsApp account.
+
+    A public demo publishes the dispatcher login, so it sets PYTHIA_WA_LINK_ADMIN_ONLY=on
+    and only the administrator can scan a QR, log the account out or pick the alert group.
+    """
+    if (getenv("WA_LINK_ADMIN_ONLY") or "").strip().lower() in {"1", "on", "true", "yes"}:
+        return ("admin:manage",)
+    return PAIRING_PERMISSIONS
+
+
+def require_link_principal(authorization: str | None = Header(default=None)) -> dict:
+    return _principal_or_raise(authorization, link_permissions())
 
 
 @router.get("/api/whatsapp/contacts")
@@ -222,7 +243,7 @@ def masked_account(me: str | None) -> str | None:
 
 @router.get("/api/whatsapp/status")
 def whatsapp_status(
-    _role: str = Depends(require_any_permission("dashboard:read", "dispatch:create")),
+    principal: dict = Depends(require_any_principal("dashboard:read", "dispatch:create")),
 ) -> dict:
     client = OpenWAClient.from_env()
     health = client.health()
@@ -231,6 +252,7 @@ def whatsapp_status(
     lang, lang_source = message_language()
     return {
         "configured": configured,
+        "can_link": any(has_permission(principal["role"], p) for p in link_permissions()),
         "message_language": {"lang": lang, "source": lang_source},
         "connected": health.get("connected", False),
         "link_state": link_state(configured, health),
@@ -247,7 +269,7 @@ def whatsapp_status(
 
 
 @router.post("/api/whatsapp/gateway/start")
-def whatsapp_gateway_start(principal: dict = Depends(require_any_principal(*PAIRING_PERMISSIONS))) -> dict:
+def whatsapp_gateway_start(principal: dict = Depends(require_link_principal)) -> dict:
     """Start the local gateway so a dispatcher or administrator can pair from Settings without a terminal.
 
     409 when the gateway is not this machine's to start (not configured, or managed
@@ -265,12 +287,12 @@ def whatsapp_gateway_start(principal: dict = Depends(require_any_principal(*PAIR
 
 
 @router.get("/api/whatsapp/qr")
-def whatsapp_qr(_role: str = Depends(require_any_permission(*PAIRING_PERMISSIONS))) -> dict:
+def whatsapp_qr(_principal: dict = Depends(require_link_principal)) -> dict:
     return OpenWAClient.from_env().qr()
 
 
 @router.get("/api/whatsapp/groups")
-def whatsapp_groups(_role: str = Depends(require_any_permission(*PAIRING_PERMISSIONS))) -> dict:
+def whatsapp_groups(_principal: dict = Depends(require_link_principal)) -> dict:
     payload = OpenWAClient.from_env().groups()
     current, _source = alert_group()
     payload["groups"] = [
@@ -285,7 +307,7 @@ class AlertGroupRequest(BaseModel):
 
 @router.post("/api/whatsapp/alert-group")
 def set_whatsapp_alert_group(
-    payload: AlertGroupRequest, principal: dict = Depends(require_any_principal(*PAIRING_PERMISSIONS))
+    payload: AlertGroupRequest, principal: dict = Depends(require_link_principal)
 ) -> dict:
     """Persist the alert group in the local contacts file (git-ignored), keeping its drivers."""
     data = load_contacts() if CONTACTS_FILE.exists() else {"send_to_group": True, "send_to_driver": True}
@@ -353,7 +375,7 @@ class WhatsAppSummaryBody(BaseModel):
 def whatsapp_summary(
     body: WhatsAppSummaryBody, principal: dict = Depends(require_any_principal("dispatch:create"))
 ) -> dict:
-    """Send the day's summary text to the alert group (never to drivers); wave 13 Reports.
+    """Send the day's summary text to the alert group (never to drivers).
 
     409 when no alert group is chosen, 503 when the gateway did not deliver it.
     Phone numbers in the text are masked before sending; the history log keeps
@@ -376,7 +398,7 @@ def whatsapp_summary(
 
 
 @router.post("/api/whatsapp/logout")
-def whatsapp_logout(_role: str = Depends(require_any_permission(*PAIRING_PERMISSIONS))) -> dict:
+def whatsapp_logout(_principal: dict = Depends(require_link_principal)) -> dict:
     return OpenWAClient.from_env().logout()
 
 
@@ -389,7 +411,7 @@ def whatsapp_alert(
     info = get_truck_info(payload.truck_code)
 
     lang = message_language()[0]
-    driver_name = info.get("driver_name", "Supir Pythia")
+    driver_name = info.get("driver_name", "Sopir Pythia")
     plate_number = info.get("plate_number", "B 1234 CD")
     fields = {
         "driver": driver_display(driver_name, lang),

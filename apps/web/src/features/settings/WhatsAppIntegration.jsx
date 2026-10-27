@@ -28,7 +28,7 @@ function accountLabel(account) {
   return account ? `+${String(account).split("@")[0]}` : null;
 }
 
-// wave11 settings: Stripe-style groups. Each group is a heading and one plain box of
+// Stripe-style groups. Each group is a heading and one plain box of
 // hairline rows; the connection state leads, delivery and the unlink action follow.
 export function WhatsAppIntegration({ canManage }) {
   const { t, lang } = useLanguage();
@@ -47,6 +47,9 @@ export function WhatsAppIntegration({ canManage }) {
   const [launchError, setLaunchError] = useState(null);
 
   const linkState = STATES.has(status?.link_state) ? status.link_state : status ? "starting" : null;
+  // A public demo keeps linking with the administrator (status.can_link); the language stays shared.
+  const canLink = canManage && status?.can_link !== false;
+  const linkLocked = canManage && !canLink;
 
   const loadStatus = useCallback(async (signal) => {
     try {
@@ -92,7 +95,7 @@ export function WhatsAppIntegration({ canManage }) {
 
   // A fresh QR with every status read while pairing (the gateway rotates it).
   useEffect(() => {
-    if (linkState !== "pairing" || !canManage) return undefined;
+    if (linkState !== "pairing" || !canLink) return undefined;
     const controller = new AbortController();
     apiGet("/whatsapp/qr", { signal: controller.signal })
       .then((body) => {
@@ -100,10 +103,10 @@ export function WhatsAppIntegration({ canManage }) {
       })
       .catch(() => {});
     return () => controller.abort();
-  }, [status, linkState, canManage]);
+  }, [status, linkState, canLink]);
 
   useEffect(() => {
-    if (linkState !== "connected" || !canManage) return undefined;
+    if (linkState !== "connected" || !canLink) return undefined;
     const controller = new AbortController();
     apiGet("/whatsapp/groups", { signal: controller.signal })
       .then((body) => {
@@ -115,7 +118,7 @@ export function WhatsAppIntegration({ canManage }) {
         if (error?.name !== "AbortError") setGroups([]);
       });
     return () => controller.abort();
-  }, [linkState, canManage, groupsReload]);
+  }, [linkState, canLink, groupsReload]);
 
   async function run(action) {
     setBusy(true);
@@ -207,7 +210,7 @@ export function WhatsAppIntegration({ canManage }) {
   const StateIcon = ICON[linkState] || QrCode;
   const source = status?.alert_group?.source;
   const selectedGroup = groups?.find((group) => group.selected);
-  const manage = linkState === "connected" && canManage;
+  const manage = linkState === "connected" && canLink;
   const gateway = status?.gateway_process;
   const exited = launching && gateway?.running === false && gateway?.exit_code != null;
   const waLang = status?.message_language?.lang === "en" ? "en" : "id";
@@ -219,9 +222,9 @@ export function WhatsAppIntegration({ canManage }) {
         <p>{t("set_wa_intro")}</p>
       </header>
 
-      {!canManage && (
+      {!canLink && status && (
         <p className="settings-banner" data-testid="settings-wa-readonly">
-          {t("set_wa_readonly")}
+          {t(linkLocked ? "set_wa_link_admin_only" : "set_wa_readonly")}
         </p>
       )}
 
@@ -293,7 +296,7 @@ export function WhatsAppIntegration({ canManage }) {
               {(linkState === "offline" || linkState === "unconfigured") && (
                 <div className="settings-offline" data-testid="settings-wa-offline">
                   <strong>{t(`set_wa_state_${linkState}`)}</strong>
-                  {canManage ? (
+                  {canLink ? (
                     <>
                       <p>{t("set_wa_offline_body")}</p>
                       <div>
@@ -314,14 +317,14 @@ export function WhatsAppIntegration({ canManage }) {
                       )}
                     </>
                   ) : (
-                    <p>{t("set_wa_offline_admin_only")}</p>
+                    <p>{t(linkLocked ? "set_wa_link_admin_only" : "set_wa_offline_admin_only")}</p>
                   )}
                   <small>{t("set_wa_offline_after")}</small>
                 </div>
               )}
 
               {(linkState === "pairing" || linkState === "starting") &&
-                (canManage ? (
+                (canLink ? (
                   <div className="settings-pairing" data-testid="settings-wa-pairing">
                     <div className="settings-qr">
                       {qr && linkState === "pairing" ? (
@@ -347,7 +350,9 @@ export function WhatsAppIntegration({ canManage }) {
                     </div>
                   </div>
                 ) : (
-                  <p className="settings-row settings-row-text">{t("set_wa_admin_only_pairing")}</p>
+                  <p className="settings-row settings-row-text">
+                    {t(linkLocked ? "set_wa_link_admin_only" : "set_wa_admin_only_pairing")}
+                  </p>
                 ))}
             </div>
           </section>
