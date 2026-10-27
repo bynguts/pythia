@@ -62,6 +62,7 @@ server's own HTTPS setup.
   traffic): run with the host-network override, which binds every container to
   127.0.0.1, and set `OPENAI_BASE_URL=http://127.0.0.1:<port>/v1`:
   `docker compose -f docker-compose.yml -f docker-compose.host.yml up -d --build`.
+  nginx then listens on `127.0.0.1:${PYTHIA_HOST_HTTP_PORT:-8080}`.
 - **WhatsApp:** sign in as `dispatcher` or `administrator`, open Settings → WhatsApp and
   scan the QR code. The session survives restarts on the `wa-auth` volume.
 
@@ -86,9 +87,9 @@ docker run --rm -v pythia-stack_pythia-history:/v -v "$PWD":/b alpine \
 
 - Fleet positions are simulated, and gate waits come from a seeded queue simulation.
   The app labels both; a deploy does not make them live.
-- SPJ activation follows roads through the public OSRM server. When it is unreachable,
-  activation answers 409 instead of drawing a straight line; set
-  `PYTHIA_SPJ_STRAIGHT_FALLBACK=on` in `.env` to activate anyway; the SPJ audit then
-  records that the road geometry was unresolved.
+- Work-order activation follows roads through the public OSRM server. When it is
+  unreachable, activation answers 409 instead of drawing a straight line; set
+  `PYTHIA_SPJ_STRAIGHT_FALLBACK=on` in `.env` to activate anyway; the work-order audit
+  then records that the road geometry was unresolved.
 - The optional `scentinel` profile builds from a separate repository
   (`SCENTINEL_SRC`); leave it off unless you have it.

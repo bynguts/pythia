@@ -7,9 +7,10 @@ weighbridge ticket. Dispatchers and supervisors work in one console; drivers wor
 phone app built for budget Android handsets.
 
 - **Live demo:** [pythia.web.id](https://pythia.web.id) (demo accounts below).
-- **Proven on real data:** the monthly Bantargebang intake forecast is backtested over
-  23 months of real weighbridge records with 13.4 % less error than the strongest simple
-  baseline, and 40.8 % less in the Ramadan and Lebaran months when the spikes hit.
+- **Proven on real data:** the monthly Bantargebang intake forecast is backtested on 66
+  forecasts across 23 months of real weighbridge records, with 13.4 % less error than the
+  strongest simple baseline, and 40.8 % less in the Ramadan and Lebaran months when the
+  spikes hit.
 - **Ready for an agency's own data:** built on Jakarta's public waste data, it plugs into
   a city's fleet, weighbridge and calendar feeds. How every number is validated:
   [How we validate](#how-we-validate).
@@ -81,7 +82,8 @@ One daily loop, from the forecast to the ticket and back into the forecast.
 | **Learn** | Every weighed day teaches the forecast: from the third one, a correction learned from the weighbridge appears next to the raw model value. | Tomorrow |
 | **Ask** | Ana answers "how many tonnes tomorrow?" or "which trucks are not ready?" from read-only tools. It proposes actions for the dispatcher to send; it never dispatches or approves on its own. | Every console page |
 
-Every number carries its source: observed, model output, simulated or assumption.
+Every number carries its source (observed, model output, simulated or assumption) in a
+tooltip and in Settings → Data and provenance.
 
 ---
 
@@ -131,7 +133,7 @@ The landing page at `/` explains the product and links to both surfaces.
 ## The AI in the product
 
 Forecasting, optimisation, vision, an assistant and tamper-evident records, each tagged
-with its provenance in the API responses and on screen.
+with its provenance in the API responses, in tooltips and in Settings → Data and provenance.
 
 | Piece | What it does | Provenance label |
 |---|---|---|
@@ -428,6 +430,14 @@ The repository is **public**:
 
 - `apps/api/data/assets/yolov8n.pt`: Ultralytics YOLOv8n weights, licensed under
   [AGPL-3.0](https://github.com/ultralytics/ultralytics/blob/main/LICENSE).
+- Weather: [Open-Meteo](https://open-meteo.com/) forecast and historical data, CC BY 4.0.
+- Maps and routing: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors
+  (ODbL), tiles from [OpenFreeMap](https://openfreemap.org/), routes from the public
+  [OSRM](https://project-osrm.org/) server.
+- Satellite imagery in the legacy briefing table: Sentinel-2 cloudless 2016 by
+  [EOX IT Services](https://s2maps.eu/), CC BY 4.0.
+- Waste, weighbridge and fleet datasets: Satu Data Jakarta and data.go.id open data, as
+  listed in `ml/data/real/manifest.json`.
 
 ---
 

@@ -238,11 +238,14 @@ the records, so they stay `SIMULATED` (`wait_validation: "not_observed"`).
 
 ## Complete Demo Flow
 
-1. **Tomorrow:** sign in as `dispatcher` (`dispatcher-demo-pass`) and open **Tomorrow**.
-   - Read the forecast and its reasons (weather, events, holidays) and the outlook ahead.
-   - Read the **Bantargebang intake** strip: the monthly forecast backtested on real data
-     (`GET /api/ml/monthly-intake`). Its data end in April 2026 and the backtest covers 1–3 months
-     ahead, so each month is badged inside or outside the backtested horizon.
+1. **Tomorrow:** sign in as `dispatcher` (`dispatcherpw` on pythia.web.id,
+   `dispatcher-demo-pass` locally) and open **Tomorrow**.
+   - Read the forecast and its reasons (weather, events, holidays) and the 7/14/30-day
+     outlook (`GET /api/forecast/outlook`).
+   - Read the monthly **Bantargebang intake** chart under the outlook: the forecast
+     backtested on real weighbridge data (`GET /api/ml/monthly-intake`; model card in
+     Settings → Data). Its data end in April 2026 and the backtest covers 1–3 months ahead,
+     so each month is marked inside or outside the backtested horizon.
 2. **Plan and approve:**
    - Build the daily plan ("Rencana harian"): CP-SAT assigns
      18 t truck trips per shift and facility for the top forecast districts (5 by default)
@@ -253,8 +256,8 @@ the records, so they stay `SIMULATED` (`wait_validation: "not_observed"`).
    - Sign in as `supervisor`, switch on **Supervisor mode** and approve. Approval creates
      one draft work order per truck with its stops, gate slot and departure time, and the driver
      instruction.
-3. **Driver:** open `/driver` on a phone, sign in as `driver` (`driver-demo-pass`), pick
-   the truck, accept the instruction and do the pre-trip check.
+3. **Driver:** open `/driver` on a phone, sign in as `driver` (`driverpw` on pythia.web.id,
+   `driver-demo-pass` locally), pick the truck, accept the instruction and do the pre-trip check.
 4. **Morning:** **Morning readiness** shows which trucks are ready; activate today's work
    orders there. **Operations** is map-first (simulated positions, not live GPS) and lists
    what needs a person; send an instruction to one truck or a WhatsApp message to the
@@ -275,7 +278,7 @@ the records, so they stay `SIMULATED` (`wait_validation: "not_observed"`).
 ### Driver weighbridge receipt
 
 After completing all work-order stops, the driver photographs the weighbridge ticket.
-`POST /api/ocr/timbangan` (`app/field/timbangan_ocr.py`, GutsAI vision when
+`POST /api/ocr/timbangan` (`app/field/timbangan_ocr.py`, the dedicated vision provider when
 `GUTS_API_KEY` is set, otherwise the OpenAI-compatible gateway) reads gross, tare, net,
 ticket number, plate, weighing times and site, or says the photo is not a ticket. The
 reading is `MODEL OUTPUT` and only prefills the form; the driver confirms or corrects it
@@ -325,7 +328,7 @@ Settings, WhatsApp by scanning the QR code. Real driver numbers go in the git-ig
 Tests: `python -m pytest tests -q` in `apps/api`; Playwright end-to-end tests in
 `apps/web` run against a built app (`npm run build`, then `npx playwright test --workers 1`).
 
-## Wave 13 console endpoints
+## Console endpoints
 
 Each figure carries its provenance (`classification`: FIELD, MODEL_OUTPUT or SIMULATED);
 a value with no source is `null` with a `reason`.
