@@ -42,7 +42,9 @@ async function instructionOrder(page) {
   return page
     .locator('[data-testid^="driver-instruction-"]')
     .evaluateAll((nodes) =>
-      nodes.map((node) => node.dataset.testid).filter((id) => !/-(ready|issue|reason|cant|depart)$/.test(id)),
+      nodes
+        .map((node) => node.dataset.testid)
+        .filter((id) => !/-(ready|issue|reason|cant|depart|day)$/.test(id)),
     );
 }
 

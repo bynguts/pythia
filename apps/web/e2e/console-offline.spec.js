@@ -54,7 +54,7 @@ test("Work orders keeps its list and says since when once the API drops", async 
   const created = await page.request.post(`${API}/spj`, {
     headers: { Authorization: `Bearer ${sessionToken}` },
     data: {
-      driver_name: "Pengemudi Sim",
+      driver_name: "Pengemudi Sim 41",
       truck_code: "T-257",
       destination: "TPST Bantargebang",
       priority: "normal",

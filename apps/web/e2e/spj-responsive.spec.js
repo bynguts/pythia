@@ -46,7 +46,7 @@ test("a work order opens from a keyboard-operable row and the page stays contain
   const created = await page.request.post(`${API}/spj`, {
     headers: { Authorization: `Bearer ${sessionToken}` },
     data: {
-      driver_name: "Pengemudi Sim",
+      driver_name: "Pengemudi Sim 41",
       truck_code: "T-255",
       destination: "TPST Bantargebang",
       priority: "normal",

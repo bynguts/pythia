@@ -29,7 +29,7 @@ export async function cancelActiveFor(request, token, truck) {
 export async function driverNameFor(request, truck) {
   const fleet = await (await request.get(`${API}/fleet`)).json();
   const trucks = Array.isArray(fleet) ? fleet : fleet.trucks;
-  return trucks.find((t) => t.truck_code === truck)?.driver_name || "Pengemudi Sim";
+  return trucks.find((t) => t.truck_code === truck)?.driver_name || "Pengemudi Sim 42";
 }
 
 // Create, fill and activate an SPJ. `stops` are {name, kecamatan, address, lat, lng}.

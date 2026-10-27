@@ -104,6 +104,10 @@
   border-left-color: var(--f-green);
   background: var(--f-hover);
 }
+/* --f-faint is 4.4:1 on the selected row's hover fill; muted keeps AA. */
+.wo-row[aria-current="true"] .wo-row-main small {
+  color: var(--f-muted);
+}
 .wo-row:focus-visible {
   outline: 2px solid var(--f-green);
   outline-offset: -2px;
