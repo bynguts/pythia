@@ -380,6 +380,10 @@ function GateTable({ plan, board }) {
   const [open, setOpen] = useState(false);
   const shown = open ? rows : rows.slice(0, VISIBLE_ROWS);
   if (!rows.length) return <p className="tmr-empty-row">{t("s3_gate_empty")}</p>;
+  // Slots on two dates name their day, so 09:00 today and 09:00 tomorrow read apart.
+  const twoDays = new Set(rows.map((row) => row.date)).size > 1;
+  const dayOf = (date) =>
+    date ? new Date(`${date}T00:00:00`).toLocaleDateString(locale, { day: "numeric", month: "short" }) : "";
   const capacityLine = gateCapacityLine(plan.gate_capacity, t, locale);
   return (
     <>
@@ -408,11 +412,17 @@ function GateTable({ plan, board }) {
           </thead>
           <tbody>
             {shown.map((row) => (
-              <tr key={row.start} className={row.over ? "is-over" : undefined} data-testid="tmr-gate-row">
+              <tr
+                key={`${row.date} ${row.start} ${row.facility || ""}`}
+                className={row.over ? "is-over" : undefined}
+                data-testid="tmr-gate-row"
+              >
                 <td>
                   <strong className="tmr-truck tmr-truck-plain">
+                    {twoDays && `${dayOf(row.date)} · `}
                     {row.start}–{row.end}
                   </strong>
+                  {row.facility && <small className="tmr-gate-facility">{row.facility}</small>}
                 </td>
                 <td>
                   <TruckCodes codes={row.trucks} />

@@ -132,7 +132,13 @@ export function gateRows(plan, board) {
   for (const dispatch of plan?.dispatches || []) {
     const slot = dispatch.fields?.gate_slot;
     if (!slot?.start) continue;
-    const row = bySlot.get(slot.start) || {
+    // A plan can reach the gate on two dates (a late round lands after midnight), and a
+    // facility without a weighbridge model shares a clock time but not Bantargebang's slot.
+    const modelled = Boolean(slot.capacity_model);
+    const key = `${slot.date || ""} ${slot.start} ${modelled ? "" : slot.facility || "-"}`;
+    const row = bySlot.get(key) || {
+      date: slot.date || null,
+      facility: modelled ? null : slot.facility || null,
       start: slot.start,
       end: slot.end,
       trucks: [],
@@ -146,9 +152,10 @@ export function gateRows(plan, board) {
       row.wait = waits[`${slot.date} ${slot.start}`] ?? slot.capacity_model.expected_wait_min ?? null;
       row.noWait = row.wait == null ? "older" : null;
     }
-    bySlot.set(slot.start, row);
+    bySlot.set(key, row);
   }
-  return [...bySlot.values()].sort((a, b) => a.start.localeCompare(b.start));
+  const order = (row) => `${row.date} ${row.start} ${row.facility || ""}`;
+  return [...bySlot.values()].sort((a, b) => order(a).localeCompare(order(b)));
 }
 
 // "Check before you submit": over-capacity trucks, districts the plan leaves short (from

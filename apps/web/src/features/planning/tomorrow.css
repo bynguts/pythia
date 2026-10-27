@@ -507,6 +507,12 @@
 .tmr-truck-plain {
   padding-left: 6px;
 }
+.tmr-gate-facility {
+  display: block;
+  padding-left: 6px;
+  color: var(--f-muted);
+  font-size: 12px;
+}
 .tmr-grip {
   display: inline-flex;
   align-items: center;
