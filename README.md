@@ -221,8 +221,8 @@ whole picture is written down.
 - **Gate waits** come from the seeded queue simulation, because the weighing records do
   not carry waiting times. The driver's gate tap measures real dwell from the first day of
   a pilot.
-- **Fleet positions** in the demo are simulated, and the console says so ("Live GPS ·
-  Coming soon"). Everything the driver app records (pre-trip, gate tap, tickets) is real
+- **Fleet positions** in the demo are simulated, and the console says so ("Coming soon ·
+  Live GPS tracking"). Everything the driver app records (pre-trip, gate tap, tickets) is real
   phone data on the server it talks to.
 - **Plan rules** come from a dated example file (`EXAMPLE_CONFIG`), each rule with its
   source, ready to be confirmed with DLH.
@@ -319,15 +319,16 @@ Session files under `apps/wa-gateway/baileys_auth_info/` are created at runtime 
 
 ## Demo accounts
 
-| Role | Username | Password |
-|---|---|---|
-| Dispatcher (console) | `dispatcher` | `dispatcher-demo-pass` |
-| Supervisor (Supervisor mode: plan approval, work-order and duty overrides) | `supervisor` | `supervisor-demo-pass` |
-| Driver (`/driver`) | `driver` | `driver-demo-pass` |
-| Administrator (accounts, contacts, WhatsApp) | `administrator` | `administrator-demo-pass` |
+| Role | Username | [pythia.web.id](https://pythia.web.id) | Local run (default) |
+|---|---|---|---|
+| Dispatcher (console) | `dispatcher` | `dispatcherpw` | `dispatcher-demo-pass` |
+| Supervisor (Supervisor mode: plan approval, work-order and duty overrides) | `supervisor` | `supervisorpw` | `supervisor-demo-pass` |
+| Driver (`/driver`) | `driver` | `driverpw` | `driver-demo-pass` |
+| Administrator (accounts, contacts, WhatsApp) | `administrator` | on request | `administrator-demo-pass` |
 
-Every role's password can be overridden with `PYTHIA_PW_<ROLE>`, and a public server must
-override them all. The shared `driver` account may act for any truck. Personal accounts
+The live administrator password is not published because that account controls the
+WhatsApp link. Every role's password can be overridden with `PYTHIA_PW_<ROLE>`, and a
+public server must override them all. The shared `driver` account may act for any truck. Personal accounts
 from `PYTHIA_USERS_FILE` (template `apps/api/users.example.json`) bind each driver to one
 truck, and the API refuses that driver's requests for another truck.
 
