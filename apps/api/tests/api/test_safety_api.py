@@ -265,6 +265,19 @@ def test_overview_falls_back_to_a_labelled_simulated_fleet(api_client, auth_head
         assert key in body
 
 
+def test_a_driver_is_never_held_by_the_seeded_scenario(api_client, auth_headers, monkeypatch):
+    """With no observed events, the fleet scenario may show 13 h on the console, but a driver
+    reads no duty of their own: no 12-hour hold screen, no gate alarm."""
+    monkeypatch.setattr(safety, "observed_activity", lambda now, truck_code=None: {})
+    overview = api_client.get("/api/safety/overview", headers=auth_headers("supervisor")).json()
+    blocked = [t["truck_code"] for t in overview["trucks"] if t["duty_state"] == "blocked"]
+    for code in blocked[:3] or [t["truck_code"] for t in overview["trucks"][:3]]:
+        body = api_client.get(f"/api/safety/driver/{code}", headers=auth_headers("driver")).json()
+        assert body["classification"] == "SIMULATED"
+        assert (body["duty_minutes"], body["duty_state"]) == (0, "ok"), code
+        assert body["shift_started_at"] is None and body["gate_state"] is None
+
+
 def test_observed_overview_never_mixes_in_simulated_trucks(api_client, auth_headers, truck, monkeypatch):
     monkeypatch.setattr(safety, "_now", lambda: FROZEN_NOW)
     _on_duty_since(truck, 30)
