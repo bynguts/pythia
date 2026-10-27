@@ -151,7 +151,8 @@ test("Send route to driver previews the message, sends the edited text and logs 
   const edited = "Gunakan Rute B lewat Daan Mogot, hindari Jl. Panjang. Konfirmasi setelah diterima.";
   await preview.getByTestId("send-preview-input").fill(edited);
   await preview.getByTestId("send-preview-send").click();
-  await expect(card.getByRole("status")).toHaveText("Rute terkirim ke T-047. Menunggu sopir.");
+  // #needs-you: sending the route handles the deviation; the confirmation stays above the list.
+  await expect(page.getByTestId("needs-you-notice")).toHaveText("Rute terkirim ke T-047. Ditandai selesai.");
   expect(writes.map((write) => write.name)).toEqual(["driver-message", "follow-up"]);
   expect(writes[0].body).toMatchObject({
     truck_code: "T-047",
@@ -159,7 +160,7 @@ test("Send route to driver previews the message, sends the edited text and logs 
     kind: "instruction",
     instruction_kind: "use_route",
   });
-  expect(writes[1].body).toMatchObject({ alert_id: "ALT-T-047", status: "DISPATCHED" });
+  expect(writes[1].body).toMatchObject({ alert_id: "ALT-T-047", status: "RESOLVED" });
 });
 
 test("Dismiss on the route preview sends nothing", async ({ page }) => {

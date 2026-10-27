@@ -493,6 +493,14 @@ button.ops-item-title:focus-visible {
   font-size: 12px;
   font-weight: 500;
 }
+.ops-needs-notice {
+  margin: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--f-line-3);
+  color: var(--f-green);
+  font-size: 12px;
+  font-weight: 500;
+}
 .ops-item-note.is-error {
   color: var(--f-red-ink);
 }

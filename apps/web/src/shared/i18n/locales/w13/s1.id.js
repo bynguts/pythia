@@ -92,7 +92,7 @@ export const s1Id = {
   s1_suggest_route_nokm: "Lewat {route}: {eta} mnt.",
   s1_suggest_none: "Belum ada rute pengalihan untuk truk ini.",
   s1_send_route: "Kirim rute ke sopir",
-  s1_route_sent: "Rute terkirim ke {truck}. Menunggu sopir.",
+  s1_route_sent: "Rute terkirim ke {truck}. Ditandai selesai.",
   s1_route_sent_note: "Rute pengalihan dikirim dari Operasi",
   s1_mark_handled: "Tandai ditangani",
 

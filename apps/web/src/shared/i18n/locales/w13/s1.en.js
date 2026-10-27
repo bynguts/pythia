@@ -92,7 +92,7 @@ export const s1En = {
   s1_suggest_route_nokm: "Go via {route}: {eta} min.",
   s1_suggest_none: "No reroute is computed for this truck yet.",
   s1_send_route: "Send route to driver",
-  s1_route_sent: "Route sent to {truck}. Waiting for the driver.",
+  s1_route_sent: "Route sent to {truck}. Marked handled.",
   s1_route_sent_note: "Reroute sent from Operations",
   s1_mark_handled: "Mark handled",
 

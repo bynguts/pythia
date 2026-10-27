@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronDown,
@@ -216,6 +216,14 @@ export function NeedsYouPanel({ feed, alerts, openId, onSelect, onFocusTruck, tr
   const [previewing, setPreviewing] = useState(null);
   // Folded to its header so the dispatcher can see the map underneath.
   const [collapsed, setCollapsed] = useState(false);
+  // What a sent message did, kept above the list once its row has left the feed.
+  const [notice, setNotice] = useState(null);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timer = setTimeout(() => setNotice(null), 8000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   const data = feed.data;
   const counts = data?.counts || {};
@@ -336,11 +344,14 @@ export function NeedsYouPanel({ feed, alerts, openId, onSelect, onFocusTruck, tr
         // One id per preview: a second Send after a lost answer is not a second message.
         { headers: { "X-Operation-Id": operationId } },
       );
-      await followUp(item, "DISPATCHED", t("s1_route_sent_note"));
+      // Sending the route is the decision: the deviation is handled and leaves the list.
+      // The driver's acknowledgement shows on Readiness, not here.
+      await followUp(item, "RESOLVED", t("s1_route_sent_note"));
       done = fill(t("s1_route_sent"), { truck: item.truck_code });
+      if (item.id === openId) onSelect(null);
     }
     setPreviewing(null);
-    setRow(item.id, { done });
+    setNotice(done);
     await feed.reload();
   }
 
@@ -601,6 +612,11 @@ export function NeedsYouPanel({ feed, alerts, openId, onSelect, onFocusTruck, tr
               </button>
             ))}
           </div>
+        )}
+        {notice && (
+          <p className="ops-needs-notice" role="status" data-testid="needs-you-notice">
+            {notice}
+          </p>
         )}
         <div className="ops-needs-body">{body}</div>
       </div>

@@ -108,6 +108,23 @@ def test_deviation_carries_the_human_spj_number_not_only_its_hash(monkeypatch, t
     assert bare["spj_id"] is None and bare["facts"]["spj_number"] is None
 
 
+def test_a_deviation_whose_route_was_sent_leaves_the_feed(api_client, auth_headers, monkeypatch, truck):
+    """Operations resolves the deviation when it sends the route, so the row does not linger."""
+    from app.fleet import data
+
+    deviation = {"violated": True, "distance_meters": 24600, "severity": "critical", "rule_flags": []}
+    monkeypatch.setattr(data, "get_dynamic_trucks", lambda: [{"truck_code": truck, "deviation": deviation}])
+    [item] = _mine(_feed(api_client, auth_headers), truck)
+    assert item["id"] == f"ALT-{truck}" and "send_route" in item["actions"]
+    res = api_client.post(
+        "/api/alert/follow-up",
+        json={"alert_id": item["id"], "status": "RESOLVED", "note": "Reroute sent from Operations"},
+        headers=auth_headers("dispatcher"),
+    )
+    assert res.status_code == 200, res.text
+    assert _mine(_feed(api_client, auth_headers), truck) == []
+
+
 def test_accident_is_urgent_and_drops_out_once_resolved(api_client, auth_headers, truck):
     exc = _exception(truck, "accident")
     item = _mine(_feed(api_client, auth_headers), truck)[0]
