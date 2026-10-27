@@ -490,14 +490,6 @@
   padding-block: 36px;
 }
 
-.land-built-row p {
-  flex: none;
-  width: 150px;
-  color: #a19d93;
-  font-size: 13px;
-  line-height: 18px;
-}
-
 .land-built-row ul {
   display: flex;
   flex: 1;

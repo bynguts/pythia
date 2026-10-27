@@ -26,8 +26,6 @@ export const lId = {
   l_tab_orders: "Surat jalan",
   l_tab_open: "Buka konsol",
 
-  l_built_on: "Dibangun di atas data terbuka dan alat terbuka",
-
   l_problem_a: "Sebuah kota menghasilkan 8.500 ton sampah per hari.",
   l_problem_b: "Sebagian besar rencananya hanya tebakan.",
   l_problem_p:
@@ -69,9 +67,6 @@ export const lId = {
   l_how_p: "Tiga langkah setiap malam, dikerjakan Pythia dan diperiksa tim Anda.",
   l_how_example: "Kartu menampilkan nilai contoh.",
   l_s1_panel: "7 hari ke depan",
-  l_tag_model: "Keluaran model",
-  l_tag_real: "Data nyata",
-  l_tag_map: "Peta terbuka",
   l_day_mon: "Sen",
   l_day_tue: "Sel",
   l_day_wed: "Rab",

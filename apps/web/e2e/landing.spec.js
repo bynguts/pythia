@@ -24,6 +24,8 @@ test("landing renders its story with one main landmark", async ({ page }) => {
   const body = page.locator("body");
   await expect(body).toContainText("1,228 trips a day");
   await expect(body).not.toContainText(/error band|Running today|trucks a day/);
+  // No on-screen provenance tags or "built on" label; provenance lives in tooltips and Settings.
+  await expect(body).not.toContainText(/Model output|Real data|Open map|Built on open data/i);
 });
 
 for (const width of [1440, 390, 320]) {

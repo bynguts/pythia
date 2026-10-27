@@ -29,9 +29,6 @@ export const lEn = {
   l_tab_orders: "Work orders",
   l_tab_open: "Open the console",
 
-  // Built on
-  l_built_on: "Built on open data and open tools",
-
   // Problem (dark)
   l_problem_a: "A city makes 8,500 tonnes of waste a day.",
   l_problem_b: "Most of the plan is a guess.",
@@ -75,9 +72,6 @@ export const lEn = {
   l_how_p: "Three steps every night, done by Pythia and checked by your team.",
   l_how_example: "Cards show example values.",
   l_s1_panel: "Next 7 days",
-  l_tag_model: "Model output",
-  l_tag_real: "Real data",
-  l_tag_map: "Open map",
   l_day_mon: "Mon",
   l_day_tue: "Tue",
   l_day_wed: "Wed",

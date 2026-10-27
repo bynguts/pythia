@@ -295,7 +295,6 @@ export function LandingPage() {
         <section className="land-dark">
           <div className="land-built">
             <div className="land-wrap land-built-row">
-              <p>{t("l_built_on")}</p>
               <ul>
                 <li style={{ fontWeight: 600 }}>OpenStreetMap</li>
                 <li style={{ fontWeight: 700 }}>Open-Meteo</li>
@@ -306,7 +305,7 @@ export function LandingPage() {
                   XGBoost
                 </li>
                 <li style={{ fontWeight: 600 }}>OR-Tools</li>
-                <li style={{ fontWeight: 700 }}>deck.gl</li>
+                <li style={{ fontWeight: 700 }}>MapLibre</li>
               </ul>
             </div>
           </div>
