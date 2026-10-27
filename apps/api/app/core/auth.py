@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import secrets
@@ -19,6 +20,7 @@ from pathlib import Path
 
 from app.core.env import getenv
 from app.core.paths import API_DIR
+from app.core.ratelimit import SlidingWindowLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -146,9 +148,44 @@ def authenticate(username: str, password: str) -> dict | None:
         }
     if name not in ROLES:
         return None
-    if hmac.compare_digest(password, _expected_password(name)):
+    # Bytes, not str: compare_digest raises TypeError on non-ASCII str (a 500 at login).
+    if hmac.compare_digest(password.encode("utf-8"), _expected_password(name).encode("utf-8")):
         return _shared_principal(name)
     return None
+
+
+# Login throttle: 10 failed logins per (client IP, username) in 5 minutes, then 429
+# until the oldest failure leaves the window. A successful login clears the count.
+LOGIN_MAX_FAILURES = 10
+LOGIN_WINDOW_SECONDS = 5 * 60
+LOGIN_FAILURES = SlidingWindowLimiter(LOGIN_MAX_FAILURES, LOGIN_WINDOW_SECONDS)
+
+
+def login_throttle_key(client_ip: str, username: str) -> str:
+    return f"{client_ip}|{username.strip().lower()}"
+
+
+def client_ip(peer: str | None, real_ip: str | None, forwarded_for: str | None) -> str:
+    """The caller's address as the deploy's nginx reports it.
+
+    nginx (deploy/frontend/nginx*.conf) sets X-Real-IP to the address it saw. When that
+    is a loopback or private address, nginx itself sits behind another proxy on the
+    host, and the last X-Forwarded-For entry (the one that proxy appended) is the
+    client. Without nginx (local dev) the socket peer is used.
+    """
+    real = (real_ip or "").strip()
+    if not real:
+        return peer or "unknown"
+    try:
+        address = ipaddress.ip_address(real)
+        internal = address.is_private or address.is_loopback
+    except ValueError:
+        internal = False
+    if internal and forwarded_for:
+        last = forwarded_for.split(",")[-1].strip()
+        if last:
+            return last
+    return real
 
 
 def _shared_principal(role: str) -> dict:

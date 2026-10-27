@@ -87,3 +87,25 @@ def test_group_listing_waits_longer_than_the_short_gateway_timeout(monkeypatch):
     result = client.groups()
     assert seen["timeout"] >= whatsapp.GROUPS_TIMEOUT_SECONDS
     assert result["groups"] == [{"jid": "1@g.us", "subject": "Drivers"}]
+
+
+def test_every_gateway_call_carries_the_api_key(monkeypatch):
+    # The gateway refuses every route but /health without X-API-Key once OPENWA_API_KEY is set.
+    import io
+
+    from app.integrations import whatsapp
+
+    seen = {}
+
+    def fake_urlopen(request, timeout):
+        seen[request.full_url.rsplit("/", 1)[-1]] = request.get_header("X-api-key")
+        return io.BytesIO(b"{}")
+
+    monkeypatch.setattr(whatsapp, "urlopen", fake_urlopen)
+    client = OpenWAClient(base_url="http://127.0.0.1:2785/api", api_key="k-test", session_id="default")
+    client.health()
+    client.qr()
+    client.groups()
+    client.logout()
+    client.send_text("6281234567890@c.us", "hi")
+    assert seen == {key: "k-test" for key in ("health", "qr", "groups", "logout", "send-text")}

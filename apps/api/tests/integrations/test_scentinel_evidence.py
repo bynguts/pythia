@@ -92,7 +92,7 @@ def test_api_endpoint_imports_and_lists(auth_headers):
     assert body["evidence_class"] == "external_simulation"
     assert body["quality_gates"]["pipeline_success"] is True
 
-    listing = client.get("/api/scentinel/evidence")
+    listing = client.get("/api/scentinel/evidence", headers=auth_headers("dispatcher"))
     assert listing.status_code == 200
     items = listing.json()["items"]
     assert any(i["run_id"] == VALID_MANIFEST["run_id"] for i in items)

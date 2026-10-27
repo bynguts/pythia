@@ -79,6 +79,9 @@ services:
     environment:
       # Reachable by the backend on the compose network; no host port is published.
       HOST: "0.0.0.0"
+      # Set in deploy/.env to require X-API-Key on every route but /api/health; the
+      # backend reads the same variable from .env and sends it.
+      OPENWA_API_KEY: "${OPENWA_API_KEY:-}"
     volumes:
       - wa-auth:/app/baileys_auth_info
     mem_limit: 384m

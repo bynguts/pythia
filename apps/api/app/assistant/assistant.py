@@ -7,7 +7,6 @@ import time
 from datetime import timedelta
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from app.assistant.pii import scrub_outgoing
@@ -613,7 +612,8 @@ def answer_with_openai_if_configured(
         )
     response = {
         "provider": "openai",
-        "provider_name": urlparse(base_url).hostname or base_url,
+        # A neutral label: the gateway host or IP is not shown to users.
+        "provider_name": "LLM",
         "model": served_model,
         "mode": "llm",
         "steps": steps,

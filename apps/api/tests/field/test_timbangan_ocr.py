@@ -196,6 +196,15 @@ class TimbanganOcrTests(unittest.TestCase):
         self.assertIsNone(result["tare_kg"])
         self.assertEqual(result["confidence"], "failed")
 
+    def test_a_remote_url_is_never_sent_to_the_model(self):
+        with mock.patch.dict(os.environ, {"GUTS_API_KEY": "test-key-not-real"}):
+            for photo in ("https://example.test/ticket.jpg", "data:text/html;base64,PGgxPg==", "QUJD"):
+                result = read_weight_from_photo(
+                    photo, http_post=lambda **kw: self.fail("a non-data-URL photo must not reach the model")
+                )
+                self.assertEqual(result["confidence"], "failed")
+                self.assertIsNone(result["gross_kg"])
+
     def test_missing_api_key_does_not_call_provider(self):
         with mock.patch.dict(os.environ, NO_KEYS):
             self.assertFalse(is_configured())

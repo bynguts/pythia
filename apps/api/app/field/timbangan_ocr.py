@@ -27,6 +27,7 @@ DOCUMENT_TYPES = ("weighbridge_ticket", "scale_display", "not_a_ticket", "unread
 # Field -> max length of the trimmed string the model may return.
 _TEXT_FIELDS = {"ticket_no": 40, "plate": 20, "weighed_in_at": 40, "weighed_out_at": 40, "site": 80}
 _KG_FIELDS = ("gross_kg", "tare_kg", "net_kg")
+_IMAGE_DATA_URL = re.compile(r"^data:image/(png|jpeg|jpg|webp|gif);base64,", re.IGNORECASE)
 
 _SYSTEM_PROMPT = "Kamu pembaca struk atau display timbangan truk sampah. Jawab HANYA satu objek JSON."
 _USER_PROMPT = (
@@ -156,6 +157,9 @@ def read_weight_from_photo(photo_b64: str, http_post: Callable[..., dict] | None
     if provider is None:
         return _failed("no vision key is set (GUTS_API_KEY or OPENAI_API_KEY)", "vision (not configured)")
     source = provider["source"]
+    # Only an inline image goes to the model, never a URL it would fetch.
+    if not isinstance(photo_b64, str) or not _IMAGE_DATA_URL.match(photo_b64):
+        return _failed("the photo is not an image data URL", source)
     post = http_post or _default_http_post
     body = {
         "model": provider["model"],

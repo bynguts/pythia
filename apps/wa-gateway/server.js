@@ -6,11 +6,27 @@ const {
 } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const QRCode = require('qrcode');
+const crypto = require('crypto');
 const fs = require('fs');
 const express = require('express');
 const app = express();
 
 app.use(express.json());
+
+// With OPENWA_API_KEY set, every route except /api/health needs it in X-API-Key
+// (the header the Pythia API sends). Unset: open, as before (loopback-only default).
+const API_KEY = process.env.OPENWA_API_KEY || '';
+
+function hasApiKey(req) {
+  const given = Buffer.from(String(req.get('X-API-Key') || ''));
+  const expected = Buffer.from(API_KEY);
+  return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+}
+
+app.use((req, res, next) => {
+  if (!API_KEY || req.path === '/api/health' || hasApiKey(req)) return next();
+  res.status(401).json({ error: 'Missing or invalid X-API-Key' });
+});
 
 let sock = null;
 let connectionState = 'starting';
@@ -112,8 +128,9 @@ app.get('/api/health', (req, res) => {
     connected: Boolean(sock && connectionState === 'open'),
     state: connectionState,
     // The paired account ("62812...:7@s.whatsapp.net"). Loopback-only; the Pythia API
-    // masks it before any client sees it, and it is never logged here.
-    me: connectionState === 'open' ? sock?.user?.id || null : null,
+    // masks it before any client sees it, and it is never logged here. Health is open,
+    // so with a key configured the account id goes only to callers that send it.
+    me: connectionState === 'open' && (!API_KEY || hasApiKey(req)) ? sock?.user?.id || null : null,
     message: connectionState === 'open'
       ? 'WhatsApp gateway is connected.'
       : `WhatsApp gateway is ${connectionState}. Scan QR or wait for reconnect.`,
@@ -190,8 +207,8 @@ app.post('/api/sessions/:sessionId/messages/send-text', async (req, res) => {
 });
 
 startWA().then(() => {
-  // Every route here (send, /api/qr pairing QR, /api/groups, logout) is
-  // unauthenticated: bind to loopback unless HOST says otherwise (the docker
+  // Without OPENWA_API_KEY every route here (send, /api/qr pairing QR, /api/groups,
+  // logout) is unauthenticated: bind to loopback unless HOST says otherwise (the docker
   // service sets HOST=0.0.0.0 on its private network and publishes no host
   // port). Operators reach QR/groups only through the Pythia API, which gates
   // them to the administrator role. Never expose port 2785 publicly.

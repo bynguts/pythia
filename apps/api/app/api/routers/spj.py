@@ -65,6 +65,9 @@ RECEIPT_WEIGHT_LABELS = {
 
 _SAFE_IMAGE_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
 _THUMB_SIZE = (320, 320)
+# The driver app downsizes photos before upload; an image above this is never
+# decoded for a thumbnail (the stored original is served instead).
+_MAX_IMAGE_PIXELS = 40_000_000
 
 
 class SpjReceiptTareBody(SpjReceiptBody):
@@ -185,7 +188,10 @@ def list_spj(
 
 
 @router.get("/api/spj/active-path/{truck_code}")
-def spj_active_path_endpoint(truck_code: str) -> dict[str, Any]:
+def spj_active_path_endpoint(
+    truck_code: str, principal: dict = Depends(require_any_principal(*READ_PERMISSIONS))
+) -> dict[str, Any]:
+    ensure_truck_access(principal, truck_code)
     spj = SPJ_STORE.active_for_truck(truck_code)
     path = spj_active_path(truck_code)
     return {
@@ -715,8 +721,14 @@ def _thumbnail(raw: bytes) -> bytes | None:
         from PIL import Image  # optional: not in requirements.txt
     except ImportError:
         return None
+    # Decompression bombs: Pillow refuses past 2x this; the size check below refuses past 1x.
+    Image.MAX_IMAGE_PIXELS = _MAX_IMAGE_PIXELS
     try:
         with Image.open(io.BytesIO(raw)) as image:
+            # open() reads only the header; refuse before load() allocates the pixels.
+            width, height = image.size
+            if width * height > _MAX_IMAGE_PIXELS:
+                return None
             image.thumbnail(_THUMB_SIZE)
             out = io.BytesIO()
             image.convert("RGB").save(out, format="JPEG", quality=70)

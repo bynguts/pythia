@@ -55,6 +55,11 @@ class OpenWAClient:
     def is_configured(self) -> bool:
         return bool(self.base_url and self.session_id)
 
+    def _request(self, path: str, method: str = "GET") -> Request:
+        """A gateway request carrying OPENWA_API_KEY (X-API-Key) when one is set."""
+        headers = {"X-API-Key": self.api_key} if self.api_key else {}
+        return Request(f"{self.base_url}{path}", headers=headers, method=method)
+
     def health(self) -> dict[str, Any]:
         if not self.is_configured():
             return {
@@ -64,7 +69,7 @@ class OpenWAClient:
                 "message": "WhatsApp gateway is not configured.",
             }
         try:
-            with urlopen(f"{self.base_url}/health", timeout=self.timeout_seconds) as response:
+            with urlopen(self._request("/health"), timeout=self.timeout_seconds) as response:
                 body = response.read().decode("utf-8")
             payload = json.loads(body) if body else {}
             return {
@@ -95,7 +100,7 @@ class OpenWAClient:
                 "message": "WhatsApp gateway is not configured.",
             }
         try:
-            with urlopen(f"{self.base_url}/qr", timeout=self.timeout_seconds) as response:
+            with urlopen(self._request("/qr"), timeout=self.timeout_seconds) as response:
                 body = response.read().decode("utf-8")
             payload = json.loads(body) if body else {}
             return {
@@ -127,7 +132,7 @@ class OpenWAClient:
             # The first listing after pairing waits for WhatsApp, which takes several
             # seconds on an account with many groups; later ones come from the cache.
             timeout = max(self.timeout_seconds, GROUPS_TIMEOUT_SECONDS)
-            with urlopen(f"{self.base_url}/groups", timeout=timeout) as response:
+            with urlopen(self._request("/groups"), timeout=timeout) as response:
                 body = response.read().decode("utf-8")
             payload = json.loads(body) if body else {}
             return {
@@ -155,7 +160,7 @@ class OpenWAClient:
                 "logged_out": False,
                 "message": "WhatsApp gateway is not configured.",
             }
-        request = Request(f"{self.base_url}/logout", method="POST")
+        request = self._request("/logout", method="POST")
         try:
             with urlopen(request, timeout=self.timeout_seconds) as response:
                 body = response.read().decode("utf-8")

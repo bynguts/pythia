@@ -6,10 +6,11 @@ import logging
 import threading
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.ai.actions.auto_state import EVENT_FEED
 from app.ai.engine_loop import maybe_start_engine
+from app.api.deps import require_any_permission
 from app.api.state import (
     _AI_ENGINE_STATE,
     _ai_carbon,
@@ -47,13 +48,17 @@ def _start_ai_engine() -> None:
 
 
 @router.get("/api/ai/events")
-def ai_events() -> dict[str, Any]:
+def ai_events(
+    _role: str = Depends(require_any_permission("dashboard:read", "history:read", "reports:read")),
+) -> dict[str, Any]:
     events = EVENT_FEED.snapshot()
     return {"events": events, "count": len(events)}
 
 
 @router.post("/api/ai/events/{index}/ack")
-def ai_event_ack(index: int) -> dict[str, Any]:
+def ai_event_ack(
+    index: int, _role: str = Depends(require_any_permission("dashboard:read", "operations:plan"))
+) -> dict[str, Any]:
     return {"ok": EVENT_FEED.acknowledge(index)}
 
 

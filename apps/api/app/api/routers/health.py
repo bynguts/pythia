@@ -4,11 +4,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 
 from app.api.schemas import LoginRequest
 from app.api.state import _AI_ENGINE_STATE, history_store
-from app.core.auth import ROLES, authenticate, role_for_token, token_for
+from app.core.auth import (
+    LOGIN_FAILURES,
+    ROLES,
+    authenticate,
+    client_ip,
+    login_throttle_key,
+    role_for_token,
+    token_for,
+)
 from app.core.env import getenv
 from app.core.paths import MODELS_DIR, REAL_DIR
 from app.forecast.engine import hybrid_models_loadable
@@ -63,11 +71,27 @@ def health_detailed() -> dict[str, Any]:
 
 
 @router.post("/api/auth/login")
-def auth_login(payload: LoginRequest) -> dict[str, Any]:
+def auth_login(
+    payload: LoginRequest,
+    request: Request,
+    x_real_ip: str | None = Header(default=None),
+    x_forwarded_for: str | None = Header(default=None),
+) -> dict[str, Any]:
     """Backend role-aware login; replaces the frontend-only admin gate."""
+    peer = request.client.host if request.client else None
+    key = login_throttle_key(client_ip(peer, x_real_ip, x_forwarded_for), payload.username)
+    wait = LOGIN_FAILURES.retry_after(key)
+    if wait:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed sign-in attempts. Try again later.",
+            headers={"Retry-After": str(wait)},
+        )
     principal = authenticate(payload.username, payload.password)
     if principal is None:
+        LOGIN_FAILURES.hit(key)
         raise HTTPException(status_code=401, detail="Invalid username or password.")
+    LOGIN_FAILURES.clear(key)
     return {
         "username": principal["username"],
         "role": principal["role"],

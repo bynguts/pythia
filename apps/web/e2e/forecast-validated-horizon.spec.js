@@ -106,7 +106,13 @@ test("monthly intake badges follow the API flag in Indonesian", async ({ page })
 });
 
 test("PDF queue line states the assumed baseline, its band and the SIMULATED class", async ({ page }) => {
-  const res = await page.request.get(`${API}/reports/executive-summary`);
+  const login = await page.request.post(`${API}/auth/login`, {
+    data: { username: "dispatcher", password: "dispatcher-demo-pass" },
+  });
+  const { token } = await login.json();
+  const res = await page.request.get(`${API}/reports/executive-summary`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   expect(res.ok()).toBeTruthy();
   const data = await res.json();
   const impact = data.queue_impact;

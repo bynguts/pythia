@@ -196,7 +196,7 @@ def test_llm_runs_tools_over_several_steps_and_applies_the_scenario(provider, fa
     assert [m["role"] for m in requests[1]["messages"]][-2:] == ["assistant", "tool"]
     assert all("tools" in r for r in requests)
     assert result["provider"] == "openai" and result["mode"] == "llm"
-    assert result["provider_name"] == "127.0.0.1"
+    assert result["provider_name"] == "LLM"  # never the gateway host
     assert result["model"] == SERVED_MODEL
     assert result["tools_used"] == ["get_tpa_queue", "run_scenario"]
     scenario = result["scenario"]

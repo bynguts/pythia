@@ -31,5 +31,11 @@ def scentinel_import(
 
 
 @router.get("/api/scentinel/evidence")
-def scentinel_list() -> dict[str, Any]:
+def scentinel_list(
+    _role: str = Depends(
+        require_any_permission(
+            "dashboard:read", "history:read", "provenance:read", "dispatch:create", "dispatch:confirm"
+        )
+    ),
+) -> dict[str, Any]:
     return {"items": SCENTINEL_STORE.all()}

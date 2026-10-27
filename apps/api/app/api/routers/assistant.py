@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.api.deps import require_any_permission, require_permission
 from app.api.routers.fleet import fleet_status_overview
@@ -12,6 +12,7 @@ from app.api.routers.forecast import predictions_kecamatan
 from app.api.schemas import AssistantRequest
 from app.api.state import dispatch_center, history_store
 from app.assistant.assistant import answer_with_openai_if_configured, build_executive_summary
+from app.core.ratelimit import SlidingWindowLimiter
 from app.fleet.data import command_center_snapshot
 from app.fleet.value_model import value_model_from_simulation
 from app.forecast.engine import simulate_staggered_dispatch
@@ -20,22 +21,44 @@ from app.forecast.weather import fetch_jakarta_weather_forecast
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Each question can call the model gateway several times: 20 questions per
+# signed-in session in any 5 minutes, then 429.
+ASSISTANT_QUOTA = SlidingWindowLimiter(20, 5 * 60)
+
 
 @router.post("/api/assistant/query")
 def assistant_query(
-    payload: AssistantRequest, _role: str = Depends(require_permission("dashboard:read"))
+    payload: AssistantRequest,
+    _role: str = Depends(require_permission("dashboard:read")),
+    authorization: str | None = Header(default=None),
 ) -> dict:
+    # The permission dependency has already checked the bearer token.
+    quota_key = (authorization or "").split(" ", 1)[-1].strip()
+    wait = ASSISTANT_QUOTA.retry_after(quota_key)
+    if wait:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many assistant questions. Try again in a few minutes.",
+            headers={"Retry-After": str(wait)},
+        )
+    ASSISTANT_QUOTA.hit(quota_key)
+    images = None
+    if payload.file_data and payload.file_type:
+        from app.assistant.pdf_vision import resolve_file_to_images
+
+        try:
+            images = resolve_file_to_images(payload.file_data, payload.file_type)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
+        except Exception as e:  # noqa: BLE001 - a corrupt PDF; the parser's message stays in the log
+            logger.exception("assistant attachment could not be read")
+            raise HTTPException(status_code=422, detail="The attached file could not be read.") from e
     # FastAPI executes sync endpoints in a worker; gateway latency must not block the event loop.
     try:
         from app.assistant.tools import ToolContext
 
         tool_ctx = ToolContext(dispatch_center=dispatch_center, history_store=history_store)
         snapshot = {}
-        images = None
-        if payload.file_data and payload.file_type:
-            from app.assistant.pdf_vision import resolve_file_to_images
-
-            images = resolve_file_to_images(payload.file_data, payload.file_type)
         result = answer_with_openai_if_configured(
             payload.question,
             snapshot,
@@ -45,8 +68,9 @@ def assistant_query(
             language=payload.language,
         )
     except Exception as e:
+        # The exception text can name the gateway host or its transport; it stays in the log.
         logger.exception("assistant query failed")
-        raise HTTPException(status_code=502, detail=f"AI gateway error: {e}") from e
+        raise HTTPException(status_code=502, detail="The assistant is unavailable right now.") from e
 
     history_store.record_event(
         "assistant_query", {"question": payload.question, "provider": result["provider"]}
@@ -70,7 +94,9 @@ def value_model_report(
 
 
 @router.get("/api/reports/executive-summary")
-def executive_summary() -> dict:
+def executive_summary(
+    _role: str = Depends(require_any_permission("dashboard:read", "reports:read")),
+) -> dict:
     snapshot = command_center_snapshot(dispatch_center.audit_log(), weather=fetch_jakarta_weather_forecast())
     summary = build_executive_summary(snapshot)
 

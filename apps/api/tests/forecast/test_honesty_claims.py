@@ -199,8 +199,8 @@ def test_district_forecast_source_says_calibrated_synthetic(api_client):
     assert "MODEL OUTPUT" in body["source"]
 
 
-def test_executive_summary_queue_is_the_modelled_peak_hour_not_now(api_client):
-    body = api_client.get("/api/reports/executive-summary").json()
+def test_executive_summary_queue_is_the_modelled_peak_hour_not_now(api_client, auth_headers):
+    body = api_client.get("/api/reports/executive-summary", headers=auth_headers("dispatcher")).json()
     assert "saat ini" not in body["summary"]
     assert "jam puncak model (simulasi)" in body["summary"]
     assert "armada simulasi" in body["summary"]

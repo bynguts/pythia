@@ -35,6 +35,16 @@ os.environ.pop("PYTHIA_WEATHER_SNAPSHOT", None)
 from app.main import app  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    # The session-scoped tokens would otherwise carry assistant and login counts across tests.
+    from app.api.routers.assistant import ASSISTANT_QUOTA
+    from app.core.auth import LOGIN_FAILURES
+
+    ASSISTANT_QUOTA.reset()
+    LOGIN_FAILURES.reset()
+
+
 @pytest.fixture(scope="session")
 def api_client() -> TestClient:
     return TestClient(app)
