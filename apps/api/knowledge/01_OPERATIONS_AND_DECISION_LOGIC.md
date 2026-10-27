@@ -12,9 +12,9 @@ briefing lama (twin `/twin`, XR `/xr`) masih ada di kode tetapi bukan bagian pro
   metrik harian (`queue_simulation.modelled_peak_hour`), dilabeli "modelled peak hour HH:00" —
   bukan jam dinding saat ini dan bukan pengukuran.
 - Ambang batas KPI snapshot (`fleet.data.command_center_snapshot`): wait < 45 menit -> green
-  ("Green corridor clear. Normal dispatch speed approved."); wait >= 45 -> yellow, dan >= 90 -> red;
-  keduanya memakai rekomendasi "Delay departures of non-essential trucks by 30-45 minutes to relieve
-  Bantargebang gridlock." Penjadwalan bertahap memakai slot 15 menit (`queue_simulation.STAGGER_SLOT_MINUTES`,
+  (teks API `Green corridor clear. Normal dispatch speed approved.`); wait >= 45 -> yellow, dan >= 90 -> red;
+  keduanya memakai rekomendasi API `Delay departures of non-essential trucks by 30-45 minutes to relieve
+  Bantargebang gridlock.` Penjadwalan bertahap memakai slot 15 menit (`queue_simulation.STAGGER_SLOT_MINUTES`,
   lihat bagian D).
 - Label panel TPA (`fleet.data.tpa_queue_status_payload`): < 30 menit NORMAL, 30–60 WARNING, > 60 CRITICAL.
 - Asumsi jembatan timbang: 4 jalur x 30 truk/jam (siklus timbang 2 menit) = 120 truk/jam; asumsi model

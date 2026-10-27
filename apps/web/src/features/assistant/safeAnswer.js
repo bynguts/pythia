@@ -6,6 +6,8 @@ import DOMPurify from "dompurify";
 // the link hook away from other DOMPurify users (html2pdf).
 const purifier = typeof window === "undefined" ? null : DOMPurify(window);
 purifier?.addHook("afterSanitizeAttributes", (node) => {
+  // Code spans are identifiers (a username, a route, an API string), not copy to translate.
+  if (node.tagName === "CODE") node.setAttribute("translate", "no");
   if (node.tagName !== "A") return;
   const href = node.getAttribute("href") || "";
   const sameSite = (href.startsWith("/") && !href.startsWith("//")) || href.startsWith("#");

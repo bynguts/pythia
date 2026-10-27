@@ -8,25 +8,25 @@ hasil timbang. Armada di demo adalah armada simulasi dan diberi label begitu.
 
 ## Alur Tertutup (Closed Loop)
 
-`predict -> plan -> approve -> instruct -> run the day -> close -> learn`
+prakiraan → rencana → setujui → instruksi → jalankan hari → tutup hari → belajar
 
-- **predict:** prakiraan besok per kecamatan (hybrid Prophet + XGBoost per kecamatan, 42 model;
-  driver cuaca/event/weekend/libur adalah asumsi perencanaan, target latihnya kalibrasi-sintetik)
+- **prakiraan:** prakiraan besok per kecamatan (hybrid Prophet + XGBoost per kecamatan, 42 model;
+  pendorong cuaca/acara/akhir pekan/libur adalah asumsi perencanaan, target latihnya kalibrasi-sintetik)
   dan outlook kota 7, 14 atau 30 hari (`GET /api/forecast/outlook?days=`). Cuaca Open-Meteo diambil
   16 hari ke depan, jadi outlook 7 dan 14 hari memakai cuaca prakiraan nyata; hari 17–30 memakai
   baseline hari kering dan ditandai `beyond_weather_forecast`. Ditambah prakiraan bulanan sampah
   masuk Bantargebang yang divalidasi dengan uji mundur pada data timbang riil.
-- **plan:** rencana harian (Rencana harian) dari optimizer OR-Tools CP-SAT di halaman Besok.
-- **approve:** supervisor menyalakan Mode pengawas di sidebar konsol dan menyetujui rencana;
+- **rencana:** rencana harian (Rencana harian) dari optimizer OR-Tools CP-SAT di halaman Besok.
+- **setujui:** supervisor menyalakan Mode pengawas di sidebar konsol dan menyetujui rencana;
   persetujuan membuat satu draf SPJ per truk dengan stop TPS, slot gerbang 15 menit dan jam berangkat.
-- **instruct:** instruksi sampai ke aplikasi sopir; pesan WhatsApp lewat gateway Baileys (klien
+- **instruksi:** instruksi sampai ke aplikasi sopir; pesan WhatsApp lewat gateway Baileys (klien
   WhatsApp Web tidak resmi untuk prototipe; deployment dinas memakai WhatsApp Business Platform),
   dalam satu bahasa yang dipilih di Pengaturan (bawaan bahasa Indonesia).
-- **run the day:** kesiapan pagi per truk, peta Operasi dengan daftar "Perlu Anda", rekomendasi
+- **jalankan hari:** kesiapan pagi per truk, peta Operasi dengan daftar "Perlu Anda", rekomendasi
   tahan slot gerbang, deviasi rute, jam kerja sopir dan lama tunggu gerbang (`app/field/safety.py`).
-- **close:** struk timbang difoto sopir dan dibaca OCR, dicek dengan aturan dan disegel (rantai
+- **tutup hari:** struk timbang difoto sopir dan dibaca OCR, dicek dengan aturan dan disegel (rantai
   SHA-256); rekap harian membandingkan aktual dengan prakiraan (`GET /api/recap/daily`).
-- **learn:** setiap hari yang ditimbang mengoreksi prakiraan; koreksi aktif mulai hari timbang ketiga
+- **belajar:** setiap hari yang ditimbang mengoreksi prakiraan; koreksi aktif mulai hari timbang ketiga
   dan dibatasi +/-25 % (`app/forecast/learning.py`), ditampilkan di samping nilai model mentah.
 - **audit:** riwayat semua event di `/api/history`; setiap SPJ punya jejak audit tersegel.
 

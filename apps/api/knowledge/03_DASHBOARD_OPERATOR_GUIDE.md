@@ -1,22 +1,22 @@
 # Panduan Operator Dashboard Pythia
 
 Panduan ini menjelaskan cara membaca KPI, menginterpretasi alert, dan mengambil tindakan
-operasional yang tepat di dashboard Pythia. Berlaku untuk role: executive, dispatcher,
-supervisor, driver, auditor, dan administrator.
+operasional yang tepat di dashboard Pythia. Berlaku untuk semua peran: eksekutif, dispatcher,
+pengawas, sopir, auditor, dan administrator.
 
 ## Login & Role
 
 - Login dilakukan di halaman depan dashboard dengan username = role (misal `dispatcher`)
   dan password default `<role>-demo-pass` (dapat dioverride via env `PYTHIA_PW_<ROLE>`).
-- Role: executive, dispatcher, supervisor, driver, auditor, administrator.
-- `/field` dan `/driver` meminta login sopir di tempat sebelum menulis apa pun. Akun bersama
-  `driver` adalah akun demo yang boleh bertindak untuk truk mana pun; akun pribadi dari
+- Username per peran: `executive`, `dispatcher`, `supervisor`, `driver`, `auditor`, `administrator`.
+- `/field` dan `/driver` meminta login sopir di tempat sebelum menulis apa pun. Akun sopir bersama
+  (`driver`) adalah akun demo yang boleh bertindak untuk truk mana pun; akun pribadi dari
   `PYTHIA_USERS_FILE` mengikat satu sopir ke satu truk, dan API menolak (403) permintaan
   sopir itu untuk truk lain.
-- Permission (`app/core/auth.py`): executive (dashboard:read, reports:read, history:read);
+- Permission (`app/core/auth.py`): eksekutif (dashboard:read, reports:read, history:read);
   dispatcher (dashboard:read, operations:plan, dispatch:create, history:read);
-  supervisor (dashboard:read, dispatch:create, dispatch:confirm, operations:approve, history:read,
-  spj:override); driver (dispatch:confirm); auditor (history:read, reports:read, provenance:read);
+  pengawas (dashboard:read, dispatch:create, dispatch:confirm, operations:approve, history:read,
+  spj:override); sopir (dispatch:confirm); auditor (history:read, reports:read, provenance:read);
   administrator (semua permission di atas + admin:manage).
 
 ## Panel Command Center
