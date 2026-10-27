@@ -10,7 +10,7 @@ test("sign-in surface follows the selected locale end to end", async ({ page }) 
   await page.goto(GATE);
 
   await expect(page.getByRole("heading", { name: "Sign in to Pythia" })).toBeVisible();
-  await expect(page.getByTestId("login-proof-list")).toContainText("Every figure labelled with its source");
+  await expect(page.getByTestId("login-proof-list")).toContainText("Every figure traceable to its source");
   await expect(page.getByLabel("Username")).toBeVisible();
   await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
   await expect(page.getByPlaceholder("e.g. dispatcher")).toBeVisible();

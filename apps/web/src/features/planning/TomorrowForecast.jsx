@@ -2,8 +2,14 @@ import { useState } from "react";
 import { Calendar, CloudRain, Flag, MessageSquareText, OctagonX, Plus, Users, Wrench, X } from "lucide-react";
 import { signedPercent } from "../../shared/hooks/useSnapshot.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
-import { Button, Card, Skeleton, Tag } from "../../shared/ui/index.js";
+import { Button, Card, Skeleton } from "../../shared/ui/index.js";
 import { mentionedTruck } from "./tomorrowModel.js";
+
+// Where an event driver comes from (GET /api/forecast/tomorrow `drivers[].source`).
+const EVENT_SOURCE_KEYS = {
+  "official calendar": "lx_event_src_official",
+  "permit intake": "lx_event_src_permit",
+};
 
 const SOURCE_ICONS = {
   tpa_notice: OctagonX,
@@ -74,7 +80,7 @@ export function ForecastCard({ forecast, error }) {
         kind: "event",
         icon: Calendar,
         text: event.detail?.name || "—",
-        title: reason ? t(`s3_why_${reason}`) : event.source,
+        title: reason ? t(`s3_why_${reason}`) : t(EVENT_SOURCE_KEYS[event.source] || "lx_event_src_other"),
         effect: reason
           ? { text: t("s3_why_not_modelled"), tone: "is-muted" }
           : effect(pct(event.effect_tons, forecast.total_tonnage_t)),
@@ -121,12 +127,9 @@ export function ForecastCard({ forecast, error }) {
       data-date={forecast.date}
     >
       <div className="tmr-fc-top">
-        <h2 className="tmr-fc-label" id="tmr-fc-title">
+        <h2 className="tmr-fc-label" id="tmr-fc-title" title={t("s3_model_title")}>
           {t("s3_fc_title")}
         </h2>
-        <Tag tone="model" title={t("s3_model_title")}>
-          {t("s3_model")}
-        </Tag>
       </div>
       <div className="tmr-fc-value">
         <strong data-testid="plan-total" data-value={forecast.total_tonnage_t}>
@@ -215,9 +218,8 @@ export function ResourcesCard({ forecast }) {
   ];
   return (
     <Card
-      title={t("s3_res_title")}
+      title={<span title={t("s3_res_units_title")}>{t("s3_res_title")}</span>}
       titleId="tmr-res-title"
-      aside={<span title={t("s3_res_units_title")}>{t("s3_res_units")}</span>}
       flush
       data-testid="tmr-resources"
       data-provenance="model"
@@ -290,7 +292,7 @@ export function FieldFactsCard({ facts, fleetCodes, canEdit, onAdd, onRemove }) 
                 className="tmr-fact"
                 data-testid="tmr-fact"
                 data-applied={fact.applied ? "true" : "false"}
-                title={fact.applied_note}
+                title={t(`lx_fact_note_${fact.effect?.kind || "none"}`)}
               >
                 <Icon size={16} aria-hidden="true" />
                 <span className="tmr-fact-text">

@@ -32,11 +32,12 @@ test("the deviation card carries the AI reroute without a simulate button", asyn
   await expect(page.locator(".astar-toggle-btn")).toHaveCount(0);
 });
 
-// The gate queue figure is model output: it carries the Model tag, and shows a dash, never a
-// sample, when the model has no answer.
+// The gate queue figure is model output: it says so in data-provenance and a tooltip (no
+// on-screen badge, founder decision 2026-10-27), and shows a dash, never a sample, when the
+// model has no answer.
 test("the gate queue KPI is labelled as model output", async ({ page }) => {
   const tile = page.getByTestId("kpi-gate");
-  await expect(tile.locator(".ui-tag-model")).toHaveText("Model");
+  await expect(tile.locator(".ui-tag-model")).toHaveCount(0);
   await expect(tile.locator(".ui-kpi-value strong")).toHaveText(/^(\d+ mnt|—)$/, { timeout: 30000 });
   await expect(tile.locator("[data-provenance=model]")).toHaveCount(1);
 });

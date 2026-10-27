@@ -1,7 +1,7 @@
 // wave11 planning, wave13 Tomorrow: product, not lab. The page has no sliders or number
 // inputs (the field-fact box is the only thing typed), the stepper follows the real state,
-// one primary action shows at a time, and every modelled or simulated figure carries its
-// thin label: a Model tag where the design shows one, data-provenance plus a tooltip.
+// one primary action shows at a time, and every modelled or simulated figure keeps its
+// provenance in data-provenance plus a tooltip (no on-screen badges since 2026-10-27).
 import { expect, test } from "@playwright/test";
 import { freeDay, signIn } from "./lib/tomorrow.js";
 
@@ -26,7 +26,7 @@ test("tomorrow has no manual what-if and follows the plan's state", async ({ pag
   // The day's drivers are model output; the weekday is always among them.
   const forecast = page.getByTestId("tmr-forecast");
   await expect(forecast).toHaveAttribute("data-provenance", "model");
-  await expect(forecast.locator(".ui-tag-model")).toHaveText("Model");
+  await expect(forecast.locator(".ui-tag-model")).toHaveCount(0);
   await expect(page.locator("[data-testid=plan-driver][data-kind=weekday], [data-kind=holiday]")).toHaveCount(
     1,
   );
@@ -38,11 +38,16 @@ test("tomorrow has no manual what-if and follows the plan's state", async ({ pag
     await page.getByTestId("tmr-submit").count(),
   );
 
-  // Thin labels: simulated fleet figures say so in a tooltip, the queue model is tagged.
+  // No badges (founder decision 2026-10-27): simulated and modelled figures say so in
+  // data-provenance and a tooltip.
   const trucks = page.getByTestId("tmr-kpi-trucks").locator("..");
   await expect(trucks).toHaveAttribute("data-provenance", "simulated");
   await expect(trucks).toHaveAttribute("title", "Armada pilot simulasi");
-  await expect(page.getByTestId("tmr-kpi-queue").locator("..").locator(".ui-tag-model")).toHaveText("Model");
+  await expect(page.getByTestId("tmr-kpi-queue").locator("..")).toHaveAttribute(
+    "data-provenance",
+    "simulated",
+  );
+  await expect(page.locator(".tmr .ui-tag-model")).toHaveCount(0);
   await expect(page.locator(".tmr")).not.toContainText(/SIMULASI|SIMULATED/);
   await expect(page.locator(".tmr")).not.toContainText(/\blive\b|langsung/i);
 });

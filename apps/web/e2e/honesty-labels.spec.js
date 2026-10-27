@@ -1,6 +1,8 @@
 // gsc-2026 P0-4/P0-5: simulated and modelled figures say so in both languages and never
 // claim "live". Wave 13 retired the fleet desk's queue, stagger and A* panels (and their old
-// fixed 47→19 / 116→48 / 58.6% figures); Operations labels its figures thinly instead.
+// fixed 47→19 / 116→48 / 58.6% figures). Founder decision 2026-10-27: no on-screen
+// Model / Simulated badges; provenance stays in data-provenance plus a tooltip, and
+// Settings → Data and provenance is the one place that names every source.
 import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
@@ -55,7 +57,8 @@ for (const lang of ["id", "en"]) {
       { timeout: 30000 },
     );
     await expect(tile.locator(".ui-kpi-sub")).toHaveText(`${copy.peak} ${tileHour}`);
-    await expect(tile.locator(".ui-tag-model")).toHaveText("Model");
+    await expect(tile.locator("[data-provenance=model]")).toHaveCount(1);
+    await expect(tile.locator(".ui-tag-model")).toHaveCount(0);
     await expect(page.getByTestId("kpi-trucks").locator("[data-provenance=simulated]")).toHaveAttribute(
       "title",
       new RegExp(copy.simulated),
@@ -69,11 +72,11 @@ for (const lang of ["id", "en"]) {
 // DLH product; it names the case it was built for.
 const LOGIN_COPY = {
   id: {
-    proof: "Setiap angka diberi label sumbernya",
+    proof: "Setiap angka dapat ditelusuri ke sumbernya",
     stale: /Operasi langsung|Prediksi terukur|Dinas Lingkungan Hidup Provinsi|DLH DKI/,
   },
   en: {
-    proof: "Every figure labelled with its source",
+    proof: "Every figure traceable to its source",
     stale: /Live operations|Measured forecasts|Jakarta Environmental Agency|DLH DKI/,
   },
 };
@@ -93,9 +96,9 @@ for (const lang of ["id", "en"]) {
   });
 }
 
-// #honesty, wave13 Tomorrow: thin labels, as in the design. The forecast and the queue model
-// carry a Model tag, the simulated pilot fleet says so in data-provenance and a tooltip (no
-// big SIMULATED badge, never "live"), and the page reads as a decision brief, not a DLH document.
+// #honesty, wave13 Tomorrow: the forecast keeps data-provenance="model" (no Model badge since
+// 2026-10-27), the simulated pilot fleet says so in data-provenance and a tooltip (no badge,
+// never "live"), and the page reads as a decision brief, not a DLH document.
 for (const [lang, fleetTitle] of [
   ["id", "Armada pilot simulasi"],
   ["en", "Simulated pilot fleet"],
@@ -105,7 +108,7 @@ for (const [lang, fleetTitle] of [
     await page.goto("/app/tomorrow");
     const forecast = page.getByTestId("tmr-forecast");
     await expect(forecast).toHaveAttribute("data-provenance", "model", { timeout: 60000 });
-    await expect(forecast.locator(".ui-tag-model")).toHaveText("Model");
+    await expect(forecast.locator(".ui-tag-model")).toHaveCount(0);
     const tmr = page.locator(".tmr");
     await expect(page.getByTestId("tmr-alloc-loading")).toHaveCount(0, { timeout: 30000 });
     if (await page.getByTestId("tmr-kpis").count()) {
@@ -134,5 +137,22 @@ for (const [lang, error] of [
     await expect(forecast).not.toContainText(/\d t\b/);
     const build = page.getByTestId("tmr-build");
     if (await build.count()) await expect(build).toBeDisabled();
+  });
+}
+
+// Founder decision 2026-10-27: with the badges gone from the screens, Settings → Data and
+// provenance is where the simulated pilot fleet and the modelled gate queue are named.
+for (const [lang, copy] of [
+  ["id", { fleet: "Armada pilot", gate: "Antrean gerbang Bantargebang", sim: "Simulasi" }],
+  ["en", { fleet: "Pilot fleet", gate: "Bantargebang gate queue", sim: "Simulated" }],
+]) {
+  test(`settings names the simulated fleet and the modelled gate queue (${lang})`, async ({ page }) => {
+    await signIn(page, lang);
+    await page.goto("/app/settings?tab=data");
+    const table = page.getByTestId("settings-provenance").getByRole("table");
+    await expect(table).toBeVisible({ timeout: 30000 });
+    await expect(table.getByRole("row").filter({ hasText: copy.fleet })).toContainText(copy.sim);
+    await expect(table.getByRole("row").filter({ hasText: copy.gate })).toContainText("Model");
+    expect(await table.innerText()).not.toMatch(/live GPS|GPS langsung/i);
   });
 }

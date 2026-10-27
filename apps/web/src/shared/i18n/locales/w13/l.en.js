@@ -123,11 +123,11 @@ export const lEn = {
   l_f3_t: "Landfill gate queue",
   l_f3_b: "Models the Bantargebang gate and staggers arrivals into waves.",
   l_f4_t: "42-district forecast",
-  l_f4_b: "Daily tonnes from Prophet plus XGBoost, labelled as model output.",
+  l_f4_b: "Daily tonnes from Prophet plus XGBoost, with the reason each number moved.",
   l_f5_t: "Weekly plan",
   l_f5_b: "CP-SAT allocates trucks, crews and shifts against the forecast.",
   l_f6_t: "Digital work orders",
-  l_f6_b: "SPJ work orders with supervisor approval and an audit trail.",
+  l_f6_b: "Work orders with supervisor approval and an audit trail.",
   l_f7_t: "Driver app",
   l_f7_b:
     "Offline-first phone app with a 2D route and landfill guide, AR optional on foot, and pre-trip checks.",
@@ -139,7 +139,7 @@ export const lEn = {
   l_day1_a_b: "Read from the landfill's trip records and fed into the forecast and the gate plan.",
   l_day1_b_v: "42",
   l_day1_b_t: "districts forecast every day",
-  l_day1_b_b: "Each labelled as model output, with the inputs that moved it.",
+  l_day1_b_b: "Each with the weather, events and holidays that moved it.",
   l_day1_c_v: "6",
   l_day1_c_t: "decisions a day, one checklist",
   l_day1_c_b:
@@ -149,21 +149,22 @@ export const lEn = {
   l_hon_h2_a: "Every number tells you",
   l_hon_h2_b: "where it came from.",
   l_hon_p:
-    "Public agencies can't act on a number they can't trace. Pythia labels every figure on every screen.",
+    "Public agencies act on numbers they can trace. Pythia keeps the source and the validation of every figure in one place, ready for auditors and leadership.",
   l_hon1_a: "Bantargebang trip records:",
   l_hon1_hi: "1,228 trips a day",
   l_hon1_b: "feed the forecast and the queue model.",
-  l_hon2_a: "Every forecast is labelled",
-  l_hon2_hi: "model output,",
-  l_hon2_b: "and the monthly intake model is backtested on real data.",
+  l_hon2_a: "The monthly intake model is",
+  l_hon2_hi: "backtested on real weighings:",
+  l_hon2_b: "4.32% error against 4.98% for a naive baseline.",
   l_hon3_a: "Every reroute is",
   l_hon3_hi: "computed on real roads",
   l_hon3_b: "from OpenStreetMap, never straight lines.",
   l_q1_t: "Is this live?",
-  l_q1_b: "Only where it says Live. Everything else carries its label.",
+  l_q1_b:
+    "Weather and road maps are read live. Live GPS tracking is the next step, and Settings names the source of every figure.",
   l_q2_t: "What if the model is wrong?",
   l_q2_b:
-    "A supervisor approves every plan. So far only the monthly intake is backtested; daily figures are not yet.",
+    "A supervisor approves every plan before a truck moves. The monthly intake model is backtested on real Bantargebang weighings; daily district backtests come next.",
   l_q3_t: "What if a source goes down?",
   l_q3_b: "The last good value is served and marked Stale.",
   l_reads_from: "Reads from",
@@ -189,7 +190,7 @@ export const lEn = {
     "No. Pythia works from each truck's last stop check-in. Live GPS tracking is coming soon and is labelled as such.",
   l_faq4_q: "How accurate is the forecast?",
   l_faq4_a:
-    "On monthly totals the backtest error is 4.32% (MAPE), against 4.98% for a naive baseline. Daily district figures are not yet backtested, so they are labelled model output and a supervisor approves every plan.",
+    "On monthly totals, 4.32% error (MAPE) in backtests on real Bantargebang weighings, against 4.98% for a naive baseline. Daily district forecasts feed a plan that a supervisor approves before it reaches a driver.",
   l_faq5_q: "Does the driver app work offline?",
   l_faq5_a:
     "Yes. Stop proofs, pre-trip checks and weigh tickets queue on the phone and send when the signal returns.",
@@ -240,6 +241,6 @@ export const lEn = {
     "Know tomorrow's load before the trucks leave. Then plan them, and show where every number came from.",
   l_si_fact1: "Daily forecasts for 42 districts",
   l_si_fact2: "Route deviations caught and rerouted",
-  l_si_fact3: "Every figure labelled with its source",
+  l_si_fact3: "Every figure traceable to its source",
   l_si_foot_label: "More",
 };

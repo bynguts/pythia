@@ -502,14 +502,12 @@ button.ops-item-title:focus-visible {
   font-size: 12px;
   font-weight: 600;
 }
+/* The suggestion is part of the open item, not a card inside it: a plain block indented
+   to the title's text edge (32 px severity icon + 12 px gap). */
 .ops-suggest {
   display: flex;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  outline: 1px solid var(--f-green-soft);
-  outline-offset: -0.5px;
-  background: var(--f-white);
+  gap: 8px;
+  padding-left: 44px;
   color: var(--f-green);
 }
 .ops-suggest svg {

@@ -81,11 +81,15 @@ test("duty hours today lists the longest shifts with the Blocked and Plan relief
   const card = page.getByTestId("duty-hours");
   await expect(card.locator("li").first()).toBeVisible({ timeout: 20000 });
   await expect(card).toHaveAttribute("data-provenance", "simulated");
-  // #honesty: the simulated rows say so on the header, not only in a tooltip.
-  const simTag = page.locator("[aria-labelledby=flt-duty-title] .ui-card-head .ui-tag-model");
-  await expect(simTag).toHaveText("Simulated");
-  await expect(simTag).toHaveAttribute("data-provenance", "simulated");
-  await expect(page.getByText("Warn 10 h · stop 12 h")).toBeVisible();
+  // Founder decision 2026-10-27: no Simulated badge on the header; the rows keep their
+  // provenance and tooltip, and the rule sits as a quiet line under a one-line title.
+  await expect(page.locator("[aria-labelledby=flt-duty-title] .ui-tag-model")).toHaveCount(0);
+  await expect(card).toHaveAttribute("title", /simulated/i);
+  await expect(page.locator("[aria-labelledby=flt-duty-title] .ui-card-sub")).toHaveText(
+    "Warn 10 h · stop 12 h",
+  );
+  const titleBox = await page.locator("#flt-duty-title").boundingBox();
+  expect(titleBox.height).toBeLessThan(30);
   const rows = card.locator("li");
   await expect(rows).toHaveCount(6);
   await expect(rows.first()).toContainText("12 h 25");
@@ -111,7 +115,8 @@ test("Indonesian copy, 44 px targets and no horizontal overflow at 390 px", asyn
   await signIn(page, { lang: "id" });
   await expect(page.getByRole("heading", { name: "Jam tugas hari ini" })).toBeVisible({ timeout: 20000 });
   await expect(page.getByTestId("duty-hours").getByText("Terblokir")).toBeVisible();
-  await expect(page.locator("[aria-labelledby=flt-duty-title] .ui-tag-model")).toHaveText("Simulasi");
+  await expect(page.locator("[aria-labelledby=flt-duty-title] .ui-tag-model")).toHaveCount(0);
+  await expect(page.getByTestId("duty-hours")).toHaveAttribute("data-provenance", "simulated");
   const geometry = await page.evaluate(() => {
     const small = [...document.querySelectorAll(".flt button")]
       .map((el) => el.getBoundingClientRect())

@@ -155,10 +155,9 @@ function RecHead({ t }) {
   return (
     <header className="gate-rec-head">
       <Sparkles size={15} aria-hidden="true" />
-      <h2 id="gate-rec-title">{t("s4_rec_label")}</h2>
-      <Tag tone="model" title={t("s4_model_title")}>
-        {t("s4_model")}
-      </Tag>
+      <h2 id="gate-rec-title" title={t("s4_model_title")}>
+        {t("s4_rec_label")}
+      </h2>
     </header>
   );
 }
@@ -295,18 +294,18 @@ function Arrivals({ safety, t, lang }) {
   const simulated = safety && safety.classification !== "OBSERVED";
   return (
     <Card
-      title={t("s4_arrivals_title")}
-      titleId="gate-arrivals-title"
-      className="gate-arrivals"
-      aside={
+      title={
         simulated ? (
           <span data-provenance="simulated" title={t("s4_sim_title")}>
-            {t("s4_arrivals_sim")}
+            {t("s4_arrivals_title")}
           </span>
         ) : (
-          t("s4_arrivals_driver_app")
+          t("s4_arrivals_title")
         )
       }
+      titleId="gate-arrivals-title"
+      className="gate-arrivals"
+      aside={simulated ? null : t("s4_arrivals_driver_app")}
       flush
     >
       {rows.length === 0 ? (
@@ -331,17 +330,13 @@ function Arrivals({ safety, t, lang }) {
 function Kpis({ day, board, safety, recap, queue, t, lang, nowMin }) {
   const slots = board?.slots || [];
   const simulatedGate = safety && safety.classification !== "OBSERVED";
-  const modelTag = (
-    <Tag tone="model" title={t("s4_model_title")}>
-      {t("s4_model")}
-    </Tag>
-  );
+  const model = { provenance: "model", hint: t("s4_model_title") };
   const peak = peakSlot(slots);
   const peakKpi = (
     <Kpi
       testId="gate-kpi-peak"
       label={t("s4_kpi_peak")}
-      tag={modelTag}
+      {...model}
       value={peak ? peak.start : "—"}
       sub={peak ? t("s4_per_truck_wait").replace("{n}", minutes(peak.expected_wait_min, lang)) : null}
     />
@@ -356,7 +351,7 @@ function Kpis({ day, board, safety, recap, queue, t, lang, nowMin }) {
         <Kpi
           testId="gate-kpi-mean"
           label={t("s4_kpi_mean")}
-          tag={modelTag}
+          {...model}
           value={mean == null ? "—" : minutes(mean, lang)}
           unit={mean == null ? null : t("s4_min")}
           sub={t("s4_day_mean")}
@@ -371,7 +366,7 @@ function Kpis({ day, board, safety, recap, queue, t, lang, nowMin }) {
         <Kpi
           testId="gate-kpi-longest"
           label={t("s4_kpi_longest_planned")}
-          tag={modelTag}
+          {...model}
           value={impact ? minutes(impact.longest_wait_before, lang) : "—"}
           unit={impact ? t("s4_min") : null}
           sub={t("s4_longest_planned_sub")}
@@ -393,7 +388,7 @@ function Kpis({ day, board, safety, recap, queue, t, lang, nowMin }) {
       <Kpi
         testId="gate-kpi-queue"
         label={t("s4_kpi_queue")}
-        tag={modelTag}
+        {...model}
         value={queueWait == null ? "—" : minutes(queueWait, lang)}
         unit={queueWait == null ? null : t("s4_min")}
         sub={
@@ -412,13 +407,8 @@ function Kpis({ day, board, safety, recap, queue, t, lang, nowMin }) {
       <Kpi
         testId="gate-kpi-longest"
         label={t("s4_kpi_longest")}
-        tag={
-          simulatedGate ? (
-            <Tag data-provenance="simulated" title={t("s4_sim_title")}>
-              {t("s4_simulated")}
-            </Tag>
-          ) : null
-        }
+        provenance={simulatedGate ? "simulated" : undefined}
+        hint={simulatedGate ? t("s4_sim_title") : undefined}
         value={longest ? minutes(longest.gate_wait_minutes, lang) : "—"}
         unit={longest ? t("s4_min") : null}
         sub={

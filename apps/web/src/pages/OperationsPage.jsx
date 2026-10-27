@@ -212,11 +212,6 @@ export function OperationsPage() {
         <Kpi
           testId="kpi-gate"
           label={t("s1_kpi_gate")}
-          tag={
-            <Tag tone="model" title={t("s1_model_hint")}>
-              {t("s1_model")}
-            </Tag>
-          }
           value={
             <span data-provenance="model" title={t("s1_model_hint")}>
               {gateWait != null ? t("s1_minutes").replace("{n}", number(gateWait, lang)) : "—"}

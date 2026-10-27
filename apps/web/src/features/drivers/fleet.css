@@ -152,18 +152,30 @@
   padding: 0;
   list-style: none;
 }
+/* One shared column grid: names left, status pills one width, times right-aligned, so
+   every row lines up whatever its pill says. */
+.flt-duty {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+}
 .flt-duty li {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  gap: 8px 10px;
   padding: 12px 20px 14px;
   border-bottom: 1px solid var(--f-line-3);
+}
+.flt-duty li.flt-empty {
+  display: block;
 }
 .flt-duty li:last-child,
 .flt-due li:last-child {
   border-bottom: 0;
 }
 .flt-duty .flt-track {
+  grid-column: 1 / -1;
   width: 100%;
   height: 6px;
   border-radius: 3px;
@@ -172,14 +184,18 @@
   border-radius: 3px;
 }
 .flt-duty-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: contents;
   font-size: 14px;
 }
+.flt-duty-line .ui-tag {
+  grid-column: 2;
+  justify-content: center;
+  justify-self: stretch;
+}
 .flt-duty-name {
-  flex: 1 1 auto;
+  grid-column: 1;
   min-width: 0;
+  font-size: 14px;
   overflow: hidden;
   color: var(--f-ink);
   font-weight: 500;
@@ -187,7 +203,10 @@
   white-space: nowrap;
 }
 .flt-duty-time {
+  grid-column: 3;
+  font-size: 14px;
   font-weight: 600;
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 .flt-duty-time.is-danger {

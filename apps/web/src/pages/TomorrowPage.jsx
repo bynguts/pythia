@@ -13,7 +13,7 @@ import {
 import { useConsole } from "../app/console/useConsole.js";
 import { apiFetch } from "../shared/api/client.js";
 import { localeFor, useLanguage } from "../shared/i18n/index.jsx";
-import { Button, Card, EmptyState, ErrorState, Progress4, Tag, WaitingApproval } from "../shared/ui/index.js";
+import { Button, Card, EmptyState, ErrorState, Progress4, WaitingApproval } from "../shared/ui/index.js";
 import { ROLE_PERMISSIONS } from "../features/settings/roles.js";
 import { FieldFactsCard, ForecastCard, ResourcesCard } from "../features/planning/TomorrowForecast.jsx";
 import { AllocationKpis, PlanFlags, useAllocationViews } from "../features/planning/PlanAllocation.jsx";
@@ -330,11 +330,7 @@ export function TomorrowPage() {
     {
       key: "forecast",
       label: t(forecast ? "s3_step_forecast" : "s3_step_forecast_todo"),
-      note: forecast
-        ? wibTime(forecast.generated_at)
-          ? t("s3_note_model_time").replace("{time}", wibTime(forecast.generated_at))
-          : t("s3_note_model")
-        : null,
+      note: forecast ? wibTime(forecast.generated_at) || null : null,
     },
     {
       key: "facts",
@@ -682,21 +678,14 @@ export function TomorrowPage() {
         </div>
         <Card
           className="tmr-alloc"
-          title={t("s3_alloc_title")}
+          title={<span title={t("s3_solver_title")}>{t("s3_alloc_title")}</span>}
           titleId="tmr-alloc-title"
           flush
           data-testid="approval-plan"
           data-plan-id={plan?.plan_id || ""}
           data-status={status || "none"}
           data-provenance="model"
-          actions={
-            <>
-              <Tag tone="real" className="tmr-alloc-head-tag" title={t("s3_solver_title")}>
-                {t("s3_solver")}
-              </Tag>
-              {plan && viewControl}
-            </>
-          }
+          actions={plan ? viewControl : null}
         >
           {cardBody}
           {footer}

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, Warehouse } from "lucide-react";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import { Button } from "../../shared/ui/Button.jsx";
-import { Tag } from "../../shared/ui/Tag.jsx";
 
 // A slot this close to the day's worst modelled wait is drawn as part of the peak.
 const PEAK_SHARE = 0.85;
@@ -38,7 +37,6 @@ export function GateCard({ board, currentStart }) {
       <header className="ops-gate-head">
         <Warehouse size={14} aria-hidden="true" />
         <h2 id="ops-gate-title">{t("s1_gate_card_title")}</h2>
-        <Tag tone="model">{t("s1_model")}</Tag>
         <Button
           variant="ghost"
           size="sm"

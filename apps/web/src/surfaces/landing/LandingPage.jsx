@@ -68,10 +68,6 @@ function LinkButton({ href, to, variant = "secondary", size = "md", icon, childr
   );
 }
 
-function Tag({ tone, children }) {
-  return <span className={`land-tag land-tag-${tone}`}>{children}</span>;
-}
-
 function Steps({ tone }) {
   return (
     <svg
@@ -379,7 +375,6 @@ export function LandingPage() {
                 <div className="land-panel land-panel-forecast">
                   <div className="land-panel-head">
                     <strong>{t("l_s1_panel")}</strong>
-                    <Tag tone="model">{t("l_tag_model")}</Tag>
                   </div>
                   <div className="land-bars" aria-hidden="true">
                     {days.map((d, i) => (
@@ -509,7 +504,6 @@ export function LandingPage() {
                 <div className="land-day1-body">
                   <div className="land-day1-v">
                     <span>{t("l_day1_a_v")}</span>
-                    <Tag tone="real">{t("l_tag_real")}</Tag>
                   </div>
                   <h3>{t("l_day1_a_t")}</h3>
                   <p>{t("l_day1_a_b")}</p>
@@ -520,7 +514,6 @@ export function LandingPage() {
                 <div className="land-day1-body">
                   <div className="land-day1-v">
                     <span>{t("l_day1_b_v")}</span>
-                    <Tag tone="model">{t("l_tag_model")}</Tag>
                   </div>
                   <h3>{t("l_day1_b_t")}</h3>
                   <p>{t("l_day1_b_b")}</p>
@@ -551,13 +544,8 @@ export function LandingPage() {
               <p>{t("l_hon_p")}</p>
             </div>
             <ul className="land-hon-cards">
-              {[
-                ["real", "l_tag_real", "l_hon1"],
-                ["model", "l_tag_model", "l_hon2"],
-                ["map", "l_tag_map", "l_hon3"],
-              ].map(([tone, tag, k]) => (
+              {["l_hon1", "l_hon2", "l_hon3"].map((k) => (
                 <li key={k}>
-                  <Tag tone={tone}>{t(tag)}</Tag>
                   <p>
                     {t(`${k}_a`)}
                     <mark>{t(`${k}_hi`)}</mark>

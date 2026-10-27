@@ -43,17 +43,44 @@
 .tmr-body {
   display: grid;
   grid-template-columns: 330px minmax(0, 1fr);
-  align-items: stretch;
+  align-items: start;
   gap: 20px;
 }
+/* The brief is one panel, not three stacked cards: forecast, what it takes and field facts
+   are sections of it, split by hairlines, each opening on the same quiet section head. */
 .tmr-left {
+  position: sticky;
+  top: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
   min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--f-border);
+  border-radius: 10px;
+  background: var(--f-white);
 }
-.tmr .ui-card-head {
-  min-height: 46px;
+.tmr-left > .tmr-fc,
+.tmr-left > .ui-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.tmr-left > * + * {
+  border-top: 1px solid var(--f-line-3);
+}
+.tmr-left .ui-card-head {
+  min-height: 0;
+  padding: 16px 18px 10px;
+  border-bottom: 0;
+}
+.tmr-left .ui-card-title,
+.tmr-fc-label {
+  margin: 0;
+  color: var(--f-ink);
+  font-family: var(--f-font-body);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
 }
 .tmr-alloc > .ui-card-head {
   min-height: 56px;
@@ -67,24 +94,13 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 16px 18px;
-  border: 1px solid var(--f-border);
-  border-radius: 10px;
-  background: var(--f-white);
+  padding: 16px 18px 18px;
 }
 .tmr-fc-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-}
-/* An h2 inherits the global Archivo heading face (loaded at 600 only); the design is Inter 400. */
-.tmr-fc-label {
-  margin: 0;
-  color: var(--f-muted);
-  font-family: var(--f-font-body);
-  font-size: 13px;
-  font-weight: 400;
 }
 .tmr-fc-value {
   display: flex;
@@ -243,7 +259,7 @@
 }
 .tmr-facts-empty {
   margin: 0;
-  padding: 14px 18px;
+  padding: 2px 18px 14px;
   border-bottom: 1px solid var(--f-line-3);
   color: var(--f-faint);
   font-size: 13px;
@@ -316,10 +332,19 @@
   font-size: 12px;
 }
 
+/* Truck codes in the district and gate tables wrap between codes, never inside one. */
+.tmr-code {
+  white-space: nowrap;
+}
+.tmr-codes-more {
+  color: var(--f-muted);
+}
+
 /* ── Allocation card ───────────────────────────────────────────────────── */
+/* Each column keeps its own height: the brief ends where its content ends instead of
+   stretching an empty white area to match a long allocation. */
 .tmr-alloc {
   min-width: 0;
-  min-height: 100%;
 }
 /* min-width: 0 lets the truck table scroll inside its wrap instead of widening the page. */
 .tmr-alloc > .ui-card-body {
@@ -565,6 +590,7 @@
   flex: 1 1 auto;
   flex-direction: column;
   justify-content: center;
+  min-height: 420px;
   padding: 24px;
 }
 .tmr-alloc-state .ui-error,
@@ -612,6 +638,10 @@
 }
 .tmr-footer.is-review {
   background: var(--f-green-tint);
+}
+/* The table's last row already draws this line. */
+.ui-table-wrap + .tmr-footer {
+  border-top: 0;
 }
 .tmr-footer > svg {
   flex-shrink: 0;
@@ -679,18 +709,23 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .tmr-left {
+    position: static;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
   }
   .tmr-left > .tmr-fc {
     grid-column: 1 / -1;
+  }
+  .tmr-left > .tmr-facts {
+    border-left: 1px solid var(--f-line-3);
   }
 }
 @media (max-width: 760px) {
   .tmr-left {
     display: flex;
-    align-items: stretch;
+  }
+  .tmr-left > .tmr-facts {
+    border-left: 0;
   }
   .tmr-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));

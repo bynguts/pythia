@@ -269,6 +269,10 @@
   .gate-page .ui-kpi {
     flex: 1 1 45%;
   }
+  /* Two per row: the right-hand cell ends on the strip's own border. */
+  .gate-page .ui-kpi:nth-child(2n) {
+    border-right: 0;
+  }
   .gate-head h1 {
     font-size: 28px;
   }

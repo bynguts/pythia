@@ -19,8 +19,8 @@ const LABEL = {
 };
 
 // wave13 Settings, Data and provenance (T6NMuR): one row per source, with the label it
-// earns. Rows come from GET /data/provenance; the three systems below them are Pythia's own
-// model and the live inputs that the registry does not list.
+// earns. Rows come from GET /data/provenance; the systems below them are Pythia's own
+// model, simulations and the live inputs that the registry does not list.
 export function ProvenancePanel() {
   const { t } = useLanguage();
   const [records, setRecords] = useState(null);
@@ -66,6 +66,29 @@ export function ProvenancePanel() {
       feeds: t("s5_set_sys_model_feeds"),
       label: LABEL.derived,
       fresh: "—",
+    },
+    // The screens carry no provenance badges (founder decision 2026-10-27), so Pythia's own
+    // simulated and modelled systems are named here.
+    {
+      key: "pilot-fleet",
+      source: t("cp_sys_fleet"),
+      feeds: t("cp_sys_fleet_feeds"),
+      label: LABEL.calibrated_synthetic,
+      fresh: t("cp_sys_fleet_fresh"),
+    },
+    {
+      key: "gate-queue",
+      source: t("cp_sys_gate"),
+      feeds: t("cp_sys_gate_feeds"),
+      label: LABEL.derived,
+      fresh: t("cp_sys_gate_fresh"),
+    },
+    {
+      key: "value-model",
+      source: t("cp_sys_value"),
+      feeds: t("cp_sys_value_feeds"),
+      label: LABEL.derived,
+      fresh: t("cp_sys_value_fresh"),
     },
     {
       key: "open-meteo",

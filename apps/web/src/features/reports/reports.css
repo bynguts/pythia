@@ -52,12 +52,6 @@
 .rp-stat:last-child {
   border-right: 0;
 }
-.rp-stat-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
 .rp-stat-k {
   color: var(--f-muted);
   font-size: 14px;
@@ -101,10 +95,12 @@
   border-radius: 10px;
   background: var(--f-white);
 }
+/* The legend drops under the title on a narrow card instead of breaking the title. */
 .rp-chart header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
+  gap: 4px 14px;
 }
 .rp-chart h2 {
   flex: 1 1 auto;
@@ -365,11 +361,13 @@
 }
 
 /* w15 value per 1,000 gate trips: a heading, a three-level strip, a table and the parameters. */
+/* A section of its own on the paper: more air above its heading than inside it. */
 .rp-value {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   min-width: 0;
+  margin-top: 12px;
 }
 .rp-value-head {
   display: flex;

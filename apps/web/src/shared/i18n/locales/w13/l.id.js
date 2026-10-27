@@ -116,7 +116,7 @@ export const lId = {
   l_f3_t: "Antrean gerbang TPA",
   l_f3_b: "Memodelkan gerbang Bantargebang dan mengatur kedatangan menjadi gelombang.",
   l_f4_t: "Prakiraan 42 kecamatan",
-  l_f4_b: "Tonase harian dari Prophet plus XGBoost, berlabel keluaran model.",
+  l_f4_b: "Tonase harian dari Prophet plus XGBoost, lengkap dengan alasan setiap angka bergeser.",
   l_f5_t: "Rencana mingguan",
   l_f5_b: "CP-SAT mengalokasikan truk, kru, dan shift terhadap prakiraan.",
   l_f6_t: "Surat jalan digital",
@@ -132,7 +132,7 @@ export const lId = {
   l_day1_a_b: "Dibaca dari catatan ritasi TPA dan dipakai untuk prakiraan dan rencana gerbang.",
   l_day1_b_v: "42",
   l_day1_b_t: "kecamatan diprakirakan setiap hari",
-  l_day1_b_b: "Masing-masing berlabel keluaran model, dengan masukan yang menggesernya.",
+  l_day1_b_b: "Masing-masing lengkap dengan cuaca, acara, dan hari libur yang menggesernya.",
   l_day1_c_v: "6",
   l_day1_c_t: "keputusan sehari, satu daftar periksa",
   l_day1_c_b:
@@ -141,21 +141,22 @@ export const lId = {
   l_hon_h2_a: "Setiap angka memberi tahu",
   l_hon_h2_b: "dari mana asalnya.",
   l_hon_p:
-    "Instansi publik tak bisa bertindak atas angka yang tak dapat ditelusuri. Pythia memberi label pada setiap angka di setiap layar.",
+    "Instansi publik bertindak atas angka yang bisa ditelusuri. Pythia menyimpan sumber dan validasi setiap angka di satu tempat, siap untuk auditor dan pimpinan.",
   l_hon1_a: "Catatan ritasi Bantargebang:",
   l_hon1_hi: "1.228 ritase per hari",
   l_hon1_b: "menjadi masukan prakiraan dan model antrean.",
-  l_hon2_a: "Setiap prakiraan berlabel",
-  l_hon2_hi: "keluaran model,",
-  l_hon2_b: "dan model asupan bulanan diuji balik pada data nyata.",
+  l_hon2_a: "Model asupan bulanan",
+  l_hon2_hi: "diuji balik pada timbangan nyata:",
+  l_hon2_b: "galat 4,32% dibanding 4,98% untuk pembanding naif.",
   l_hon3_a: "Setiap rute ulang",
   l_hon3_hi: "dihitung di jalan nyata",
   l_hon3_b: "dari OpenStreetMap, bukan garis lurus.",
   l_q1_t: "Apakah ini langsung?",
-  l_q1_b: "Hanya yang berlabel Langsung. Selebihnya membawa labelnya sendiri.",
+  l_q1_b:
+    "Cuaca dan peta jalan dibaca langsung. Pelacakan GPS langsung adalah langkah berikutnya, dan Pengaturan menyebut sumber setiap angka.",
   l_q2_t: "Bagaimana jika modelnya salah?",
   l_q2_b:
-    "Pengawas menyetujui setiap rencana. Sejauh ini hanya asupan bulanan yang diuji balik; angka harian belum.",
+    "Pengawas menyetujui setiap rencana sebelum truk berangkat. Model asupan bulanan diuji balik pada timbangan nyata Bantargebang; uji balik harian per kecamatan menyusul.",
   l_q3_t: "Bagaimana jika sumber data mati?",
   l_q3_b: "Nilai terakhir yang baik ditampilkan dan ditandai Usang.",
   l_reads_from: "Membaca dari",
@@ -180,7 +181,7 @@ export const lId = {
     "Tidak. Pythia bekerja dari cek-in perhentian terakhir tiap truk. Pelacakan GPS langsung segera hadir dan diberi label demikian.",
   l_faq4_q: "Seberapa akurat prakiraannya?",
   l_faq4_a:
-    "Pada total bulanan, galat backtest 4,32% (MAPE), dibanding 4,98% untuk pembanding naif. Angka harian per kecamatan belum diuji balik, jadi diberi label keluaran model dan pengawas menyetujui setiap rencana.",
+    "Pada total bulanan, galat 4,32% (MAPE) dalam uji balik pada timbangan nyata Bantargebang, dibanding 4,98% untuk pembanding naif. Prakiraan harian per kecamatan mengisi rencana yang disetujui pengawas sebelum sampai ke sopir.",
   l_faq5_q: "Apakah aplikasi sopir berfungsi offline?",
   l_faq5_a:
     "Ya. Bukti perhentian, cek pra-perjalanan, dan tiket timbang antre di ponsel dan terkirim saat sinyal kembali.",
@@ -230,6 +231,6 @@ export const lId = {
     "Ketahui beban besok sebelum truk berangkat. Lalu rencanakan, dan tunjukkan dari mana setiap angka berasal.",
   l_si_fact1: "Prakiraan harian untuk 42 kecamatan",
   l_si_fact2: "Penyimpangan rute terdeteksi dan dialihkan",
-  l_si_fact3: "Setiap angka diberi label sumbernya",
+  l_si_fact3: "Setiap angka dapat ditelusuri ke sumbernya",
   l_si_foot_label: "Lainnya",
 };

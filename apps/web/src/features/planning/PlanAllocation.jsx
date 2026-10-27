@@ -1,10 +1,29 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { ChevronDown, GripVertical } from "lucide-react";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
-import { Segmented, Tag } from "../../shared/ui/index.js";
-import { districtRows, gateRows, lanesFromBasis, planGateWindow } from "./tomorrowModel.js";
+import { Segmented } from "../../shared/ui/index.js";
+import { basisText, districtRows, gateRows, lanesFromBasis, planGateWindow } from "./tomorrowModel.js";
 
 const VISIBLE_ROWS = 9;
+const DISTRICT_CODES = 6;
+
+// Truck codes in a cell: a code never breaks inside itself ("T-" / "222"); past `max` the
+// rest fold into "+n", listed in full in the tooltip.
+function TruckCodes({ codes, max = Infinity }) {
+  const shown = codes.slice(0, max);
+  const rest = codes.length - shown.length;
+  return (
+    <span className="tmr-codes" title={rest > 0 ? codes.join(", ") : undefined}>
+      {shown.map((code, index) => (
+        <Fragment key={code}>
+          {index > 0 && ", "}
+          <span className="ui-code tmr-code">{code}</span>
+        </Fragment>
+      ))}
+      {rest > 0 && <span className="tmr-code tmr-codes-more"> +{rest}</span>}
+    </span>
+  );
+}
 
 // The plan's KPI row: trucks used of the pilot fleet, trips and tonnes, the gate slot
 // grid, and the modelled queue at the gate without vs with a staggered plan.
@@ -50,7 +69,7 @@ export function AllocationKpis({ plan, rows, fleetSize, held, board, queueMetric
         <dd className="tmr-kpi-value">
           {board?.slot_minutes != null ? t("s3_kpi_gate_value").replace("{n}", board.slot_minutes) : "—"}
         </dd>
-        <dd className="tmr-kpi-note" title={board?.capacity_basis}>
+        <dd className="tmr-kpi-note" title={basisText(board?.capacity_basis, t)}>
           {gateWindow
             ? t(lanes ? "s3_kpi_gate_note_lanes" : "s3_kpi_gate_note")
                 .replace("{from}", gateWindow.from)
@@ -60,12 +79,7 @@ export function AllocationKpis({ plan, rows, fleetSize, held, board, queueMetric
         </dd>
       </div>
       <div className="tmr-kpi is-model" data-provenance="simulated" title={t("s3_kpi_queue_title")}>
-        <dt>
-          {t("s3_kpi_queue")}
-          <Tag tone="model" title={t("s3_kpi_queue_title")}>
-            {t("s3_model")}
-          </Tag>
-        </dt>
+        <dt>{t("s3_kpi_queue")}</dt>
         <dd className="tmr-kpi-value" data-testid="tmr-kpi-queue">
           {queueBefore != null && queueAfter != null
             ? t("s3_kpi_queue_value")
@@ -324,7 +338,9 @@ function DistrictTable({ plan }) {
                 <td>
                   <strong className="tmr-truck tmr-truck-plain">{row.label}</strong>
                 </td>
-                <td>{row.trucks.join(", ")}</td>
+                <td>
+                  <TruckCodes codes={row.trucks} max={DISTRICT_CODES} />
+                </td>
                 <td>{row.trips}</td>
                 <td>{number(row.tons)} t</td>
                 <td className="tmr-why-cell">{row.demand != null ? `${number(row.demand)} t` : "—"}</td>
@@ -368,7 +384,11 @@ function GateTable({ plan, board }) {
   return (
     <>
       {capacityLine && (
-        <p className="tmr-empty-row" data-testid="tmr-gate-capacity" title={plan.gate_capacity?.basis}>
+        <p
+          className="tmr-empty-row"
+          data-testid="tmr-gate-capacity"
+          title={basisText(plan.gate_capacity?.basis, t)}
+        >
           {capacityLine}
         </p>
       )}
@@ -381,11 +401,8 @@ function GateTable({ plan, board }) {
                 {t("s3_th_slot")}
               </th>
               <th scope="col">{t("s3_th_trucks")}</th>
-              <th scope="col" className="tmr-col-gate">
-                {t("s3_th_wait")}{" "}
-                <Tag tone="model" title={t("s3_wait_model_title")}>
-                  {t("s3_model")}
-                </Tag>
+              <th scope="col" className="tmr-col-gate" title={t("s3_wait_model_title")}>
+                {t("s3_th_wait")}
               </th>
             </tr>
           </thead>
@@ -397,7 +414,9 @@ function GateTable({ plan, board }) {
                     {row.start}–{row.end}
                   </strong>
                 </td>
-                <td>{row.trucks.join(", ")}</td>
+                <td>
+                  <TruckCodes codes={row.trucks} />
+                </td>
                 <td className="tmr-why-cell" data-testid="tmr-gate-wait">
                   {row.wait != null ? (
                     t("s3_wait_min").replace(

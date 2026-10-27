@@ -3,7 +3,8 @@
  * over a body. Never nest a Card inside a Card.
  * @param {{
  *   title?: any, titleId?: string, as?: string,
- *   aside?: any,     // muted text right of the title ("Next 90 minutes")
+ *   aside?: any,     // short muted text right of the title ("Next 90 minutes")
+ *   sub?: any,       // a quiet line under the title, for rules or legends too long for the aside
  *   actions?: any,   // buttons at the right end of the header
  *   flush?: boolean, // body without padding (tables, lists)
  *   className?: string, bodyClassName?: string, children: any
@@ -14,6 +15,7 @@ export function Card({
   titleId,
   as: Element = "section",
   aside,
+  sub,
   actions,
   flush = false,
   className = "",
@@ -28,11 +30,20 @@ export function Card({
       {...rest}
     >
       {(title || aside || actions) && (
-        <header className="ui-card-head">
-          {title && (
-            <h2 className="ui-card-title" id={titleId}>
-              {title}
-            </h2>
+        <header className={`ui-card-head${sub ? " has-sub" : ""}`}>
+          {title && sub ? (
+            <div className="ui-card-titles">
+              <h2 className="ui-card-title" id={titleId}>
+                {title}
+              </h2>
+              <p className="ui-card-sub">{sub}</p>
+            </div>
+          ) : (
+            title && (
+              <h2 className="ui-card-title" id={titleId}>
+                {title}
+              </h2>
+            )
           )}
           {aside && <span className="ui-card-aside">{aside}</span>}
           {actions && <div className="ui-card-actions">{actions}</div>}

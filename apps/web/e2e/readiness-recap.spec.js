@@ -37,8 +37,9 @@ test("Reports shows the day against the plan and never invents a figure", async 
   // A figure the day has not recorded reads "—", never 0.
   const weighed = page.getByTestId("recap-actual").locator(".rp-stat-v");
   if (recap.actual.receipt_tons == null) await expect(weighed).toHaveText("—");
-  // The forecast figure is a backtest, labelled Model, and the chart says it is the pilot fleet.
-  await expect(page.getByTestId("recap-error")).toContainText("Model");
+  // The forecast figure is a backtest (model provenance, no badge), and the chart says it is
+  // the pilot fleet.
+  await expect(page.getByTestId("recap-error").locator("[data-provenance=model]")).toHaveCount(1);
   await expect(page.getByTestId("reports-chart")).toContainText("Armada pilot");
   await expect(page.getByTestId("recap-summary")).toContainText("Draf");
   await expect(page.getByTestId("reports-carried")).toBeVisible();
