@@ -25,6 +25,8 @@ import {
   queuedDispatchIds,
   safetyNotices,
 } from "./driverHelpers.js";
+import { instructionText } from "./driverText.js";
+import { stopText } from "../../shared/format/stopText.js";
 import { SafetyLines, SyncChip } from "./DriverPanels.jsx";
 import { StopProof } from "./StopProof.jsx";
 import { etaLabelKey, haversineKm, readPhoto, straightLineEta, useDriverTrip } from "./tripApi.js";
@@ -284,9 +286,9 @@ function StopsSheet({ spj, stops, pendingIndex, target, onClose }) {
                 <div className="drt-stop-body">
                   <h3>
                     <span className="drt-sr">{t("drv11_stop_prefix").replace("{n}", i + 1)} </span>
-                    {stop.name}
+                    {stopText(stop.name, t)}
                   </h3>
-                  <p>{[stop.kecamatan, stop.address].filter(Boolean).join(" — ")}</p>
+                  <p>{[stop.kecamatan, stopText(stop.address, t)].filter(Boolean).join(" — ")}</p>
                   {completed && stop.queued && <p data-testid="stop-queued-note">{t("drv6_stop_queued")}</p>}
                 </div>
                 {completed ? (
@@ -506,7 +508,7 @@ export function RouteScreen({
               <Flag size={12} />
             </span>
             <p className="drt-trip-text">
-              <strong>{next.name}</strong>
+              <strong>{stopText(next.name, t)}</strong>
               <span>{nextLabel}</span>
             </p>
             <button
@@ -529,7 +531,7 @@ export function RouteScreen({
             <button type="button" className="drt-tip-text" onClick={onOpenInstructions}>
               {t("d2_route_tip")
                 .replace("{time}", clockTime(tip.created_at) || "—")
-                .replace("{text}", tip.instruction)}
+                .replace("{text}", instructionText(tip.instruction, t))}
             </button>
             <button
               type="button"
@@ -602,7 +604,7 @@ export function RouteScreen({
                   {stop && (
                     <span className="drt-sr">{t("drv11_stop_prefix").replace("{n}", pendingIndex + 1)} </span>
                   )}
-                  {next.name}
+                  {stopText(next.name, t)}
                 </h2>
                 <p title={spj.spj_number}>{subParts.join(" · ")}</p>
               </div>

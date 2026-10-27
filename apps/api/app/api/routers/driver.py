@@ -296,9 +296,9 @@ def create_driver_exception(
     if body.spj_id:
         spj = SPJ_STORE.get(body.spj_id)
         if spj is None:
-            raise HTTPException(status_code=404, detail=f"SPJ {body.spj_id} not found")
+            raise HTTPException(status_code=404, detail=f"Work order {body.spj_id} not found")
         if spj.truck_code != truck_code:
-            raise HTTPException(status_code=409, detail="The SPJ belongs to another truck.")
+            raise HTTPException(status_code=409, detail="The work order belongs to another truck.")
     try:
         rec = _store_exception(body, truck_code, principal["username"], operation_id)
     except StorageError as exc:

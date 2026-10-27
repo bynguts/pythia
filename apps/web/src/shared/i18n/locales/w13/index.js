@@ -7,9 +7,13 @@ import { d1Id } from "./d1.id.js";
 import { d2En } from "./d2.en.js";
 import { d2Id } from "./d2.id.js";
 import { fEn } from "./f.en.js";
+import { fhEn } from "./fh.en.js";
+import { fhId } from "./fh.id.js";
 import { fId } from "./f.id.js";
 import { lEn } from "./l.en.js";
 import { lId } from "./l.id.js";
+import { lxEn } from "./lx.en.js";
+import { lxId } from "./lx.id.js";
 import { olEn } from "./ol.en.js";
 import { olId } from "./ol.id.js";
 import { s1En } from "./s1.en.js";
@@ -28,6 +32,10 @@ import { ocEn } from "./oc.en.js";
 import { ocId } from "./oc.id.js";
 import { nsEn } from "./ns.en.js";
 import { nsId } from "./ns.id.js";
+import { cpEn } from "./cp.en.js";
+import { cpId } from "./cp.id.js";
+import { eaEn } from "./ea.en.js";
+import { eaId } from "./ea.id.js";
 
 export const w13En = {
   ...fEn,
@@ -43,6 +51,10 @@ export const w13En = {
   ...slEn,
   ...ocEn,
   ...nsEn,
+  ...fhEn,
+  ...cpEn,
+  ...lxEn,
+  ...eaEn,
 };
 export const w13Id = {
   ...fId,
@@ -58,4 +70,8 @@ export const w13Id = {
   ...slId,
   ...ocId,
   ...nsId,
+  ...fhId,
+  ...cpId,
+  ...lxId,
+  ...eaId,
 };

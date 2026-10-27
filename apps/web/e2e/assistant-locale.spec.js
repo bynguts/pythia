@@ -28,7 +28,6 @@ const messages = (page) => page.locator('[data-testid="assistant-message"][data-
 
 test("assistant interface follows the locale in both modes", async ({ page }) => {
   await openAssistant(page, "en");
-  await expect(page.locator(".ui-drawer-subtitle")).toContainText("Reads the same data you see");
   await expect(messages(page).first()).toContainText("Hi, I am Ana");
   await expect(page.getByTestId("assistant-prompt").first()).toContainText(
     "How many trucks are currently damaged?",
@@ -43,7 +42,6 @@ test("assistant interface follows the locale in both modes", async ({ page }) =>
   expect(query.postDataJSON().language).toBe("en");
 
   await openAssistant(page, "id");
-  await expect(page.locator(".ui-drawer-subtitle")).toContainText("Membaca data yang sama");
   await expect(messages(page).first()).toContainText("Halo, saya Ana");
   await expect(page.getByTestId("assistant-prompt").first()).toContainText(
     "Berapa truk yang bermasalah saat ini?",

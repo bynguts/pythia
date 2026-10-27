@@ -111,7 +111,7 @@ export const s3Id = {
   s3_kpi_gate_note: "{from}–{to}",
   s3_kpi_queue: "Antrean di gerbang",
   s3_kpi_queue_value: "{a} → {b}",
-  s3_kpi_queue_note: "mnt/truk jika semua ritasi diberi slot · seluruh kota · simulasi",
+  s3_kpi_queue_note: "mnt/truk bila semua ritasi diberi slot · model gerbang seluruh kota",
   s3_kpi_queue_title:
     "Simulasi seluruh kota pada hari normal: semua ritasi tanpa jeda vs semua ritasi diberi slot. Bukan hasil rencana ini: slot dan tunggu modelnya ada di Slot gerbang.",
   s3_kpi_sim_title: "Armada pilot simulasi",

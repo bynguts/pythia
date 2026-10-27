@@ -297,7 +297,7 @@ def _backup_candidates(
                 "pretrip_at": raw.get("created_at"),
                 "zone": truck.get("assigned_zone"),
                 "classification": "FIELD",
-                "basis": "pre-trip passed today, no open damage, no active SPJ, not duty-blocked",
+                "basis": "pre-trip passed today, no open damage, no active work order, not duty-blocked",
             }
         )
     out.sort(key=lambda c: (c["pretrip_at"] or "", c["truck_code"]))

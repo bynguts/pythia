@@ -29,6 +29,7 @@ from datetime import UTC, date, datetime
 from uuid import uuid4
 
 from app.core.env import getenv, local_today
+from app.core.errors import CodedError
 from app.fleet.facilities import provenance_payload, route_ground_truth
 from app.fleet.osrm import road_route
 
@@ -216,7 +217,7 @@ def _validate_evidence(evidence: dict, demo: bool = False, weigh_on_site: bool =
     # Weighing is part of a stop only when the SPJ orders on-site weighing.
     if weigh_on_site and not weighing:
         raise ValueError(
-            "evidence.weighing is required: this SPJ orders on-site weighing (weigh_on_site); "
+            "evidence.weighing is required: this work order orders on-site weighing (weigh_on_site); "
             "add at least one weighing entry"
         )
     for i, entry in enumerate(weighing):
@@ -1167,7 +1168,7 @@ class SpjStore:
     def _fetch_status(self, connection: sqlite3.Connection, spj_id: str) -> sqlite3.Row:
         row = connection.execute("SELECT * FROM spj WHERE spj_id=?", (spj_id,)).fetchone()
         if row is None:
-            raise ValueError(f"SPJ {spj_id} not found")
+            raise ValueError(f"Work order {spj_id} not found")
         return row
 
     def add_stop(
@@ -1189,7 +1190,7 @@ class SpjStore:
         def mutate(connection):
             row = self._fetch_status(connection, spj_id)
             if row["status"] != "draft":
-                raise ValueError("stops can only be added to a draft SPJ")
+                raise ValueError("stops can only be added to a draft work order")
             idx = connection.execute(
                 "SELECT COALESCE(MAX(idx)+1, 0) FROM spj_stops WHERE spj_id=?", (spj_id,)
             ).fetchone()[0]
@@ -1214,24 +1215,32 @@ class SpjStore:
         def mutate(connection):
             row = self._fetch_status(connection, spj_id)
             if row["status"] != "draft":
-                raise ValueError(f"cannot activate SPJ in status '{row['status']}'")
+                raise CodedError(
+                    "spj_not_draft",
+                    f"cannot activate a work order in status '{row['status']}'",
+                    status=row["status"],
+                )
             # A trip worked today on tomorrow's SPJ would count for tomorrow: the day
             # recap, the KPIs and readiness read the SPJ date, so it is refused.
             if row["date"] > _today():
                 raise ValueError(
-                    f"cannot activate: this SPJ is for {row['date']} and today is {_today()}; "
+                    f"cannot activate: this work order is for {row['date']} and today is {_today()}; "
                     "activate it on that day so its trips and tonnes count for the right day"
                 )
             stop_count = connection.execute(
                 "SELECT COUNT(*) FROM spj_stops WHERE spj_id=?", (spj_id,)
             ).fetchone()[0]
             if stop_count < 1:
-                raise ValueError("SPJ needs at least one stop before activation")
+                raise CodedError("spj_no_stops", "The work order needs at least one stop before activation")
             active = connection.execute(
                 "SELECT spj_id FROM spj WHERE truck_code=? AND status='aktif'", (row["truck_code"],)
             ).fetchone()
             if active is not None:
-                raise ValueError(f"truck {row['truck_code']} already has an active SPJ")
+                raise CodedError(
+                    "spj_truck_busy",
+                    f"truck {row['truck_code']} already has an active work order",
+                    truck=row["truck_code"],
+                )
 
             # #58: resolve road-following geometry for the whole path.
             stops = connection.execute(
@@ -1338,7 +1347,7 @@ class SpjStore:
         def mutate(connection):
             row = self._fetch_status(connection, spj_id)
             if row["status"] != "aktif":
-                raise ValueError("stops can only be completed on an active SPJ")
+                raise ValueError("stops can only be completed on an active work order")
             # Gap 6: the audit names who did it; legacy callers without an actor
             # fall back to the SPJ's creator as before.
             who = actor or row["created_by"]
@@ -1420,7 +1429,7 @@ class SpjStore:
         def mutate(connection):
             row = self._fetch_status(connection, spj_id)
             if row["status"] != "aktif":
-                raise ValueError("stops can only be skipped on an active SPJ")
+                raise ValueError("stops can only be skipped on an active work order")
             stops = connection.execute(
                 "SELECT idx, status FROM spj_stops WHERE spj_id=? ORDER BY idx", (spj_id,)
             ).fetchall()
@@ -1475,7 +1484,7 @@ class SpjStore:
         def mutate(connection):
             row = self._fetch_status(connection, spj_id)
             if row["status"] != "selesai":
-                raise ValueError("receipt can only be submitted after the SPJ is selesai")
+                raise ValueError("receipt can only be submitted after the work order is completed")
             if not photo_name.strip() or not photo_b64.strip():
                 raise ValueError("receipt photo_name and photo_b64 are required")
             if total_weight_kg is not None and not (0 < total_weight_kg <= MAX_STOP_WEIGHT_KG):
@@ -1548,7 +1557,7 @@ class SpjStore:
         def mutate(connection):
             row = connection.execute("SELECT ocr FROM spj_receipts WHERE spj_id=?", (spj_id,)).fetchone()
             if row is None:
-                raise ValueError("no receipt recorded for this SPJ")
+                raise ValueError("no receipt recorded for this work order")
             current = json.loads(row["ocr"]) if row["ocr"] else {}
             stored = dict(ocr)
             if current.get("status") in RECEIPT_OCR_REVIEWED:
@@ -1595,7 +1604,7 @@ class SpjStore:
         def mutate(connection):
             row = connection.execute("SELECT * FROM spj_receipts WHERE spj_id=?", (spj_id,)).fetchone()
             if row is None:
-                raise ValueError("no receipt recorded for this SPJ")
+                raise ValueError("no receipt recorded for this work order")
             ocr = (
                 json.loads(row["ocr"])
                 if row["ocr"]
@@ -1668,7 +1677,7 @@ class SpjStore:
         def mutate(connection):
             row = self._fetch_status(connection, spj_id)
             if row["status"] != "aktif":
-                raise ValueError(f"cannot complete SPJ in status '{row['status']}'")
+                raise ValueError(f"cannot complete a work order in status '{row['status']}'")
             # A skipped stop was decided by dispatch: it needs no evidence and stays skipped.
             unevidenced = connection.execute(
                 "SELECT COUNT(*) FROM spj_stops WHERE spj_id=? AND status != 'skipped' "
@@ -1724,7 +1733,7 @@ class SpjStore:
         def mutate(connection):
             row = self._fetch_status(connection, spj_id)
             if row["status"] != "draft":
-                raise ValueError(f"cannot reassign SPJ in status '{row['status']}'")
+                raise ValueError(f"cannot reassign a work order in status '{row['status']}'")
             connection.execute(
                 "UPDATE spj SET truck_code=?, driver_name=? WHERE spj_id=?",
                 (truck_code, driver_name, spj_id),
@@ -1749,7 +1758,7 @@ class SpjStore:
         def mutate(connection):
             row = self._fetch_status(connection, spj_id)
             if row["status"] not in ("draft", "aktif"):
-                raise ValueError(f"cannot cancel SPJ in status '{row['status']}'")
+                raise ValueError(f"cannot cancel a work order in status '{row['status']}'")
             connection.execute("UPDATE spj SET status='batal' WHERE spj_id=?", (spj_id,))
             self._audit(connection, spj_id, "cancel", actor or row["created_by"])
 
@@ -1768,7 +1777,7 @@ class SpjStore:
         def mutate(connection):
             row = self._fetch_status(connection, spj_id)
             if row["status"] not in ("aktif", "selesai"):
-                raise ValueError(f"cannot record a gate arrival for SPJ in status '{row['status']}'")
+                raise ValueError(f"cannot record a gate arrival for a work order in status '{row['status']}'")
             if connection.execute(
                 "SELECT 1 FROM spj_audit WHERE spj_id=? AND action='gate_arrival'", (spj_id,)
             ).fetchone():
@@ -1783,7 +1792,7 @@ class SpjStore:
         with closing(self._connect()) as connection:
             spj = self._load_spj(connection, spj_id)
         if spj is None:
-            raise ValueError(f"SPJ {spj_id} not found")
+            raise ValueError(f"Work order {spj_id} not found")
         return spj
 
     def _commit(self, spj: Spj) -> Spj:
@@ -1796,7 +1805,7 @@ class SpjStore:
         def mutate(connection):
             row = connection.execute("SELECT status FROM spj WHERE spj_id=?", (spj.spj_id,)).fetchone()
             if row is None:
-                raise ValueError(f"SPJ {spj.spj_id} not found")
+                raise ValueError(f"Work order {spj.spj_id} not found")
             connection.execute(
                 "UPDATE spj SET status=?, completed_at=? WHERE spj_id=?",
                 (spj.status, spj.completed_at, spj.spj_id),

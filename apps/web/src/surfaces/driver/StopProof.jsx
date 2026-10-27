@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ArrowLeft, Camera, Check, CloudOff, Scale } from "lucide-react";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { stopText } from "../../shared/format/stopText.js";
 import { enqueueDriverOperation, OutboxStorageFullError } from "./DriverOutbox.js";
 import { SyncChip } from "./DriverPanels.jsx";
 import { clockTime } from "./driverHelpers.js";
@@ -237,7 +238,7 @@ export function StopProof({
         </button>
         <h2 className="drt-head-title" id={`drt-proof-title-${index}`}>
           <span className="drt-sr">{t("drv11_stop_prefix").replace("{n}", index + 1)} </span>
-          {stop.name}
+          {stopText(stop.name, t)}
         </h2>
         <SyncChip online={online} pending={pending} flushing={flushing} />
       </header>
@@ -337,7 +338,7 @@ export function StopProof({
               return (
                 <div className="drt-field-row" key={fraction}>
                   <label className="drt-field-label" htmlFor={id}>
-                    {fraction}
+                    {t(`s4_wo_fraction_${fraction.toLowerCase()}`)}
                   </label>
                   <div className={`drt-input-wrap${bad ? " is-invalid" : ""}`}>
                     <input

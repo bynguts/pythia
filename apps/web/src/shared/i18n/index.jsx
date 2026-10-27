@@ -15,6 +15,36 @@ export function translate(lang, key) {
   return translations[lang]?.[key] || translations.en?.[key] || key;
 }
 
+// Text the app wrote into a record in either language (a follow-up note, a driver's
+// default answer): the first of `keys` whose template it fills, with the filled values,
+// so it can be said again in the current language. null when it is someone's own words.
+export function fromCatalog(text, keys) {
+  if (!text) return null;
+  for (const key of keys) {
+    for (const lang of ["en", "id"]) {
+      const parts = String(translations[lang]?.[key] || "").split(/\{(\w+)\}/);
+      if (!parts[0] && parts.length === 1) continue;
+      const names = parts.filter((_, i) => i % 2);
+      const source = parts
+        .map((part, i) => (i % 2 ? "(.+?)" : part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+        .join("");
+      const match = new RegExp(`^${source}$`).exec(text);
+      if (match) return { key, params: Object.fromEntries(names.map((name, i) => [name, match[i + 1]])) };
+    }
+  }
+  return null;
+}
+
+// `text` said in the current language when the app wrote it from one of `keys`, else as written.
+export function localizeRecorded(text, keys, t) {
+  const known = fromCatalog(text, keys);
+  if (!known) return text;
+  return Object.entries(known.params).reduce(
+    (out, [name, value]) => out.replaceAll(`{${name}}`, value),
+    t(known.key),
+  );
+}
+
 const LanguageContext = createContext({
   lang: "en",
   setLang: () => {},

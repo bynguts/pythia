@@ -326,7 +326,7 @@ def test_local_fallback_answers_in_english_with_the_scenario_card(fake_scene):
             "What if 80 mm of rain hits during a 50k concert at GBK tomorrow?",
             {},
             tool_ctx=_ctx(),
-            language="id",
+            language="en",
         )
     assert result["provider"] == "local"
     assert result["tools_used"] == ["run_scenario"]
@@ -349,7 +349,7 @@ def test_local_fallback_answers_in_english_with_the_scenario_card(fake_scene):
 def test_local_fallback_answers_in_indonesian(fake_scene):
     with patch.dict("os.environ", {}, clear=True):
         result = answer_with_openai_if_configured(
-            "kalau hujan 80 mm pas konser 50 ribu di GBK besok?", {}, tool_ctx=_ctx(), language="en"
+            "kalau hujan 80 mm pas konser 50 ribu di GBK besok?", {}, tool_ctx=_ctx(), language="id"
         )
     assert result["answer"].startswith("Mode lokal")
     assert "Skenario" in result["answer"] and "bukan pengamatan" in result["answer"]

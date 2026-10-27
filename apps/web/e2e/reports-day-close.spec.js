@@ -129,6 +129,9 @@ test("Reports shows the closed day with its provenance and honest limits", async
   await page.route(/\/api\/whatsapp\/summary/, (route) =>
     route.fulfill({ status: 409, json: { detail: "Choose an alert group first." } }),
   );
+  await page.route(/\/api\/whatsapp\/language/, (route) =>
+    route.fulfill({ json: { lang: "id", source: "default", options: ["id", "en"] } }),
+  );
   await open(page, "/app/reports");
   await expect(page.getByTestId("reports-page")).toHaveAttribute("data-date", today(), { timeout: 30000 });
   await expect(page.getByTestId("recap-trips")).toContainText("152 of 156");
@@ -138,9 +141,9 @@ test("Reports shows the closed day with its provenance and honest limits", async
   await expect(page.getByTestId("recap-gate-wait")).toContainText("16 min");
   await expect(page.getByTestId("recap-gate-wait")).toContainText("longest 47 min");
   // #honesty: the error is the monthly Bantargebang intake backtest on real data, with its period,
-  // tagged Model, never read as daily accuracy.
+  // model provenance (no badge), never read as daily accuracy.
   await expect(page.getByTestId("recap-error")).toContainText("4.3%");
-  await expect(page.getByTestId("recap-error")).toContainText("Model");
+  await expect(page.getByTestId("recap-error").locator("[data-provenance=model]")).toHaveCount(1);
   await expect(page.getByTestId("recap-error")).toContainText("Monthly intake backtest error");
   await expect(page.getByTestId("recap-error")).toContainText("Bantargebang, real data · 2022-12–2026-04");
   await expect(page.getByTestId("recap-error")).not.toContainText("Forecast error");
@@ -161,10 +164,14 @@ test("Reports shows the closed day with its provenance and honest limits", async
   await expect(carried).toContainText("approved");
 
   // With no alert group the send falls back to WhatsApp with the text ready.
+  // The send first reads the WhatsApp message language, so the fallback opens a moment later.
   await page.getByTestId("reports-send").click();
+  await expect.poll(() => page.evaluate(() => window.__opened?.length || 0)).toBe(1);
   const opened = await page.evaluate(() => window.__opened);
-  expect(opened).toHaveLength(1);
-  expect(decodeURIComponent(opened[0])).toContain("152 of 156 trips done.");
+  // WhatsApp text is in the message language (Settings → WhatsApp, default Indonesian), whatever
+  // language the console shows.
+  expect(decodeURIComponent(opened[0])).toContain("152 dari 156 ritase.");
+  expect(decodeURIComponent(opened[0])).not.toContain("trips done");
 });
 
 test("Reports reads — for a day with no records, never 0", async ({ page }) => {

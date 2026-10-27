@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { formatDriverName } from "../../shared/format/driverName.js";
 
 // #83: presentation-only translations. The API enums (`berat`, `baru`,
 // `selesai`, …) stay stable on the wire; they are mapped to locale copy at
@@ -72,7 +73,7 @@ export function DamageReportsPanel() {
                 <tr key={r.report_id}>
                   <td>{new Date(r.created_at).toLocaleString(locale)}</td>
                   <td>{r.truck_code}</td>
-                  <td>{r.driver_name}</td>
+                  <td>{formatDriverName(r.driver_name, t).label}</td>
                   <td>{r.component}</td>
                   <td>
                     <span className={`pill ${r.severity === "berat" ? "danger" : ""}`}>

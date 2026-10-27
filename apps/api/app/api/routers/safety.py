@@ -18,6 +18,7 @@ from app.api.deps import ensure_truck_access, require_any_principal, require_per
 from app.api.state import history_store
 from app.core.auth import has_permission
 from app.core.env import getenv
+from app.core.errors import error_detail
 from app.core.storage import StorageError
 from app.field import safety
 
@@ -58,7 +59,7 @@ def _storage_503(exc: StorageError) -> HTTPException:
 
 
 def enforce_duty_limit(truck_code: str, action: str) -> None:
-    """409 with an Indonesian reason when observed duty is past the block limit.
+    """409 with a coded duty-block refusal when observed duty is past the block limit.
 
     Called before an SPJ is created or activated. A start allowed by an
     override is written to the history log with the override's actor.
@@ -69,7 +70,7 @@ def enforce_duty_limit(truck_code: str, action: str) -> None:
             "safety_duty_block",
             {"truck_code": truck_code, "action": action, "duty_minutes": check["duty_minutes"]},
         )
-        raise HTTPException(status_code=409, detail=check["reason"])
+        raise HTTPException(status_code=409, detail=safety.duty_detail(truck_code, check))
     if check["override"] is not None:
         history_store.record_event(
             "safety_override_used",
@@ -141,7 +142,7 @@ def safety_override(
             body.truck_code, body.reason, principal["username"], before["classification"]
         )
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail=error_detail(exc)) from exc
     except StorageError as exc:
         raise _storage_503(exc) from exc
     history_store.record_event(

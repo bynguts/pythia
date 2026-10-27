@@ -38,5 +38,5 @@ export const nsId = {
   ns_rule_receipt_plate: "Aturan: pelat di tiket berbeda dengan truk SPJ",
   ns_rule_receipt_arithmetic: "Aturan: bruto − tara berbeda dari neto tercetak lebih dari {value} kg",
   ns_rule_receipt_ocr: "Aturan: OCR tiket dan bruto yang diisi berbeda lebih dari {value}% (min {min_kg} kg)",
-  ns_rule_review: "Aturan: {value}",
+  ns_rule_review: "Aturan: catatan ini perlu ditinjau",
 };

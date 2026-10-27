@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from app.core.env import getenv
+from app.core.storage import RecordStore, StorageError
 
 # Placeholder JIDs: the repo never carries a real number. Point alerts at a
 # real chat/group with PYTHIA_WA_DEFAULT_CHAT_ID / PYTHIA_WA_DEFAULT_GROUP_ID.
@@ -23,14 +25,121 @@ def default_group_id() -> str:
     return getenv("WA_DEFAULT_GROUP_ID") or PLACEHOLDER_GROUP_ID
 
 
-def build_alert_message(truck_code: str, issue: str, recommendation: str) -> str:
-    return (
-        "PYTHIA ALERT\n"
-        f"Truck: {truck_code}\n"
-        f"Issue: {issue}\n"
-        f"Recommended action: {recommendation}\n"
-        "Please confirm field response in the Pythia Field App."
-    )
+# Every WhatsApp message is written in ONE language: the Settings → WhatsApp choice
+# (stored), else PYTHIA_WA_LANG, else Indonesian, the language the drivers read.
+WA_LANGS = ("id", "en")
+_SETTING_ID = "message_language"
+_SETTINGS: RecordStore | None = None
+
+WA_TEMPLATES: dict[str, dict[str, str]] = {
+    "alert": {
+        "id": (
+            "PERINGATAN PYTHIA\nTruk: {truck}\nKendala: {issue}\nRekomendasi tindakan: {recommendation}\n"
+            "Mohon konfirmasi tindak lanjut di aplikasi sopir Pythia."
+        ),
+        "en": (
+            "PYTHIA ALERT\nTruck: {truck}\nIssue: {issue}\nRecommended action: {recommendation}\n"
+            "Please confirm the field response in the Pythia driver app."
+        ),
+    },
+    "alert_driver": {
+        "id": (
+            "Yth. {driver} (unit {truck} / {plate}),\nPythia mendeteksi kendala: {issue}.\n"
+            "Rekomendasi rute/tindakan: {recommendation}.\nMohon segera konfirmasi di aplikasi sopir Pythia."
+        ),
+        "en": (
+            "Hello {driver} (unit {truck} / {plate}),\nPythia detected an issue: {issue}.\n"
+            "Recommended route/action: {recommendation}.\nPlease confirm right away in the Pythia driver app."
+        ),
+    },
+    "alert_group": {
+        "id": (
+            "⚠️ PERINGATAN OPERASIONAL PYTHIA ⚠️\nUnit: {truck} ({driver} / {plate})\n"
+            "Kendala: {issue}\nRekomendasi tindakan: {recommendation}"
+        ),
+        "en": (
+            "⚠️ PYTHIA OPERATIONAL ALERT ⚠️\nUnit: {truck} ({driver} / {plate})\n"
+            "Issue: {issue}\nRecommended action: {recommendation}"
+        ),
+    },
+    "test": {
+        "id": (
+            "Pythia terhubung ke WhatsApp. Grup ini menerima peringatan operasional Pythia. "
+            "Pesan uji, tidak perlu dibalas."
+        ),
+        "en": (
+            "Pythia is connected to WhatsApp. This group receives Pythia operational alerts. "
+            "Test message, no reply needed."
+        ),
+    },
+    "gate_hold": {
+        "id": "Tahan keberangkatan {n} menit; slot gerbang baru Anda {slot}.",
+        "en": "Hold your departure {n} min; your new gate slot is {slot}.",
+    },
+    "gate_safety": {
+        "id": (
+            "PYTHIA · PERINGATAN KESELAMATAN SOPIR\n"
+            "Truk {truck} sudah menunggu {h} jam {m} menit di gerbang {dest} (sejak {since} WIB).\n"
+            "Batas layanan DLH: {limit} jam.\n"
+            "Tindakan: prioritaskan bongkar atau rotasi sopir, lalu konfirmasi di Pythia.\n"
+            "Sumber: kejadian tercatat di aplikasi Pythia (bukan simulasi)."
+        ),
+        "en": (
+            "PYTHIA · DRIVER SAFETY ALERT\n"
+            "Truck {truck} has waited {h} h {m} min at the {dest} gate (since {since} WIB).\n"
+            "DLH service limit: {limit} h.\n"
+            "Action: prioritise unloading or rotate the driver, then confirm in Pythia.\n"
+            "Source: Pythia app event (not simulated)."
+        ),
+    },
+}
+
+
+def _settings() -> RecordStore:
+    global _SETTINGS
+    if _SETTINGS is None:
+        _SETTINGS = RecordStore("pythia_whatsapp_settings")
+    return _SETTINGS
+
+
+def message_language() -> tuple[str, str]:
+    """(lang, source): the stored Settings choice, else PYTHIA_WA_LANG, else Indonesian."""
+    try:
+        stored = (_settings().get(_SETTING_ID) or {}).get("lang")
+    except StorageError:
+        stored = None
+    if stored in WA_LANGS:
+        return stored, "settings"
+    env = (getenv("WA_LANG") or "").strip().lower()
+    if env in WA_LANGS:
+        return env, "env"
+    return "id", "default"
+
+
+def set_message_language(lang: str) -> None:
+    if lang not in WA_LANGS:
+        raise ValueError(f"lang must be one of {', '.join(WA_LANGS)}")
+    _settings().write(_SETTING_ID, {"lang": lang})
+
+
+def wa_text(key: str, lang: str | None = None, **params: Any) -> str:
+    """One WhatsApp template, fully in ``lang`` (default: the message language setting)."""
+    if lang not in WA_LANGS:
+        lang = message_language()[0]
+    return WA_TEMPLATES[key][lang].format(**params)
+
+
+def driver_display(name: str, lang: str) -> str:
+    """A fleet driver name in the message language: 'Pengemudi Sim 03' reads 'Driver Sim 03' in English."""
+    if lang != "en":
+        return name
+    if name == "Supir Pythia":
+        return "Pythia driver"
+    return re.sub(r"^(Pengemudi|Supir)\b", "Driver", name)
+
+
+def build_alert_message(truck_code: str, issue: str, recommendation: str, lang: str | None = None) -> str:
+    return wa_text("alert", lang, truck=truck_code, issue=issue, recommendation=recommendation)
 
 
 GROUPS_TIMEOUT_SECONDS = 25.0

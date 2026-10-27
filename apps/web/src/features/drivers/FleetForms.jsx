@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { ApiError, apiPost } from "../../shared/api/client.js";
+import { apiPost } from "../../shared/api/client.js";
+import { apiErrorText } from "../../shared/api/errorText.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { formatDriverName } from "../../shared/format/driverName.js";
 import { Button } from "../../shared/ui/Button.jsx";
 import { Drawer } from "../../shared/ui/Drawer.jsx";
 import { jakartaToday } from "../readiness/clock.js";
-import { PRETRIP_ITEM_KEYS } from "../readiness/readinessModel.js";
+import { componentCode, PRETRIP_ITEM_KEYS } from "../readiness/readinessModel.js";
 
 function useSubmit(onDone) {
+  const { lang } = useLanguage();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function run(task) {
@@ -16,7 +19,7 @@ function useSubmit(onDone) {
       await task();
       onDone();
     } catch (reason) {
-      setError(reason instanceof ApiError && reason.detail ? reason.detail : "x");
+      setError(apiErrorText(lang, reason, "x"));
     }
     setBusy(false);
   }
@@ -31,7 +34,7 @@ function TruckSelect({ id, trucks, value, onChange }) {
       {trucks.map((truck) => (
         <option key={truck.truck_code} value={truck.truck_code}>
           {truck.truck_code}
-          {truck.driver_name ? ` · ${truck.driver_name}` : ""}
+          {truck.driver_name ? ` · ${formatDriverName(truck.driver_name, t).label}` : ""}
         </option>
       ))}
     </select>
@@ -81,7 +84,7 @@ export function LogDamageDrawer({ open, onClose, trucks, onSaved }) {
             apiPost("/damage-reports", {
               truck_code: truck,
               driver_name: driver || "—",
-              component: component.trim(),
+              component: componentCode(component.trim()),
               severity,
               note: note.trim(),
               source: "dispatcher",
@@ -182,7 +185,7 @@ export function BookServiceDrawer({ open, onClose, trucks, onSaved }) {
             apiPost("/service-records", {
               truck_code: truck,
               service_date: date,
-              component: component.trim(),
+              component: componentCode(component.trim()),
               description: description.trim(),
               next_due_date: nextDue || null,
             }),

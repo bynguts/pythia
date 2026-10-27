@@ -3,6 +3,7 @@ import { CheckCircle2, Route, Wrench } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { apiGet } from "../../shared/api/client.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
+import { formatDriverName } from "../../shared/format/driverName.js";
 import { ListRow } from "../../shared/ui/ListRow.jsx";
 import { MetricStrip } from "../../shared/ui/MetricStrip.jsx";
 import "./drivers.css";
@@ -209,7 +210,7 @@ export function DriverAnalytics() {
                           <td>
                             <span className="drv-person">
                               <i aria-hidden="true">{initials(driver.driver_name)}</i>
-                              <strong>{driver.driver_name}</strong>
+                              <strong>{formatDriverName(driver.driver_name, t).label}</strong>
                             </span>
                           </td>
                           <td className="drv-mono">{driver.truck_code}</td>
@@ -259,7 +260,11 @@ export function DriverAnalytics() {
                               ? t("set11_drv_row_off_route").replace("{d}", distance(driver.deviation_meters))
                               : t("w10num_drv_damaged_badge")
                           }
-                          meta={[driver.truck_code, driver.driver_name, driver.assigned_zone]
+                          meta={[
+                            driver.truck_code,
+                            formatDriverName(driver.driver_name, t).label,
+                            driver.assigned_zone,
+                          ]
                             .filter(Boolean)
                             .join(" · ")}
                           action={{ label: t("set11_drv_open_fleet"), onClick: () => navigate("/fleet") }}

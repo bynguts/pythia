@@ -14,15 +14,16 @@ test("tomorrow's gate slots stay within capacity and each shows its modelled wai
   const plan = await buildAndSubmit(page, day);
   await expect(page.getByTestId("tmr-truck-table")).toBeVisible({ timeout: 60000 });
 
-  // The queue KPI is the city-wide simulation, not this plan's result.
+  // The queue KPI is the city-wide gate model, not this plan's result.
   await expect(page.getByTestId("tmr-kpi-queue").locator("..")).toContainText(
-    "if every trip were slotted · city-wide · simulated",
+    "with every trip slotted · city-wide gate model",
   );
 
   await page.getByTestId("tmr-view-gate").click();
   const table = page.getByTestId("tmr-gate-table");
   await expect(table).toBeVisible();
-  await expect(table.locator("thead .ui-tag-model")).toHaveText("Model");
+  await expect(table).toHaveAttribute("data-provenance", "model");
+  await expect(table.locator("thead .ui-tag-model")).toHaveCount(0);
 
   const capacity = plan.gate_capacity;
   const rows = table.getByTestId("tmr-gate-row");

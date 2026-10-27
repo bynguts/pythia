@@ -1,5 +1,6 @@
 import { Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { apiErrorText } from "../../shared/api/errorText.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { formatDriverName } from "../../shared/format/driverName.js";
 import { useConsole } from "../../app/console/useConsole.js";
@@ -92,7 +93,7 @@ export function WorkOrdersScreen() {
       {(error || offline) && !items.length ? (
         <ErrorState
           title={t("s4_wo_error_title")}
-          reason={error?.detail || error?.message || t("s4_error_reason")}
+          reason={apiErrorText(lang, error, t("s4_error_reason"))}
           onRetry={reload}
         />
       ) : loading ? (

@@ -14,14 +14,20 @@ from app.api.schemas import WhatsAppAlertRequest
 from app.api.state import history_store
 from app.core.env import getenv
 from app.core.paths import DRIVER_CONTACTS_EXAMPLE_FILE, DRIVER_CONTACTS_FILE
+from app.core.storage import StorageError
 from app.field.privacy import mask_phones_in_text
 from app.integrations import wa_gateway_process
 from app.integrations.whatsapp import (
     PLACEHOLDER_GROUP_ID,
+    WA_LANGS,
     OpenWAClient,
     build_alert_message,
     default_chat_id,
     default_group_id,
+    driver_display,
+    message_language,
+    set_message_language,
+    wa_text,
 )
 
 router = APIRouter()
@@ -222,8 +228,10 @@ def whatsapp_status(
     health = client.health()
     configured = client.is_configured()
     group_jid, group_source = alert_group()
+    lang, lang_source = message_language()
     return {
         "configured": configured,
+        "message_language": {"lang": lang, "source": lang_source},
         "connected": health.get("connected", False),
         "link_state": link_state(configured, health),
         "linked_account": masked_account(health.get("me")),
@@ -293,10 +301,31 @@ def set_whatsapp_alert_group(
     return {"alert_group": {"jid": masked, "source": "contacts_file"}}
 
 
-TEST_MESSAGE = (
-    "Pythia: pesan uji koneksi WhatsApp. Grup ini menerima peringatan operasional Pythia. "
-    "Tidak perlu dibalas."
-)
+class MessageLanguageRequest(BaseModel):
+    lang: str = Field(pattern="^(id|en)$")
+
+
+@router.get("/api/whatsapp/language")
+def get_message_language(
+    _role: str = Depends(require_any_permission("dashboard:read", "dispatch:create")),
+) -> dict:
+    """The language every WhatsApp message is written in (Settings → WhatsApp)."""
+    lang, source = message_language()
+    return {"lang": lang, "source": source, "options": list(WA_LANGS)}
+
+
+@router.post("/api/whatsapp/language")
+def post_message_language(
+    payload: MessageLanguageRequest, principal: dict = Depends(require_any_principal(*PAIRING_PERMISSIONS))
+) -> dict:
+    """Store the WhatsApp message language; the dispatcher and the administrator choose it."""
+    try:
+        set_message_language(payload.lang)
+    except StorageError as error:
+        raise HTTPException(status_code=503, detail="The WhatsApp settings could not be saved.") from error
+    history_store.record_event("whatsapp_language", {"lang": payload.lang, "actor": principal["username"]})
+    lang, source = message_language()
+    return {"lang": lang, "source": source, "options": list(WA_LANGS)}
 
 
 @router.post("/api/whatsapp/test")
@@ -305,7 +334,7 @@ def whatsapp_test_message(principal: dict = Depends(require_any_principal(*PAIRI
     jid, source = alert_group()
     if source == "placeholder":
         raise HTTPException(status_code=409, detail="Choose an alert group before sending a test message.")
-    result = OpenWAClient.from_env().send_text(jid, TEST_MESSAGE)
+    result = OpenWAClient.from_env().send_text(jid, wa_text("test"))
     masked = mask_phones_in_text(jid)
     sent = bool(result.get("sent"))
     history_store.record_event(
@@ -359,8 +388,16 @@ def whatsapp_alert(
     config = load_contacts()
     info = get_truck_info(payload.truck_code)
 
+    lang = message_language()[0]
     driver_name = info.get("driver_name", "Supir Pythia")
     plate_number = info.get("plate_number", "B 1234 CD")
+    fields = {
+        "driver": driver_display(driver_name, lang),
+        "truck": payload.truck_code,
+        "plate": plate_number,
+        "issue": payload.issue,
+        "recommendation": payload.recommendation,
+    }
 
     responses = {}
     attempted = []
@@ -368,12 +405,7 @@ def whatsapp_alert(
     # 1. Send to Driver
     if config.get("send_to_driver", True):
         driver_jid = driver_chat_id(config, driver_name)
-        driver_msg = (
-            f"Yth. Bapak {driver_name} (Supir Unit {payload.truck_code} / {plate_number}),\n"
-            f"Anda terdeteksi mengalami kendala: {payload.issue}.\n"
-            f"Rekomendasi rute/tindakan: {payload.recommendation}.\n"
-            f"Harap segera respon di aplikasi Pythia Field App."
-        )
+        driver_msg = wa_text("alert_driver", lang, **fields)
         res_driver = client.send_text(driver_jid, driver_msg)
         responses["driver"] = res_driver
         attempted.append(("driver", res_driver))
@@ -392,12 +424,7 @@ def whatsapp_alert(
     # 2. Send to Group
     if config.get("send_to_group", True):
         group_jid = config.get("group_jid") or default_group_id()
-        group_msg = (
-            "⚠️ PYTHIA OPERATIONAL ALERT ⚠️\n"
-            f"Unit: {payload.truck_code} ({driver_name} / {plate_number})\n"
-            f"Kendala: {payload.issue}\n"
-            f"Rekomendasi Tindakan: {payload.recommendation}"
-        )
+        group_msg = wa_text("alert_group", lang, **fields)
         res_group = client.send_text(group_jid, group_msg)
         responses["group"] = res_group
         attempted.append(("group", res_group))

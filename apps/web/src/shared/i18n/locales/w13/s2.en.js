@@ -8,7 +8,7 @@ export const s2En = {
   s2_col_pretrip: "Pretrip",
   s2_col_duty: "Duty hours",
   s2_col_instruction: "Instruction",
-  s2_col_spj: "SPJ",
+  s2_col_spj: "Work order",
   s2_col_vehicle: "Vehicle",
   s2_col_action: "Action",
   s2_col_issue: "Issue",

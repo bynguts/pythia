@@ -34,7 +34,7 @@ async function assertShellCopy(page, mode) {
   await expect(page.getByTestId("nav-readiness")).toContainText(id ? "Kesiapan pagi" : "Morning readiness");
   await expect(page.getByTestId("console-search")).toHaveAttribute(
     "placeholder",
-    id ? "Cari truk, SPJ, TPS" : "Search truck, SPJ, TPS",
+    id ? "Cari truk, SPJ, TPS" : "Search truck, work order, TPS",
   );
   await expect(page.getByTestId("ask-ana")).toHaveText(id ? "Tanya Ana" : "Ask Ana");
   await expect(page.getByTestId("supervisor-toggle")).toContainText(id ? "Mode pengawas" : "Supervisor mode");

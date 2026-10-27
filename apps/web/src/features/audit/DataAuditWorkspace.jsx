@@ -227,11 +227,11 @@ const LIMITATIONS_ID = {
     "Rata-rata timbulan harian per kota untuk tiap tahun; tidak tersedia resolusi harian atau per kecamatan.",
   "Monthly landfill intake totals; inconsistent tonase formats normalized on load; two corrupted rows corrected (2024-01 fix inferred, pending DLH confirmation) and the missing month 2023-12 kept as a gap.":
     "Total sampah masuk TPA per bulan; format tonase yang tidak konsisten dinormalisasi saat dimuat; dua baris rusak dikoreksi (koreksi 2024-01 bersifat dugaan, menunggu konfirmasi DLH) dan bulan 2023-12 yang hilang tetap dicatat sebagai celah.",
-  "Vehicle counts per wilayah/type; not live telematics.":
-    "Jumlah kendaraan menurut wilayah dan jenis; bukan telemetri langsung.",
+  "Yearly vehicle counts per wilayah/type, 2023-2025; the fleet size is the latest year's trucks (motor carts listed in 2024 are not trucks); not live telematics.":
+    "Jumlah kendaraan tahunan menurut wilayah dan jenis, 2023-2025; ukuran armada adalah truk tahun terakhir (gerobak motor yang tercatat pada 2024 bukan truk); bukan telemetri langsung.",
   "TPS registry; no operational throughput capacity.": "Registri TPS; tidak memuat kapasitas operasional.",
-  "Per-kecamatan generation modeled by SILIKA population formula; lat/lng column labels swapped in source.":
-    "Timbulan per kecamatan dimodelkan dengan rumus populasi SILIKA; label kolom lat/lng tertukar pada sumber.",
+  "Per-kecamatan generation modeled by SILIKA population formula (real source, modeled values); lat/lng column labels swapped in source.":
+    "Timbulan per kecamatan dimodelkan dengan rumus populasi SILIKA (sumber riil, nilai dimodelkan); label kolom lat/lng tertukar pada sumber.",
   "TPS capacity is a PROXY (not official operational capacity); demand side is real SILIKA.":
     "Kapasitas TPS adalah PROKSI (bukan kapasitas operasional resmi); sisi kebutuhan berasal dari data riil SILIKA.",
   "2013 census snapshot; used only as relative population weights.":
@@ -243,8 +243,8 @@ const LIMITATIONS_ID = {
   "267 DKI village polygons; administrative boundaries only.":
     "267 poligon kelurahan DKI; hanya batas administratif.",
   "Official SILIKA TPS location coordinate layer.": "Lapisan koordinat lokasi TPS dari SILIKA resmi.",
-  "Official SILIKA Wajib Retribusi commercial waste generator coordinate layer.":
-    "Lapisan koordinat penghasil sampah komersial Wajib Retribusi dari SILIKA resmi.",
+  "Official SILIKA Wajib Retribusi commercial waste generator coordinate layer; names, addresses and coordinators removed — category and area only.":
+    "Lapisan koordinat penghasil sampah komersial Wajib Retribusi dari SILIKA resmi; nama, alamat, dan koordinator dihapus — hanya kategori dan wilayah.",
 };
 
 const BACKEND_MODEL_NOTE = COPY.en.modelSourceNote;

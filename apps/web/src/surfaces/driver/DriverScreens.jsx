@@ -40,6 +40,7 @@ import {
   pretripSummary,
   queuedDispatchIds,
 } from "./driverHelpers.js";
+import { instructionText } from "./driverText.js";
 
 // Wave 13 driver core (lane D1): the top bar, the sync pill, the safety gate,
 // the instructions screen, the waiting-for-signal and signed-out states and the
@@ -686,15 +687,6 @@ function localDay(offset = 0) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-function ModelTag() {
-  const { t } = useLanguage();
-  return (
-    <span className="drv-tag is-model" title={t("d1_model_title")}>
-      {t("d1_model")}
-    </span>
-  );
-}
-
 // One instruction card: the approved plan's trips (structured fields) or a
 // dispatcher's message (text only). "Depart HH:MM" is the headline when the
 // plan carries a gate slot; both times are model output and tagged so.
@@ -749,7 +741,12 @@ function InstructionCard({ dispatch, plan, cachedTag }) {
         </p>
         <h2 className="drv-h3">{title}</h2>
         {depart && (
-          <div className="drv-slot" data-testid="driver-instruction-depart">
+          <div
+            className="drv-slot"
+            data-testid="driver-instruction-depart"
+            data-provenance="model"
+            title={t("d1_model_title")}
+          >
             <Warehouse size={20} aria-hidden="true" />
             <span className="drv-slot-text">
               <small>{t("d1_depart_label")}</small>
@@ -769,7 +766,6 @@ function InstructionCard({ dispatch, plan, cachedTag }) {
                 </small>
               )}
             </span>
-            <ModelTag />
           </div>
         )}
       </div>
@@ -800,16 +796,15 @@ function InstructionCard({ dispatch, plan, cachedTag }) {
           )}
         </ol>
       ) : (
-        <p className="drv-instr-text driver-instruction-text">{dispatch.instruction}</p>
+        <p className="drv-instr-text driver-instruction-text">{instructionText(dispatch.instruction, t)}</p>
       )}
       {areas.length > 0 && (
-        <p className="drv-why">
+        <p className="drv-why" data-provenance="model" title={t("d1_model_title")}>
           <Info size={15} aria-hidden="true" />
           <span>
             {fill(t("d1_reason"), {
               areas: areas.map((a) => `Kec. ${a.kecamatan} ${nf(a.forecast_tons)} t`).join(", "),
-            })}{" "}
-            <ModelTag />
+            })}
           </span>
         </p>
       )}

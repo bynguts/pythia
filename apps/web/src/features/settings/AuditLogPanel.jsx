@@ -7,17 +7,33 @@ import { DataTable } from "../../shared/ui/DataTable.jsx";
 import { EmptyState } from "../../shared/ui/EmptyState.jsx";
 import { ErrorState } from "../../shared/ui/ErrorState.jsx";
 import { Skeleton } from "../../shared/ui/Skeleton.jsx";
+import { componentLabel } from "../readiness/readinessModel.js";
 import { exportAuditLog } from "./auditExport.js";
 
 const SHOWN = 100;
 // Long free text stays out of the table; the export still carries it.
 const SKIP = new Set(["msg", "message", "photo_b64"]);
 
-function detail(payload) {
+// A field name or event type in the UI language when the catalog has it, else as recorded.
+function said(t, key, raw) {
+  const text = t(key);
+  return text === key ? raw.replaceAll("_", " ") : text;
+}
+
+const SEVERITY_KEYS = { berat: "s2_sev_major", ringan: "s2_sev_minor" };
+
+function value(t, key, raw) {
+  if (typeof raw === "boolean") return t(raw ? "lx_yes" : "lx_no");
+  if (key === "component") return componentLabel(raw, t);
+  if (key === "severity" && SEVERITY_KEYS[raw]) return t(SEVERITY_KEYS[raw]);
+  return String(raw).slice(0, 60);
+}
+
+function detail(payload, t) {
   return Object.entries(payload || {})
-    .filter(([key, value]) => !SKIP.has(key) && value != null && typeof value !== "object" && value !== "")
+    .filter(([key, raw]) => !SKIP.has(key) && raw != null && typeof raw !== "object" && raw !== "")
     .slice(0, 3)
-    .map(([key, value]) => `${key}: ${String(value).slice(0, 60)}`)
+    .map(([key, raw]) => `${said(t, `lx_akey_${key}`, key)}: ${value(t, key, raw)}`)
     .join(" · ");
 }
 
@@ -61,12 +77,14 @@ export function AuditLogPanel() {
       key: "type",
       label: t("s5_set_audit_event"),
       width: 220,
-      render: (row) => <span className="st-strong">{row.event_type.replaceAll("_", " ")}</span>,
+      render: (row) => (
+        <span className="st-strong">{said(t, `lx_evt_${row.event_type}`, row.event_type)}</span>
+      ),
     },
     {
       key: "detail",
       label: t("s5_set_audit_detail"),
-      render: (row) => <span className="st-mid">{detail(row.payload) || "—"}</span>,
+      render: (row) => <span className="st-mid">{detail(row.payload, t) || "—"}</span>,
     },
   ];
 
@@ -92,7 +110,7 @@ export function AuditLogPanel() {
           caption={t("s5_set_audit_title")}
           columns={columns}
           rows={events.slice(0, SHOWN)}
-          rowKey={(row) => `${row.created_at}-${row.event_type}-${detail(row.payload)}`}
+          rowKey={(row) => `${row.created_at}-${row.event_type}-${detail(row.payload, t)}`}
         />
       </div>
     );

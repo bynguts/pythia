@@ -152,7 +152,9 @@ test("a plan instruction leads with the departure time and tags the modelled gat
   await expect(item.getByTestId("driver-instruction-depart")).toContainText(
     "Gate slot at TPA Bantargebang · 10:00–10:15",
   );
-  await expect(item.getByTestId("driver-instruction-depart").getByText("Model")).toBeVisible();
+  // Founder decision 2026-10-27: no Model badge; the planned time keeps its provenance.
+  await expect(item.getByTestId("driver-instruction-depart")).toHaveAttribute("data-provenance", "model");
+  await expect(item.getByText("Model", { exact: true })).toHaveCount(0);
   await expect(item).toContainText("Kec. Kalideres");
   await expect(item).toContainText("Trip plan · 1 trip");
   // Problems go back with a reason instead of an acceptance.

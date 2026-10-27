@@ -216,6 +216,24 @@ export function lanesFromBasis(basis) {
   return match ? Number(match[1]) : null;
 }
 
+// The weighbridge assumption the API states in English, said in the UI language from its numbers.
+export function basisText(basis, t) {
+  const s = String(basis || "");
+  const whatIf = /(\d+) of (\d+) weighbridge lanes open x ([\d.]+) trucks\/h \(([\d.]+)-min/.exec(s);
+  if (whatIf) {
+    const [, lanes, of, tph, cycle] = whatIf;
+    return t("lx_basis_whatif")
+      .replace("{lanes}", lanes)
+      .replace("{of}", of)
+      .replace("{tph}", tph)
+      .replace("{cycle}", cycle);
+  }
+  const plain = /(\d+) weighbridge lanes x ([\d.]+) trucks\/h \(([\d.]+)-min/.exec(s);
+  if (!plain) return undefined;
+  const [, lanes, tph, cycle] = plain;
+  return t("lx_basis").replace("{lanes}", lanes).replace("{tph}", tph).replace("{cycle}", cycle);
+}
+
 // The fleet trucks a field fact keeps out of the plan (as the plan recorded them).
 export function heldTrucks(plan) {
   return (plan?.scenario?.auto_inputs?.field_facts_applied || []).map((f) => f.truck_code);

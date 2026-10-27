@@ -1,7 +1,9 @@
 import { Check, Lock, MessageCircle, TriangleAlert } from "lucide-react";
 import { Fragment, useState } from "react";
 import { ApiError, apiPost } from "../../shared/api/client.js";
-import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
+import { apiErrorText } from "../../shared/api/errorText.js";
+import { stopText } from "../../shared/format/stopText.js";
+import { localeFor, localizeRecorded, useLanguage } from "../../shared/i18n/index.jsx";
 import { formatDriverName } from "../../shared/format/driverName.js";
 import { useConsole } from "../../app/console/useConsole.js";
 import { Button, Skeleton, StatusDot, Tag } from "../../shared/ui/index.js";
@@ -10,11 +12,20 @@ import { EvidencePhoto, ReceiptReview } from "../fleet/SpjPanel.jsx";
 import { AUDIT_KEYS, FRACTIONS, mergeAudit, tonnes } from "./workOrdersModel.js";
 import { useWorkOrderDetail } from "./useWorkOrders.js";
 
-const ACTOR_NAMES = { operations_optimizer: "Pythia", optimizer: "Pythia", manager_central: "Dispatcher" };
+const ACTOR_NAMES = { operations_optimizer: "Pythia", optimizer: "Pythia", "system:ocr": "Pythia OCR" };
+const ACTOR_ROLES = { manager_central: "dispatcher" };
+// Reasons the API writes itself in English; the action label already says it.
+const SYSTEM_REASONS = new Set(["demo_straight_fallback", "straight_fallback"]);
+// Reasons Operations writes from the catalog, in the writer's language (NeedsYouPanel).
+const RECORDED_REASONS = ["s1_skip_reason", "s1_reassign_reason"];
+const ROLE_NAMES = ["administrator", "supervisor", "dispatcher", "executive", "auditor", "driver"];
 
-function actorLabel(actor) {
+// Who wrote an audit entry: Pythia itself, a role (sign-in name == role) in the UI language, else as recorded.
+function actorLabel(actor, t) {
   if (!actor) return "";
   if (ACTOR_NAMES[actor]) return ACTOR_NAMES[actor];
+  const role = ACTOR_ROLES[actor] || actor;
+  if (ROLE_NAMES.includes(role)) return t(`pln6_profile_role_${role}`);
   return actor.charAt(0).toUpperCase() + actor.slice(1);
 }
 
@@ -28,11 +39,11 @@ function whenLabel(iso, lang) {
   return `${clock} ${day}`;
 }
 
-function errorText(err, t) {
+function errorText(err, t, lang) {
   if (!(err instanceof ApiError)) return t("s4_wo_network_error");
   if (err.status === 401) return t("s4_wo_err_session");
   if (err.status === 403) return t("s4_wo_err_forbidden");
-  return err.detail || err.message;
+  return apiErrorText(lang, err, t("lx_err_failed"));
 }
 
 function stopGaps(stop, weighingRequired) {
@@ -75,7 +86,7 @@ function StopProof({ spj, stop, listStop, number, t, lang }) {
       </span>
       <div className="wo-stop-body">
         <div className="wo-stop-head">
-          <h4>{stop.name}</h4>
+          <h4>{stopText(stop.name, t)}</h4>
           <span className="wo-muted">{when}</span>
         </div>
         {(stop.photos || stop.has_arrival || showWeights) && (done || stop.has_arrival) && (
@@ -173,7 +184,7 @@ export function WorkOrderDetail({ spj, state, onChanged }) {
       onChanged();
       return true;
     } catch (err) {
-      setError(errorText(err, t));
+      setError(errorText(err, t, lang));
       return false;
     } finally {
       setBusy(false);
@@ -229,7 +240,7 @@ export function WorkOrderDetail({ spj, state, onChanged }) {
       <header className="wo-detail-head">
         <div className="wo-detail-title">
           {/* A long number (DLH-DKI/SPJ/26-10-2026/000001) wraps only after a slash. */}
-          <h2 id="wo-detail-title">
+          <h2 id="wo-detail-title" translate="no">
             {String(spj.spj_number || "")
               .split("/")
               .map((part, index, parts) => (
@@ -372,7 +383,7 @@ export function WorkOrderDetail({ spj, state, onChanged }) {
                       </span>
                       <div className="wo-stop-body">
                         <div className="wo-stop-head">
-                          <h4>{stop.name}</h4>
+                          <h4>{stopText(stop.name, t)}</h4>
                         </div>
                       </div>
                     </li>
@@ -431,8 +442,10 @@ export function WorkOrderDetail({ spj, state, onChanged }) {
                       : entry.action}
                   </strong>
                   <small>
-                    {whenLabel(entry.created_at, lang)} · {actorLabel(entry.actor)}
-                    {entry.reason ? ` · ${entry.reason}` : ""}
+                    {whenLabel(entry.created_at, lang)} · {actorLabel(entry.actor, t)}
+                    {entry.reason && !SYSTEM_REASONS.has(entry.action)
+                      ? ` · ${localizeRecorded(entry.reason, RECORDED_REASONS, t)}`
+                      : ""}
                   </small>
                 </li>
               ))}

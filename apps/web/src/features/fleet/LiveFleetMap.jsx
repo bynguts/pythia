@@ -4,6 +4,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Compass, Info, LocateFixed, Minus, Plus } from "lucide-react";
 import { translate, useLanguage } from "../../shared/i18n/index.jsx";
+import { formatDriverName } from "../../shared/format/driverName.js";
 import { apiFetch } from "../../shared/api/client.js";
 import { fleetDenominator } from "../../shared/hooks/useBaseline.js";
 import { routeMeta, routeName, routeSource } from "./decisionRoute.js";
@@ -305,7 +306,7 @@ function renderTruckPopup(truckData, truthData, followingCode, lang = "id") {
   return `
       <div class="map-popup">
         <strong>${truckData.truck_code}</strong>
-        <span>${truckData.driver_name} - ${truckData.assigned_zone}</span>
+        <span>${formatDriverName(truckData.driver_name, (key) => translate(lang, key)).label} - ${truckData.assigned_zone}</span>
         <p>${statusTxt}</p>
         ${activityTxt ? `<small>${activityTxt}</small>` : ""}
         ${damageTxt ? `<small>${damageTxt}</small>` : ""}
@@ -2168,7 +2169,7 @@ export function LiveFleetMap({
         id: "truck-" + t.truck_code,
         kind: lang === "id" ? "Truk" : "Truck",
         label: t.truck_code,
-        sub: `${t.driver_name} · ${t.assigned_zone}`,
+        sub: `${formatDriverName(t.driver_name, (key) => translate(lang, key)).label} · ${t.assigned_zone}`,
         coords,
       });
     });

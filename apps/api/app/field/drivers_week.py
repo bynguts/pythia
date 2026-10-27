@@ -136,9 +136,9 @@ def drivers_week(days: int, today: date) -> dict[str, Any]:
         "drivers": out,
         "classification": "FIELD",
         "notes": {
-            "trips": "SPJs with a weighbridge receipt",
+            "trips": "work orders with a weighbridge receipt",
             "proof_complete_pct": "completed stops closed with evidence; an override is not proof",
-            "on_time_pct": "gate arrival at or before the planned gate-slot end (MODEL slot); plan SPJs only",
+            "on_time_pct": "gate arrival at or before the planned gate-slot end (MODEL slot); plan work orders only",
             "avg_duty_min": "first pre-trip or activation to the last receipt, per day with both",
         },
     }

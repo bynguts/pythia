@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Send } from "lucide-react";
 import { apiGet, apiPost } from "../../shared/api/client.js";
-import { useLanguage } from "../../shared/i18n/index.jsx";
+import { fromCatalog, useLanguage } from "../../shared/i18n/index.jsx";
 import { Button } from "../../shared/ui/Button.jsx";
 import { Drawer } from "../../shared/ui/Drawer.jsx";
 import { StatusDot } from "../../shared/ui/StatusDot.jsx";
@@ -155,7 +155,7 @@ export function InstructionDrawer({ open, onClose, truckCodes, role }) {
               ? t("s1_instruction_driver_ready")
               : answer.status === "PENDING"
                 ? t("s1_instruction_driver_waiting")
-                : answer.note
+                : answer.note && !fromCatalog(answer.note, ["drv6_instr_issue_note"])
                   ? t("s1_instruction_driver_issue").replace("{reason}", answer.note)
                   : t("s1_instruction_driver_issue_plain")}
           </StatusDot>

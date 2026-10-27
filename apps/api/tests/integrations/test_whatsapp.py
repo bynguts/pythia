@@ -10,6 +10,7 @@ class WhatsAppTests(unittest.TestCase):
             truck_code="T-047",
             issue="Route deviation 3448m from assigned corridor",
             recommendation="Use Route B - Daan Mogot Recovery",
+            lang="en",
         )
 
         self.assertIn("PYTHIA ALERT", message)

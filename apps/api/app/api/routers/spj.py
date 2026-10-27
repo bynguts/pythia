@@ -29,6 +29,7 @@ from app.api.schemas import (
 )
 from app.api.state import _refresh_fleet_caches, history_store
 from app.core.auth import has_permission
+from app.core.errors import error_detail
 from app.core.storage import StorageError
 from app.field import timbangan_ocr
 from app.field.receipt_checks import checks_for
@@ -139,7 +140,7 @@ def _spj_payload(spj) -> dict[str, Any]:
 def _readable_spj(spj_id: str, principal: dict):
     spj = SPJ_STORE.get(spj_id)
     if spj is None:
-        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
+        raise HTTPException(status_code=404, detail=f"Work order {spj_id} not found")
     ensure_truck_access(principal, spj.truck_code)
     return spj
 
@@ -156,13 +157,13 @@ def _spj_or_409(fn, *args, **kwargs):
     try:
         return _spj_payload(fn(*args, **kwargs))
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail=error_detail(exc)) from exc
     except StorageError as exc:
         # A mutation that never reached the durable store must not look like
         # success — the caller has to know the write did not commit.
         logger.error("SPJ persistence failure: %s", exc)
         raise HTTPException(
-            status_code=503, detail="SPJ storage is unavailable; the change was not saved."
+            status_code=503, detail="Work order storage is unavailable; the change was not saved."
         ) from exc
 
 
@@ -640,7 +641,7 @@ def review_spj_receipt(
     """
     spj = _readable_spj(spj_id, principal)
     if spj.receipt is None:
-        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} has no receipt to review")
+        raise HTTPException(status_code=404, detail=f"Work order {spj_id} has no receipt to review")
     actor = principal["username"]
     reviewed = _spj_or_409(
         SPJ_STORE.review_receipt,
@@ -741,7 +742,7 @@ def _evidence_response(spj_id: str, n: int, principal: dict, thumb: bool) -> Res
     _readable_spj(spj_id, principal)
     photo = SPJ_STORE.evidence_photo(spj_id, n)
     if photo is None:
-        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} has no evidence photo {n}")
+        raise HTTPException(status_code=404, detail=f"Work order {spj_id} has no evidence photo {n}")
     raw, media_type = _decode_image(photo["photo_b64"])
     variant = "original"
     if thumb:

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { fleetDenominator } from "../../shared/hooks/useBaseline.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
+import { formatDriverName } from "../../shared/format/driverName.js";
 import { Search } from "lucide-react";
 
 const ACTIVE_STATUSES = ["active", "deviation"];
@@ -132,7 +133,9 @@ export function FleetTable({ trucks, onOpenTripHistory }) {
                       </div>
                     </td>
                     <td className="driver-name-cell">
-                      <strong style={{ color: "var(--ui-ink)", fontWeight: 600 }}>{truck.driver_name}</strong>
+                      <strong style={{ color: "var(--ui-ink)", fontWeight: 600 }}>
+                        {formatDriverName(truck.driver_name, t).label}
+                      </strong>
                     </td>
                     <td>
                       <span className="zone-tag">{truck.assigned_zone}</span>

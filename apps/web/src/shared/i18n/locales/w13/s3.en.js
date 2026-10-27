@@ -110,7 +110,7 @@ export const s3En = {
   s3_kpi_gate_note: "{from}–{to}",
   s3_kpi_queue: "Queue at gate",
   s3_kpi_queue_value: "{a} → {b}",
-  s3_kpi_queue_note: "min/truck if every trip were slotted · city-wide · simulated",
+  s3_kpi_queue_note: "min/truck with every trip slotted · city-wide gate model",
   s3_kpi_queue_title:
     "City-wide simulation of a normal day: every trip unstaggered vs every trip slotted. Not this plan's result: its slots and modelled waits are under Gate slots.",
   s3_kpi_sim_title: "Simulated pilot fleet",

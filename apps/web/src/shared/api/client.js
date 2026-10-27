@@ -9,6 +9,10 @@ export class ApiError extends Error {
     this.status = status;
     this.detail = detail;
     this.body = body;
+    // A coded refusal ({code, params, message}) the UI says in its own language.
+    const coded = body?.detail && typeof body.detail === "object" && !Array.isArray(body.detail);
+    this.code = coded ? body.detail.code || null : null;
+    this.params = coded ? body.detail.params || {} : {};
   }
 }
 
@@ -69,7 +73,13 @@ async function readJson(response) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     const detail =
-      typeof body?.detail === "string" ? body.detail : typeof body?.message === "string" ? body.message : "";
+      typeof body?.detail === "string"
+        ? body.detail
+        : typeof body?.detail?.message === "string"
+          ? body.detail.message
+          : typeof body?.message === "string"
+            ? body.message
+            : "";
     throw new ApiError(response.status, detail, body);
   }
   return body;

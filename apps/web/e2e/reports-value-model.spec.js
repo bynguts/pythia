@@ -28,7 +28,11 @@ test("Reports shows the value per 1,000 gate trips with its model label", async 
   const section = page.getByTestId("value-model");
   await expect(section).toBeVisible({ timeout: 30000 });
   await expect(section).toContainText("Value per 1,000 gate trips");
-  await expect(page.getByTestId("value-model-tag")).toHaveText("Model · Simulated × assumption");
+  // No badge (founder decision 2026-10-27): the head keeps the provenance and the tooltip.
+  const head = section.locator(".rp-value-head");
+  await expect(head).toHaveAttribute("data-provenance", "model");
+  await expect(head).toHaveAttribute("title", /gate-queue model/i);
+  await expect(page.getByTestId("value-model-tag")).toHaveCount(0);
   for (const level of ["low", "base", "high"]) {
     const hours = Math.round(model.scenarios[level].queue_truck_hours_returned).toLocaleString("en-US");
     await expect(page.getByTestId(`value-model-${level}`).locator(".rp-stat-v")).toHaveText(hours);
@@ -41,19 +45,28 @@ test("Reports shows the value per 1,000 gate trips with its model label", async 
   await expect(lowCell).toHaveText(
     Math.round(model.scenarios.low.queue_truck_hours_returned).toLocaleString("en-US"),
   );
-  await expect(table).toContainText("Idle diesel avoided (L, assumption)");
+  await expect(table).toContainText("Idle diesel saved (L)");
   await expect(table).toContainText(`Trips over the ${model.gate_alert_minutes}-min gate alert`);
   await expect(table).not.toContainText("Rp");
 
   const params = page.getByTestId("value-model-params");
   await params.locator("summary").click();
   await expect(params.locator("li")).toHaveCount(model.parameters.length);
-  await expect(page.getByTestId("value-model-param-idle_fuel_l_per_h")).toContainText("Assumption");
+  await expect(page.getByTestId("value-model-param-idle_fuel_l_per_h")).toHaveAttribute(
+    "data-provenance",
+    "assumption",
+  );
   await expect(page.getByTestId("value-model-param-idle_fuel_l_per_h")).toContainText(
     "no source in this repository",
   );
-  await expect(page.getByTestId("value-model-param-slot_adherence")).toContainText("Assumption");
-  await expect(page.getByTestId("value-model-param-wait_without_min")).toContainText("Simulated");
+  await expect(page.getByTestId("value-model-param-slot_adherence")).toHaveAttribute(
+    "data-provenance",
+    "assumption",
+  );
+  await expect(page.getByTestId("value-model-param-wait_without_min")).toHaveAttribute(
+    "data-provenance",
+    "simulated",
+  );
   await expect(params).toContainText("not a field measurement");
 
   // a11y: the strip folds to one column at 320 px without sideways scroll.

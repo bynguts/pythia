@@ -1,4 +1,5 @@
 // Pure derivations over GET /api/readiness for the Morning readiness screen (lane S2).
+import { fromCatalog } from "../../shared/i18n/index.jsx";
 
 // Pre-trip item key -> i18n key of its name.
 export const PRETRIP_ITEM_KEYS = {
@@ -9,7 +10,22 @@ export const PRETRIP_ITEM_KEYS = {
   oli: "s2_item_oil",
   bak_compactor: "s2_item_compactor",
   lampu: "s2_item_lights",
+  // Components a driver's quick breakdown / accident report files (api routers/driver.py).
+  mogok: "lx_item_breakdown",
+  kecelakaan: "lx_item_accident",
 };
+
+// A damage component code ("rem", "mogok") in the UI language; free text stays as typed.
+export function componentLabel(code, t) {
+  const key = PRETRIP_ITEM_KEYS[code];
+  return key ? t(key) : code;
+}
+
+// The code of a component picked or typed by its name in either language ("Brakes" -> "rem").
+export function componentCode(text) {
+  const known = fromCatalog(text, Object.values(PRETRIP_ITEM_KEYS));
+  return known ? Object.keys(PRETRIP_ITEM_KEYS).find((code) => PRETRIP_ITEM_KEYS[code] === known.key) : text;
+}
 
 // Blockers a driver can clear by answering a message (the "Remind drivers" set).
 const REMINDABLE = ["pretrip_missing", "instruction_pending"];
@@ -47,31 +63,30 @@ export function rowAction(truck, { canSwap, canMessage, canOverride, hasBackup }
   return "details";
 }
 
-// Indonesian text for the WhatsApp alert body: the driver reads it, whatever language the console is in.
-export function reminderText(truck) {
+// The WhatsApp alert body, through `wt` (a translator in the WhatsApp message language):
+// one language per message, whatever language the console is in.
+export function reminderText(truck, wt) {
   const missing = truck.blockers.includes("pretrip_missing");
   const unread = truck.blockers.includes("instruction_pending");
-  const issue = [missing && "pre-trip belum diisi", unread && "instruksi belum dikonfirmasi"]
+  const issue = [missing && wt("lx_wa_remind_pretrip"), unread && wt("lx_wa_remind_instruction")]
     .filter(Boolean)
-    .join(" dan ");
+    .join(wt("lx_wa_remind_and"));
   return {
     issue: issue.charAt(0).toUpperCase() + issue.slice(1),
-    recommendation: "Isi pre-trip dan konfirmasi instruksi di aplikasi Pythia sebelum berangkat",
+    recommendation: wt("lx_wa_remind_reco"),
   };
 }
 
 // One alert-group message for "Remind N drivers": a line per issue listing its trucks (stays
 // well under the 2000-character summary limit), then the shared ask.
-export function reminderSummary(trucks) {
+export function reminderSummary(trucks, wt) {
   const byIssue = new Map();
   for (const truck of trucks) {
-    const { issue } = reminderText(truck);
+    const { issue } = reminderText(truck, wt);
     byIssue.set(issue, [...(byIssue.get(issue) || []), truck.truck_code]);
   }
   const lines = [...byIssue].map(([issue, codes]) => `${issue}: ${codes.join(", ")}`);
-  return ["Pengingat Pythia sebelum berangkat", ...lines, `${reminderText(trucks[0]).recommendation}.`].join(
-    "\n",
-  );
+  return [wt("lx_wa_remind_head"), ...lines, `${reminderText(trucks[0], wt).recommendation}.`].join("\n");
 }
 
 // The approved plan of the board's day that holds a truck, with that truck's stops and gate slot.

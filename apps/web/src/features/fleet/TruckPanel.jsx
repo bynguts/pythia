@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { History, Play, Search, Square, X } from "lucide-react";
 import { apiFetch } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { formatDriverName } from "../../shared/format/driverName.js";
 import { ActionCard } from "./ActionCard.jsx";
 import { FleetHistoryPanel } from "./FleetHistoryPanel.jsx";
 import { formatDistance } from "./decisionRoute.js";
@@ -174,7 +175,7 @@ export function TruckDrawer({
             <span className="mono-id">{truck.truck_code}</span>{" "}
             <span className="mono-id truck-drawer-plate">{truck.plate_number}</span>
           </h3>
-          <p>{truck.driver_name}</p>
+          <p>{formatDriverName(truck.driver_name, t).label}</p>
         </div>
         <button
           type="button"

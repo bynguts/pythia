@@ -3,6 +3,7 @@ import { ArrowLeft, CircleCheck, Cloud, CloudOff, LogOut } from "lucide-react";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { SyncChip } from "./DriverPanels.jsx";
 import { clockTime, receiptWeightRows } from "./driverHelpers.js";
+import { safetyNote } from "./driverText.js";
 import { shortSpjNumber } from "./RouteOverview.jsx";
 
 const WEIGHT_ROW_NAMES = { gross_weight_kg: "gross", tare_weight_kg: "tare", net_weight_kg: "net" };
@@ -123,7 +124,9 @@ export function ShiftSummary({
             className="drt-stat"
             data-testid="summary-duty"
             data-provenance={dutySimulated ? "simulated" : undefined}
-            title={dutySimulated ? safety?.label || t("drv6_safety_class_simulated") : undefined}
+            title={
+              dutySimulated ? safetyNote(safety, t, lang) || t("drv6_safety_class_simulated") : undefined
+            }
           >
             <span>{t("d2_summary_duty")}</span>
             <strong>

@@ -18,6 +18,7 @@ from app.api.routers.forecast import predictions_kecamatan
 from app.api.schemas import EventPermitRequest, PlanReassignRequest
 from app.api.state import _OPERATIONS_PLAN_STORE, _tpa_cache, dispatch_center, history_store
 from app.core.env import today
+from app.core.errors import coded_detail
 from app.core.units import (
     TRUCK_CAPACITY_TONS,
     event_tons_for_attendance,
@@ -843,11 +844,19 @@ def reassign_operations_truck(
     with _reassign_lock(plan_id):
         plan = _OPERATIONS_PLAN_STORE.get(plan_id)
         if plan["status"] != "approved":
-            raise HTTPException(status_code=409, detail="Rencana belum disetujui.")
+            raise HTTPException(
+                status_code=409, detail=coded_detail("plan_not_approved", "The plan is not approved.")
+            )
         record = _OPERATIONS_PLAN_STORE.reassign_row(plan_id, from_truck)
         if record is not None and record["to_truck"] != to_truck:
             raise HTTPException(
-                status_code=409, detail=f"Truk {from_truck} sudah dialihkan ke Truk {record['to_truck']}."
+                status_code=409,
+                detail=coded_detail(
+                    "already_reassigned",
+                    f"Truck {from_truck} is already reassigned to truck {record['to_truck']}.",
+                    truck=from_truck,
+                    to=record["to_truck"],
+                ),
             )
         try:
             if record is None:
@@ -885,7 +894,10 @@ def reassign_operations_truck(
         except sqlite3.Error as error:
             logger.exception("reassign %s %s -> %s interrupted", plan_id, from_truck, to_truck)
             raise HTTPException(
-                status_code=503, detail="Pengalihan belum selesai; kirim ulang permintaan yang sama."
+                status_code=503,
+                detail=coded_detail(
+                    "reassign_incomplete", "The reassignment did not finish; send the same request again."
+                ),
             ) from error
     return {
         "plan_id": plan_id,
@@ -895,6 +907,9 @@ def reassign_operations_truck(
         "dispatch_id": record["new_dispatch_id"],
         "spj_id": record["spj_id"],
     }
+
+
+_SPJ_STARTED = coded_detail("spj_started", "The work order is already active; cancel it and create it again.")
 
 
 def _start_reassign(
@@ -912,16 +927,24 @@ def _start_reassign(
     if index is None or "fields" not in dispatches[index]:
         raise HTTPException(status_code=404, detail=f"Truck {from_truck} is not in plan {plan_id}.")
     if any(d.get("truck_code") == to_truck for d in dispatches):
-        raise HTTPException(status_code=409, detail=f"Truk {to_truck} sudah ada di rencana ini.")
+        raise HTTPException(
+            status_code=409,
+            detail=coded_detail(
+                "truck_in_plan", f"Truck {to_truck} is already in this plan.", truck=to_truck
+            ),
+        )
     if trucks[to_truck].get("is_damaged"):
-        raise HTTPException(status_code=409, detail=f"Truk {to_truck} sedang rusak.")
+        raise HTTPException(
+            status_code=409,
+            detail=coded_detail("truck_damaged", f"Truck {to_truck} is damaged.", truck=to_truck),
+        )
     duty = safety.duty_check(to_truck)
     if duty["blocked"]:
-        raise HTTPException(status_code=409, detail=duty["reason"])
+        raise HTTPException(status_code=409, detail=safety.duty_detail(to_truck, duty))
     link = next((r for r in _OPERATIONS_PLAN_STORE.spj_links(plan_id) if r["truck_code"] == from_truck), None)
     spj = SPJ_STORE.get(link["spj_id"]) if link and link["spj_id"] else None
     if spj is not None and spj.status != "draft":
-        raise HTTPException(status_code=409, detail="SPJ sudah aktif; batalkan dan buat ulang")
+        raise HTTPException(status_code=409, detail=_SPJ_STARTED)
 
     old = dispatches[index]
     header, _, rest = old["text"].partition("\n")
@@ -936,7 +959,7 @@ def _start_reassign(
                 spj.spj_id, to_truck, trucks[to_truck].get("driver_name") or "", actor=actor, reason=reason
             )
         except ValueError:
-            raise HTTPException(status_code=409, detail="SPJ sudah aktif; batalkan dan buat ulang") from None
+            raise HTTPException(status_code=409, detail=_SPJ_STARTED) from None
     return _OPERATIONS_PLAN_STORE.claim_reassign(
         plan_id,
         from_truck,

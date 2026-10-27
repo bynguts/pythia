@@ -39,7 +39,7 @@ def test_tomorrows_spj_cannot_be_activated_today(api_client, auth_headers):
     res = api_client.post(f"/api/spj/{spj.spj_id}/activate", headers=auth_headers("dispatcher"))
     assert res.status_code == 409, res.text
     detail = res.json()["detail"]
-    assert f"this SPJ is for {tomorrow}" in detail
+    assert f"this work order is for {tomorrow}" in detail
     assert f"today is {local_today().isoformat()}" in detail
     assert SPJ_STORE.get(spj.spj_id).status == "draft"
     SPJ_STORE.cancel(spj.spj_id, actor="admin")

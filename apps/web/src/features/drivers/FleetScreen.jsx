@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Plus, Wrench } from "lucide-react";
 import { useConsole } from "../../app/console/useConsole.js";
 import { apiPost } from "../../shared/api/client.js";
-import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
+import { fromCatalog, localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { Button } from "../../shared/ui/Button.jsx";
 import { Card } from "../../shared/ui/Card.jsx";
 import { DataTable } from "../../shared/ui/DataTable.jsx";
@@ -16,7 +16,7 @@ import { StatusDot } from "../../shared/ui/StatusDot.jsx";
 import { Tag } from "../../shared/ui/Tag.jsx";
 import { formatDriverName } from "../../shared/format/driverName.js";
 import { driverTag, formatDuty } from "../readiness/clock.js";
-import { PRETRIP_ITEM_KEYS } from "../readiness/readinessModel.js";
+import { componentLabel } from "../readiness/readinessModel.js";
 import { BookServiceDrawer, LogDamageDrawer } from "./FleetForms.jsx";
 import {
   ON_TIME_OK_PCT,
@@ -39,7 +39,10 @@ const SOURCE_KEYS = {
   pretrip: "s2_src_pretrip",
   driver_pwa: "s2_src_driver",
   dispatcher: "s2_src_dispatcher",
+  driver_exception: "lx_src_driver_exception",
 };
+// Notes the driver app or the API write when the driver typed none: the component says it.
+const AUTO_NOTES = ["drv_pretrip_no_reason", "lx_dmg_quick_breakdown", "lx_dmg_quick_accident"];
 
 function DriverChip({ name }) {
   const { t } = useLanguage();
@@ -141,9 +144,8 @@ export function FleetScreen() {
 
   const rows = tab === "open" ? stats.open : stats.fixedThisWeek;
   const issueText = (report) => {
-    const key = PRETRIP_ITEM_KEYS[report.component];
-    const part = key ? t(key) : report.component;
-    return report.note || part;
+    const part = componentLabel(report.component, t);
+    return report.note && !fromCatalog(report.note, AUTO_NOTES) ? report.note : part;
   };
   const damageColumns = [
     {
@@ -261,7 +263,7 @@ export function FleetScreen() {
       label: t("s2_col_avg_duty"),
       render: (d) => (
         <span className={warnMin && d.avg_duty_min >= warnMin ? "flt-amber" : undefined}>
-          {formatDuty(d.avg_duty_min)}
+          {formatDuty(d.avg_duty_min, t("lx_unit_h"))}
         </span>
       ),
     },
@@ -432,20 +434,13 @@ export function FleetScreen() {
               <Card
                 title={t("s2_duty_title")}
                 titleId="flt-duty-title"
-                aside={
+                sub={
                   warnMin
                     ? fill(t("s2_duty_aside"), {
                         warn: Math.round(warnMin / 60),
                         stop: Math.round(blockMin / 60),
                       })
                     : null
-                }
-                actions={
-                  dutySimulated ? (
-                    <Tag tone="model" title={t("s2_prov_duty")} data-provenance="simulated">
-                      {t("s2_duty_sim")}
-                    </Tag>
-                  ) : null
                 }
                 flush
               >
@@ -470,7 +465,9 @@ export function FleetScreen() {
                             </Tag>
                           )}
                           {row.state === "warn" && <Tag tone="warn">{t("s2_duty_relief")}</Tag>}
-                          <span className={`flt-duty-time is-${tone}`}>{formatDuty(row.minutes)}</span>
+                          <span className={`flt-duty-time is-${tone}`}>
+                            {formatDuty(row.minutes, t("lx_unit_h"))}
+                          </span>
                         </div>
                         <Bar value={row.minutes} max={scaleMax} tone={tone}>
                           <span
@@ -508,8 +505,8 @@ export function FleetScreen() {
                     return (
                       <li key={`${item.truck_code}-${item.component}`}>
                         <strong>{item.truck_code}</strong>
-                        <span className="flt-clip" title={item.component}>
-                          {item.component}
+                        <span className="flt-clip" title={componentLabel(item.component, t)}>
+                          {componentLabel(item.component, t)}
                         </span>
                         <StatusDot tone={tone}>{label}</StatusDot>
                       </li>

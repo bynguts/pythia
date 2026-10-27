@@ -117,7 +117,8 @@ export const s5Id = {
   s5_set_wb_name: "API jembatan timbang",
   s5_set_wb_desc: "Membaca bobot gerbang langsung dari Bantargebang",
   s5_set_prov_title: "Data dan asal data",
-  s5_set_prov_sub: "Untuk auditor dan pimpinan: sumber di balik setiap angka.",
+  s5_set_prov_sub:
+    "Cara Pythia divalidasi: setiap sumber, apa yang diisinya, dan seberapa baru, di satu tempat untuk auditor dan pimpinan.",
   s5_set_prov_failed: "Sumber data tidak dapat dimuat",
   s5_set_failed_reason: "Server tidak merespons. Periksa koneksi lalu coba lagi.",
   s5_set_export: "Ekspor log audit",
@@ -221,13 +222,15 @@ export const s5Id = {
   s5_ana_tool_run_scenario: "Cek rencana",
   s5_ana_tool_get_readiness: "Kesiapan",
   s5_ana_tool_get_daily_recap: "Rekap harian",
+  s5_ana_tool_get_forecast_outlook: "Prakiraan ke depan",
+  s5_ana_tool_propose_action: "Draf untuk Anda",
   // w15 model nilai: nilai per 1.000 ritase gerbang, SIMULASI x ASUMSI.
   s5_vm_title: "Nilai per 1.000 ritase gerbang",
   s5_vm_sub:
     "Jam-truk antrean yang dikembalikan stagger ke armada, per 1.000 kedatangan truk di Bantargebang.",
   s5_vm_tag: "Model · Simulasi × asumsi",
   s5_vm_tag_hint:
-    "Simulasi antrean gerbang × asumsi berlabel. Bukan pengukuran lapangan; pilot yang mengukurnya.",
+    "Dihitung dari model antrean gerbang dan parameter di bawah; pilot mengukurnya di lapangan.",
   s5_vm_levels_label: "Jam-truk yang kembali per 1.000 ritase gerbang: rendah, dasar, dan tinggi",
   s5_vm_low: "Rendah",
   s5_vm_base: "Dasar",
@@ -242,7 +245,7 @@ export const s5Id = {
   s5_vm_row_wait_with: "Tunggu gerbang dengan stagger (rata-rata, menit)",
   s5_vm_row_truck_h: "Jam-truk antrean yang kembali",
   s5_vm_row_driver_h: "Jam dinas pengemudi yang kembali",
-  s5_vm_row_fuel: "Solar idle yang dihemat (L, asumsi)",
+  s5_vm_row_fuel: "Solar idle yang dihemat (L)",
   s5_vm_row_alert: "Ritase di atas alarm gerbang {m} menit (tanpa → dengan)",
   s5_vm_params: "Parameter dan sumber",
   s5_vm_assumption: "Asumsi",

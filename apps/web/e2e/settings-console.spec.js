@@ -83,7 +83,8 @@ test("the audit log lists recorded events newest first", async ({ page }) => {
   await open(page, "/app/settings?tab=audit");
   const rows = page.getByTestId("settings-audit").locator("tbody tr");
   await expect(rows).toHaveCount(2);
-  await expect(rows.first()).toContainText("alert followup");
+  // Event types and field names are said in the console language.
+  await expect(rows.first()).toContainText("Alert follow-up");
   await expect(rows.first()).toContainText("status: RESOLVED");
 });
 

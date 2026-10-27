@@ -29,11 +29,11 @@ def apply_hysteresis(truck_code: str, distance_m: float) -> bool:
     return state
 
 
-DEMO_SUPPRESSION_MESSAGE = "Deviation not measured: the active SPJ is a DEMO work order."
+DEMO_SUPPRESSION_MESSAGE = "Deviation not measured: the active work order is a DEMO work order."
 SUPPRESSION_MESSAGES = {
     "demo_spj": DEMO_SUPPRESSION_MESSAGE,
     "awaiting_spj_position": (
-        "Deviation not measured yet: no GPS position has been recorded on the active SPJ "
+        "Deviation not measured yet: no GPS position has been recorded on the active work order "
         "(the map position is simulated)."
     ),
 }

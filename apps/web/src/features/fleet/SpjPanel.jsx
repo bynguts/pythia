@@ -2,6 +2,7 @@ import { Fragment, useState, useEffect, useCallback } from "react";
 import { LocateFixed } from "lucide-react";
 import { apiFetch, apiGet, apiPost } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { formatDriverName } from "../../shared/format/driverName.js";
 
 const copy = {
   id: {
@@ -75,9 +76,11 @@ const copy = {
     retryStops: "Draf SPJ sudah dibuat. Lanjutkan penambahan titik tanpa membuat draf baru.",
     continueStops: "Lanjutkan penambahan titik",
     missingDriver: "Kendaraan yang dipilih tidak memiliki pengemudi terdaftar.",
+    count: "{n} SPJ",
   },
   en: {
     title: "Dispatch orders",
+    count: "{n} work orders",
     create: "Create a dispatch order",
     vehicle: "Vehicle",
     selectVehicle: "Select a vehicle…",
@@ -335,20 +338,23 @@ export function ReceiptReview({ spj, act, pendingAction, words }) {
   const number = (n) => Number(n).toLocaleString(lang === "en" ? "en-US" : "id-ID");
   const kg = (n) => (n == null ? t("spj7_receipt_not_recorded") : `${number(n)} kg`);
   // A check's sentence from sl_check_<id>_<state> filled with its numbers; the server's
-  // English detail when there is no key or a number the sentence needs is missing.
+  // English detail when there is no key or a number the sentence needs is missing (in
+  // Indonesian, a plain "needs a look" rather than English). Seal problems are codes.
+  const fallback = (c) => (lang === "en" ? c.detail : t("lx_check_fallback"));
   const checkText = (c) => {
     const key = `sl_check_${c.id}_${c.state}`;
     const template = t(key);
-    if (template === key) return c.detail;
+    if (template === key) return fallback(c);
     let missing = false;
     const text = template.replace(/\{(\w+)\}/g, (_m, name) => {
       const value = c.numbers?.[name];
       if (value == null || (Array.isArray(value) && value.length === 0)) missing = true;
+      else if (name === "problems") return value.map((code) => t(`lx_seal_${code}`)).join(", ");
       else if (Array.isArray(value)) return value.map((o) => o?.spj_number || o?.spj_id || o).join(", ");
       else if (typeof value === "number") return number(value);
       return value == null ? "" : String(value);
     });
-    return missing ? c.detail : text;
+    return missing ? fallback(c) : text;
   };
 
   // Weights the driver recorded (typed, or a phone OCR reading the driver accepted) are
@@ -717,9 +723,9 @@ export function SpjCreateForm({ onCreated }) {
           onChange={(e) => setForm({ ...form, truck_code: e.target.value })}
         >
           <option value="">{loadingFleet ? words.loadingVehicles : words.selectVehicle}</option>
-          {trucks.map((t) => (
-            <option key={t.truck_code} value={t.truck_code}>
-              {t.truck_code} — {t.driver_name}
+          {trucks.map((truck) => (
+            <option key={truck.truck_code} value={truck.truck_code}>
+              {truck.truck_code} — {formatDriverName(truck.driver_name, t).label}
             </option>
           ))}
         </select>
@@ -931,7 +937,7 @@ export function SpjPanel() {
     <div className="panel-card spj-panel">
       <div className="panel-head">
         <h3>{words.title}</h3>
-        <span className="pill">{items.length} SPJ</span>
+        <span className="pill">{words.count.replace("{n}", items.length)}</span>
       </div>
       <SpjCreateForm onCreated={load} />
       {actionError && (
@@ -985,7 +991,7 @@ export function SpjPanel() {
                         </button>
                         {s.priority === "vip" && <> · {words.vip}</>}
                       </td>
-                      <td>{s.driver_name}</td>
+                      <td>{formatDriverName(s.driver_name, t).label}</td>
                       <td>{s.truck_code}</td>
                       <td>{s.destination}</td>
                       <td>
@@ -1039,7 +1045,10 @@ export function SpjPanel() {
                                           `${words.weighing}: ${st.weighing_count} ${words.photos}, ${st.total_weight_kg} kg (${Object.entries(
                                             st.fractions || {},
                                           )
-                                            .map(([f, kg]) => `${f} ${kg} kg`)
+                                            .map(
+                                              ([f, kg]) =>
+                                                `${t(`s4_wo_fraction_${f.toLowerCase()}`)} ${kg} kg`,
+                                            )
                                             .join(", ")}); `}
                                         {st.officer_name && `${words.officer}: ${st.officer_name}`}{" "}
                                         <GeotagNote geotag={st.geotag} />

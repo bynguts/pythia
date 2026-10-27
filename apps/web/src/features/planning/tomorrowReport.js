@@ -55,8 +55,8 @@ export function buildTomorrowReportHtml({ t, number, title, subtitle, forecast, 
     ${factItems ? `<ul>${factItems}</ul>` : `<p>${escape(t("s3_facts_empty"))}</p>`}
     ${
       plan
-        ? `<h2>${escape(t("s3_alloc_title"))} (CP-SAT · SIMULATED fleet)</h2>
-    <p>${escape(plan.plan_id)} · ${escape(plan.status)} · ${number(plan.total_assigned_tons)} t</p>
+        ? `<h2>${escape(t("s3_alloc_title"))} (${escape(t("lx_pdf_alloc_source"))})</h2>
+    <p>${escape(plan.plan_id)} · ${escape(t(`lx_plan_status_${plan.status}`))} · ${number(plan.total_assigned_tons)} t</p>
     <table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:11px;">
       <thead><tr><th>${escape(t("s3_th_truck"))}</th><th>${escape(t("s3_th_districts"))}</th><th>${escape(
         t("s3_th_trips"),

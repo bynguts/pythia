@@ -2,8 +2,9 @@ import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, Check } from "lucide-react";
 import { apiFetch } from "../shared/api/client.js";
+import { whatsappLanguage } from "../shared/api/whatsappLanguage.js";
 import { useSnapshot } from "../shared/hooks/useSnapshot.js";
-import { useLanguage } from "../shared/i18n/index.jsx";
+import { translate, useLanguage } from "../shared/i18n/index.jsx";
 import { ErrorBoundary } from "../shared/ui/ErrorBoundary.jsx";
 import { DriverAnalytics } from "../features/drivers/DriverAnalytics.jsx";
 import { DamageReportsPanel } from "../features/fleet/DamageReportsPanel.jsx";
@@ -71,7 +72,7 @@ const MAP_LAYER_KEYS = [
 // settings) without their old shell. The console page stubs render one each until
 // their lane replaces it; scenario hand-offs between them travel in the URL.
 export function LegacyWorkspace({ workspace: activeWorkspace }) {
-  const { t, lang } = useLanguage();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const { snapshot, status: snapshotStatus } = useSnapshot();
   // Teardown v3 N1: the canned sample is only ever the offline sample, never live data.
@@ -142,14 +143,16 @@ export function LegacyWorkspace({ workspace: activeWorkspace }) {
   async function sendWhatsAppAlert(alert) {
     const route = alert.recommended_routes?.[0];
     try {
+      const wl = await whatsappLanguage();
+      const wt = (key) => translate(wl, key);
       const response = await apiFetch("/whatsapp/alert", {
         method: "POST",
         body: JSON.stringify({
           truck_code: alert.truck_code,
-          issue: `${alertTitle(t, alert)}. ${alertDetail(t, alert, lang)}`,
+          issue: `${alertTitle(wt, alert)}. ${alertDetail(wt, alert, wl)}`,
           recommendation: route
-            ? routeName(t, route)
-            : t(alert.type === "driver_exception" ? "w10fleet_exc_wa_reco" : "w10fleet_wa_backup"),
+            ? routeName(wt, route)
+            : wt(alert.type === "driver_exception" ? "w10fleet_exc_wa_reco" : "w10fleet_wa_backup"),
         }),
       });
       if (!response.ok) {

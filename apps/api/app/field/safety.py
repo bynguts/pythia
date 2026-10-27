@@ -31,11 +31,12 @@ from typing import Any
 from uuid import uuid4
 
 from app.core.env import getenv
+from app.core.errors import CodedError, coded_detail
 from app.core.storage import RecordStore
 from app.core.units import DUTY_BLOCK_MIN, DUTY_WARN_MIN, GATE_ALERT_MIN
 from app.field.pretrip import PRETRIP_STORE
 from app.field.spj import SPJ_STORE, Spj
-from app.integrations.whatsapp import OpenWAClient
+from app.integrations.whatsapp import OpenWAClient, wa_text
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ WIB = timezone(timedelta(hours=7), "WIB")
 OBSERVED = "OBSERVED_APP_EVENTS"
 SIMULATED = "SIMULATED"
 LABELS = {
-    OBSERVED: "Observed app events on this server: pre-trip checks, SPJ activations, "
+    OBSERVED: "Observed app events on this server: pre-trip checks, work order activations, "
     "gate arrivals and weighbridge receipts (local WIB day).",
     SIMULATED: "SIMULATED: seeded demo scenario over the simulated fleet; no driver's "
     "duty or gate wait was observed.",
@@ -107,7 +108,7 @@ def shift_window_payload(now: datetime) -> dict[str, str]:
         "start": start.isoformat(),
         "end": end.isoformat(),
         "timezone": "Asia/Jakarta (WIB, UTC+7)",
-        "basis": "local operating day; an SPJ still active from the previous day carries its start over",
+        "basis": "local operating day; a work order still active from the previous day carries its start over",
     }
 
 
@@ -255,9 +256,13 @@ def grant_override(
     truck_code = (truck_code or "").strip()
     reason = (reason or "").strip()
     if not truck_code:
-        raise ValueError("truck_code wajib diisi")
+        raise ValueError("truck_code is required")
     if len(reason) < OVERRIDE_REASON_MIN:
-        raise ValueError(f"alasan override wajib diisi, minimal {OVERRIDE_REASON_MIN} karakter")
+        raise CodedError(
+            "override_reason_short",
+            f"An override needs a reason of at least {OVERRIDE_REASON_MIN} characters.",
+            n=OVERRIDE_REASON_MIN,
+        )
     record = {
         "override_id": uuid4().hex[:12],
         "truck_code": truck_code,
@@ -388,6 +393,21 @@ def duty_check(truck_code: str, now: datetime | None = None) -> dict[str, Any]:
     return {"blocked": blocked, "reason": reason, "duty_minutes": duty, "override": override}
 
 
+def duty_detail(truck_code: str, check: dict[str, Any]) -> dict[str, Any]:
+    """The coded 409 detail of a duty block (`check` from duty_check), for the UI to say in its language."""
+    duty = check["duty_minutes"]
+    return coded_detail(
+        "duty_blocked",
+        f"Truck {truck_code} has been on duty {duty // 60} h {duty % 60} min today (limit "
+        f"{DUTY_BLOCK_MIN // 60} h). New work orders are blocked for the driver's safety; a supervisor "
+        "can grant an override with a reason.",
+        truck=truck_code,
+        h=duty // 60,
+        m=duty % 60,
+        limit=DUTY_BLOCK_MIN // 60,
+    )
+
+
 # -- gate arrival and alerts -------------------------------------------------------
 
 
@@ -398,7 +418,7 @@ def record_gate_arrival(
     now = now or _now()
     spj = SPJ_STORE.get(spj_id)
     if spj is None:
-        raise LookupError(f"SPJ {spj_id} not found")
+        raise LookupError(f"Work order {spj_id} not found")
     at = now
     if arrived_at:
         at = _parse(arrived_at)
@@ -408,7 +428,7 @@ def record_gate_arrival(
             raise ValueError("arrived_at is in the future")
         activated = _parse(spj.activated_at)
         if activated is not None and at < activated:
-            raise ValueError("arrived_at is before the SPJ was activated")
+            raise ValueError("arrived_at is before the work order was activated")
     SPJ_STORE.record_gate_arrival(spj_id, actor, at.isoformat())
     return driver_state(spj.truck_code, now)
 
@@ -418,17 +438,19 @@ def _dispatch(fn: Callable[..., Any], *args: Any) -> None:
     threading.Thread(target=fn, args=args, daemon=True).start()
 
 
-def gate_alert_message(alert: dict[str, Any]) -> str:
+def gate_alert_message(alert: dict[str, Any], lang: str | None = None) -> str:
+    """The group's gate-wait alert in the WhatsApp message language (or ``lang``)."""
     wait = int(alert["wait_minutes"])
     arrived = _parse(alert["gate_arrived_at"])
-    since = arrived.astimezone(WIB).strftime("%H:%M") if arrived else "?"
-    return (
-        "PYTHIA · PERINGATAN KESELAMATAN SOPIR\n"
-        f"Truk {alert['truck_code']} sudah menunggu {wait // 60} jam {wait % 60} menit "
-        f"di gerbang {alert.get('destination') or 'TPA'} (sejak {since} WIB).\n"
-        f"Batas layanan DLH: {GATE_ALERT_MIN // 60} jam.\n"
-        "Tindakan: prioritaskan bongkar atau rotasi sopir, lalu konfirmasi di Pythia.\n"
-        "Sumber: event aplikasi Pythia (bukan simulasi)."
+    return wa_text(
+        "gate_safety",
+        lang,
+        truck=alert["truck_code"],
+        h=wait // 60,
+        m=wait % 60,
+        dest=alert.get("destination") or "TPA",
+        since=arrived.astimezone(WIB).strftime("%H:%M") if arrived else "?",
+        limit=GATE_ALERT_MIN // 60,
     )
 
 

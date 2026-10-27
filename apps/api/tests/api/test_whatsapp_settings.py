@@ -180,7 +180,7 @@ def test_test_message_goes_to_the_alert_group_only(api_client, auth_headers, con
     res = api_client.post("/api/whatsapp/test", headers=auth_headers("administrator"))
     assert res.status_code == 200, res.text
     assert res.json() == {"sent": True, "recipient": "12036****0042@g.us"}
-    assert gateway["sent"] == [(GROUP, wa_router.TEST_MESSAGE)]
+    assert gateway["sent"] == [(GROUP, wa_router.wa_text("test"))]
     event = next(e for e in history_store.list_events(limit=20) if e["event_type"] == "whatsapp_test")
     assert event["payload"]["sent"] is True
     assert not re.search(r"\d{9,}", event["payload"]["recipient"])

@@ -13,7 +13,7 @@ export const fEn = {
   f_sidebar_label: "Console",
   f_user_org: "DLH DKI Jakarta",
   f_org_name: "Jakarta operations",
-  f_search_placeholder: "Search truck, SPJ, TPS",
+  f_search_placeholder: "Search truck, work order, TPS",
   f_search_label: "Search the console",
   f_search_empty: "No page matches.",
   f_daycycle_label: "Today's cycle",

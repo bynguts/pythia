@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { apiGet, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
+import { stopText } from "../../shared/format/stopText.js";
 import {
   ARRIVAL_RADIUS_M,
   OFF_ROUTE_M,
@@ -684,7 +685,16 @@ export function ArNavigator({
               )}
           </li>
           {queue.weighbridge_status && (
-            <li>{t("drv_ar_spotter_bridge").replace("{s}", queue.weighbridge_status)}</li>
+            <li>
+              {t("drv_ar_spotter_bridge").replace(
+                "{s}",
+                t(
+                  queue.weighbridge_status.startsWith("DEGRADED")
+                    ? "lx_bridge_degraded"
+                    : "lx_bridge_operational",
+                ),
+              )}
+            </li>
           )}
         </ul>
         <p
@@ -750,7 +760,7 @@ export function ArNavigator({
                 .replace("{n}", index + 1)
                 .replace("{total}", total)}
           </span>
-          <strong>{stop.name}</strong>
+          <strong>{stopText(stop.name, t)}</strong>
         </div>
         <span
           className={`ar-chip${fix && (!fixFresh || (fix.accuracy !== null && fix.accuracy > 30)) ? " is-weak" : ""}`}
@@ -769,7 +779,7 @@ export function ArNavigator({
           <h2>{t("drv_ar_no_coord_title")}</h2>
           <p>{t("drv_ar_no_coord_desc")}</p>
           <p className="ar-empty-address">
-            {stop.kecamatan} — {stop.address}
+            {stop.kecamatan} — {stopText(stop.address, t)}
           </p>
           <button type="button" className="ar-btn secondary" onClick={onUseForm}>
             <Camera size={18} /> {t("drv_ar_use_form")}
@@ -915,7 +925,7 @@ export function ArNavigator({
               <>
                 <p className="ar-sheet-kicker">{stopTitle}</p>
                 <p className="ar-sheet-address">
-                  {stop.kecamatan} — {stop.address}
+                  {stop.kecamatan} — {stopText(stop.address, t)}
                 </p>
               </>
             )}

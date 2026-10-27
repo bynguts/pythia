@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { CalendarCheck, Camera, Download, FileText, Info, MessageCircle, Send, Wrench } from "lucide-react";
 import { apiPost } from "../../shared/api/client.js";
-import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
+import { whatsappLanguage } from "../../shared/api/whatsappLanguage.js";
+import { localeFor, localizeRecorded, translate, useLanguage } from "../../shared/i18n/index.jsx";
+import { componentLabel } from "../readiness/readinessModel.js";
 import { Button } from "../../shared/ui/Button.jsx";
 import { Card } from "../../shared/ui/Card.jsx";
 import { DataTable } from "../../shared/ui/DataTable.jsx";
@@ -14,6 +16,8 @@ import { clockTime, loadReports } from "./reportsData.js";
 import "./reports.css";
 
 const POLL_MS = 60000;
+// Follow-up notes Operations writes from the catalog (NeedsYouPanel), in the writer's language.
+const RECORDED_NOTES = ["s1_escalate_note", "s1_route_sent_note", "s1_reassigned_note"];
 
 function fill(template, values) {
   return Object.entries(values).reduce((text, [key, v]) => text.replaceAll(`{${key}}`, v), template);
@@ -110,16 +114,43 @@ export function ReportsView() {
     fill(t("s5_rp_share_head"), { date: longDate }),
     ...bullets.map((line) => `- ${line}`),
   ].join("\n");
+  // The same summary in another language: what the WhatsApp alert group receives is written
+  // in the WhatsApp message language (Settings → WhatsApp), one language per message.
+  const shareTextIn = (wl) => {
+    if (wl === lang) return shareText;
+    const wt = (key) => translate(wl, key);
+    const wLocale = localeFor(wl);
+    const wNumber = (value) =>
+      value == null ? "—" : Number(value).toLocaleString(wLocale, { maximumFractionDigits: 0 });
+    const wDate = new Date(`${today}T12:00:00+07:00`).toLocaleDateString(wLocale, {
+      weekday: "long",
+      day: "numeric",
+      month: "short",
+    });
+    const wTomorrow = tomorrowPlan
+      ? fill(wt("s5_rp_sum_tomorrow"), {
+          t: data.tomorrowTons == null ? "—" : wNumber(data.tomorrowTons),
+          time: clockTime(tomorrowPlan.approved_at) || "—",
+        })
+      : wt("s5_rp_sum_tomorrow_pending");
+    const wLines = recap.summary_lines?.[wl] || recap.summary_lines?.en || [];
+    return [
+      fill(wt("s5_rp_share_head"), { date: wDate }),
+      ...[...wLines, wTomorrow].map((line) => `- ${line}`),
+    ].join("\n");
+  };
 
   // The summary goes to the alert group through the gateway. When that cannot deliver (no
   // group chosen, gateway down, a role without dispatch:create), WhatsApp opens with the text
   // ready and the operator picks the chat.
   async function shareWhatsApp() {
+    const wl = await whatsappLanguage();
+    const text = shareTextIn(wl);
     try {
-      await apiPost("/whatsapp/summary", { text: shareText, lang });
+      await apiPost("/whatsapp/summary", { text, lang: wl });
       setSent(true);
     } catch {
-      window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer");
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
     }
   }
 
@@ -177,7 +208,8 @@ export function ReportsView() {
   }
 
   const resolution = (row) => {
-    if (row.note) return row.note;
+    // A note the console wrote is said again in the current language; an operator's own words stay.
+    if (row.note && row.note !== row.kind) return localizeRecorded(row.note, RECORDED_NOTES, t);
     if (row.kind === "damage")
       return t(row.state === "handled" ? "s5_rp_state_resolved" : "s5_rp_state_open");
     return t(`s5_rp_state_${row.state}`);
@@ -197,7 +229,7 @@ export function ReportsView() {
       render: (row) => (
         <span className="rp-strong">
           {t(`s5_rp_kind_${row.kind}`)}
-          {row.kind === "damage" && row.detail ? `: ${row.detail}` : ""}
+          {row.kind === "damage" && row.detail ? `: ${componentLabel(row.detail, t)}` : ""}
         </span>
       ),
     },
@@ -309,14 +341,11 @@ export function ReportsView() {
           </span>
         </div>
         <div className="rp-stat" data-testid="recap-error">
-          <span className="rp-stat-top">
-            <span className="rp-stat-k">{t("s5_rp_error")}</span>
-            <Tag
-              tone="model"
-              title={backtest ? fill(t("s5_rp_error_hint"), { period: backtest.period }) : undefined}
-            >
-              {t("s5_rp_error_model")}
-            </Tag>
+          <span
+            className="rp-stat-k"
+            title={backtest ? fill(t("s5_rp_error_hint"), { period: backtest.period }) : undefined}
+          >
+            {t("s5_rp_error")}
           </span>
           <strong className="rp-stat-v" data-provenance="model">
             {backtest?.mape_model_pct == null ? "—" : `${number(backtest.mape_model_pct, 1)}%`}
@@ -390,14 +419,11 @@ export function ReportsView() {
 
           {vm && (
             <section className="rp-value" aria-labelledby="rp-value-title" data-testid="value-model">
-              <header className="rp-value-head">
+              <header className="rp-value-head" data-provenance="model" title={t("s5_vm_tag_hint")}>
                 <div>
                   <h2 id="rp-value-title">{t("s5_vm_title")}</h2>
                   <p className="rp-note">{t("s5_vm_sub")}</p>
                 </div>
-                <Tag tone="model" title={t("s5_vm_tag_hint")} data-testid="value-model-tag">
-                  {t("s5_vm_tag")}
-                </Tag>
               </header>
               <div className="rp-stats is-three" role="group" aria-label={t("s5_vm_levels_label")}>
                 {VM_LEVELS.map((level) => (
@@ -431,15 +457,12 @@ export function ReportsView() {
                 </summary>
                 <ul className="rp-value-params">
                   {vm.parameters.map((param) => (
-                    <li key={param.key} data-testid={`value-model-param-${param.key}`}>
-                      <span className="rp-stat-top">
-                        <strong>{lang === "id" ? param.label_id : param.label}</strong>
-                        {param.assumption ? (
-                          <Tag tone="warn">{t("s5_vm_assumption")}</Tag>
-                        ) : (
-                          <Tag tone="model">{t("s5_vm_simulated")}</Tag>
-                        )}
-                      </span>
+                    <li
+                      key={param.key}
+                      data-testid={`value-model-param-${param.key}`}
+                      data-provenance={param.assumption ? "assumption" : "simulated"}
+                    >
+                      <strong>{lang === "id" ? param.label_id : param.label}</strong>
                       <small>
                         {fill(t("s5_vm_range"), {
                           l: number(param.low, 1),
@@ -508,7 +531,9 @@ export function ReportsView() {
                   </span>
                   <span>
                     <strong>{fill(t("s5_rp_carry_workshop"), { truck: item.truck })}</strong>
-                    <small>{fill(t("s5_rp_carry_workshop_sub"), { component: item.component })}</small>
+                    <small>
+                      {fill(t("s5_rp_carry_workshop_sub"), { component: componentLabel(item.component, t) })}
+                    </small>
                   </span>
                 </li>
               ))}

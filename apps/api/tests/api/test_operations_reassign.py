@@ -200,7 +200,8 @@ def test_reassign_of_an_active_spj_gets_409_with_guidance(api_client, auth_heade
     try:
         res = _reassign(api_client, auth_headers("dispatcher"), plan["plan_id"], a, target)
         assert res.status_code == 409
-        assert res.json()["detail"] == "SPJ sudah aktif; batalkan dan buat ulang"
+        # A coded refusal: the console says it in its own language (lx_err_spj_started).
+        assert res.json()["detail"]["code"] == "spj_started"
         assert history_store.get_dispatch(plan["dispatch_ids"][0])["field_status"] == "PENDING"
     finally:
         SPJ_STORE.cancel(spj.spj_id, actor="test")
@@ -336,7 +337,7 @@ def test_a_storage_failure_while_recording_the_reassign_is_503_and_the_retry_com
     monkeypatch.setattr(_OPERATIONS_PLAN_STORE, "claim_reassign", boom)
     failed = _reassign(api_client, headers, plan["plan_id"], a, target)
     assert failed.status_code == 503
-    assert "kirim ulang" in failed.json()["detail"]
+    assert failed.json()["detail"]["code"] == "reassign_incomplete"
     assert _plan_dispatches_for(target, plan["plan_id"]) == []
     assert history_store.get_dispatch(plan["dispatch_ids"][0])["field_status"] == "PENDING"
     monkeypatch.undo()

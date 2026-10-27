@@ -180,7 +180,7 @@ test("a rain word runs at its BMKG category value and the card says it was assum
   await expect(page.getByTestId("twin-rainfall-value")).toHaveText("75 mm");
   const card = page.getByTestId("twin-ask").getByTestId("assistant-scenario-card");
   await expect(card.getByTestId("assistant-scenario-rain-category")).toHaveText(
-    `"rains heavily" → 75 mm (BMKG 'lebat' 50–100 mm/day): assumed from the BMKG category, not measured.`,
+    `"rains heavily" → 75 mm (BMKG 'heavy' 50–100 mm/day): assumed from the BMKG category, not measured.`,
   );
 });
 

@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, LogOut, Plug, QrCode, Send, WifiOff } from "lucide-react";
 import { apiGet, apiPost } from "../../shared/api/client.js";
+import { apiErrorText } from "../../shared/api/errorText.js";
+import { rememberWhatsappLanguage } from "../../shared/api/whatsappLanguage.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import { Button } from "../../shared/ui/Button.jsx";
+import { Segmented } from "../../shared/ui/Segmented.jsx";
 
 const POLL_MS = 4000;
 // States in which the page keeps checking: a scan, a session start or the gateway coming up.
@@ -28,7 +31,7 @@ function accountLabel(account) {
 // wave11 settings: Stripe-style groups. Each group is a heading and one plain box of
 // hairline rows; the connection state leads, delivery and the unlink action follow.
 export function WhatsAppIntegration({ canManage }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [status, setStatus] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [reload, setReload] = useState(0);
@@ -153,6 +156,19 @@ export function WhatsAppIntegration({ canManage }) {
       }
     });
 
+  // Every WhatsApp message is written in one language, stored on the server.
+  const saveLanguage = (next) =>
+    run(async () => {
+      try {
+        const body = await apiPost("/whatsapp/language", { lang: next });
+        rememberWhatsappLanguage(body?.lang === "en" ? "en" : "id");
+        setNotice({ tone: "good", text: t("lx_wa_lang_saved") });
+        setReload((n) => n + 1);
+      } catch {
+        setNotice({ tone: "bad", text: t("lx_wa_lang_failed") });
+      }
+    });
+
   // Starts the local gateway on the server; the status poll then brings the QR code.
   const connect = () =>
     run(async () => {
@@ -163,8 +179,8 @@ export function WhatsAppIntegration({ canManage }) {
         setReload((n) => n + 1);
       } catch (error) {
         setLaunchError(
-          (error?.status === 409 || error?.status === 503) && error.detail
-            ? error.detail
+          error?.status === 409 || error?.status === 503
+            ? apiErrorText(lang, error, t("set_wa_connect_failed"))
             : t("set_wa_connect_failed"),
         );
       }
@@ -194,6 +210,7 @@ export function WhatsAppIntegration({ canManage }) {
   const manage = linkState === "connected" && canManage;
   const gateway = status?.gateway_process;
   const exited = launching && gateway?.running === false && gateway?.exit_code != null;
+  const waLang = status?.message_language?.lang === "en" ? "en" : "id";
 
   return (
     <section className="settings-panel" aria-labelledby="settings-wa-title" data-testid="settings-whatsapp">
@@ -332,6 +349,35 @@ export function WhatsAppIntegration({ canManage }) {
                 ) : (
                   <p className="settings-row settings-row-text">{t("set_wa_admin_only_pairing")}</p>
                 ))}
+            </div>
+          </section>
+
+          <section className="settings-group" aria-labelledby="settings-wa-language">
+            <h3 id="settings-wa-language" className="settings-group-title">
+              {t("lx_wa_lang_title")}
+            </h3>
+            <div className="settings-box">
+              <div className="settings-row settings-row-field">
+                <div className="settings-row-text">
+                  <strong>{t("lx_wa_lang_label")}</strong>
+                  <small>{t("lx_wa_lang_body")}</small>
+                </div>
+                <div className="settings-row-control">
+                  {canManage ? (
+                    <Segmented
+                      label={t("lx_wa_lang_label")}
+                      value={waLang}
+                      onChange={(next) => next !== waLang && !busy && saveLanguage(next)}
+                      options={[
+                        { value: "id", label: t("lx_wa_lang_id"), testId: "settings-wa-lang-id" },
+                        { value: "en", label: t("lx_wa_lang_en"), testId: "settings-wa-lang-en" },
+                      ]}
+                    />
+                  ) : (
+                    <span data-testid="settings-wa-lang">{t(`lx_wa_lang_${waLang}`)}</span>
+                  )}
+                </div>
+              </div>
             </div>
           </section>
 

@@ -146,7 +146,7 @@ def _summary_parts(data: dict[str, Any]) -> dict[str, list[str]]:
         f"tonase tercatat {tons} t" if tons is not None else "tonase tercatat belum ada",
     ]
     en_parts = [
-        f"{spj['selesai']} SPJ completed, {spj['aktif']} active, {spj['draft']} draft",
+        f"{spj['selesai']} completed, {spj['aktif']} active, {spj['draft']} draft work orders",
         f"{act['receipts']} receipts",
         f"recorded tonnage {tons} t" if tons is not None else "no recorded tonnage yet",
     ]

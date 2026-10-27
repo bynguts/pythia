@@ -215,8 +215,8 @@ def test_summary_lines_carry_the_summary_facts_one_per_line(day):
         lines = recap["summary_lines"][lang]
         assert len(lines) >= 3 and all(line.endswith(".") for line in lines)
         assert any("6.0 t" in line for line in lines)
-    assert recap["summary_lines"]["en"][0].startswith("1 SPJ completed")
-    assert recap["summary"]["en"].startswith(f"{day}: 1 SPJ completed, 0 active, 0 draft; 1 receipts")
+    assert recap["summary_lines"]["en"][0].startswith("1 completed, 0 active, 0 draft work orders")
+    assert recap["summary"]["en"].startswith(f"{day}: 1 completed, 0 active, 0 draft work orders; 1 receipts")
 
 
 def test_empty_day_summary_lines_say_there_is_no_data(day):

@@ -105,6 +105,8 @@ export const AUDIT_KEYS = {
   receipt_ocr: "s4_audit_receipt_ocr",
   receipt_review: "s4_audit_receipt_review",
   reassign: "s4_audit_reassign",
+  demo_straight_fallback: "lx_audit_straight_fallback",
+  straight_fallback: "lx_audit_straight_fallback",
 };
 
 export function mergeAudit(audit, planEvents) {

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, MessageCircle, Play, Sparkles } from "lucide-react";
 import { useConsole } from "../../app/console/useConsole.js";
 import { ApiError, apiGet, apiPost } from "../../shared/api/client.js";
-import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
+import { apiErrorText } from "../../shared/api/errorText.js";
+import { whatsappLanguage } from "../../shared/api/whatsappLanguage.js";
+import { localeFor, translate, useLanguage } from "../../shared/i18n/index.jsx";
 import { Button } from "../../shared/ui/Button.jsx";
 import { DataTable } from "../../shared/ui/DataTable.jsx";
 import { EmptyState } from "../../shared/ui/EmptyState.jsx";
@@ -31,8 +33,9 @@ const OVERRIDE_MIN = 10;
 const fill = (text, values) =>
   Object.entries(values).reduce((out, [key, value]) => out.replaceAll(`{${key}}`, value ?? ""), text);
 
-function reasonOf(error, fallback) {
-  return error instanceof ApiError && error.detail ? error.detail : fallback;
+// Backend detail is English: coded refusals are translated, plain detail shows in English mode only.
+function reasonOf(lang, error, fallback) {
+  return error instanceof ApiError ? apiErrorText(lang, error, fallback) : fallback;
 }
 
 export function ReadinessScreen() {
@@ -118,7 +121,8 @@ export function ReadinessScreen() {
   const time = (iso) => clockTime(iso);
 
   async function sendReminder(truck) {
-    const body = reminderText(truck);
+    const wl = await whatsappLanguage();
+    const body = reminderText(truck, (key) => translate(wl, key));
     const result = await apiPost("/whatsapp/alert", { truck_code: truck.truck_code, ...body });
     return Boolean(result?.sent);
   }
@@ -128,7 +132,9 @@ export function ReadinessScreen() {
     setBusy("remind");
     let sent = false;
     try {
-      const result = await apiPost("/whatsapp/summary", { text: reminderSummary(remindable), lang: "id" });
+      const wl = await whatsappLanguage();
+      const text = reminderSummary(remindable, (key) => translate(wl, key));
+      const result = await apiPost("/whatsapp/summary", { text, lang: wl });
       sent = Boolean(result?.sent);
     } catch {
       // reported as not sent
@@ -147,7 +153,7 @@ export function ReadinessScreen() {
         sent ? fill(t("s2_msg_one"), { truck: truck.truck_code }) : t("s2_msg_none"),
       );
     } catch (error) {
-      say("danger", reasonOf(error, t("s2_msg_none")));
+      say("danger", reasonOf(lang, error, t("s2_msg_none")));
     }
     setBusy(null);
   }
@@ -161,7 +167,7 @@ export function ReadinessScreen() {
         await apiPost(`/spj/${truck.spj.spj_id}/activate`, {});
         done += 1;
       } catch (error) {
-        failures.push(`${truck.truck_code}: ${reasonOf(error, t("s2_act_failed"))}`);
+        failures.push(`${truck.truck_code}: ${reasonOf(lang, error, t("s2_act_failed"))}`);
       }
     }
     setBusy(null);
@@ -190,7 +196,7 @@ export function ReadinessScreen() {
       setOpen(null);
       load();
     } catch (error) {
-      say("danger", fill(t("s2_swap_failed"), { reason: reasonOf(error, "") }));
+      say("danger", fill(t("s2_swap_failed"), { reason: reasonOf(lang, error, "") }));
     }
     setBusy(null);
   }
@@ -213,7 +219,7 @@ export function ReadinessScreen() {
       setOpen(null);
       load();
     } catch (error) {
-      say("danger", reasonOf(error, t("s2_ovr_failed")));
+      say("danger", reasonOf(lang, error, t("s2_ovr_failed")));
     }
     setBusy(null);
   }
@@ -250,7 +256,7 @@ export function ReadinessScreen() {
   function dutyCell(truck) {
     const { minutes, state, override, source } = truck.duty;
     if (minutes == null) return <span className="rdy-muted">—</span>;
-    const text = formatDuty(minutes);
+    const text = formatDuty(minutes, t("lx_unit_h"));
     const simulated = source === "simulated";
     const tone = state === "blocked" ? "danger" : state === "warn" ? "warn" : "ok";
     const label =

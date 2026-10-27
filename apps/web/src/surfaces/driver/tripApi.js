@@ -3,6 +3,7 @@
 // the arrival geotag. Moved out of DriverApp.jsx unchanged in behaviour.
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
+import { apiErrorText, responseError } from "../../shared/api/errorText.js";
 import { translate } from "../../shared/i18n/index.jsx";
 import { markDriverSynced } from "./DriverOutbox.js";
 import { announceSessionExpired } from "./DriverPanels.jsx";
@@ -66,9 +67,9 @@ export async function post(path, data) {
     }
     const body = await res.json().catch(() => ({}));
     const base = translate(lang, "drv6_request_failed").replace("{code}", res.status);
-    const error = new Error(
-      typeof body.detail === "string" && body.detail ? `${base}: ${body.detail}` : base,
-    );
+    // Backend detail is English: a coded refusal is translated, plain text shows in English only.
+    const reason = apiErrorText(lang, responseError(res.status, body), "");
+    const error = new Error(reason ? `${base}: ${reason}` : base);
     error.status = res.status;
     throw error;
   }

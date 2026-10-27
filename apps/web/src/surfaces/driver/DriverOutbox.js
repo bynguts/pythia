@@ -17,6 +17,7 @@
 // reason and are never counted as synced. Only a receipt 409 still means
 // "already recorded" (the server answers a same-operation replay itself).
 import { apiFetch, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
+import { apiErrorText, responseError } from "../../shared/api/errorText.js";
 
 const KEY = "pythia_driver_outbox";
 const REJECTED_KEY = "pythia_driver_outbox_rejected";
@@ -334,9 +335,11 @@ export async function flushDriverOutbox() {
 
 async function readDetail(res) {
   const body = await res.json().catch(() => ({}));
-  if (typeof body?.detail === "string") return body.detail;
-  if (Array.isArray(body?.detail)) return body.detail.map((d) => d?.msg || "").join("; ");
-  return "";
+  const lang = document.documentElement.lang === "id" ? "id" : "en";
+  if (Array.isArray(body?.detail)) {
+    return lang === "en" ? body.detail.map((d) => d?.msg || "").join("; ") : "";
+  }
+  return apiErrorText(lang, responseError(res.status, body), "");
 }
 
 async function doFlushDriverOutbox() {

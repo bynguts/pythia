@@ -133,10 +133,18 @@ def test_spj_start_is_blocked_at_twelve_hours_until_a_supervisor_overrides(
     _on_duty_since(truck, 721)
     refused = _draft(api_client, auth_headers, truck)
     assert refused.status_code == 409
-    assert "diblokir" in refused.json()["detail"]
+    # A coded refusal the console translates; the English message is for API users.
+    detail = refused.json()["detail"]
+    assert detail["code"] == "duty_blocked" and detail["params"] == {
+        "truck": truck,
+        "h": 12,
+        "m": 1,
+        "limit": 12,
+    }
+    assert "blocked for the driver's safety" in detail["message"]
     activate = api_client.post(f"/api/spj/{spj_id}/activate", headers=auth_headers("supervisor"))
     assert activate.status_code == 409
-    assert "keselamatan sopir" in activate.json()["detail"]
+    assert activate.json()["detail"]["code"] == "duty_blocked"
     assert {e["action"] for e in _events("safety_duty_block", truck)} == {"create", "activate"}
 
     reason = "Sopir pengganti belum tiba di pool"

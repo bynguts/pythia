@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, Clock, Route, Send } from "lucide-react";
-import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
+import { localeFor, translate, useLanguage } from "../../shared/i18n/index.jsx";
+import { formatDriverName } from "../../shared/format/driverName.js";
 import { apiFetch } from "../../shared/api/client.js";
 import { createAlertDispatch } from "./alertDispatch.js";
 import {
@@ -36,7 +37,9 @@ export function ActionCard({ snapshot, alert: pinnedAlert = null, targetTruck = 
   const alert = pinnedAlert || targetedAlert || pickAlert(alerts);
   const truckCode = alert?.truck_code || "";
   const truck = (snapshot?.trucks || []).find((item) => item.truck_code === truckCode);
-  const driverName = truck?.driver_name || t("ac_unknown_driver");
+  const driverName = truck?.driver_name
+    ? formatDriverName(truck.driver_name, t).label
+    : t("ac_unknown_driver");
   const route = decisionRoute(alert);
   const issueText = alert ? `${alertTitle(t, alert)}. ${alertDetail(t, alert, lang)}` : "";
   // A map/table click on a truck with no active alert shows that truck as an
@@ -145,14 +148,17 @@ export function ActionCard({ snapshot, alert: pinnedAlert = null, targetTruck = 
         const gateway = status.ok ? await status.json() : null;
         if (generation !== requestGeneration.current) return;
         setWaConnected(gateway?.connected === true);
+        // The alert is written in the WhatsApp message language (Settings → WhatsApp).
+        const wl = gateway?.message_language?.lang === "en" ? "en" : "id";
+        const wt = (key) => translate(wl, key);
         const notification = await apiFetch("/whatsapp/alert", {
           method: "POST",
           body: JSON.stringify({
             truck_code: truckCode,
-            issue: issueText,
+            issue: `${alertTitle(wt, alert)}. ${alertDetail(wt, alert, wl)}`,
             recommendation: route
-              ? `${routeName(t, route)} (${routeMeta(t, route, lang)})`
-              : t("ac_instruction_handle"),
+              ? `${routeName(wt, route)} (${routeMeta(wt, route, wl)})`
+              : wt("ac_instruction_handle"),
           }),
         });
         if (generation !== requestGeneration.current) return;
@@ -202,7 +208,10 @@ export function ActionCard({ snapshot, alert: pinnedAlert = null, targetTruck = 
           </span>
           <div>
             <h2 className="action-card-title">
-              {infoTruck.truck_code} — {infoTruck.driver_name || t("ac_unknown_driver")}
+              {infoTruck.truck_code} —{" "}
+              {infoTruck.driver_name
+                ? formatDriverName(infoTruck.driver_name, t).label
+                : t("ac_unknown_driver")}
             </h2>
             <p className="action-card-issue">
               {t("w10fleet_no_alert_for_unit")}

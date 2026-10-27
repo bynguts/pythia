@@ -145,7 +145,9 @@ for (const [code, detail] of [
   ],
   [503, "Node.js is not installed on the server (node is not on PATH)."],
 ]) {
-  test(`a ${code} from Connect WhatsApp shows the server's reason and allows a retry`, async ({ page }) => {
+  test(`a ${code} from Connect WhatsApp shows a reason in the console language and allows a retry`, async ({
+    page,
+  }) => {
     await signIn(page, "administrator");
     await stubStatus(page, status("offline"));
     await page.route("**/whatsapp/gateway/start", (route) =>
@@ -153,7 +155,10 @@ for (const [code, detail] of [
     );
     await page.goto("/settings?tab=whatsapp", { waitUntil: "domcontentloaded" });
     await page.getByTestId("settings-wa-connect").click();
-    await expect(page.getByTestId("settings-wa-connect-error")).toHaveText(detail);
+    // Indonesian mode never shows the English server text: the localized reason instead.
+    await expect(page.getByTestId("settings-wa-connect-error")).toHaveText(
+      "Gateway WhatsApp tidak dapat dijalankan. Coba lagi.",
+    );
     await expect(page.getByTestId("settings-wa-connect")).toBeEnabled();
     await expect(page.getByTestId("settings-wa-connect")).toHaveText("Hubungkan WhatsApp");
   });
