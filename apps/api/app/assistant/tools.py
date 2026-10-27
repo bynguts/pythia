@@ -2,7 +2,9 @@
 
 Tools call the same Python functions used by the API endpoints (single source
 of truth). Ana is read-only: no dispatch/approve/send tools are exposed; she
-recommends actions and the operator executes them in the dashboard.
+recommends actions and the operator executes them in the dashboard. The one
+non-reading tool, ``propose_action``, only returns a validated draft
+(app.assistant.proposals); the operator sends it, or not, from the console.
 """
 
 from __future__ import annotations
@@ -12,6 +14,7 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+from app.assistant.proposals import PROPOSE_ACTION_SCHEMA, propose_action_tool
 from app.assistant.scenario import run_scenario
 from app.core.env import local_today
 from app.field.readiness import readiness_payload
@@ -36,7 +39,7 @@ from app.forecast.engine import (
 )
 from app.forecast.forecast_metrics import suitability_labels
 from app.forecast.impact import build_impact_report
-from app.forecast.outlook import outlook_payload
+from app.forecast.outlook import OUTLOOK_DAYS, OUTLOOK_HORIZONS, outlook_payload
 from app.forecast.real_data import (
     build_provenance_records,
     data_provenance,
@@ -53,6 +56,15 @@ from app.integrations.whatsapp import OpenWAClient
 class ToolContext:
     dispatch_center: Any
     history_store: Any
+    # The asking operator may send messages (dispatch:create): only then does Ana draft them.
+    can_send: bool = True
+
+
+def tool_schemas(ctx: ToolContext) -> list[dict[str, Any]]:
+    """The tools offered for this operator: without can_send, no propose_action."""
+    if ctx.can_send:
+        return TOOL_SCHEMAS
+    return [schema for schema in TOOL_SCHEMAS if schema["function"]["name"] != "propose_action"]
 
 
 TOOL_SCHEMAS: list[dict[str, Any]] = [
@@ -270,13 +282,24 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "get_forecast_outlook",
             "description": (
-                "Prakiraan ke depan tanpa input manual: ton/hari se-kota untuk 7 hari (hari ini + 6) dengan "
-                "pendorongnya (cuaca Open-Meteo, acara resmi, izin, libur), dan asupan TPST Bantargebang "
+                "Prakiraan ke depan tanpa input manual: ton/hari se-kota untuk 7, 14 atau 30 hari mulai hari ini "
+                "dengan total, rata-rata, hari puncak dan truk saat puncak; 7 hari menyertakan pendorong tiap hari "
+                "(cuaca Open-Meteo 16 hari, lalu basis hari kering; acara resmi, izin, libur), plus koreksi yang "
+                "dipelajari dari jembatan timbang, dan asupan TPST Bantargebang "
                 "3 bulan ke depan (model rata-rata 12 bulan yang disesuaikan kalender, diuji balik pada data timbangan "
                 "nyata; bulan di luar horizon backtest 1-3 bulan ditandai) beserta galat backtest (MAPE). Hanya baca. "
-                "Pakai untuk 'berapa ton minggu depan / bulan depan'. Semua angka MODEL OUTPUT."
+                "Pakai untuk 'berapa ton minggu depan / 2 minggu / 30 hari / bulan depan'. Semua angka MODEL OUTPUT."
             ),
-            "parameters": {"type": "object", "properties": {}},
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "days": {
+                        "type": "integer",
+                        "enum": [7, 14, 30],
+                        "description": "hari ke depan, default 7",
+                    }
+                },
+            },
         },
     },
     {
@@ -295,6 +318,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    PROPOSE_ACTION_SCHEMA,
 ]
 
 
@@ -423,8 +447,12 @@ _TOOLS_IMPL: dict[str, Any] = {
     },
     "run_scenario": lambda args, ctx: run_scenario(args),
     "get_readiness": lambda args, ctx: _readiness_tool(args),
-    "get_forecast_outlook": lambda args, ctx: _outlook_tool(),
+    "get_forecast_outlook": lambda args, ctx: _outlook_tool(args.get("days", OUTLOOK_DAYS)),
     "get_daily_recap": lambda args, ctx: _without_people(daily_recap(args.get("date") or local_today())),
+    # Drafts are for operators who may send them (dispatch:create); see ToolContext.can_send.
+    "propose_action": lambda args, ctx: (
+        propose_action_tool(args) if ctx.can_send else {"error": "this role does not send messages"}
+    ),
     "get_data_provenance": lambda args, ctx: {
         "provenance": data_provenance(),
         "records": build_provenance_records(),
@@ -437,10 +465,14 @@ _TOOLS_IMPL: dict[str, Any] = {
 }
 
 
-def _outlook_tool() -> dict[str, Any]:
-    """The outlook without per-event detail or the per-month backtest rows, so the answer stays
-    under the tool output limit (the pooled backtest error and its Lebaran split stay)."""
-    outlook = outlook_payload()
+def _outlook_tool(days: int = OUTLOOK_DAYS) -> dict[str, Any]:
+    """The 7/14/30-day outlook without per-event detail or the per-month backtest rows, so the
+    answer stays under the tool output limit (the pooled backtest error and its Lebaran split
+    stay). Past a week each day keeps only its figures; the summary carries the horizon."""
+    days = int(days)
+    if days not in OUTLOOK_HORIZONS:
+        raise ValueError("days must be 7, 14 or 30")
+    outlook = outlook_payload(days)
     week = outlook["week"]
     intake = outlook["monthly_intake"]
     backtest = intake.get("backtest")
@@ -459,6 +491,12 @@ def _outlook_tool() -> dict[str, Any]:
                         {"kind": d["kind"], "detail": d["detail"], "effect_tons": d["effect_tons"]}
                         for d in day["drivers"]
                     ],
+                }
+                if days <= OUTLOOK_DAYS
+                else {
+                    k: day[k]
+                    for k in ("date", "total_tons", "corrected_tons", "beyond_weather_forecast")
+                    if k in day
                 }
                 for day in week["days"]
             ],

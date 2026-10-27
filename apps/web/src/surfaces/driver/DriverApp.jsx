@@ -39,6 +39,7 @@ import {
 } from "./DriverScreens.jsx";
 import { FIELD_EPHEMERAL_KEY, FIELD_SESSION_MARK } from "./DriverLogin.jsx";
 import { ExceptionPanel } from "./ExceptionPanel.jsx";
+import { MessageAlert, useMessageAlerts } from "./MessageAlert.jsx";
 import { RouteScreen } from "./RouteOverview.jsx";
 import { postQueueable } from "./tripApi.js";
 import { TpaScreen } from "./TpaGuide.jsx";
@@ -307,6 +308,8 @@ export default function DriverApp() {
   const safety = useDriverSafety(driver?.truck_code);
   const instructionFeed = useDispatchInstructions(driver?.truck_code);
   const reloadInstructions = instructionFeed.reload;
+  // Wave 16: a message from dispatch that arrives while the app is open (banner + phone alert).
+  const messageAlerts = useMessageAlerts(driver?.truck_code, instructionFeed);
   const planInstructions = useStructuredInstructions(driver?.truck_code);
   const blocked = safetyBlocksNewWork(safety);
   const arEnabled = useMemo(
@@ -756,6 +759,16 @@ export default function DriverApp() {
       ) : (
         <div className={`drv-body${tab === "rute" ? " is-route" : ""}`}>
           <RejectedList items={rejected} onDismiss={dismissRejected} />
+          {tab !== "rute" && (
+            <MessageAlert
+              fresh={messageAlerts.fresh}
+              onOpen={() => {
+                messageAlerts.markSeen();
+                selectTab("instruksi");
+              }}
+              onClose={messageAlerts.markSeen}
+            />
+          )}
 
           {tab === "instruksi" &&
             (blocked ? (

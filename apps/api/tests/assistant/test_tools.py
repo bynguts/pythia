@@ -12,8 +12,9 @@ def _ctx():
 
 
 class ToolRegistryTests(unittest.TestCase):
-    def test_17_schemas_declared(self):
-        self.assertEqual(len(TOOL_SCHEMAS), 17)
+    def test_18_schemas_declared(self):
+        # 17 read-only tools and propose_action, which only drafts (tests/assistant/test_proposals.py).
+        self.assertEqual(len(TOOL_SCHEMAS), 18)
         names = {s["function"]["name"] for s in TOOL_SCHEMAS}
         expected = {
             "get_command_center_snapshot",
@@ -33,6 +34,7 @@ class ToolRegistryTests(unittest.TestCase):
             "get_daily_recap",
             "get_readiness",
             "get_forecast_outlook",
+            "propose_action",
         }
         self.assertEqual(names, expected)
 

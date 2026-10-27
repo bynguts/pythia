@@ -73,8 +73,8 @@ const FEED = {
       facts: {
         slot: "10:00",
         holds: [
-          { rec_id: "rec-a", truck_code: "T-E2E", hold_minutes: 15 },
-          { rec_id: "rec-b", truck_code: "T-E2F", hold_minutes: 15 },
+          { rec_id: "rec-a", truck_code: "T-E2E", hold_minutes: 15, to_slot: "10:15", to_slot_end: "10:30" },
+          { rec_id: "rec-b", truck_code: "T-E2F", hold_minutes: 15, to_slot: "10:15", to_slot_end: "10:30" },
         ],
       },
       actions: ["accept"],
@@ -217,7 +217,8 @@ test("every open item shows its one action; the chips count and filter the list"
   await expect(row(page, "truck_breakdown")).toContainText("T-E2C bisa mengambil sisa titiknya.");
   await expect(row(page, "truck_breakdown").getByTestId("needs-action-reassign")).toHaveText("Alihkan");
   await expect(row(page, "gate_peak")).toContainText("Puncak gerbang 10:00–10:15");
-  await expect(row(page, "gate_peak").locator(".ui-tag-model")).toHaveText("Model");
+  await expect(row(page, "gate_peak").locator(".ui-tag-model")).toHaveCount(0);
+  await expect(row(page, "gate_peak")).toHaveAttribute("data-provenance", /model|simulated/);
   await expect(row(page, "gate_peak").getByTestId("needs-action-accept")).toHaveText("Terima");
   await expect(row(page, "tps_empty")).toContainText("TPS Uji 1 kosong");
   await expect(row(page, "tps_empty").getByTestId("needs-action-skip_stop")).toHaveText("Lewati titik");
@@ -295,11 +296,20 @@ test("each action writes the existing API with the item's own ids", async ({ pag
     });
   await expect.poll(() => latest("whatsapp")?.body?.truck_code).toBe("T-E2A");
 
-  // Gate peak: Accept takes every recommended hold.
+  // Gate peak (#w16-escalate): Accept first previews each held driver's message; Send then takes
+  // every recommended hold with the text that driver will read.
   await row(page, "gate_peak").getByTestId("needs-action-accept").click();
+  const holdPreview = row(page, "gate_peak").getByTestId("needs-send-preview");
+  await expect(holdPreview).toContainText("Kirim ke sopir T-E2E dan T-E2F?");
+  await expect(holdPreview.getByTestId("send-preview-text")).toHaveCount(2);
+  expect(writes.filter((write) => write.name === "accept")).toEqual([]);
+  await holdPreview.getByTestId("send-preview-send").click();
   await expect
     .poll(() => writes.filter((write) => write.name === "accept").map((write) => write.url.split("/").at(-2)))
     .toEqual(["rec-a", "rec-b"]);
+  expect(writes.find((write) => write.name === "accept").body.text).toBe(
+    "Tahan keberangkatan 15 menit; slot gerbang baru Anda 10:15–10:30.",
+  );
 
   // Empty TPS: Skip stop skips that stop of that work order, with the drivers' reason.
   await row(page, "tps_empty").getByTestId("needs-action-skip_stop").click();

@@ -1,6 +1,6 @@
 import unittest
 
-from app.assistant.rag import build_rag_index, retrieve_pythia_context
+from app.assistant.rag import CURATED_KNOWLEDGE, build_rag_index, retrieve_pythia_context
 
 
 class RagTests(unittest.TestCase):
@@ -13,12 +13,26 @@ class RagTests(unittest.TestCase):
         self.assertEqual(index.components.shape[0], index.scale.shape[0])
 
     def test_rag_retrieves_forecast_context(self):
-        results = retrieve_pythia_context("Can Pythia predict waste tonnage for the next 7 days?", top_k=3)
+        results = retrieve_pythia_context("Can Pythia predict waste tonnage for the next 30 days?", top_k=3)
         joined = " ".join(item["text"].lower() for item in results)
 
-        self.assertIn("7 days", joined)
+        self.assertIn("14 days or 30 days", joined)
+        self.assertIn("first 16 days", joined)
         self.assertIn("predicted_tons", joined)
         self.assertTrue(any("forecast" in item["title"].lower() for item in results))
+
+    def test_overview_describes_the_two_surfaces_and_the_learning_forecast(self):
+        overviews = {c["source"]: c["text"] for c in CURATED_KNOWLEDGE if "overview" in c["source"]}
+        en = overviews["curated:pythia_overview"]
+        idn = overviews["curated:pythia_overview_id"]
+        for phrase in ("dispatcher console", "driver app", "7, 14 or 30 days", "self-corrects", "gate slots"):
+            self.assertIn(phrase, en)
+        for phrase in ("konsol dispatcher", "aplikasi pengemudi", "7, 14 atau 30 hari", "mengoreksi diri"):
+            self.assertIn(phrase, idn)
+        for text in (en, idn):
+            self.assertNotIn("A*", text)
+            self.assertNotIn("DLH Jakarta", text)
+            self.assertIn("DKI Jakarta", text)
 
     def test_rag_index_contains_decision_logic_knowledge_docs(self):
         index = build_rag_index()

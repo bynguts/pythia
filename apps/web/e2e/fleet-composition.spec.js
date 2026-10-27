@@ -1,8 +1,9 @@
 // wave13 Operations composition (U0H9au): the old /fleet link lands on Operations; a
 // deviation card carries one reroute, drawn on the map only while the card is open, and
-// sends it to the driver in one press; the head's buttons reach the existing flows; the
-// Indonesian screen has no English backend prose; phones stack the panels under the map and
-// desktops frame the fleet. The shell's nav and profile menu are covered by routing.spec.js.
+// sends it to that driver after a preview the dispatcher may edit; the head's buttons reach
+// the existing flows; the Indonesian screen has no English backend prose; phones stack the
+// panels under the map and desktops frame the fleet. The shell's nav and profile menu are
+// covered by routing.spec.js.
 import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
@@ -119,12 +120,16 @@ test("a deviation has one reroute, drawn on the map only while its card is open"
   await expect(routeRow).toHaveCount(1);
 });
 
-test("Send route to driver dispatches the reroute and logs the follow-up", async ({ page }) => {
+// #w16-escalate: the reroute is previewed as the driver will read it, may be edited, and goes
+// to that one driver only (POST /api/driver/messages), then the follow-up is logged.
+test("Send route to driver previews the message, sends the edited text and logs the follow-up", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await stubDecision(page);
   const writes = [];
   for (const [name, pattern] of [
-    ["dispatch", /\/api\/dispatch$/],
+    ["driver-message", /\/api\/driver\/messages$/],
     ["follow-up", /\/api\/alert\/follow-up$/],
   ]) {
     await page.route(pattern, async (route) => {
@@ -136,11 +141,42 @@ test("Send route to driver dispatches the reroute and logs the follow-up", async
   const card = deviation(page);
   await expect(card.getByTestId("needs-action-send_route")).toBeEnabled({ timeout: 30000 });
   await card.getByTestId("needs-action-send_route").click();
+  const preview = card.getByTestId("needs-send-preview");
+  await expect(preview).toContainText("Kirim ke sopir T-047?");
+  await expect(preview.getByTestId("send-preview-to")).toContainText("Sopir T-047 · aplikasi sopir");
+  await expect(preview.getByTestId("send-preview-text")).toContainText("Rute B · pemulihan via Daan Mogot");
+  expect(writes).toEqual([]);
+
+  await preview.getByTestId("send-preview-edit").click();
+  const edited = "Gunakan Rute B lewat Daan Mogot, hindari Jl. Panjang. Konfirmasi setelah diterima.";
+  await preview.getByTestId("send-preview-input").fill(edited);
+  await preview.getByTestId("send-preview-send").click();
   await expect(card.getByRole("status")).toHaveText("Rute terkirim ke T-047. Menunggu sopir.");
-  expect(writes.map((write) => write.name)).toEqual(["dispatch", "follow-up"]);
-  expect(writes[0].body.truck_code).toBe("T-047");
-  expect(writes[0].body.instruction).toContain("Rute B · pemulihan via Daan Mogot");
+  expect(writes.map((write) => write.name)).toEqual(["driver-message", "follow-up"]);
+  expect(writes[0].body).toMatchObject({
+    truck_code: "T-047",
+    text: edited,
+    kind: "instruction",
+    instruction_kind: "use_route",
+  });
   expect(writes[1].body).toMatchObject({ alert_id: "ALT-T-047", status: "DISPATCHED" });
+});
+
+test("Dismiss on the route preview sends nothing", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await stubDecision(page);
+  const writes = [];
+  await page.route(/\/api\/(driver\/messages|dispatch|alert\/follow-up)$/, async (route) => {
+    writes.push(route.request().url());
+    await route.fulfill({ json: { ok: true } });
+  });
+  await signIn(page);
+  const card = deviation(page);
+  await expect(card.getByTestId("needs-action-send_route")).toBeEnabled({ timeout: 30000 });
+  await card.getByTestId("needs-action-send_route").click();
+  await card.getByTestId("send-preview-dismiss").click();
+  await expect(card.getByTestId("needs-send-preview")).toHaveCount(0);
+  expect(writes).toEqual([]);
 });
 
 test("New instruction sends to one truck", async ({ page }) => {

@@ -1,0 +1,112 @@
+/* Wave 16 "Send to the driver of T-047?" preview: a tinted block inside its row or answer,
+   not a card of its own (no border, no shadow), like the reassign confirmation. */
+.send-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 10px var(--space-3);
+  border-radius: 10px;
+  background: var(--f-banner);
+  color: var(--f-ink);
+  font-size: var(--fs-caption);
+  line-height: 19px;
+  min-width: 0;
+}
+.send-preview p {
+  margin: 0;
+}
+.send-preview-kicker {
+  color: var(--f-green);
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+.send-preview-title {
+  font-weight: 600;
+}
+.send-preview-msg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.send-preview-to {
+  color: var(--f-muted);
+  overflow-wrap: anywhere;
+}
+.send-preview-to strong {
+  color: var(--f-ink-2);
+  font-weight: 600;
+}
+.send-preview-lang {
+  color: var(--f-green);
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+/* The exact text the recipient reads, as plain characters. */
+.send-preview-text {
+  color: var(--f-ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.send-preview-input {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: var(--space-2) 10px;
+  border: 1px solid var(--f-control-line);
+  border-radius: 8px;
+  background: var(--f-white);
+  color: var(--f-ink);
+  font: inherit;
+  resize: vertical;
+}
+.send-preview-input:focus-visible {
+  outline: 2px solid var(--f-green);
+  outline-offset: 1px;
+}
+.send-preview-note {
+  color: var(--f-muted);
+  font-size: var(--fs-label);
+}
+.send-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.send-preview-dismiss {
+  min-height: var(--tap-min);
+  min-width: var(--tap-min);
+  margin-left: auto;
+  padding: 0 var(--space-1);
+  border: 0;
+  background: none;
+  color: var(--f-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.send-preview-dismiss:hover {
+  color: var(--f-ink);
+}
+.send-preview-dismiss:focus-visible {
+  outline: 2px solid var(--f-green);
+  outline-offset: -8px;
+  border-radius: 6px;
+}
+.send-preview-dismiss:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.send-preview-error {
+  color: var(--f-red-ink);
+}
+.send-preview-done {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--f-green);
+  font-size: var(--fs-caption);
+}
+.send-preview-done.is-muted {
+  color: var(--f-muted);
+}

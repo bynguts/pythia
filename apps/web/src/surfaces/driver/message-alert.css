@@ -1,0 +1,89 @@
+/* Wave 16: "New message from dispatch" banner at the top of the driver app's body. In the
+   flow (not floating), so it never covers a button; no card border, a tinted fill. */
+.drv-msg-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) 14px;
+  border-radius: 10px;
+  color: var(--f-ink, #1c1b19);
+  background: var(--f-green-soft, #dcebdd);
+  font-size: 14px;
+  line-height: 20px;
+}
+.drv-msg-alert p {
+  margin: 0;
+}
+.drv-msg-alert-icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--f-green, #1f6b45);
+}
+.drv-msg-alert-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.drv-msg-alert-title {
+  font-weight: 600;
+}
+/* The dispatcher's text as plain characters, cut to three lines here; the card has it all. */
+.drv-msg-alert-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.drv-msg-alert-optin {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.drv-msg-alert-optin .drv-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 0;
+}
+.drv-msg-alert-note {
+  color: var(--f-muted, #6b6860);
+  font-size: 13px;
+  line-height: 18px;
+}
+.drv-msg-alert-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+.drv-msg-alert-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--tap-min, 44px);
+  min-height: var(--tap-min, 44px);
+  border: 0;
+  border-radius: 10px;
+  color: var(--f-ink-2, #45433d);
+  background: transparent;
+  cursor: pointer;
+}
+.drv-msg-alert-close:focus-visible {
+  outline: 3px solid var(--f-green, #1f6b45);
+  outline-offset: 2px;
+}
+@media (max-width: 360px) {
+  .drv-msg-alert {
+    flex-wrap: wrap;
+  }
+  .drv-msg-alert-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

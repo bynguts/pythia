@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { apiFetch, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { safetyNote } from "./driverText.js";
 import { enqueueDriverOperation, markDriverSynced, OutboxStorageFullError } from "./DriverOutbox.js";
 import { clockTime, pendingInstructions, queuedDispatchIds, safetyNotices } from "./driverHelpers.js";
 
@@ -99,7 +100,7 @@ export function SafetyLines({ safety }) {
         <span
           className="driver-badge driver-provenance"
           data-testid="driver-safety-label"
-          title={safety.label || undefined}
+          title={safetyNote(safety, t, lang)}
         >
           {label}
         </span>
@@ -141,6 +142,9 @@ export function useDispatchInstructions(truckCode) {
   // The driver's latest answer on this phone ({ id, status, at }): the pending list
   // drops it at once, so the tab badge and the empty state agree before the next poll.
   const [lastAnswer, setLastAnswer] = useState(null);
+  // When the list last came live from the server (null until the first live read): the
+  // message alert counts what is already there on that first read as seen.
+  const [liveAt, setLiveAt] = useState(null);
 
   const settle = useCallback(
     (id, status) => {
@@ -174,6 +178,7 @@ export function useDispatchInstructions(truckCode) {
       setLoadFailed(false);
       setCached(isStale ? { at: res.headers.get("X-Pythia-Cached-At") } : null);
       if (!isStale) {
+        setLiveAt(Date.now());
         markDriverSynced();
         try {
           localStorage.setItem(dispatchCacheKey(truckCode), JSON.stringify(items));
@@ -192,6 +197,7 @@ export function useDispatchInstructions(truckCode) {
     setList(readDispatchCache(truckCode));
     setCached(null);
     setLastAnswer(null);
+    setLiveAt(null);
     load();
     const id = setInterval(load, DISPATCH_POLL_MS);
     // Back online: reload at once instead of showing the offline failure until the next poll.
@@ -202,7 +208,7 @@ export function useDispatchInstructions(truckCode) {
     };
   }, [truckCode, load]);
 
-  return { list, cached, loadFailed, lastAnswer, settle, reload: load };
+  return { list, cached, loadFailed, lastAnswer, liveAt, settle, reload: load };
 }
 
 export function cachedAgeMinutes(at) {

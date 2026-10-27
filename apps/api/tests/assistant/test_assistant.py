@@ -316,6 +316,75 @@ class AssistantTests(unittest.TestCase):
                 tool_ctx=ToolContext(dispatch_center=None, history_store=None),
             )
         self.assertIn("7 hari ke depan", result["answer"])
+        self.assertNotIn("tanpa prakiraan", result["answer"])
+
+    def test_local_mode_answers_14_and_30_days_as_a_summary(self):
+        from datetime import timedelta
+
+        from app.assistant.tools import ToolContext
+        from app.core.env import today
+
+        def outlook(name, args, ctx):
+            n = args["days"]
+            days = [
+                {
+                    "date": (today() + timedelta(days=i)).isoformat(),
+                    "total_tons": 9000.0 if i == 4 else 8000.0,
+                    "corrected_tons": None,
+                    "beyond_weather_forecast": i >= 16,
+                }
+                for i in range(n)
+            ]
+            total = sum(d["total_tons"] for d in days)
+            summary = {
+                "total_tons": total,
+                "avg_tons_per_day": round(total / n, 1),
+                "peak_date": days[4]["date"],
+                "peak_tons": 9000.0,
+                "peak_trucks_needed": 520,
+                "corrected_total_tons": None,
+            }
+            return {
+                "week": {"days": days, "summary": summary},
+                "monthly_intake": {"available": False, "months": []},
+                "learned_correction": None,
+            }
+
+        peak = (today() + timedelta(days=4)).isoformat()
+        for question, lang, days, expected in (
+            (
+                "berapa ton sampah 30 hari ke depan?",
+                "id",
+                30,
+                f"Sampah se-kota, 30 hari ke depan (MODEL OUTPUT): total 241,000 t, rata-rata 8,033 t/hari, "
+                f"puncak {peak} sebesar 9,000 t, 520 truk saat puncak.",
+            ),
+            (
+                "how much waste over the next two weeks?",
+                "en",
+                14,
+                f"City-wide waste, next 14 days (MODEL OUTPUT): 113,000 t in total, 8,071 t/day on average, "
+                f"peak {peak} at 9,000 t, 520 trucks at the peak.",
+            ),
+        ):
+            with (
+                patch.dict("os.environ", {}, clear=True),
+                patch("app.assistant.assistant.execute_tool", side_effect=outlook) as tool,
+            ):
+                result = answer_with_openai_if_configured(
+                    question,
+                    {},
+                    tool_ctx=ToolContext(dispatch_center=None, history_store=None),
+                    language=lang,
+                )
+            self.assertEqual(tool.call_args.args[:2], ("get_forecast_outlook", {"days": days}))
+            self.assertIn(expected, result["answer"])
+            # A summary, not every date.
+            self.assertNotIn((today() + timedelta(days=10)).isoformat(), result["answer"])
+            if days == 30:
+                self.assertIn("16 hari pertama; 14 hari terakhir memakai basis hari kering", result["answer"])
+            else:
+                self.assertNotIn("dry-day baseline", result["answer"])
 
     def test_local_fallback_does_not_invent_metrics_when_tool_fails(self):
         from app.assistant.tools import ToolContext
@@ -375,7 +444,7 @@ class AssistantTests(unittest.TestCase):
         self.assertEqual(observed["seconds"], 18)
         self.assertEqual(result["provider"], "local")
         self.assertEqual(result["fallback_reason"], "timeout")
-        self.assertIn("Layanan LLM gagal (timeout)", result["answer"])
+        self.assertIn("Layanan LLM gagal (waktu habis)", result["answer"])
 
     def test_local_photo_does_not_claim_to_interpret_image(self):
         with patch.dict("os.environ", {}, clear=True):
@@ -466,11 +535,74 @@ class AssistantTests(unittest.TestCase):
         self.assertIn("simulated fleet", summary)
         self.assertNotIn("TPA delay", summary)
 
+    def test_local_fleet_and_queue_answers_follow_the_ui_language(self):
+        from app.assistant.tools import ToolContext
+
+        fleet = {
+            "total_trucks": 40,
+            "active_count": 35,
+            "damaged_count": 3,
+            "deviation_count": 2,
+            "problem_count": 5,
+            "problem_trucks": [{"truck_code": "T-007", "is_damaged": True, "deviation_violated": False}],
+        }
+        queue = {"trucks_in_queue": 12, "avg_wait_minutes": 41, "status_label": "WARNING (Padat Merayap)"}
+        cases = (
+            # The UI language wins over the question's language.
+            ("berapa truk rusak?", "en", fleet, "Pythia fleet data: 3 of 40 trucks damaged."),
+            ("how many trucks are damaged?", "id", fleet, "Data armada Pythia: 3 truk mengalami kerusakan"),
+            ("TPA queue now?", "en", queue, "Simulated TPST Bantargebang queue: 12 trucks"),
+            ("antrean TPA?", "id", queue, "Simulasi antrean TPST Bantargebang: 12 truk"),
+        )
+        for question, lang, result, expected in cases:
+            with (
+                patch.dict("os.environ", {}, clear=True),
+                patch("app.assistant.assistant.execute_tool", return_value=result),
+            ):
+                answer = answer_with_openai_if_configured(
+                    question,
+                    {},
+                    tool_ctx=ToolContext(dispatch_center=None, history_store=None),
+                    language=lang,
+                )["answer"]
+            self.assertIn(expected, answer)
+            if lang == "en":
+                self.assertNotIn("Padat", answer)
+                self.assertIn("Local mode", answer)
+
     def test_curated_knowledge_never_calls_the_simulated_fleet_live(self):
         from app.assistant.rag import CURATED_KNOWLEDGE
 
         for doc in CURATED_KNOWLEDGE:
             self.assertNotIn("live supervision", doc["text"])
+
+    def test_local_knowledge_skips_excerpts_with_no_telling_words(self):
+        from app.assistant import assistant as module
+
+        chunks = [
+            {
+                "title": "Package",
+                "source": "apps/wa-gateway/package.json",
+                "score": 0.9,
+                "text": '"name": "pythia-wa-gateway", "version": "1.0.0"',
+            },
+            {
+                "title": "Alur",
+                "source": "knowledge/02.md",
+                "score": 0.8,
+                "text": "Dispatcher menyetujui rencana dan sopir menerima surat jalan untuk besok.",
+            },
+        ]
+        with (
+            patch.object(module, "_knowledge_context", return_value="context"),
+            patch.object(module, "retrieve_pythia_context", return_value=chunks),
+        ):
+            id_answer = module._local_knowledge("bagaimana alur kerja pythia?", "id")
+            en_answer = module._local_knowledge("how does pythia work?", "en")
+
+        self.assertIn("surat jalan", id_answer)
+        self.assertNotIn("package.json", id_answer)
+        self.assertNotIn("package.json", en_answer)
 
 
 if __name__ == "__main__":

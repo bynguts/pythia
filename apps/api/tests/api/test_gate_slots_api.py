@@ -102,12 +102,20 @@ def test_overloaded_slot_gets_holds_and_an_accepted_hold_reaches_the_driver(
 
     pending = api_client.get(f"/api/dispatch/{rec['truck_code']}", headers=auth_headers("driver")).json()
     hold = next(d for d in pending if d["id"] == body["dispatch_id"])
-    assert hold["instruction"] == "Tahan keberangkatan 15 menit; slot gerbang baru 09:15–09:30 (simulasi)"
+    # The full new slot range; the API still classifies it SIMULATED.
+    assert hold["instruction"] == "Tahan keberangkatan 15 menit; slot gerbang baru Anda 09:15–09:30."
+    assert body["new_slot"]["classification"] == "SIMULATED"
+    assert body["channels"][0] == {"channel": "in_app", "status": "inbox"}
     assert hold["field_status"] == "PENDING"
 
     again = api_client.post(f"/api/gate/slots/recommendations/{rec['id']}/accept", headers=auth_headers())
     assert again.status_code == 200
-    assert again.json()["dispatch_id"] == body["dispatch_id"]
+    assert again.json() == body  # a repeat answers in the first call's shape, channels included
+    # A repeat carrying a blank text is still the same acceptance, not a 422.
+    blank = api_client.post(
+        f"/api/gate/slots/recommendations/{rec['id']}/accept", json={"text": "  "}, headers=auth_headers()
+    )
+    assert blank.status_code == 200 and blank.json() == body
     holds = [
         d for d in history_store.pending_dispatches(rec["truck_code"]) if d["instruction"].startswith("Tahan")
     ]
@@ -206,3 +214,36 @@ def test_saturated_gate_says_so_instead_of_proposing_a_long_hold(api_client, aut
     assert board["saturated"] is True and board["reason"] == "saturated"
     assert board["coverage"]["planned_gate_arrivals"] == 2
     assert board["modelled_wait"]["classification"] == "SIMULATED"
+
+
+def test_an_accepted_hold_carries_the_operators_edited_text(
+    api_client, auth_headers, background, day, tmp_path, monkeypatch
+):
+    from app.api.routers import whatsapp as wa_router
+
+    monkeypatch.setattr(wa_router, "CONTACTS_FILE", tmp_path / "absent.json")
+    # Wave 16: the console previews the hold message and the operator may edit it before sending.
+    trucks = [f"GE{i:03d}-{uuid.uuid4().hex[:4]}" for i in range(int(CAPACITY_PER_SLOT) + 1)]
+    _approve_plan(day, [_dispatch(t, day, gate_slot=_slot_at_nine(day)) for t in trucks])
+    rec = _board(api_client, auth_headers, day)["recommendations"][0]
+
+    blank = api_client.post(
+        f"/api/gate/slots/recommendations/{rec['id']}/accept", json={"text": "  "}, headers=auth_headers()
+    )
+    assert blank.status_code == 422
+    accepted = api_client.post(
+        f"/api/gate/slots/recommendations/{rec['id']}/accept",
+        json={"text": "Berangkat 15 menit lebih lambat, slot baru 09:15."},
+        headers=auth_headers(),
+    )
+    assert accepted.status_code == 200, accepted.text
+    body = accepted.json()
+    # The truck is not in the fleet registry, so no private chat: the app inbox only, never the group.
+    assert body["channels"] == [
+        {"channel": "in_app", "status": "inbox"},
+        {"channel": "whatsapp_private", "status": "no_contact"},
+    ]
+    hold = next(
+        d for d in history_store.pending_dispatches(rec["truck_code"]) if d["id"] == body["dispatch_id"]
+    )
+    assert hold["instruction"] == "Berangkat 15 menit lebih lambat, slot baru 09:15."

@@ -170,3 +170,16 @@ self.addEventListener("fetch", (event) => {
     }),
   );
 });
+
+// Wave 16: a tap on a "message from dispatch" alert (shown by the driver app through this
+// registration's showNotification) brings the open driver app forward, or opens it.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = event.notification.data?.url || "/driver";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const open = windows.find((client) => new URL(client.url).pathname.startsWith("/driver"));
+      return open ? open.focus() : self.clients.openWindow(target);
+    }),
+  );
+});

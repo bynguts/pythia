@@ -11,6 +11,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from app.api.deps import require_permission
 from app.api.state import _OPERATIONS_PLAN_STORE, dispatch_center, history_store
@@ -85,14 +86,33 @@ def get_gate_slots(
     return gate_slots_payload(slot_date or today())
 
 
+class AcceptBody(BaseModel):
+    # The operator's previewed (possibly edited) text for the driver; default: the fixed template.
+    text: str | None = Field(default=None, max_length=2000)
+
+
 @router.post("/api/gate/slots/recommendations/{rec_id}/accept")
 def accept_gate_slot_recommendation(
-    rec_id: str, _role: str = Depends(require_permission("dispatch:create"))
+    rec_id: str,
+    body: AcceptBody | None = None,
+    _role: str = Depends(require_permission("dispatch:create")),
 ) -> dict[str, Any]:
-    """Send the held truck one dispatch instruction; a repeat returns the first acceptance."""
+    """Send the held truck one dispatch instruction; a repeat returns the first acceptance.
+
+    The instruction reaches that driver only: the app inbox, plus a private WhatsApp when
+    the contact registry has the driver (never the alert group).
+    """
+    from app.field.driver_messages import TEXT_MAX, plain_text, send_private_whatsapp
+    from app.integrations.whatsapp import wa_text
+
+    # A repeat answers like the first call, whatever text it carries.
     existing = ACCEPTS.get(rec_id)
     if existing:
-        return existing
+        return _accepted(existing)
+    try:
+        edited = plain_text(body.text, TEXT_MAX) if body and body.text is not None else None
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
     try:
         slot_date = date.fromisoformat(rec_id[len("rec-") : len("rec-") + 10])
     except ValueError:
@@ -106,13 +126,13 @@ def accept_gate_slot_recommendation(
     with _accept_lock, ACCEPTS.transaction() as connection:
         existing = ACCEPTS.get(rec_id, connection)
         if existing:
-            return existing
+            return _accepted(existing)
+        # The inbox row keeps the Indonesian record the driver app localizes; the WhatsApp
+        # leg is written in the message language setting. The slot is its full range.
+        hold = {"n": rec["hold_minutes"], "slot": f"{rec['to_slot']}–{rec['to_slot_end']}"}
         dispatch = history_store.save_dispatch(
             truck_code=rec["truck_code"],
-            instruction=(
-                f"Tahan keberangkatan {rec['hold_minutes']} menit; slot gerbang baru "
-                f"{rec['to_slot']}–{rec['to_slot_end']} (simulasi)"
-            ),
+            instruction=edited or wa_text("gate_hold", "id", **hold),
             manager_id="gate_slot_recommendation",
         )
         result = {
@@ -138,6 +158,18 @@ def accept_gate_slot_recommendation(
             "truck_code": rec["truck_code"],
             "dispatch_id": dispatch["id"],
             "accepted_by": _role,
+            "edited": edited is not None,
         },
     )
+    result["channels"] = [
+        {"channel": "in_app", "status": "inbox"},
+        send_private_whatsapp(rec["truck_code"], edited or wa_text("gate_hold", **hold)),
+    ]
+    ACCEPTS.write(rec_id, result)  # with its channels, so a repeat answers the same
     return result
+
+
+def _accepted(record: dict[str, Any]) -> dict[str, Any]:
+    """A stored acceptance in the first call's shape (records from before channels were kept
+    name the inbox, the one channel every acceptance reached)."""
+    return {"channels": [{"channel": "in_app", "status": "inbox"}], **record}

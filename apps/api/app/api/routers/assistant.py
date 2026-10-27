@@ -12,6 +12,7 @@ from app.api.routers.forecast import predictions_kecamatan
 from app.api.schemas import AssistantRequest
 from app.api.state import dispatch_center, history_store
 from app.assistant.assistant import answer_with_openai_if_configured, build_executive_summary
+from app.core.auth import has_permission
 from app.core.ratelimit import SlidingWindowLimiter
 from app.fleet.data import command_center_snapshot
 from app.fleet.value_model import value_model_from_simulation
@@ -57,7 +58,12 @@ def assistant_query(
     try:
         from app.assistant.tools import ToolContext
 
-        tool_ctx = ToolContext(dispatch_center=dispatch_center, history_store=history_store)
+        # Send drafts only for a role that may send them; anyone else would get a dead Send.
+        tool_ctx = ToolContext(
+            dispatch_center=dispatch_center,
+            history_store=history_store,
+            can_send=has_permission(_role, "dispatch:create"),
+        )
         snapshot = {}
         result = answer_with_openai_if_configured(
             payload.question,
@@ -72,8 +78,15 @@ def assistant_query(
         logger.exception("assistant query failed")
         raise HTTPException(status_code=502, detail="The assistant is unavailable right now.") from e
 
+    # Drafts only (propose_action): the console shows them; nothing was sent.
+    result.setdefault("proposed_actions", [])
     history_store.record_event(
-        "assistant_query", {"question": payload.question, "provider": result["provider"]}
+        "assistant_query",
+        {
+            "question": payload.question,
+            "provider": result["provider"],
+            "proposed_actions": len(result["proposed_actions"]),
+        },
     )
     return result
 

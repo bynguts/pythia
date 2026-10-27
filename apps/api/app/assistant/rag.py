@@ -17,24 +17,48 @@ CURATED_KNOWLEDGE = [
         "source": "curated:pythia_overview",
         "title": "Pythia overview",
         "text": (
-            "Pythia is an AI command center for DLH Jakarta waste operations. "
-            "Fitur utama Pythia dan cara kerja Pythia mencakup monitoring armada, prediksi sampah, perencanaan dispatch, "
-            "asisten Ana, peta operasional, audit model, dan laporan eksekutif. "
-            "It combines fleet supervision, route deviation detection, OSRM road-following routing, A* rerouting simulation, "
-            "TPA Bantargebang queue awareness, seven-day waste tonnage forecasting, Open-Meteo weather risk, integrated planning, "
-            "WhatsApp/field dispatch, field confirmation, audit history, and executive reporting."
+            "Pythia is an AI operations platform for DKI Jakarta waste collection, built as two surfaces: a "
+            "dispatcher console and a driver app. In the console the dispatcher sees the pilot fleet on one "
+            "map, issues work orders (SPJ) to drivers, books TPA Bantargebang gate slots so trucks reach the "
+            "weighbridge spread across the day, and closes the day with a recap of weighed tonnes against the "
+            "plan. The Tomorrow page forecasts city-wide waste for all 42 kecamatan 7, 14 or 30 days ahead, "
+            "turns it into trucks, crews and a plan, and self-corrects from weighbridge data. Drivers use the "
+            "driver app for their work orders, navigation, weighbridge tickets and private messages from the "
+            "dispatcher. Ana, the assistant, answers from live tools and proposes actions; a human approves "
+            "every send before anything changes."
+        ),
+    },
+    # The same overview in Indonesian: a local answer quotes only excerpts in the UI language.
+    {
+        "source": "curated:pythia_overview_id",
+        "title": "Ringkasan Pythia",
+        "text": (
+            "Pythia adalah platform operasi berbasis AI untuk pengangkutan sampah DKI Jakarta, dengan dua "
+            "permukaan: konsol dispatcher dan aplikasi pengemudi. Fitur utama Pythia dan cara kerja Pythia: di "
+            "konsol, dispatcher melihat armada uji coba di satu peta, menerbitkan surat jalan (SPJ) ke pengemudi, "
+            "memesan slot gerbang TPA Bantargebang agar truk tiba di jembatan timbang tersebar sepanjang hari, dan "
+            "menutup hari dengan rekap tonase tertimbang dibandingkan rencana. Halaman Besok memprakirakan sampah "
+            "se-kota untuk 42 kecamatan 7, 14 atau 30 hari ke depan, mengubahnya menjadi kebutuhan truk, kru dan "
+            "rencana, dan mengoreksi diri dari data jembatan timbang. Pengemudi memakai aplikasi pengemudi untuk "
+            "surat jalan, navigasi, tiket timbang dan pesan pribadi dari dispatcher. Asisten Ana menjawab dari alat "
+            "data langsung dan mengusulkan tindakan; manusia menyetujui setiap pengiriman sebelum ada yang berubah."
         ),
     },
     {
         "source": "curated:waste_forecast",
         "title": "Waste forecast capability",
         "text": (
-            "The Waste Forecast module predicts waste tonnage for the next 7 days. It uses district-level predictions with "
-            "predicted_tons, baseline_tons, spike_percent, risk_level, recommended_extra_trucks, recommended_extra_crews, "
-            "trucks_required, crews_required, workers_required, man_hours_required (person-hours), bins_required, "
-            "fuel consumption, and CO2 impact. Forecast drivers include "
-            "Open-Meteo rainfall, temperature, wind, weekends, holidays, and permitted crowd events. The frontend also has 14-day "
-            "and 30-day projection controls for demo planning, extending the 7-day source baseline."
+            "The Waste Forecast module predicts waste tonnage for the next 7 days, 14 days or 30 days, city-wide, "
+            "with the total, the average per day, the peak day and the trucks needed at the peak. Each of the 42 kecamatan has "
+            "its own Prophet + XGBoost model; district rows carry predicted_tons, baseline_tons, spike_percent, "
+            "risk_level, recommended_extra_trucks, recommended_extra_crews, trucks_required, crews_required, "
+            "workers_required, man_hours_required (person-hours) and bins_required. Inputs fill themselves: "
+            "Open-Meteo rainfall, temperature and wind for the first 16 days, then a dry-day baseline (0 mm "
+            "rain) that sharpens as the weather forecast reaches each day, plus weekends, national holidays, "
+            "official events and permitted crowd events. The forecast learns from the weighbridge: every closed "
+            "work-order day's weighed tonnes are compared with the plan's forecast, and from the third weighed "
+            "day a bounded correction (capped at 25 %) appears beside the model figure, never instead of it. "
+            "Bantargebang intake is forecast monthly, validated 1-3 months ahead on real weighing data."
         ),
     },
     {

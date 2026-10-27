@@ -5,6 +5,7 @@ import {
   ChevronUp,
   Construction,
   Hourglass,
+  Megaphone,
   Package,
   Route,
   Send,
@@ -13,15 +14,17 @@ import {
   Timer,
   Wrench,
 } from "lucide-react";
+import { useConsole } from "../../app/console/useConsole.js";
 import { apiPost } from "../../shared/api/client.js";
-import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
+import { useWhatsappLanguage } from "../../shared/api/whatsappLanguage.js";
+import { localeFor, translate, useLanguage } from "../../shared/i18n/index.jsx";
 import { Button } from "../../shared/ui/Button.jsx";
 import { EmptyState } from "../../shared/ui/EmptyState.jsx";
 import { ErrorState } from "../../shared/ui/ErrorState.jsx";
 import { Skeleton } from "../../shared/ui/Skeleton.jsx";
 import { Tag } from "../../shared/ui/Tag.jsx";
-import { createAlertDispatch } from "../fleet/alertDispatch.js";
 import { decisionRoute, formatDistance, routeName } from "../fleet/decisionRoute.js";
+import { SendPreview, useDriverChannels } from "./SendPreview.jsx";
 import { jakartaTime, minutesOfDay } from "./useOperations.js";
 
 const FILTERS = ["all", "trucks", "gate", "tps"];
@@ -35,6 +38,7 @@ const KIND_LOOK = {
   gate_peak: { icon: Hourglass, tone: "blue" },
   duty_warn: { icon: Timer, tone: "amber" },
   duty_blocked: { icon: Timer, tone: "red" },
+  escalation: { icon: Megaphone, tone: "amber" },
 };
 
 function fill(text, values) {
@@ -135,11 +139,6 @@ export function describe(item, { t, lang, alert }) {
       const same = minutes.every((value) => value === minutes[0]);
       return {
         title: fill(t("s1_gate_title"), { from: facts.slot, to: slotEnd(facts.slot) }),
-        tag: (
-          <Tag tone="model" title={t("s1_model_hint")} data-provenance="model">
-            {t("s1_model")}
-          </Tag>
-        ),
         sub: fill(t(same ? "s1_gate_sub" : "s1_gate_sub_upto"), {
           trucks: list(
             holds.map((hold) => hold.truck_code),
@@ -161,9 +160,22 @@ export function describe(item, { t, lang, alert }) {
         action: "plan_relief",
       };
     }
+    case "escalation":
+      return {
+        title: fill(t("ea_esc_title"), { subject: facts.subject || "" }),
+        tag: <Tag tone="neutral">{t("ea_esc_for")}</Tag>,
+        sub: facts.text || "",
+        action: "mark_handled",
+      };
     default:
       return { title: truck, sub: "", action: "mark_handled" };
   }
+}
+
+function previewTrucks(item) {
+  if (!item) return [];
+  if (item.kind === "gate_peak") return (item.facts?.holds || []).map((hold) => hold.truck_code);
+  return [item.truck_code];
 }
 
 const ACTION_KEYS = {
@@ -190,10 +202,18 @@ const ACTION_KEYS = {
  */
 export function NeedsYouPanel({ feed, alerts, openId, onSelect, onFocusTruck, trucksOnRoute, role }) {
   const { t, lang } = useLanguage();
+  // What drivers read (instructions, WhatsApp) is written in the WhatsApp message language
+  // (Settings → WhatsApp), whatever language the console is in.
+  const waLang = useWhatsappLanguage();
+  const driverT = (key) => translate(waLang, key);
+  // Closing an escalation is the supervisor's call (operations:approve); others see it, no button.
+  const { canSupervise } = useConsole();
   const navigate = useNavigate();
   const [filter, setFilter] = useState("all");
   const [rowState, setRowState] = useState({});
   const [confirming, setConfirming] = useState(null);
+  // The row whose message to its driver(s) is being previewed: "Send to the driver of T-047?".
+  const [previewing, setPreviewing] = useState(null);
   // Folded to its header so the dispatcher can see the map underneath.
   const [collapsed, setCollapsed] = useState(false);
 
@@ -201,6 +221,8 @@ export function NeedsYouPanel({ feed, alerts, openId, onSelect, onFocusTruck, tr
   const counts = data?.counts || {};
   const items = (data?.items || []).filter((item) => filter === "all" || item.category === filter);
   const alertFor = (item) => (alerts || []).find((alert) => alert.id === item.id) || null;
+  const previewItem = (data?.items || []).find((item) => item.id === previewing) || null;
+  const channels = useDriverChannels(previewTrucks(previewItem));
 
   const setRow = (id, next) => setRowState((current) => ({ ...current, [id]: next }));
 
@@ -228,35 +250,98 @@ export function NeedsYouPanel({ feed, alerts, openId, onSelect, onFocusTruck, tr
       setConfirming(item.id);
       return;
     }
+    if (action === "send_route" || action === "accept") {
+      // A message to a driver is previewed (and editable) before it is sent.
+      setPreviewing(item.id);
+      return;
+    }
     run(item, async () => {
-      if (action === "mark_handled") {
+      if (action === "mark_handled" && item.kind === "escalation") {
+        // An escalation lives in its own queue; handling it closes the record.
+        await apiPost(`/escalations/${encodeURIComponent(item.id)}/handled`);
+      } else if (action === "mark_handled") {
         await followUp(item, "RESOLVED");
       } else if (action === "escalate") {
         await followUp(item, "DISPATCHED", t("s1_escalate_note"));
         // The WhatsApp alert is best effort: the escalation is already on record.
+        // Its fragments are in the WhatsApp message language, like the body around them.
         apiPost("/whatsapp/alert", {
           truck_code: item.truck_code,
-          issue: fill(t("s1_acc_title"), { truck: item.truck_code }),
-          recommendation: t("s1_escalate_note"),
+          issue: fill(driverT("s1_acc_title"), { truck: item.truck_code }),
+          recommendation: driverT("s1_escalate_note"),
         }).catch(() => {});
-      } else if (action === "accept") {
-        for (const hold of item.facts?.holds || []) {
-          await apiPost(`/gate/slots/recommendations/${encodeURIComponent(hold.rec_id)}/accept`, {});
-        }
       } else if (action === "skip_stop") {
         await apiPost(`/spj/${encodeURIComponent(item.spj_id)}/stops/${item.facts.stop_index}/skip`, {
           reason: fill(t("s1_skip_reason"), { n: item.facts.reports || 1 }),
         });
-      } else if (action === "send_route") {
-        const alert = alertFor(item);
-        if (!alert) throw new Error("no alert");
-        const response = await createAlertDispatch(alert, t);
-        if (!response.ok) throw Object.assign(new Error("dispatch"), { status: response.status });
-        await followUp(item, "DISPATCHED", t("s1_route_sent_note"));
-        return fill(t("s1_route_sent"), { truck: item.truck_code });
       }
       return null;
     });
+  }
+
+  // The previewed messages of a row: the reroute for its truck, or one hold per gate truck.
+  // Prefilled in the WhatsApp message language; the operator sees and may edit it.
+  function previewMessages(item, view) {
+    const to = (truck) => fill(t("ea_to_driver"), { truck });
+    if (item.kind === "gate_peak") {
+      return (item.facts?.holds || []).map((hold) => ({
+        key: hold.rec_id,
+        to: to(hold.truck_code),
+        channels: channels[hold.truck_code] || null,
+        lang: waLang,
+        text: fill(driverT("ea_gate_hold_text"), {
+          n: hold.hold_minutes,
+          // The full new slot, "10:15–10:30", as the server's default hold text has it.
+          slot: hold.to_slot_end ? `${hold.to_slot}–${hold.to_slot_end}` : hold.to_slot || "—",
+        }),
+      }));
+    }
+    return [
+      {
+        key: item.id,
+        to: to(item.truck_code),
+        channels: channels[item.truck_code] || null,
+        lang: waLang,
+        text: view.route ? fill(driverT("ea_route_text"), { route: routeName(driverT, view.route) }) : "",
+      },
+    ];
+  }
+
+  // Send pressed in the preview: the (possibly edited) texts go to those drivers only.
+  async function sendPreviewed(item, texts, operationId) {
+    let done;
+    if (item.kind === "gate_peak") {
+      const holds = item.facts?.holds || [];
+      for (const hold of holds) {
+        await apiPost(`/gate/slots/recommendations/${encodeURIComponent(hold.rec_id)}/accept`, {
+          text: texts[hold.rec_id],
+        });
+      }
+      done = fill(t("ea_gate_sent"), {
+        trucks: list(
+          holds.map((hold) => hold.truck_code),
+          lang,
+        ),
+      });
+    } else {
+      await apiPost(
+        "/driver/messages",
+        {
+          truck_code: item.truck_code,
+          text: texts[item.id],
+          kind: "instruction",
+          instruction_kind: "use_route",
+          source: "needs_you",
+        },
+        // One id per preview: a second Send after a lost answer is not a second message.
+        { headers: { "X-Operation-Id": operationId } },
+      );
+      await followUp(item, "DISPATCHED", t("s1_route_sent_note"));
+      done = fill(t("s1_route_sent"), { truck: item.truck_code });
+    }
+    setPreviewing(null);
+    setRow(item.id, { done });
+    await feed.reload();
   }
 
   function reassign(item, suggestion) {
@@ -378,7 +463,7 @@ export function NeedsYouPanel({ feed, alerts, openId, onSelect, onFocusTruck, tr
                     </p>
                   )}
                 </div>
-                {!open && action}
+                {!open && (item.kind !== "escalation" || canSupervise) && action}
               </div>
 
               {open && (
@@ -418,6 +503,26 @@ export function NeedsYouPanel({ feed, alerts, openId, onSelect, onFocusTruck, tr
                     </button>
                   </div>
                 </>
+              )}
+
+              {previewing === item.id && (
+                <SendPreview
+                  testId="needs-send-preview"
+                  title={
+                    item.kind === "gate_peak"
+                      ? fill(t("ea_ask_drivers"), {
+                          trucks: list(
+                            (item.facts?.holds || []).map((hold) => hold.truck_code),
+                            lang,
+                          ),
+                        })
+                      : fill(t("ea_ask_driver"), { truck: item.truck_code })
+                  }
+                  kicker={t("s1_suggests")}
+                  messages={previewMessages(item, view)}
+                  onSend={(texts, operationId) => sendPreviewed(item, texts, operationId)}
+                  onDismiss={() => setPreviewing(null)}
+                />
               )}
 
               {confirming === item.id && view.suggestion && (

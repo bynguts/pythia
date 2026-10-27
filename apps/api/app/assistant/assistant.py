@@ -10,7 +10,13 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from app.assistant.pii import scrub_outgoing
-from app.assistant.rag import format_rag_context
+from app.assistant.proposals import (
+    MAX_PROPOSALS,
+    local_proposal_answer,
+    parse_proposal_request,
+    validate_proposal,
+)
+from app.assistant.rag import format_rag_context, retrieve_pythia_context
 from app.assistant.scenario import (
     parse_scenario_question,
     question_language,
@@ -19,8 +25,9 @@ from app.assistant.scenario import (
     scenario_answer,
     with_parse_step,
 )
-from app.assistant.tools import TOOL_SCHEMAS, ToolContext, execute_tool, run_tools_pass
+from app.assistant.tools import ToolContext, execute_tool, run_tools_pass, tool_schemas
 from app.core.env import today
+from app.integrations.whatsapp import message_language
 
 # Per-request gateway timeouts, and the budget for the whole multi-step tool loop.
 _GATEWAY_TIMEOUT = 18
@@ -74,7 +81,10 @@ SYSTEM_PROMPT = (
     "sangat lebat, ekstrem; light/heavy/very heavy/extreme rain) tanpa mm, isi rain_category, bukan "
     "rainfall_mm, dan sebutkan nilai kategori BMKG yang dipakai; jika scenario.snapped_to_twin_presets bernilai true, "
     "katakan bahwa nilai diminta (scenario.requested) disesuaikan ke preset twin. Semua tool bersifat baca-saja: "
-    "jangan klaim telah dispatch, approve, atau mengirim WhatsApp. Tolak permintaan di luar Pythia dengan "
+    "jangan klaim telah dispatch, approve, atau mengirim WhatsApp. Untuk mengusulkan pesan atau instruksi ke "
+    "sopir satu truk, atau eskalasi ke pengawas, panggil propose_action: tool itu hanya membuat draf yang "
+    "dikirim operator sendiri. Tawarkan drafnya dengan yakin dan sebutkan langkah berikutnya (periksa, ubah, "
+    "tekan Kirim); jangan klaim sudah terkirim. Tolak permintaan di luar Pythia dengan "
     "sopan. Jangan tampilkan JSON mentah atau nama field teknis kecuali diminta."
 )
 
@@ -130,7 +140,21 @@ def _knowledge_context(question: str, images: list[str] | None = None) -> str:
     return format_rag_context(question, top_k=2, max_chars=1600)
 
 
-# Questions about the days and months ahead go to the outlook (7 days + 3 months).
+def _local_knowledge(question: str, lang: str) -> str:
+    """Knowledge-base excerpts quoted as a local answer: only those written in the answer's language."""
+    if not _knowledge_context(question).strip():
+        return ""
+    # A tie (e.g. a JSON or table chunk with no telling words) goes to the other language, so it is left out.
+    other = "en" if lang == "id" else "id"
+    parts = [
+        f"[{item['title']} | {item['source']} | score={item['score']:.3f}]\n{item['text']}"
+        for item in retrieve_pythia_context(question, top_k=6)
+        if question_language(item["text"], default=other) == lang
+    ][:2]
+    return "\n\n---\n\n".join(parts)[:1600]
+
+
+# Questions about the days and months ahead go to the outlook (7, 14 or 30 days + 3 months).
 OUTLOOK_TERMS = (
     "minggu depan",
     "pekan depan",
@@ -144,11 +168,28 @@ OUTLOOK_TERMS = (
     "7 days",
     "3 months",
     "outlook",
+    "14 hari",
+    "2 minggu",
+    "dua minggu",
+    "30 hari",
+    "sebulan",
+    "14 days",
+    "two weeks",
+    "30 days",
+)
+# The horizon a question asks for; anything else reads the week.
+OUTLOOK_DAY_TERMS = (
+    (30, ("30 hari", "sebulan", "30 days")),
+    (14, ("14 hari", "2 minggu", "dua minggu", "14 days", "two weeks", "2 weeks")),
 )
 
 
 def _wants_outlook(q: str) -> bool:
     return any(term in q for term in OUTLOOK_TERMS)
+
+
+def _outlook_days(q: str) -> int:
+    return next((n for n, terms in OUTLOOK_DAY_TERMS if any(term in q for term in terms)), 7)
 
 
 # "How many tonnes tomorrow?" reads tomorrow's day from the same outlook.
@@ -196,33 +237,71 @@ def _tomorrow_answer(result: dict[str, Any], lang: str) -> str | None:
         )
     if day.get("beyond_weather_forecast"):
         parts.append(
-            "No weather forecast covers that day; the model uses 0 mm rain."
+            "That day runs on the dry-day baseline (0 mm rain) and sharpens once the Open-Meteo forecast "
+            "reaches it."
             if en
-            else "Belum ada prakiraan cuaca untuk hari itu; model memakai hujan 0 mm."
+            else "Hari itu memakai basis hari kering (hujan 0 mm) dan makin tajam begitu prakiraan Open-Meteo "
+            "mencakupnya."
         )
     return " ".join(parts)
 
 
 def _outlook_answer(result: dict[str, Any], lang: str) -> str:
-    """The outlook tool's figures as one local answer (no LLM)."""
+    """The outlook tool's figures as one local answer (no LLM): a week day by day, 14 or 30 days
+    as their total, average, peak and how many days run on the dry-day baseline."""
     en = lang == "en"
-    days = "; ".join(
-        f"{d['date']} {d['total_tons']:,.0f} t"
-        + (
-            (" (no weather forecast)" if en else " (tanpa prakiraan cuaca)")
-            if d["beyond_weather_forecast"]
-            else ""
+    week = result["week"]
+    n = len(week["days"])
+    if n <= 7:
+        days = "; ".join(
+            f"{d['date']} {d['total_tons']:,.0f} t"
+            + (
+                (" (dry-day baseline)" if en else " (basis hari kering)")
+                if d["beyond_weather_forecast"]
+                else ""
+            )
+            for d in week["days"]
         )
-        for d in result["week"]["days"]
-    )
-    intake = result["monthly_intake"]
-    parts = [
-        (
-            f"City-wide waste per day, next 7 days (MODEL OUTPUT): {days}."
+        parts = [
+            f"City-wide waste per day, next {n} days (MODEL OUTPUT): {days}."
             if en
-            else f"Sampah se-kota per hari, 7 hari ke depan (MODEL OUTPUT): {days}."
+            else f"Sampah se-kota per hari, {n} hari ke depan (MODEL OUTPUT): {days}."
+        ]
+    else:
+        totals = [d["total_tons"] for d in week["days"]]
+        summary = week.get("summary") or {}
+        peak_i = totals.index(max(totals))
+        total = summary.get("total_tons", sum(totals))
+        avg = summary.get("avg_tons_per_day", total / n)
+        peak_date = summary.get("peak_date", week["days"][peak_i]["date"])
+        peak = summary.get("peak_tons", totals[peak_i])
+        trucks = summary.get("peak_trucks_needed")
+        at_peak = (
+            (f", {trucks} trucks at the peak" if en else f", {trucks} truk saat puncak") if trucks else ""
         )
-    ]
+        parts = [
+            f"City-wide waste, next {n} days (MODEL OUTPUT): {total:,.0f} t in total, {avg:,.0f} t/day on "
+            f"average, peak {peak_date} at {peak:,.0f} t{at_peak}."
+            if en
+            else f"Sampah se-kota, {n} hari ke depan (MODEL OUTPUT): total {total:,.0f} t, rata-rata "
+            f"{avg:,.0f} t/hari, puncak {peak_date} sebesar {peak:,.0f} t{at_peak}."
+        ]
+        if summary.get("corrected_total_tons") is not None:
+            parts.append(
+                f"With the weighbridge-learned correction: {summary['corrected_total_tons']:,.0f} t in total."
+                if en
+                else f"Dengan koreksi dari jembatan timbang: total {summary['corrected_total_tons']:,.0f} t."
+            )
+        baseline = sum(1 for d in week["days"] if d["beyond_weather_forecast"])
+        if baseline:
+            parts.append(
+                f"Open-Meteo weather drives the first {n - baseline} days; the last {baseline} run on the "
+                "dry-day baseline (0 mm rain) and sharpen as the forecast reaches them."
+                if en
+                else f"Cuaca Open-Meteo menggerakkan {n - baseline} hari pertama; {baseline} hari terakhir "
+                "memakai basis hari kering (hujan 0 mm) dan makin tajam begitu prakiraan mencakupnya."
+            )
+    intake = result["monthly_intake"]
     if intake.get("available"):
         through = intake["fitted_through"]
         within = [m for m in intake["months"] if m["within_backtested_horizon"]]
@@ -242,11 +321,11 @@ def _outlook_answer(result: dict[str, Any], lang: str) -> str:
             span = f"{beyond[0]['month']}..{beyond[-1]['month']}"
             ahead = f"{beyond[0]['horizon_months']}-{beyond[-1]['horizon_months']}"
             parts.append(
-                f"No Bantargebang figure for {span}: {ahead} months past the weighing data (through "
-                f"{through}), beyond the backtested 1-3 months."
+                f"Bantargebang figures for {span} ({ahead} months past the weighing data through {through}) "
+                "unlock as new weighings arrive; the model is validated 1-3 months ahead."
                 if en
-                else f"Tidak ada angka TPST Bantargebang untuk {span}: {ahead} bulan setelah data timbangan "
-                f"(s.d. {through}), di luar horizon backtest 1-3 bulan."
+                else f"Angka TPST Bantargebang untuk {span} ({ahead} bulan setelah data timbangan s.d. {through}) "
+                "terbuka begitu data timbangan baru masuk; model teruji 1-3 bulan ke depan."
             )
         backtest = intake.get("backtest") or {}
         if backtest.get("mape_model_pct") is not None:
@@ -273,11 +352,11 @@ def _outlook_answer(result: dict[str, Any], lang: str) -> str:
             )
         else:
             parts.append(
-                f"The weighbridge correction starts after {learned['min_days']} weighed days "
-                f"({learned['n_days']} so far)."
+                f"Learns from every weighed day: self-correcting from day {learned['min_days']} "
+                f"({learned['n_days']} weighed so far)."
                 if en
-                else f"Koreksi dari jembatan timbang mulai setelah {learned['min_days']} hari tertimbang "
-                f"(baru {learned['n_days']})."
+                else f"Belajar dari setiap hari tertimbang: mengoreksi diri mulai hari ke-{learned['min_days']} "
+                f"({learned['n_days']} hari tertimbang sejauh ini)."
             )
     return " ".join(parts)
 
@@ -339,6 +418,36 @@ def build_executive_summary(snapshot: dict[str, Any]) -> str:
     )
 
 
+# Local fleet answers, in the language the UI asked for.
+_STATUS = {
+    "en": {"active": "active", "damaged": "damaged", "deviation": "off route"},
+    "id": {"active": "aktif", "damaged": "rusak", "deviation": "deviasi rute"},
+}
+_FLEET_LABEL = {
+    "en": {
+        "deviation": "off their route",
+        "damaged": "damaged",
+        "active": "active",
+        "problem": "with an issue",
+    },
+    "id": {
+        "deviation": "mengalami deviasi rute",
+        "damaged": "mengalami kerusakan",
+        "active": "aktif",
+        "problem": "bermasalah",
+    },
+}
+
+
+# The provider failure reasons (_provider_error_reason) said in Indonesian.
+_FALLBACK_REASON_ID = {
+    "timeout": "waktu habis",
+    "provider unreachable": "penyedia tidak terjangkau",
+    "invalid provider response": "respons penyedia tidak valid",
+    "no scenario tool call": "tool skenario tidak dipanggil",
+}
+
+
 def _local_prefix(language: str, fallback_reason: str | None) -> str:
     """The first line of every local answer: it says no LLM produced it, and why."""
     if fallback_reason:
@@ -347,7 +456,8 @@ def _local_prefix(language: str, fallback_reason: str | None) -> str:
                 f"The LLM provider failed ({fallback_reason}); this answer comes from the local parser, "
                 "not the LLM."
             )
-        return f"Layanan LLM gagal ({fallback_reason}); jawaban ini dari parser lokal, bukan LLM."
+        reason = _FALLBACK_REASON_ID.get(fallback_reason, fallback_reason)
+        return f"Layanan LLM gagal ({reason}); jawaban ini dari parser lokal, bukan LLM."
     if language == "en":
         return "Local mode (no LLM assistant configured)."
     return "Mode lokal aktif (asisten LLM tidak dikonfigurasi)."
@@ -358,11 +468,12 @@ def _answer_locally(
     snapshot: dict[str, Any],
     tool_ctx: ToolContext | None = None,
     images: list[str] | None = None,
-    language: str = "id",
+    language: str | None = None,
     fallback_reason: str | None = None,
 ) -> dict[str, Any]:
     """No-LLM answer from the tool matching the question; also the fallback when the provider fails."""
-    lang = question_language(question, language)
+    # The UI language decides, as on the LLM path; without one, the question's language.
+    lang = language if language in ("id", "en") else question_language(question)
     prefix = _local_prefix(lang, fallback_reason)
     base: dict[str, Any] = {"provider": "local", "mode": "fallback" if fallback_reason else "local"}
     if fallback_reason:
@@ -374,6 +485,22 @@ def _answer_locally(
             else "Analisis foto/PDF memerlukan layanan AI."
         )
         return {**base, "tools_used": [], "answer": f"{prefix} {needs_ai}"}
+    request = parse_proposal_request(question) if tool_ctx is not None and tool_ctx.can_send else None
+    if request:
+        # A typed send/escalate request becomes a draft for the operator; nothing is sent.
+        try:
+            proposal = validate_proposal(request)
+        except ValueError:
+            proposal = None
+        if proposal:
+            # The operator typed this text: no claim about its language.
+            proposal.pop("lang", None)
+            return {
+                **base,
+                "answer": f"{prefix}\n\n{local_proposal_answer(proposal, lang)}",
+                "tools_used": ["propose_action"],
+                "proposed_actions": [proposal],
+            }
     scenario = parse_scenario_question(question) if tool_ctx is not None else None
     if scenario:
         result = execute_tool("run_scenario", scenario, tool_ctx)
@@ -392,57 +519,76 @@ def _answer_locally(
         args: dict[str, Any] = {}
         if _wants_outlook(q) or _wants_tomorrow(q):
             name = "get_forecast_outlook"
+            args["days"] = _outlook_days(q)
         elif any(term in q for term in ("prediksi", "forecast", "prakiraan ton", "timbulan")):
             name = "get_predictions"
         elif "tpa" in q or "antrean" in q or "antrian" in q:
             name = "get_tpa_queue"
-        elif any(term in q for term in ("truk", "armada", "fleet")):
+        elif any(term in q for term in ("truk", "armada", "fleet", "truck")):
             name = "get_fleet_status"
-            code = re.search(r"\bT-\d+\b", question, re.IGNORECASE)
+            code = re.search(r"T-\d+", question, re.IGNORECASE)
             if code:
                 args["truck_code"] = code.group().upper()
         if name:
             result = execute_tool(name, args, tool_ctx)
             if "error" not in result:
                 used = [name]
+                en = lang == "en"
                 if name == "get_fleet_status":
                     if args.get("truck_code"):
                         truck = (result.get("trucks") or [None])[0]
                         if truck:
+                            yes, no = ("yes", "no") if en else ("ya", "tidak")
+                            damaged = yes if truck["is_damaged"] else no
+                            deviated = yes if truck["deviation_violated"] else no
+                            status = _STATUS[lang].get(truck["status"], truck["status"])
                             answer = (
-                                f"Armada {truck['truck_code']}: status {truck['status']}; "
-                                f"kerusakan: {'ya' if truck['is_damaged'] else 'tidak'}; "
-                                f"deviasi rute: {'ya' if truck['deviation_violated'] else 'tidak'}."
+                                f"Truck {truck['truck_code']}: status {status}; "
+                                f"damaged: {damaged}; route deviation: {deviated}."
+                                if en
+                                else f"Armada {truck['truck_code']}: status {status}; "
+                                f"kerusakan: {damaged}; deviasi rute: {deviated}."
                             )
                         else:
-                            answer = f"Data armada {args['truck_code']} tidak tersedia."
+                            answer = (
+                                f"No fleet data for {args['truck_code']}."
+                                if en
+                                else f"Data armada {args['truck_code']} tidak tersedia."
+                            )
                     else:
-                        if any(term in q for term in ("deviasi", "menyimpang")):
-                            label, count = "mengalami deviasi rute", result["deviation_count"]
+                        if any(term in q for term in ("deviasi", "menyimpang", "deviat", "off route")):
+                            kind, count = "deviation", result["deviation_count"]
                             affected = [t for t in result["problem_trucks"] if t["deviation_violated"]]
-                        elif any(term in q for term in ("rusak", "kerusakan")):
-                            label, count = "mengalami kerusakan", result["damaged_count"]
+                        elif any(term in q for term in ("rusak", "kerusakan", "damage", "broken")):
+                            kind, count = "damaged", result["damaged_count"]
                             affected = [t for t in result["problem_trucks"] if t["is_damaged"]]
-                        elif "aktif" in q:
-                            label, count = "aktif", result["active_count"]
+                        elif "aktif" in q or "active" in q:
+                            kind, count = "active", result["active_count"]
                             affected = []
                         else:
-                            label, count = "bermasalah", result["problem_count"]
+                            kind, count = "problem", result["problem_count"]
                             affected = result.get("problem_trucks", [])
+                        label = _FLEET_LABEL[lang][kind]
                         answer = (
-                            f"Data armada Pythia: {count} truk {label} dari {result['total_trucks']} truk."
+                            f"Pythia fleet data: {count} of {result['total_trucks']} trucks {label}."
+                            if en
+                            else f"Data armada Pythia: {count} truk {label} dari {result['total_trucks']} truk."
                         )
-                        if affected and re.search(r"\b(mana|which|siapa)\b", q):
+                        if affected and re.search(r"(mana|which|siapa)", q):
                             codes = ", ".join(t["truck_code"] for t in affected[:5])
-                            answer += f" Truk terkait: {codes}."
+                            answer += f" Trucks: {codes}." if en else f" Truk terkait: {codes}."
                 elif name == "get_forecast_outlook":
                     tomorrow = None if _wants_outlook(q) else _tomorrow_answer(result, lang)
                     answer = tomorrow or _outlook_answer(result, lang)
                 elif name == "get_tpa_queue":
                     answer = (
-                        f"Simulasi antrean TPST Bantargebang: {result['trucks_in_queue']} truk, "
-                        f"perkiraan tunggu rata-rata {result['avg_wait_minutes']} menit "
-                        f"({result['status_label']}). Ini simulasi, bukan pengamatan langsung."
+                        f"Simulated TPST Bantargebang queue: {result['trucks_in_queue']} trucks, "
+                        f"average wait about {result['avg_wait_minutes']} minutes. "
+                        "This is a simulation, not a live observation."
+                        if en
+                        else f"Simulasi antrean TPST Bantargebang: {result['trucks_in_queue']} truk, "
+                        f"perkiraan tunggu rata-rata {result['avg_wait_minutes']} menit. "
+                        "Ini simulasi, bukan pengamatan langsung."
                     )
                 else:
                     predictions = result.get("predictions_daily_city", [])
@@ -457,12 +603,16 @@ def _answer_locally(
                             if p["date"] == first_date and (district is None or p["district"] == district)
                         ]
                         figures = "; ".join(f"{p['district']}: {p['predicted_tons']} ton" for p in day)
-                        answer = f"Prediksi Pythia {first_date} per kota: {figures}."
+                        answer = (
+                            f"Pythia forecast for {first_date} by city: {figures}."
+                            if en
+                            else f"Prediksi Pythia {first_date} per kota: {figures}."
+                        )
     if answer is None and rain_without_amount(question):
         answer = rain_words_hint(lang)
     if answer is None:
-        rag = _knowledge_context(question).strip()
-        if rag and rag.lower() != "no matching pythia knowledge found.":
+        rag = _local_knowledge(question, lang)
+        if rag:
             heading = (
                 "Related information from the Pythia knowledge base:"
                 if lang == "en"
@@ -485,8 +635,10 @@ def _answer_locally(
 
 
 def answer_with_openai_if_configured(
-    question, snapshot, history=None, tool_ctx=None, images=None, language="id"
+    question, snapshot, history=None, tool_ctx=None, images=None, language=None
 ) -> dict[str, Any]:
+    if language not in ("id", "en"):
+        language = question_language(question)
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return _answer_locally(question, snapshot, tool_ctx, images, language)
@@ -505,6 +657,11 @@ def answer_with_openai_if_configured(
     # language for the whole conversation.
     language_name = "Bahasa Indonesia" if language == "id" else "English"
     system_prompt = f"{SYSTEM_PROMPT}\nJawab selalu dalam {language_name}."
+    if language == "en":
+        system_prompt += '\nDalam bahasa Inggris, sebut SPJ "work order" dan pengemudi/sopir "driver".'
+    # Driver drafts follow the WhatsApp message language setting, whatever the console shows.
+    driver_language = "Bahasa Indonesia" if message_language()[0] == "id" else "English"
+    system_prompt += f"\nTeks propose_action untuk sopir ditulis dalam {driver_language}."
 
     if images:
         content: list[dict[str, Any]] = [{"type": "text", "text": user_prompt}]
@@ -525,7 +682,7 @@ def answer_with_openai_if_configured(
         "stream": False,
     }
     if tool_ctx is not None:
-        payload["tools"] = TOOL_SCHEMAS
+        payload["tools"] = tool_schemas(tool_ctx)
         payload["tool_choice"] = "auto"
 
     per_call_timeout = _IMAGE_GATEWAY_TIMEOUT if images else _GATEWAY_TIMEOUT
@@ -552,6 +709,7 @@ def answer_with_openai_if_configured(
     # (capped per turn, per question, in steps and in wall-clock time); the last
     # turn is offered no tools, so it has to answer from what the tools returned.
     tools_used: list[str] = []
+    proposals: list[dict[str, Any]] = []
     scenario: dict[str, Any] | None = None
     served_model = model
     budget = _MAX_TOOL_CALLS_TOTAL if tool_ctx is not None else 0
@@ -581,6 +739,8 @@ def answer_with_openai_if_configured(
                     name = tool_message["name"]
                     if name not in tools_used:
                         tools_used.append(name)
+                    if name == "propose_action" and len(proposals) < MAX_PROPOSALS:
+                        proposals.append(result["proposal"])
                     if name == "run_scenario":
                         # The latest scenario is the one the final answer describes.
                         scenario = with_parse_step(result, "llm_tool_call", served_model)
@@ -622,6 +782,8 @@ def answer_with_openai_if_configured(
     }
     if scenario is not None:
         response["scenario"] = scenario
+    if proposals:
+        response["proposed_actions"] = proposals
     return response
 
 

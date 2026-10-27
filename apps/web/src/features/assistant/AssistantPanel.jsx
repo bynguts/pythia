@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import { ArrowUp, Lock, Mic, MicOff, Paperclip, Sparkles, X } from "lucide-react";
+import { ProposalCard } from "./ProposalCard.jsx";
 import { ScenarioCard } from "./ScenarioCard.jsx";
 import { useSpeechInput } from "./useSpeechInput.js";
 import { answerToSafeHtml } from "./safeAnswer.js";
@@ -95,7 +96,8 @@ export function AssistantPanel() {
           ...current,
           {
             role: "assistant",
-            text: `${t("asst_error_prefix")} ${data.detail || t("asst_error_detail")} ${t("asst_error_suffix")}`,
+            // The gateway detail is English: it shows in English mode only.
+            text: `${t("asst_error_prefix")} ${(lang === "en" && typeof data.detail === "string" && data.detail) || t("asst_error_detail")} ${t("asst_error_suffix")}`,
             provider: "error",
           },
         ]);
@@ -109,8 +111,11 @@ export function AssistantPanel() {
           provider: data.provider || "unknown",
           model: data.model || "",
           source: { mode: data.mode, providerName: data.provider_name, fallbackReason: data.fallback_reason },
-          toolsUsed: data.tools_used || [],
+          // A draft shows as its own card, not as a tool chip.
+          toolsUsed: (data.tools_used || []).filter((id) => id !== "propose_action"),
           scenario: data.scenario?.links ? data.scenario : null,
+          // Ana's drafts: nothing is sent until the operator presses Send on one.
+          proposals: Array.isArray(data.proposed_actions) ? data.proposed_actions : [],
         },
       ]);
     } catch {
@@ -182,6 +187,9 @@ export function AssistantPanel() {
                       source={message.source}
                     />
                   )}
+                  {message.proposals?.map((proposal) => (
+                    <ProposalCard key={proposal.id} proposal={proposal} />
+                  ))}
                   {answered && message.toolsUsed?.length > 0 && (
                     <div className="ana-used" data-testid="assistant-used">
                       <span className="ana-used-k">{t("s5_ana_used")}</span>

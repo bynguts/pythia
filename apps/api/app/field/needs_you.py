@@ -12,7 +12,9 @@ Read-only. It gathers what other stores already hold and adds no fact of its own
   alerts act on observed events only), so it is counted under ``sources`` instead;
 - ``receipt_check``: a weighbridge receipt of the last ``RECEIPT_CHECK_DAYS`` local
   days whose rule checks (app.field.receipt_checks) want a review: recorded data
-  compared by plain rules, not AI. A broken seal is urgent.
+  compared by plain rules, not AI. A broken seal is urgent;
+- ``escalation``: an operator's escalation to the field supervisor (an approved Ana
+  proposal or a console action), open until handled.
 
 Every item also carries a deterministic ``next_step`` (one imperative sentence) and
 the ``rule`` that raised it (the constant's name and value), both as an i18n key
@@ -47,11 +49,12 @@ CATEGORIES = {
     "gate_peak": "gate",
     "tps_empty": "tps",
     "receipt_check": "gate",
+    "escalation": "trucks",
 }
 URGENT_KINDS = ("accident", "truck_breakdown", "duty_blocked")
 FOLLOW_UP_SCAN = 2000
 # Unique per record: a follow-up on any day closes them.
-_UNIQUE_PREFIXES = ("driver-exception:", "damage:", "receipt-check:")
+_UNIQUE_PREFIXES = ("driver-exception:", "damage:", "receipt-check:", "escalation:")
 RECEIPT_CHECK_DAYS = 7
 
 
@@ -316,6 +319,7 @@ def _gate_peaks(day: str, follow_ups: dict[str, dict[str, Any]]) -> list[dict[st
                             "truck_code": r["truck_code"],
                             "hold_minutes": r["hold_minutes"],
                             "to_slot": r["to_slot"],
+                            "to_slot_end": r.get("to_slot_end"),
                             "expected_wait_reduction_min": r["expected_wait_reduction_min"],
                         }
                         for r in recs
@@ -370,6 +374,29 @@ def _receipt_checks(day: str, follow_ups: dict[str, dict[str, Any]]) -> list[dic
             )
         )
     return items
+
+
+def _escalations() -> list[dict[str, Any]]:
+    """Open escalations to the supervisor (their own store), whatever day they were raised."""
+    from app.field.driver_messages import escalations
+
+    return [
+        _item(
+            esc["id"],
+            "escalation",
+            truck_code=esc.get("truck_code"),
+            created_at=esc["created_at"],
+            facts={
+                "subject": esc.get("subject") or "",
+                "text": esc.get("text") or "",
+                "source": (esc.get("client_hints") or {}).get("source"),
+                "raised_by": esc.get("approved_by"),
+            },
+            actions=["mark_handled"],
+            classification="FIELD",
+        )
+        for esc in escalations()
+    ]
 
 
 def _duty(day: str, now: datetime, follow_ups: dict[str, dict[str, Any]]) -> tuple[list, dict[str, Any]]:
@@ -556,6 +583,12 @@ def _guidance(item: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             "%",
             min_kg=OCR_TOLERANCE_MIN_KG,
         )
+    if kind == "escalation":
+        # Lane ea catalog: the supervisor's step, and that an operator raised it.
+        return (
+            {"key": "ea_step_escalation", "params": {"by": facts.get("raised_by") or ""}},
+            {"id": "ESCALATION", "value": None, "unit": None, "key": "ea_rule_escalation", "params": {}},
+        )
     return _step("review", truck=truck), _rule("review", kind, None)
 
 
@@ -578,8 +611,15 @@ def needs_you(now: datetime | None = None) -> dict[str, Any]:
         + _gate_peaks(day, follow_ups)
         + _receipt_checks(day, follow_ups)
         + duty
+        + _escalations()
     )
-    items = [i for i in items if (follow_ups.get(i["id"]) or {}).get("status") != "RESOLVED"]
+    # An escalation closes only through its own store (a supervisor's Mark handled), never
+    # through a generic alert follow-up.
+    items = [
+        i
+        for i in items
+        if i["kind"] == "escalation" or (follow_ups.get(i["id"]) or {}).get("status") != "RESOLVED"
+    ]
     _suggest_backups(items, day)
     for item in items:
         item["next_step"], item["rule"] = _guidance(item)

@@ -71,6 +71,7 @@ def create_app() -> FastAPI:
         forecast,
         gate_slots,
         health,
+        messages,
         operations,
         ops,
         readiness,
@@ -112,6 +113,7 @@ def create_app() -> FastAPI:
         ops,
         field_facts,
         driver_trip,
+        messages,
     ):
         application.include_router(module.router)
     return application
