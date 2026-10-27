@@ -331,14 +331,6 @@
   color: var(--f-ink-2);
   font-size: 12px;
 }
-.ana-chip.is-source {
-  background: var(--f-blue-soft);
-  color: var(--f-blue);
-}
-.ana-actions {
-  display: flex;
-  gap: 8px;
-}
 .ana-prompt:focus-visible,
 .ana-icon:focus-visible,
 .ana-send:focus-visible {

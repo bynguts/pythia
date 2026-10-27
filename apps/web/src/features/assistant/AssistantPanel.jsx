@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { marked } from "marked";
-import DOMPurify from "dompurify";
 import { apiFetch } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
-import { Button } from "../../shared/ui/Button.jsx";
-import { ArrowUp, Check, Copy, Lock, Mic, MicOff, Paperclip, Sparkles, X } from "lucide-react";
-import { ScenarioCard, providerLabel } from "./ScenarioCard.jsx";
+import { ArrowUp, Lock, Mic, MicOff, Paperclip, Sparkles, X } from "lucide-react";
+import { ScenarioCard } from "./ScenarioCard.jsx";
 import { useSpeechInput } from "./useSpeechInput.js";
+import { answerToSafeHtml } from "./safeAnswer.js";
 import "./assistant.css";
 
 const PROMPTS = ["asst_prompt1_q", "asst_prompt2_q", "asst_prompt3_q"];
@@ -23,7 +21,6 @@ export function AssistantPanel() {
   const [messages, setMessages] = useState(() => [{ role: "assistant", text: null }]);
   const [loading, setLoading] = useState(false);
   const [attachedFile, setAttachedFile] = useState(null);
-  const [copied, setCopied] = useState(null);
   const logRef = useRef(null);
   const fileInputRef = useRef(null);
   const questionRef = useRef(null);
@@ -49,16 +46,6 @@ export function AssistantPanel() {
   function toolLabel(id) {
     const label = t(`s5_ana_tool_${id}`);
     return label === `s5_ana_tool_${id}` ? id.replace(/^get_/, "").replaceAll("_", " ") : label;
-  }
-
-  async function copyAnswer(index, text) {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(index);
-      setTimeout(() => setCopied((current) => (current === index ? null : current)), 2000);
-    } catch {
-      setCopied(null);
-    }
   }
 
   function handleFileSelect(event) {
@@ -162,11 +149,7 @@ export function AssistantPanel() {
 
   function renderAssistantText(text) {
     if (!text) return null;
-    const rawHtml = marked.parse(humanizeAssistantAnswer(text), { gfm: true, breaks: true });
-    return DOMPurify.sanitize(rawHtml, {
-      USE_PROFILES: { html: true },
-      FORBID_TAGS: ["style", "script", "iframe", "form", "input"],
-    });
+    return answerToSafeHtml(humanizeAssistantAnswer(text));
   }
 
   return (
@@ -176,13 +159,6 @@ export function AssistantPanel() {
           const isUser = message.role === "user";
           const answered =
             !isUser && index > 0 && message.provider !== "error" && message.provider !== "offline";
-          const source = answered
-            ? providerLabel(message.provider, message.model, t, {
-                mode: message.source?.mode,
-                providerName: message.source?.providerName,
-                fallbackReason: message.source?.fallbackReason,
-              })
-            : null;
           return (
             <article
               className={`ana-msg ${isUser ? "is-user" : "is-ana"}${message.provider === "error" ? " is-error" : ""}`}
@@ -206,26 +182,14 @@ export function AssistantPanel() {
                       source={message.source}
                     />
                   )}
-                  {answered && (
+                  {answered && message.toolsUsed?.length > 0 && (
                     <div className="ana-used" data-testid="assistant-used">
                       <span className="ana-used-k">{t("s5_ana_used")}</span>
-                      {message.toolsUsed?.map((id) => (
+                      {message.toolsUsed.map((id) => (
                         <span className="ana-chip" key={id}>
                           {toolLabel(id)}
                         </span>
                       ))}
-                      {source && <span className="ana-chip is-source">{source}</span>}
-                    </div>
-                  )}
-                  {answered && (
-                    <div className="ana-actions">
-                      <Button
-                        size="sm"
-                        icon={copied === index ? Check : Copy}
-                        onClick={() => copyAnswer(index, message.text)}
-                      >
-                        {copied === index ? t("s5_ana_copied") : t("s5_ana_copy")}
-                      </Button>
                     </div>
                   )}
                   {message.scenario && (

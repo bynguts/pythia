@@ -1,11 +1,10 @@
 import { useRef, useState } from "react";
-import { marked } from "marked";
-import DOMPurify from "dompurify";
 import { Mic, MicOff, PanelLeftClose, Send, Sparkles } from "lucide-react";
 import { apiPost } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
 import { providerLabel, ScenarioCard } from "../assistant/ScenarioCard.jsx";
 import { useSpeechInput } from "../assistant/useSpeechInput.js";
+import { answerToSafeHtml } from "../assistant/safeAnswer.js";
 import "../assistant/assistant.css";
 
 /**
@@ -20,10 +19,7 @@ import "../assistant/assistant.css";
  * LLM provider and model the backend says answered.
  */
 function answerHtml(text) {
-  return DOMPurify.sanitize(marked.parse(text, { gfm: true, breaks: true }), {
-    USE_PROFILES: { html: true },
-    FORBID_TAGS: ["style", "script", "iframe", "form", "input"],
-  });
+  return answerToSafeHtml(text);
 }
 
 export function TwinAskRail({ onApply, appliedText, queueText, collapsible = false, onCollapse }) {
