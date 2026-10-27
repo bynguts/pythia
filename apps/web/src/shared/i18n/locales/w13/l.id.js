@@ -5,7 +5,6 @@ export const lId = {
   l_nav_label: "Utama",
   l_nav_product: "Produk",
   l_nav_how: "Cara kerja",
-  l_nav_honesty: "Kejujuran data",
   l_nav_driver: "Aplikasi sopir",
   l_nav_faq: "FAQ",
   l_nav_signin: "Masuk",

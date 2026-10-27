@@ -241,9 +241,6 @@ export function LandingPage() {
                 <a href="#how">{t("l_nav_how")}</a>
               </li>
               <li>
-                <a href="#honesty">{t("l_nav_honesty")}</a>
-              </li>
-              <li>
                 <Link to="/driver">{t("l_nav_driver")}</Link>
               </li>
               <li>

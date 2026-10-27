@@ -6,7 +6,6 @@ export const lEn = {
   l_nav_label: "Main",
   l_nav_product: "Product",
   l_nav_how: "How it works",
-  l_nav_honesty: "Data honesty",
   l_nav_driver: "Driver app",
   l_nav_faq: "FAQ",
   l_nav_signin: "Sign in",

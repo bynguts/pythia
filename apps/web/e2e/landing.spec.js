@@ -14,6 +14,7 @@ test("landing renders its story with one main landmark", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Waste operations,");
   await expect(page.getByRole("main")).toHaveCount(1);
+  await expect(page.getByRole("navigation", { name: "Main" })).not.toContainText(/Data honesty/);
   for (const id of ["product", "how", "honesty", "faq"]) await expect(page.locator(`#${id}`)).toHaveCount(1);
   // The modelled citywide figure carries its provenance, never presented as measured.
   const citywide = page.locator('#main [data-provenance="modelled"]').first();
