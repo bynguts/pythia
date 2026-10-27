@@ -1,7 +1,8 @@
-/* Outlook on the Tomorrow page: the week ahead and the next three months. Same card,
-   type and colour tokens as tomorrow.css; the highlight is a green outline, never a fill. */
+/* Outlook on the Tomorrow page: the days ahead, what the weighbridge taught the forecast and the
+   monthly intake proof. Flat throughout: hairline dividers, no boxes, no fills; tomorrow is
+   marked by its green label only. */
 
-/* The header wraps on narrow screens so the Model tag stays inside the card. */
+/* The header wraps on narrow screens so the aside stays inside the card. */
 .tmr-ol > .ui-card-head {
   flex-wrap: wrap;
   row-gap: 4px;
@@ -27,35 +28,36 @@
   font-size: 12px;
   font-weight: 600;
 }
-.tmr-ol-days,
+.tmr-ol-months-label {
+  margin-top: 8px;
+}
+
+/* Days (and next months): one row of columns split by hairlines; a list of rows on a phone. */
+.tmr-ol-strip,
 .tmr-ol-months {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  gap: 8px;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
   margin: 0;
   padding: 0;
   list-style: none;
+  border-block: 1px solid var(--f-line-3);
 }
-.tmr-ol-months {
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-}
-.tmr-ol-day,
+.tmr-ol-cell,
 .tmr-ol-month {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
   padding: 10px 12px;
-  border: 1px solid var(--f-line-3);
-  border-radius: 8px;
-  background: var(--f-white);
+  border-left: 1px solid var(--f-line-3);
 }
-.tmr-ol-day.is-today,
-.tmr-ol-day.is-tomorrow {
-  border-color: var(--f-green);
-  background: var(--f-green-tint);
+.tmr-ol-cell:first-child,
+.tmr-ol-month:first-child {
+  padding-left: 0;
+  border-left: 0;
 }
-.tmr-ol-day-name {
+.tmr-ol-cell-day {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -64,15 +66,15 @@
   font-size: 13px;
   font-weight: 500;
 }
-.tmr-ol-day.is-today .tmr-ol-day-name,
-.tmr-ol-day.is-tomorrow .tmr-ol-day-name {
-  color: var(--f-green);
-  font-weight: 600;
-}
-.tmr-ol-day-name small {
+.tmr-ol-cell-day small {
   color: var(--f-faint);
   font-size: 11px;
   font-weight: 400;
+}
+.tmr-ol-cell.is-tomorrow .tmr-ol-cell-day,
+.tmr-ol-chart-readout .tmr-ol-cell-day {
+  color: var(--f-green);
+  font-weight: 600;
 }
 .tmr-ol-value {
   color: var(--f-ink);
@@ -88,24 +90,69 @@
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
-.tmr-ol-chips {
-  display: flex;
-  flex-wrap: wrap;
+.tmr-ol-cell-input {
+  display: inline-flex;
+  align-items: center;
   gap: 4px;
-}
-.tmr-ol-chip {
-  max-width: 100%;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: var(--f-hover);
   color: var(--f-ink-2);
-  font-size: 11px;
-  overflow-wrap: anywhere;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-.tmr-ol-chip.is-warn {
-  background: var(--f-amber-soft);
-  color: var(--f-amber-ink);
+.tmr-ol-cell-input svg {
+  flex: none;
+  color: var(--f-muted);
+}
+.tmr-ol-cell-input.is-dry,
+.tmr-ol-cell-input.is-baseline {
+  color: var(--f-muted);
+}
+.tmr-ol-cell-marks {
+  display: flex;
+  flex-wrap: wrap;
+  color: var(--f-faint);
+  font-size: 11px;
+}
+.tmr-ol-cell-marks > span + span::before {
+  content: "·";
+  margin: 0 5px;
+}
+@media (max-width: 640px) {
+  .tmr-ol-strip,
+  .tmr-ol-months {
+    grid-auto-flow: row;
+  }
+  .tmr-ol-cell,
+  .tmr-ol-month {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 2px 12px;
+    padding: 8px 0;
+    border-left: 0;
+    border-top: 1px solid var(--f-line-3);
+  }
+  .tmr-ol-cell:first-child,
+  .tmr-ol-month:first-child {
+    border-top: 0;
+  }
+  .tmr-ol-cell > *,
+  .tmr-ol-month > * {
+    grid-column: 1;
+  }
+  .tmr-ol-cell > .tmr-ol-value,
+  .tmr-ol-month > .tmr-ol-value {
+    grid-column: 2;
+    grid-row: 1;
+    text-align: right;
+  }
+  .tmr-ol-cell > .tmr-ol-corrected {
+    grid-column: 2;
+    grid-row: 2;
+    text-align: right;
+  }
+  .tmr-ol-value {
+    font-size: 16px;
+  }
 }
 .tmr-ol-horizon {
   color: var(--f-faint);
@@ -234,4 +281,226 @@
   color: var(--f-ink-2);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+
+/* Horizon switch (7 / 14 / 30 days) beside the days heading; wraps under it on a phone. */
+.tmr-ol-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.tmr-ol-range {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Horizon summary: a flat metric strip, hairline dividers, no boxes. */
+.tmr-ol-sum {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin: 0;
+  border-top: 1px solid var(--f-line-3);
+}
+.tmr-ol-sum-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-left: 1px solid var(--f-line-3);
+}
+.tmr-ol-sum-item:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+.tmr-ol-sum dt {
+  color: var(--f-muted);
+  font-size: 12px;
+}
+.tmr-ol-sum dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  margin: 0;
+}
+.tmr-ol-sum-value {
+  color: var(--f-ink);
+  font-family: var(--f-font-display);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.tmr-ol-sum-sub {
+  color: var(--f-faint);
+  font-size: 12px;
+}
+.tmr-ol-sum .tmr-ol-corrected {
+  flex-basis: 100%;
+}
+@media (max-width: 520px) {
+  .tmr-ol-sum {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tmr-ol-sum-item:nth-child(odd) {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .tmr-ol-sum-item:nth-child(n + 3) {
+    border-top: 1px solid var(--f-line-3);
+  }
+}
+
+/* Daily chart: columns above or below the horizon average; days past the weather window are
+   dashed, the picked day is the accent. Every column fits the card (no inner scroll). */
+.tmr-ol-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+}
+.tmr-ol-chart-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tmr-ol-chart-key::before {
+  content: "";
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--f-green-bar);
+}
+.tmr-ol-chart-key.is-beyond::before {
+  border: 1px dashed var(--f-green-2);
+  background: var(--f-green-tint);
+}
+.tmr-ol-chart-key.is-avg::before {
+  height: 0;
+  width: 14px;
+  border-radius: 0;
+  border-top: 1px dashed var(--f-faint);
+  background: none;
+}
+.tmr-ol-chart-plot {
+  position: relative;
+  height: 140px;
+  margin: 6px 4px 0 44px;
+  border-radius: 4px;
+}
+.tmr-ol-chart-plot:focus-visible {
+  outline: 2px solid var(--f-green);
+  outline-offset: 4px;
+}
+.tmr-ol-chart-avg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed var(--f-faint);
+  pointer-events: none;
+}
+.tmr-ol-chart-cut {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  border-left: 1px dashed var(--f-muted);
+  pointer-events: none;
+}
+.tmr-ol-chart-cols {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  column-gap: 2px;
+}
+.tmr-ol-chart-col {
+  position: relative;
+  min-width: 0;
+  cursor: pointer;
+}
+.tmr-ol-chart-bar {
+  position: absolute;
+  left: 50%;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 24px;
+  min-height: 2px;
+  border-radius: 2px;
+  background: var(--f-green-bar);
+  transform: translateX(-50%);
+}
+.tmr-ol-chart-bar.is-beyond {
+  border: 1px dashed var(--f-green-2);
+  background: var(--f-green-tint);
+}
+.tmr-ol-chart-bar.is-active {
+  background: var(--f-green);
+}
+/* The weather-window label starts at the cut line (padding = its share of the plot width). */
+.tmr-ol-chart-cut-label {
+  margin: 4px 4px -4px 44px;
+  color: var(--f-muted);
+  font-size: 10px;
+}
+.tmr-ol-chart-cut-label span {
+  display: block;
+  padding-left: 5px;
+  border-left: 1px dashed var(--f-muted);
+}
+.tmr-ol-chart-readout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--f-line-3);
+}
+
+/* Learning from the weighbridge: its own section under the days, hairline above, no box. */
+.tmr-ol-learn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--f-line-3);
+}
+.tmr-ol-learn-title {
+  margin: 0;
+  color: var(--f-ink);
+  font-family: var(--f-font-body);
+  font-size: 14px;
+  font-weight: 600;
+}
+.tmr-ol-learn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+.tmr-ol-learn-item dt {
+  color: var(--f-muted);
+  font-size: 12px;
+}
+.tmr-ol-learn-item dd {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  color: var(--f-ink);
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.tmr-ol-learn-item small {
+  color: var(--f-faint);
+  font-size: 11px;
+  font-weight: 400;
+}
+.tmr-ol-learn[data-active="true"] [data-testid="tmr-outlook-learn-correction"] dd {
+  color: var(--f-green);
 }

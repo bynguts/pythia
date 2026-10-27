@@ -34,7 +34,7 @@ from app.forecast.forecast_metrics import (
 )
 from app.forecast.impact import build_impact_report
 from app.forecast.learning import corrected, learned_correction
-from app.forecast.outlook import outlook_payload
+from app.forecast.outlook import OUTLOOK_DAYS, OUTLOOK_HORIZONS, outlook_payload
 from app.forecast.real_data import (
     load_kecamatan_map,
     load_kelurahan_heatmap,
@@ -222,10 +222,16 @@ def forecast_tomorrow(
 
 
 @router.get("/api/forecast/outlook")
-def forecast_outlook(_role: str = Depends(require_permission("dashboard:read"))) -> dict[str, Any]:
-    """The week ahead (city-wide t/day, drivers filled automatically) and the next 3 months
-    of Bantargebang intake with its real-data backtest error. Takes no inputs."""
-    return outlook_payload()
+def forecast_outlook(
+    days: int = Query(OUTLOOK_DAYS, description="Days ahead: 7, 14 or 30"),
+    _role: str = Depends(require_permission("dashboard:read")),
+) -> dict[str, Any]:
+    """The next 7, 14 or 30 days (city-wide t/day, drivers filled automatically, total, average
+    and peak) and the next 3 months of Bantargebang intake with its real-data backtest error.
+    Takes no scenario inputs; days past the Open-Meteo window are flagged."""
+    if days not in OUTLOOK_HORIZONS:
+        raise HTTPException(status_code=422, detail="days must be 7, 14 or 30")
+    return outlook_payload(days)
 
 
 @router.get("/api/baseline/scenario")

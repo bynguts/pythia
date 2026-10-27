@@ -33,7 +33,7 @@ _lock = threading.Lock()
 _cache: dict[str, Any] = {"ts": 0.0, "payload": None}
 
 BASIS = (
-    "weighbridge net tonnes of closed SPJ days (pilot fleet) against the approved plan's forecast "
+    "weighbridge net tonnes of closed work-order days (pilot fleet) against the approved plan's forecast "
     "demand tonnes (not its truck capacity) for the same day, pro-rated to the trips weighed; EWMA (alpha 0.3) of actual / forecast "
     "over the last 14 weighed days, clamped to +/-25 %, applied to the city-wide forecast as a factor"
 )

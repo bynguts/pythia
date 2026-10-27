@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { CloudRain } from "lucide-react";
 import { apiGet } from "../../shared/api/client.js";
 import { signedPercent } from "../../shared/hooks/useSnapshot.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
-import { Card, Skeleton, Tag } from "../../shared/ui/index.js";
+import { Card, Segmented, Skeleton } from "../../shared/ui/index.js";
 import "./outlook.css";
 
-const MAX_CHIPS = 3;
+// Fallback when an older API omits `horizons_available`; the API's list wins.
+const HORIZONS = [7, 14, 30];
 
 // "2026-10-28" → a local Date on that day (no UTC shift).
 function isoDate(iso, add = 0) {
@@ -13,44 +15,80 @@ function isoDate(iso, add = 0) {
   return new Date(year, month - 1 + add, day || 1);
 }
 
-// The chips that moved one day, in the order the operator reads them: missing weather,
-// rain, events, holiday, weekend.
-function dayChips(day, t, number) {
-  const chips = [];
+// What moved one day, as quiet inline text: the weather input (rain and its effect against the
+// same day dry, a dry day, or the dry-day baseline past the forecast window), then the calendar
+// markers (events, a holiday, the weekend).
+function dayFacts(day, t, number) {
   const weather = day.drivers.find((d) => d.kind === "weather");
   const normal = day.normal_tons;
+  let input = null;
   if (day.beyond_weather_forecast) {
-    chips.push({
-      key: "noweather",
-      text: t("ol_no_weather"),
-      title: t("ol_no_weather_title"),
-      tone: "is-warn",
-    });
+    input = { kind: "baseline", text: t("fh_dry_baseline"), title: t("fh_dry_baseline_title") };
   } else if (weather?.detail?.rainfall_mm > 0) {
     const effect = normal ? signedPercent((weather.effect_tons / normal) * 100) : null;
-    chips.push({
-      key: "rain",
-      text: `${t("ol_rain").replace("{mm}", number(weather.detail.rainfall_mm, 1))}${effect ? ` ${effect}` : ""}`,
+    input = {
+      kind: "rain",
+      text: `${number(weather.detail.rainfall_mm, 1)} mm${effect && effect !== "—" ? ` · ${effect}` : ""}`,
       title: t("s3_why_rain_title"),
-    });
+    };
   } else if (weather) {
-    chips.push({ key: "dry", text: t("ol_dry"), title: t("s3_why_rain_title") });
+    input = { kind: "dry", text: t("ol_dry"), title: t("s3_why_rain_title") };
   }
-  day.drivers
+  const marks = day.drivers
     .filter((d) => d.kind === "event")
-    .forEach((event, index) =>
-      chips.push({
-        key: `event-${index}`,
-        text: t("ol_event").replace("{name}", event.detail?.name || "—"),
-        title: t("ol_event_title"),
-      }),
-    );
+    .map((event, index) => ({
+      kind: `event-${index}`,
+      text: event.detail?.name || "—",
+      title: t("ol_event_title"),
+    }));
   const holiday = day.drivers.find((d) => d.kind === "holiday");
   if (holiday)
-    chips.push({ key: "holiday", text: holiday.detail?.name || "—", title: t("s3_why_holiday_title") });
+    marks.push({ kind: "holiday", text: holiday.detail?.name || "—", title: t("s3_why_holiday_title") });
   const weekday = day.drivers.find((d) => d.kind === "weekday");
-  if (!holiday && weekday?.detail?.weekend) chips.push({ key: "weekend", text: t("ol_weekend") });
-  return chips.slice(0, MAX_CHIPS);
+  if (!holiday && weekday?.detail?.weekend) marks.push({ kind: "weekend", text: t("ol_weekend") });
+  return { input, marks };
+}
+
+// One day in reading order: name and date, tonnes, the learned figure, what moved it.
+function DayFacts({ day, when, t, number, locale }) {
+  const { input, marks } = dayFacts(day, t, number);
+  const date = isoDate(day.date);
+  return (
+    <>
+      <span className="tmr-ol-cell-day">
+        {when
+          ? t(when === "today" ? "ol_today" : "ol_tomorrow")
+          : date.toLocaleDateString(locale, { weekday: "short" })}
+        <small>{date.toLocaleDateString(locale, { day: "numeric", month: "short" })}</small>
+      </span>
+      <strong className="tmr-ol-value">{number(day.total_tons)} t</strong>
+      {day.corrected_tons != null && (
+        <span className="tmr-ol-corrected" data-testid="tmr-outlook-corrected">
+          {t("ol_corrected").replace("{t}", number(day.corrected_tons))}
+        </span>
+      )}
+      {input && (
+        <span
+          className={`tmr-ol-cell-input is-${input.kind}`}
+          title={input.title}
+          data-testid="tmr-outlook-input"
+          data-kind={input.kind}
+        >
+          {input.kind === "rain" && <CloudRain size={12} strokeWidth={2} aria-hidden="true" />}
+          {input.text}
+        </span>
+      )}
+      {marks.length > 0 && (
+        <span className="tmr-ol-cell-marks">
+          {marks.map((mark) => (
+            <span key={mark.kind} title={mark.title} data-testid="tmr-outlook-mark" data-kind={mark.kind}>
+              {mark.text}
+            </span>
+          ))}
+        </span>
+      )}
+    </>
+  );
 }
 
 // Tick step for the backtest chart: the smallest of 500 / 1,000 / 2,000 t that gives at most
@@ -167,23 +205,321 @@ function BacktestChart({ rows, t, number, monthLabel }) {
   );
 }
 
-// The week ahead (city-wide t/day with what moved each day) and the Bantargebang intake model's
-// backtest on real weighing data: actual vs model per month, its error against the best simple
-// rule and where the gain comes from. Next months show a figure only inside the backtested
-// horizon. Every input fills itself; every figure comes from /api/forecast/outlook.
+// The horizon's total, average per day, peak day and trucks at the peak, every figure (and the
+// truck capacity behind the count) from the API; the learned figure sits under the raw one.
+function HorizonSummary({ summary, n, t, number, dayLabel }) {
+  const items = [
+    {
+      key: "total",
+      label: t("fh_total").replace("{n}", n),
+      value: `${number(summary.total_tons)} t`,
+      adjusted: summary.corrected_total_tons,
+    },
+    {
+      key: "avg",
+      label: t("fh_avg"),
+      value: `${number(summary.avg_tons_per_day)} t`,
+      adjusted: summary.corrected_avg_tons_per_day,
+    },
+    {
+      key: "peak",
+      label: t("fh_peak"),
+      value: `${number(summary.peak_tons)} t`,
+      sub: dayLabel(summary.peak_date),
+      adjusted: summary.corrected_peak_tons,
+    },
+    {
+      key: "trucks",
+      label: t("fh_peak_trucks"),
+      value: number(summary.peak_trucks_needed),
+      sub: t("fh_trucks_unit"),
+      title: t("fh_peak_trucks_title").replace("{cap}", number(summary.truck_capacity_tons)),
+    },
+  ];
+  return (
+    <dl className="tmr-ol-sum" data-testid="tmr-outlook-summary" data-provenance="model">
+      {items.map((item) => (
+        <div
+          key={item.key}
+          className="tmr-ol-sum-item"
+          data-testid={`tmr-outlook-sum-${item.key}`}
+          title={item.title}
+        >
+          <dt>{item.label}</dt>
+          <dd>
+            <strong className="tmr-ol-sum-value">{item.value}</strong>
+            {item.sub && <span className="tmr-ol-sum-sub">{item.sub}</span>}
+            {item.adjusted != null && (
+              <span className="tmr-ol-corrected" data-testid="tmr-outlook-sum-adjusted">
+                {t("fh_adjusted").replace("{t}", number(item.adjusted))}
+              </span>
+            )}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+// Every day of the horizon as a column above or below the horizon's average (the axis reads
+// absolute t/day), so a few-percent day-to-day swing stays visible without truncated bars.
+// Days past the weather window are dashed. Pointer or arrow keys pick the day the readout
+// explains; a hidden table carries every row.
+function DailyChart({ days, summary, today, tomorrow, t, number, locale, dayLabel }) {
+  const n = days.length;
+  const first = days.findIndex((d) => d.date === tomorrow);
+  const [active, setActive] = useState(first >= 0 ? first : 0);
+  const avg = summary.avg_tons_per_day;
+  const devs = days.map((d) => d.total_tons - avg);
+  // The data's own range plus a tenth of headroom; the axis labels the top, average and bottom.
+  const spread = Math.max(...devs.map(Math.abs), 1);
+  const lo = Math.min(0, ...devs) - spread * 0.1;
+  const hi = Math.max(0, ...devs) + spread * 0.1;
+  const y = (v) => ((hi - v) / (hi - lo)) * 100;
+  const beyondFrom = days.findIndex((d) => d.beyond_weather_forecast);
+  const at = Math.min(active, n - 1);
+  const day = days[at];
+  const when = day.date === today ? "today" : day.date === tomorrow ? "tomorrow" : null;
+  const onKeyDown = (event) => {
+    const next = { ArrowLeft: at - 1, ArrowRight: at + 1, Home: 0, End: n - 1 }[event.key];
+    if (next == null) return;
+    event.preventDefault();
+    setActive(Math.max(0, Math.min(n - 1, next)));
+  };
+  return (
+    <figure className="tmr-ol-chart" data-testid="tmr-outlook-chart" data-days={n}>
+      <div className="tmr-ol-bt-legend" aria-hidden="true">
+        <span className="tmr-ol-chart-key">{t("fh_key_forecast")}</span>
+        {beyondFrom >= 0 && <span className="tmr-ol-chart-key is-beyond">{t("fh_key_beyond")}</span>}
+        <span className="tmr-ol-chart-key is-avg">
+          {t("fh_chart_avg").replace("{t}", `${number(avg)} t`)}
+        </span>
+      </div>
+      {beyondFrom > 0 && (
+        <p className="tmr-ol-chart-cut-label" aria-hidden="true">
+          {/* A margin in % resolves against the label row, which spans the plot's width. */}
+          <span style={{ marginLeft: `${(beyondFrom / n) * 100}%` }}>
+            {t("fh_axis_beyond").replace("{date}", dayLabel(days[beyondFrom].date))}
+          </span>
+        </p>
+      )}
+      <div
+        className="tmr-ol-chart-plot"
+        tabIndex={0}
+        role="group"
+        aria-label={t("fh_chart_hint")}
+        aria-describedby="tmr-ol-readout"
+        onKeyDown={onKeyDown}
+        data-testid="tmr-outlook-chart-plot"
+      >
+        {[hi, 0, lo].map((v) => (
+          <span key={v} className="tmr-ol-bt-tick" style={{ top: `${y(v)}%` }} aria-hidden="true">
+            {number(avg + v)}
+          </span>
+        ))}
+        <span className="tmr-ol-chart-avg" style={{ top: `${y(0)}%` }} aria-hidden="true" />
+        {beyondFrom > 0 && (
+          <span
+            className="tmr-ol-chart-cut"
+            style={{ left: `${(beyondFrom / n) * 100}%` }}
+            aria-hidden="true"
+            data-testid="tmr-outlook-chart-cut"
+          />
+        )}
+        <div
+          className="tmr-ol-chart-cols"
+          style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
+          aria-hidden="true"
+        >
+          {days.map((d, i) => (
+            <div
+              key={d.date}
+              className="tmr-ol-chart-col"
+              onPointerEnter={() => setActive(i)}
+              onClick={() => setActive(i)}
+            >
+              <span
+                className={`tmr-ol-chart-bar${d.beyond_weather_forecast ? " is-beyond" : ""}${i === at ? " is-active" : ""}`}
+                style={{ top: `${y(Math.max(devs[i], 0))}%`, height: `${Math.abs(y(devs[i]) - y(0))}%` }}
+                data-testid="tmr-outlook-bar"
+                data-date={d.date}
+                data-value={d.total_tons}
+                data-beyond={d.beyond_weather_forecast ? "true" : "false"}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="tmr-ol-bt-axis" aria-hidden="true">
+        <span>{dayLabel(days[0].date)}</span>
+        <span>{dayLabel(days[n - 1].date)}</span>
+      </div>
+      <div
+        className="tmr-ol-chart-readout"
+        id="tmr-ol-readout"
+        aria-live="polite"
+        data-testid="tmr-outlook-readout"
+        data-date={day.date}
+      >
+        <DayFacts day={day} when={when} t={t} number={number} locale={locale} />
+      </div>
+      {/* A table ignores the 1px sr-only box, so the wrapper clips it. */}
+      <div className="sr-only">
+        <table>
+          <caption>{t("fh_days_label").replace("{n}", n)}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{t("fh_col_date")}</th>
+              <th scope="col">{t("fh_col_tons")}</th>
+              <th scope="col">{t("fh_col_adjusted")}</th>
+              <th scope="col">{t("fh_col_weather")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {days.map((d) => (
+              <tr key={d.date} data-testid="tmr-outlook-row" data-date={d.date}>
+                <th scope="row">{dayLabel(d.date)}</th>
+                <td>{number(d.total_tons)}</td>
+                <td>{d.corrected_tons != null ? number(d.corrected_tons) : "—"}</td>
+                <td>{t(d.beyond_weather_forecast ? "fh_weather_no" : "fh_weather_yes")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </figure>
+  );
+}
+
+// The weighbridge loop as its own panel: status, the correction in force, the weighed days it
+// uses and its cap, all from `learned_correction`. Before day `min_days` it names the day the
+// correction starts, never a figure.
+function LearningPanel({ learned, t, number, dayLabel }) {
+  const { active } = learned;
+  const windowDays = learned.window_days ?? "—";
+  const cap = learned.clamp_pct ?? "—";
+  const minDays = learned.min_days ?? "—";
+  const items = [
+    {
+      key: "status",
+      label: t("fh_learn_status"),
+      value: active
+        ? t("fh_learn_active").replace("{n}", number(learned.n_days ?? 0))
+        : t("fh_learn_waiting")
+            .replace("{min}", minDays)
+            .replace("{n}", number(learned.n_days ?? 0)),
+    },
+    {
+      key: "correction",
+      label: t("fh_learn_correction"),
+      value: active ? signedPercent(learned.pct) : t("fh_learn_correction_from").replace("{min}", minDays),
+    },
+    {
+      key: "days",
+      label: t("fh_learn_days"),
+      value: t("fh_learn_days_value")
+        .replace("{n}", number(learned.n_days ?? 0))
+        .replace("{window}", windowDays),
+      sub:
+        learned.since && learned.last_day
+          ? t("fh_learn_since")
+              .replace("{from}", dayLabel(learned.since))
+              .replace("{to}", dayLabel(learned.last_day))
+          : null,
+    },
+    { key: "cap", label: t("fh_learn_cap"), value: t("fh_learn_cap_value").replace("{cap}", cap) },
+  ];
+  return (
+    <section
+      className="tmr-ol-learn"
+      aria-labelledby="tmr-ol-learn-title"
+      data-testid="tmr-outlook-learning"
+      data-active={active ? "true" : "false"}
+      data-provenance={learned.classification || ""}
+    >
+      <h3 className="tmr-ol-learn-title" id="tmr-ol-learn-title">
+        {t("fh_learn_title")}
+      </h3>
+      <dl className="tmr-ol-learn-grid">
+        {items.map((item) => (
+          <div key={item.key} className="tmr-ol-learn-item" data-testid={`tmr-outlook-learn-${item.key}`}>
+            <dt>{item.label}</dt>
+            <dd>
+              {item.value}
+              {item.sub && <small>{item.sub}</small>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <p className="tmr-ol-note" data-testid="tmr-outlook-learn-basis">
+        {active
+          ? t("fh_learn_basis").replace("{window}", windowDays).replace("{cap}", cap)
+          : t("fh_learn_waiting_basis").replace("{min}", minDays)}
+        {active && learned.clamped && learned.unclamped_factor != null && (
+          <span data-testid="tmr-outlook-learn-clamped">
+            {" "}
+            {t("fh_learn_clamped")
+              .replace("{cap}", cap)
+              .replace("{raw}", signedPercent((learned.unclamped_factor - 1) * 100))}
+          </span>
+        )}
+      </p>
+    </section>
+  );
+}
+
+// The days ahead (7 as a calm strip, 14 or 30 as a chart, each with its total, average, peak and
+// trucks at the peak), what the weighbridge has taught the forecast, and the Bantargebang intake
+// model's backtest on real weighing data. Every input fills itself; every figure comes from
+// /api/forecast/outlook. Provenance stays on data-provenance and the heading tooltips.
 export function OutlookSection() {
   const { t, lang } = useLanguage();
   const locale = localeFor(lang);
-  const [outlook, setOutlook] = useState(null);
-  const [failed, setFailed] = useState(false);
+  const [horizon, setHorizon] = useState(7);
+  // {days: payload} and {days: true} per horizon; the 7-day payload also carries the months.
+  const [byDays, setByDays] = useState({});
+  const [failedDays, setFailedDays] = useState({});
+  const pending = useRef(new Map());
+  const controller = useRef(null);
 
+  const load = (n) => {
+    if (!pending.current.has(n)) {
+      const request = apiGet(`/forecast/outlook?days=${n}`, { signal: controller.current?.signal })
+        .then((payload) => setByDays((prev) => ({ ...prev, [n]: payload })))
+        .catch((error) => {
+          if (pending.current.get(n) === request) pending.current.delete(n);
+          if (error?.name !== "AbortError") setFailedDays((prev) => ({ ...prev, [n]: true }));
+        });
+      pending.current.set(n, request);
+    }
+    return pending.current.get(n);
+  };
+
+  // The week first; the longer horizons are fetched right after so the switch answers at once
+  // (the API caches each horizon for 5 minutes).
   useEffect(() => {
-    const controller = new AbortController();
-    apiGet("/forecast/outlook", { signal: controller.signal })
-      .then(setOutlook)
-      .catch((error) => error?.name !== "AbortError" && setFailed(true));
-    return () => controller.abort();
+    controller.current = new AbortController();
+    const requests = pending.current;
+    load(7)
+      .then(() => load(14))
+      .then(() => load(30));
+    return () => {
+      controller.current.abort();
+      requests.clear();
+    };
   }, []);
+
+  const outlook = byDays[7] || null;
+  const failed = Boolean(failedDays[7]);
+  const current = byDays[horizon] || null;
+  const choose = (value) => {
+    const n = Number(value);
+    setHorizon(n);
+    if (!byDays[n]) {
+      setFailedDays((prev) => ({ ...prev, [n]: false }));
+      load(n);
+    }
+  };
 
   const number = (value, digits = 0) =>
     value == null ? "—" : Number(value).toLocaleString(locale, { maximumFractionDigits: digits });
@@ -192,7 +528,12 @@ export function OutlookSection() {
     value == null
       ? "—"
       : Number(value).toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  const days = outlook?.week?.days || [];
+  const days = current?.week?.days || [];
+  const summary = current?.week?.summary;
+  const horizons = outlook?.horizons_available || HORIZONS;
+  const dayLabel = (iso) =>
+    isoDate(iso).toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" });
+  const beyondFrom = days.find((d) => d.beyond_weather_forecast);
   const intake = outlook?.monthly_intake;
   const months = intake?.available ? intake.months : [];
   const backtest = intake?.backtest;
@@ -207,7 +548,7 @@ export function OutlookSection() {
     : null;
   const monthLabel = (ym) =>
     isoDate(`${ym}-01`).toLocaleDateString(locale, { month: "short", year: "numeric" });
-  const learned = outlook?.learned_correction;
+  const learned = current?.learned_correction || outlook?.learned_correction;
   // "Nov 2026–Jan 2027", or one value when the list holds one.
   const span = (values) => (values.length > 1 ? `${values[0]}–${values.at(-1)}` : `${values[0]}`);
   const within = months.filter((m) => m.within_backtested_horizon);
@@ -215,7 +556,7 @@ export function OutlookSection() {
   const rows = backtest?.one_month_ahead || [];
   const evidence =
     backtest?.mape_model_pct != null
-      ? t("ol_evidence")
+      ? t("fh_months_proof")
           .replace("{n}", number(backtest.n_target_months))
           .replace(
             "{period}",
@@ -226,7 +567,7 @@ export function OutlookSection() {
           .replace("{mape}", pct(backtest.mape_model_pct))
           .replace("{naive}", pct(backtest.mape_naive_pct))
           .replace("{max}", maxHorizon)
-      : t("ol_evidence_none");
+      : t("fh_months_pending");
 
   return (
     <Card
@@ -234,11 +575,6 @@ export function OutlookSection() {
       title={t("ol_title")}
       titleId="tmr-ol-title"
       aside={t("ol_aside")}
-      actions={
-        <Tag tone="model" title={t("ol_model_title")}>
-          {t("s3_model")}
-        </Tag>
-      }
       data-testid="tmr-outlook"
       data-provenance="model"
     >
@@ -250,85 +586,97 @@ export function OutlookSection() {
       )}
       {outlook && (
         <>
-          <h3 className="tmr-ol-label">{t("ol_week")}</h3>
-          <ol className="tmr-ol-days" aria-label={t("ol_week_label")} data-testid="tmr-outlook-week">
-            {days.map((day) => {
-              const when = day.date === today ? "today" : day.date === tomorrow ? "tomorrow" : null;
-              return (
-                <li
-                  key={day.date}
-                  className={`tmr-ol-day${when ? ` is-${when}` : ""}`}
-                  data-testid="tmr-outlook-day"
-                  data-date={day.date}
-                  data-when={when || ""}
-                  data-value={day.total_tons}
+          <div className="tmr-ol-head">
+            <h3 className="tmr-ol-label" data-testid="tmr-outlook-days-heading" title={t("ol_model_title")}>
+              {t("fh_days_heading").replace("{n}", horizon)}
+            </h3>
+            <Segmented
+              className="tmr-ol-switch"
+              label={t("fh_horizon_label")}
+              value={String(horizon)}
+              options={horizons.map((n) => ({
+                value: String(n),
+                label: t("fh_horizon_option").replace("{n}", n),
+                testId: `tmr-outlook-horizon-${n}`,
+              }))}
+              onChange={choose}
+            />
+          </div>
+          {!current && !failedDays[horizon] && (
+            <Skeleton rows={2} label={t("fh_loading_days").replace("{n}", horizon)} />
+          )}
+          {!current && failedDays[horizon] && (
+            <p className="tmr-inline-error" data-testid="tmr-outlook-days-error">
+              {t("fh_error_days").replace("{n}", horizon)}
+            </p>
+          )}
+          {current && (
+            <div className="tmr-ol-range" data-testid="tmr-outlook-range" data-days={days.length}>
+              {summary && (
+                <HorizonSummary summary={summary} n={days.length} t={t} number={number} dayLabel={dayLabel} />
+              )}
+              {days.length <= 7 || !summary ? (
+                <ol
+                  className="tmr-ol-strip"
+                  aria-label={t("fh_days_label").replace("{n}", days.length)}
+                  data-testid="tmr-outlook-week"
                 >
-                  <span className="tmr-ol-day-name">
-                    {when
-                      ? t(when === "today" ? "ol_today" : "ol_tomorrow")
-                      : isoDate(day.date).toLocaleDateString(locale, { weekday: "short" })}
-                    <small>
-                      {isoDate(day.date).toLocaleDateString(locale, { day: "numeric", month: "short" })}
-                    </small>
-                  </span>
-                  <strong className="tmr-ol-value">{number(day.total_tons)} t</strong>
-                  {day.corrected_tons != null && (
-                    <span className="tmr-ol-corrected" data-testid="tmr-outlook-corrected">
-                      {t("ol_corrected").replace("{t}", number(day.corrected_tons))}
-                    </span>
-                  )}
-                  <span className="tmr-ol-chips">
-                    {dayChips(day, t, number).map((chip) => (
-                      <span
-                        key={chip.key}
-                        className={`tmr-ol-chip ${chip.tone || ""}`.trim()}
-                        title={chip.title}
-                        data-testid="tmr-outlook-chip"
-                        data-kind={chip.key}
+                  {days.map((day) => {
+                    const when = day.date === today ? "today" : day.date === tomorrow ? "tomorrow" : null;
+                    return (
+                      <li
+                        key={day.date}
+                        className={`tmr-ol-cell${when ? ` is-${when}` : ""}${day.beyond_weather_forecast ? " is-beyond" : ""}`}
+                        data-testid="tmr-outlook-day"
+                        data-date={day.date}
+                        data-when={when || ""}
+                        data-value={day.total_tons}
                       >
-                        {chip.text}
-                      </span>
-                    ))}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-
-          {learned && (
-            <p
-              className="tmr-ol-note"
-              data-testid="tmr-outlook-learning"
-              data-active={learned.active ? "true" : "false"}
-              title={t("ol_learning_title").replace("{cap}", learned.clamp_pct ?? "—")}
-            >
-              {learned.active
-                ? t("ol_learning")
-                    .replace("{n}", number(learned.n_days))
-                    .replace("{pct}", signedPercent(learned.pct))
-                : [
-                    t("ol_learning_off").replace("{min}", learned.min_days ?? "—"),
-                    learned.n_days > 0
-                      ? t("ol_learning_so_far").replace("{n}", number(learned.n_days))
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-            </p>
+                        <DayFacts day={day} when={when} t={t} number={number} locale={locale} />
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : (
+                <DailyChart
+                  key={horizon}
+                  days={days}
+                  summary={summary}
+                  today={today}
+                  tomorrow={tomorrow}
+                  t={t}
+                  number={number}
+                  locale={locale}
+                  dayLabel={dayLabel}
+                />
+              )}
+              <p className="tmr-ol-note" data-testid="tmr-outlook-weather-window">
+                {beyondFrom && summary
+                  ? t("fh_weather_window")
+                      .replace("{with}", summary.days_with_weather_forecast)
+                      .replace("{from}", dayLabel(beyondFrom.date))
+                  : t("fh_weather_all")}
+              </p>
+            </div>
           )}
 
-          <h3 className="tmr-ol-label">{t("ol_months")}</h3>
+          {learned && <LearningPanel learned={learned} t={t} number={number} dayLabel={dayLabel} />}
+
+          <h3 className="tmr-ol-label tmr-ol-months-label" title={t("ol_model_title")}>
+            {t("ol_months")}
+          </h3>
           {rows.length > 0 && <BacktestChart rows={rows} t={t} number={number} monthLabel={monthLabel} />}
-          <p className="tmr-ol-note" data-testid="tmr-outlook-evidence">
-            {evidence}
+          <p className="tmr-ol-note">
+            <span data-testid="tmr-outlook-evidence">{evidence}</span>
+            {backtest?.lebaran_skill_pct != null && (
+              <span data-testid="tmr-outlook-lebaran">
+                {" "}
+                {t("fh_months_lebaran")
+                  .replace("{lebaran}", pct(backtest.lebaran_skill_pct))
+                  .replace("{normal}", pct(backtest.normal_skill_pct))}
+              </span>
+            )}
           </p>
-          {backtest?.lebaran_skill_pct != null && (
-            <p className="tmr-ol-note" data-testid="tmr-outlook-lebaran">
-              {t("ol_lebaran")
-                .replace("{lebaran}", pct(backtest.lebaran_skill_pct))
-                .replace("{normal}", pct(backtest.normal_skill_pct))}
-            </p>
-          )}
           {within.length > 0 && (
             <>
               <h3 className="tmr-ol-label">{t("ol_next")}</h3>
@@ -341,7 +689,7 @@ export function OutlookSection() {
                     data-month={month.month}
                     data-within="true"
                   >
-                    <span className="tmr-ol-day-name">{monthLabel(month.month)}</span>
+                    <span className="tmr-ol-cell-day">{monthLabel(month.month)}</span>
                     <strong className="tmr-ol-value">
                       {number(month.tons_per_day)} {t("hon_mi_unit")}
                     </strong>
@@ -353,16 +701,14 @@ export function OutlookSection() {
           )}
           {beyond.length > 0 && (
             <p className="tmr-ol-note" data-testid="tmr-outlook-months-beyond">
-              {t("ol_beyond")
+              {t("fh_months_more")
                 .replace("{months}", span(beyond.map((m) => monthLabel(m.month))))
-                .replace("{h}", span(beyond.map((m) => m.horizon_months)))
-                .replace("{through}", intake.fitted_through ? monthLabel(intake.fitted_through) : "—")
                 .replace("{max}", maxHorizon)}
             </p>
           )}
           {!months.length && (
             <p className="tmr-ol-note" data-testid="tmr-outlook-months-unavailable">
-              {t("ol_unavailable")}
+              {t("fh_months_unavailable")}
             </p>
           )}
         </>

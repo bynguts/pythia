@@ -15,6 +15,10 @@ from app.core.paths import API_DIR, WEATHER_SNAPSHOT_DEFAULT
 JAKARTA_LAT = -6.2088
 JAKARTA_LNG = 106.8456
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
+# Open-Meteo serves up to 16 daily forecast days (today + 15); all of them feed the models
+# (`extended_forecast`), while the weather panels and Ana keep showing the first week.
+FORECAST_DAYS = 16
+DISPLAY_DAYS = 7
 
 
 def build_weather_risk(
@@ -139,12 +143,13 @@ def _open_meteo_url() -> str:
             ]
         ),
         "timezone": "Asia/Jakarta",
-        "forecast_days": 7,
+        "forecast_days": FORECAST_DAYS,
     }
     return f"{OPEN_METEO_URL}?{urlencode(params)}"
 
 
 def _open_meteo_result(payload: dict[str, Any], fetched_at: str, snapshot: bool) -> dict[str, Any]:
+    daily = parse_open_meteo_daily(payload)
     return {
         "source": "open-meteo",
         # A forecast, never an observation: these are predicted daily totals.
@@ -155,7 +160,12 @@ def _open_meteo_result(payload: dict[str, Any], fetched_at: str, snapshot: bool)
         "location": "Jakarta, Indonesia",
         "latitude": JAKARTA_LAT,
         "longitude": JAKARTA_LNG,
-        "forecast": parse_open_meteo_daily(payload),
+        "forecast": daily[:DISPLAY_DAYS],
+        # Every day Open-Meteo returned, model inputs only (read by real_forecast_by_date).
+        "extended_forecast": [
+            {k: day[k] for k in ("date", "rainfall_mm", "temperature_max_c", "wind_speed_kmh")}
+            for day in daily
+        ],
     }
 
 
@@ -237,17 +247,19 @@ def real_forecast_by_date(weather: dict[str, Any]) -> dict[str, dict[str, float]
     """{date: rain/temp/wind} from an Open-Meteo forecast; empty for any other source.
 
     The demo fallback's numbers are invented for the weather panel, so they must
-    never reach a model as if they were a forecast.
+    never reach a model as if they were a forecast. Reads all 16 days when the payload carries
+    them (`extended_forecast`), else the displayed week.
     """
     if weather.get("source") != "open-meteo":
         return {}
+    days = weather.get("extended_forecast") or weather.get("forecast", [])
     return {
         day["date"]: {
             "rainfall_mm": float(day.get("rainfall_mm") or 0.0),
             "temp_max_c": float(day.get("temperature_max_c") or 31.0),
             "wind_max_kmh": float(day.get("wind_speed_kmh") or 10.0),
         }
-        for day in weather.get("forecast", [])
+        for day in days
         if day.get("date")
     }
 

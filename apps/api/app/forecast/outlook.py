@@ -1,9 +1,12 @@
-"""The week and the next three months ahead, with every input filled automatically.
+"""The next 7, 14 or 30 days and the next three months ahead, with every input filled automatically.
 
-Week: the city-wide daily forecast for today and the six days after it, the same
-`build_outlook` frame the Tomorrow page reads (Open-Meteo weather, the official event
-calendar, submitted permits, national holidays). A day Open-Meteo does not cover is
-flagged `beyond_weather_forecast` (the model then uses 0 mm). Months: the Bantargebang
+Days (`week`, the key Ana's tool reads, holds whichever horizon was asked): the city-wide
+daily forecast for today and the days after it, the same `build_outlook` frame the Tomorrow
+page reads (Open-Meteo weather, the official event calendar, submitted permits, national
+holidays), with the horizon's total, average per day and peak day (trucks at peak from
+app/core/units.py). Open-Meteo serves 16 forecast days; a later day is flagged
+`beyond_weather_forecast` and the model is fed 0 mm rain and the default 31 °C / 10 km/h
+for it (no climatology). Months: the Bantargebang
 intake model (`ma12_calendar`, calendar-adjusted 12-month level fitted on real weighing
 data) with `within_backtested_horizon` per month, and its rolling-origin backtest: the
 pooled error against the strongest naive rule, split into Lebaran and normal months, and
@@ -18,19 +21,21 @@ from typing import Any
 
 from app.api.state import _outlook_cache
 from app.core.env import today
-from app.forecast.baseline import build_outlook, day_drivers
+from app.core.units import TRUCK_CAPACITY_TONS, resource_requirements
+from app.forecast.baseline import DEFAULT_TEMP_MAX_C, DEFAULT_WIND_MAX_KMH, build_outlook, day_drivers
 from app.forecast.engine import forecast_monthly_intake
 from app.forecast.forecast_metrics import load_forecast_evaluation
 from app.forecast.learning import corrected, learned_correction
 
 OUTLOOK_DAYS = 7
+OUTLOOK_HORIZONS = (7, 14, 30)
 OUTLOOK_MONTHS = 3
 PROVENANCE = "MODEL OUTPUT"
 _CACHE_TTL_S = 300.0
 
 
-def _week() -> dict[str, Any]:
-    base = build_outlook(days=OUTLOOK_DAYS)
+def _week(n_days: int = OUTLOOK_DAYS) -> dict[str, Any]:
+    base = build_outlook(days=n_days)
     horizon = base["horizon"]
     source = base["weather"]["source"]
     days = []
@@ -39,7 +44,7 @@ def _week() -> dict[str, Any]:
         forecast_input = horizon["daily_weather_input"][i] == "forecast"
         drivers, events_total = day_drivers(
             iso,
-            days=OUTLOOK_DAYS,
+            days=n_days,
             total_t=total,
             normal_t=horizon["daily_normal_tons"][i],
             rainfall_mm=horizon["daily_rainfall_mm"][i],
@@ -59,14 +64,38 @@ def _week() -> dict[str, Any]:
                 "provenance": PROVENANCE,
             }
         )
+    totals = [d["total_tons"] for d in days]
+    peak = max(range(len(totals)), key=totals.__getitem__)
+    # Trucks at the peak the way build_outlook counts them: per-kecamatan truckloads, summed.
+    peak_trucks = sum(
+        resource_requirements(row["series"][peak]["predicted_tons"])["trucks_required"]
+        for row in base["kecamatan"]
+    )
     return {
         "days": days,
+        "horizon_days": n_days,
+        "summary": {
+            "total_tons": round(sum(totals), 1),
+            "avg_tons_per_day": round(sum(totals) / len(totals), 1),
+            "peak_date": days[peak]["date"],
+            "peak_tons": totals[peak],
+            "peak_trucks_needed": peak_trucks,
+            "truck_capacity_tons": TRUCK_CAPACITY_TONS,
+            "trucks_basis": (
+                f"each kecamatan's tonnes on the peak day / {TRUCK_CAPACITY_TONS:g} t per truck per shift, "
+                "rounded up and summed"
+            ),
+            "days_with_weather_forecast": sum(not d["beyond_weather_forecast"] for d in days),
+            "days_beyond_weather_forecast": sum(d["beyond_weather_forecast"] for d in days),
+            "provenance": PROVENANCE,
+        },
         "unit": "t/day",
         "quantity": "waste generated (timbulan) per day, all 42 kecamatan summed",
         "weather_source": source,
         "weather_window_note": (
-            "Open-Meteo forecasts 7 days; a day it does not cover is flagged beyond_weather_forecast "
-            "and the model uses 0 mm rain for it"
+            "Open-Meteo serves up to 16 forecast days (today + 15); a day it does not cover is flagged "
+            f"beyond_weather_forecast and the model is fed 0 mm rain, {DEFAULT_TEMP_MAX_C:g} °C max "
+            f"temperature and {DEFAULT_WIND_MAX_KMH:g} km/h wind for it (fixed defaults, not climatology)"
         ),
         "basis": (
             "Prophet + XGBoost per kecamatan trained on calibrated-synthetic daily series anchored to "
@@ -110,31 +139,47 @@ def _months() -> dict[str, Any]:
     return {**result, "backtest": backtest, "provenance": PROVENANCE}
 
 
-def forecast_outlook() -> dict[str, Any]:
-    """Seven days of city-wide tonnes per day and three months of Bantargebang intake."""
+def forecast_outlook(days: int = OUTLOOK_DAYS) -> dict[str, Any]:
+    """`days` (7, 14 or 30) of city-wide tonnes per day and three months of Bantargebang intake."""
+    if days not in OUTLOOK_HORIZONS:
+        raise ValueError(f"days must be one of {', '.join(map(str, OUTLOOK_HORIZONS))}")
     return {
         "generated_for": today().isoformat(),
         "inputs_auto": True,
-        "week": _week(),
+        "horizon_days": days,
+        "horizons_available": list(OUTLOOK_HORIZONS),
+        "week": _week(days),
         "monthly_intake": _months(),
         "provenance": PROVENANCE,
     }
 
 
-def outlook_payload() -> dict[str, Any]:
-    """`forecast_outlook()` shared for 5 minutes per forecast date (the route and Ana's tool),
-    with the weighbridge-learned correction (app/forecast/learning.py)."""
+def outlook_payload(days: int = OUTLOOK_DAYS) -> dict[str, Any]:
+    """`forecast_outlook(days)` shared for 5 minutes per forecast date and horizon (the route and
+    Ana's tool), with the weighbridge-learned correction (app/forecast/learning.py)."""
     key = today().isoformat()
     now = time.time()
-    if _outlook_cache["key"] != key or now - _outlook_cache["ts"] >= _CACHE_TTL_S:
-        _outlook_cache["payload"] = forecast_outlook()
-        _outlook_cache["key"] = key
-        _outlook_cache["ts"] = now
-    payload = _outlook_cache["payload"]
+    if _outlook_cache["key"] != key or _outlook_cache["payload"] is None:
+        # One entry per horizon, {days: (ts, payload)}, dropped when the forecast date turns.
+        _outlook_cache.update(key=key, ts=now, payload={})
+    entry = _outlook_cache["payload"].get(days)
+    if entry is None or now - entry[0] >= _CACHE_TTL_S:
+        entry = (now, forecast_outlook(days))
+        _outlook_cache["payload"][days] = entry
+    payload = entry[1]
     # The learned correction moves with every weighed day, so it is applied after the cache,
     # next to (never instead of) each day's raw model value.
     correction = learned_correction()
-    days = [
-        {**day, "corrected_tons": corrected(day["total_tons"], correction)} for day in payload["week"]["days"]
-    ]
-    return {**payload, "week": {**payload["week"], "days": days}, "learned_correction": correction}
+    week = payload["week"]
+    days_out = [{**day, "corrected_tons": corrected(day["total_tons"], correction)} for day in week["days"]]
+    summary = {
+        **week["summary"],
+        "corrected_total_tons": corrected(week["summary"]["total_tons"], correction),
+        "corrected_avg_tons_per_day": corrected(week["summary"]["avg_tons_per_day"], correction),
+        "corrected_peak_tons": corrected(week["summary"]["peak_tons"], correction),
+    }
+    return {
+        **payload,
+        "week": {**week, "days": days_out, "summary": summary},
+        "learned_correction": correction,
+    }

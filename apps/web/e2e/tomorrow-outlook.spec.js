@@ -97,11 +97,11 @@ function outlook({ backtest = true, learned = null, months = null } = {}) {
 }
 
 test("the outlook shows seven model days with drivers, today and tomorrow marked", async ({ page }) => {
-  await page.route(/\/api\/forecast\/outlook$/, (route) => route.fulfill({ json: outlook() }));
+  await page.route(/\/api\/forecast\/outlook(\?.*)?$/, (route) => route.fulfill({ json: outlook() }));
   await signIn(page, { lang: "en", path: "/app/tomorrow" });
   const section = page.getByTestId("tmr-outlook");
   await expect(section).toHaveAttribute("data-provenance", "model");
-  await expect(section.locator(".ui-tag-model")).toHaveText("Model");
+  await expect(section.locator(".ui-tag-model")).toHaveCount(0);
   const days = section.getByTestId("tmr-outlook-day");
   await expect(days).toHaveCount(7);
   await expect(days.nth(0)).toHaveAttribute("data-when", "today");
@@ -110,17 +110,24 @@ test("the outlook shows seven model days with drivers, today and tomorrow marked
   await expect(days.nth(1)).toContainText("Tomorrow");
   await expect(days.nth(2)).toHaveAttribute("data-when", "");
   await expect(days.nth(1).locator(".tmr-ol-value")).toHaveText("8,640 t");
-  await expect(days.nth(1).getByTestId("tmr-outlook-chip")).toHaveText(["Rain 20 mm +8%"]);
-  await expect(days.nth(2).getByTestId("tmr-outlook-chip")).toHaveText(["Dry", "Hari Uji"]);
-  await expect(days.nth(3).getByTestId("tmr-outlook-chip")).toHaveText(["Dry", "Weekend"]);
-  await expect(days.nth(6).getByTestId("tmr-outlook-chip")).toHaveText(["No weather forecast"]);
+  // What moved each day reads as quiet inline text: the weather input, then calendar markers.
+  await expect(days.nth(1).getByTestId("tmr-outlook-input")).toHaveText("20 mm · +8%");
+  await expect(days.nth(1).getByTestId("tmr-outlook-input")).toHaveAttribute("data-kind", "rain");
+  await expect(days.nth(1).getByTestId("tmr-outlook-mark")).toHaveCount(0);
+  await expect(days.nth(2).getByTestId("tmr-outlook-input")).toHaveText("Dry");
+  await expect(days.nth(2).getByTestId("tmr-outlook-mark")).toHaveText(["Hari Uji"]);
+  await expect(days.nth(3).getByTestId("tmr-outlook-mark")).toHaveText(["Weekend"]);
+  await expect(days.nth(6).getByTestId("tmr-outlook-input")).toHaveText("Dry-day baseline");
+  await expect(days.nth(6).getByTestId("tmr-outlook-input")).toHaveAttribute("data-kind", "baseline");
+  // No chips, no visible Model badge; provenance stays on the section.
+  await expect(section.locator(".tmr-ol-chip, .ui-tag")).toHaveCount(0);
   // No sliders, inputs or what-if wording anywhere in the section.
   await expect(section.locator("input, select, [role=slider]")).toHaveCount(0);
   await expect(section).not.toContainText(/what-if/i);
 });
 
 test("the months carry the backtest evidence from the API, never a hardcoded figure", async ({ page }) => {
-  await page.route(/\/api\/forecast\/outlook$/, (route) => route.fulfill({ json: outlook() }));
+  await page.route(/\/api\/forecast\/outlook(\?.*)?$/, (route) => route.fulfill({ json: outlook() }));
   await signIn(page, { lang: "id", path: "/app/tomorrow" });
   // Weighed vs model for every backtested month, Lebaran months marked.
   const rows = page.getByTestId("tmr-outlook-backtest-row");
@@ -132,19 +139,17 @@ test("the months carry the backtest evidence from the API, never a hardcoded fig
     "tertimbang 7.516 · model 7.524 t/hari",
   );
   const evidence = page.getByTestId("tmr-outlook-evidence");
-  await expect(evidence).toContainText(
-    "Model rata-rata 12 bulan yang disesuaikan kalender, diuji balik (backtest) pada 5 bulan data timbangan nyata TPST Bantargebang",
-  );
+  await expect(evidence).toContainText("Teruji pada 5 bulan data timbangan nyata Bantargebang");
   await expect(evidence).toContainText("galat 3,9% vs 4,6%");
   await expect(page.getByTestId("tmr-outlook-lebaran")).toContainText(
-    "galat 38,5% lebih kecil dari aturan sederhana di sana, 0,4% di bulan biasa",
+    "Paling tajam di bulan Lebaran (diarsir): galat 38,5% lebih kecil dari aturan sederhana, 0,4% di bulan biasa",
   );
   // Only months inside the backtested horizon get a figure; the one past it is named only.
   const months = page.getByTestId("tmr-outlook-month");
   await expect(months).toHaveCount(2);
   await expect(months.nth(0)).toContainText("7.311 t/hari");
   const beyond = page.getByTestId("tmr-outlook-months-beyond");
-  await expect(beyond).toContainText("4 bulan setelah data timbangan terakhir");
+  await expect(beyond).toHaveText("Jul 2026 terbuka begitu data timbangan Bantargebang terbaru masuk.");
   await expect(beyond).not.toContainText("7.333");
 });
 
@@ -159,23 +164,25 @@ test("months past the backtested horizon get no figure at all", async ({ page })
     horizon_months: h,
     within_backtested_horizon: false,
   }));
-  await page.route(/\/api\/forecast\/outlook$/, (route) => route.fulfill({ json: outlook({ months }) }));
+  await page.route(/\/api\/forecast\/outlook(\?.*)?$/, (route) =>
+    route.fulfill({ json: outlook({ months }) }),
+  );
   await signIn(page, { lang: "en", path: "/app/tomorrow" });
   await expect(page.getByTestId("tmr-outlook-backtest")).toBeVisible();
   await expect(page.getByTestId("tmr-outlook-month")).toHaveCount(0);
   const beyond = page.getByTestId("tmr-outlook-months-beyond");
-  await expect(beyond).toContainText(
-    "No figure for Nov 2026–Jan 2027: 7–9 months past the latest weighing data",
-  );
+  await expect(beyond).toHaveText("Nov 2026–Jan 2027 unlock as new Bantargebang weighings arrive.");
   await expect(page.getByTestId("tmr-outlook")).not.toContainText("7,247");
 });
 
 test("without a backtest the evidence reads a dash", async ({ page }) => {
-  await page.route(/\/api\/forecast\/outlook$/, (route) =>
+  await page.route(/\/api\/forecast\/outlook(\?.*)?$/, (route) =>
     route.fulfill({ json: outlook({ backtest: false }) }),
   );
   await signIn(page, { lang: "en", path: "/app/tomorrow" });
-  await expect(page.getByTestId("tmr-outlook-evidence")).toContainText("Backtest error: —");
+  await expect(page.getByTestId("tmr-outlook-evidence")).toHaveText(
+    "Accuracy figures appear here once the backtest has run.",
+  );
   await expect(page.getByTestId("tmr-outlook-backtest")).toHaveCount(0);
 });
 
@@ -190,27 +197,35 @@ test("the live outlook agrees with tomorrow's forecast card", async ({ page }) =
   await expect(page.getByTestId("tmr-outlook-day")).toHaveCount(7);
   await expect(page.getByTestId("tmr-outlook-backtest-row")).toHaveCount(23);
   await expect(page.getByTestId("tmr-outlook-evidence")).toContainText(
-    "Calendar-adjusted 12-month model, backtested on 23 months of real Bantargebang weighing data",
+    "Validated on 23 months of real Bantargebang weighings",
   );
-  await expect(page.getByTestId("tmr-outlook-lebaran")).toContainText("The gain comes from Lebaran months");
+  await expect(page.getByTestId("tmr-outlook-lebaran")).toContainText("Sharpest in Lebaran months");
 });
 
 test("the outlook says when it starts learning from the weighbridge", async ({ page }) => {
-  await page.route(/\/api\/forecast\/outlook$/, (route) => route.fulfill({ json: outlook() }));
+  await page.route(/\/api\/forecast\/outlook(\?.*)?$/, (route) => route.fulfill({ json: outlook() }));
   await signIn(page, { lang: "en", path: "/app/tomorrow" });
-  const line = page.getByTestId("tmr-outlook-learning");
-  await expect(line).toHaveAttribute("data-active", "false");
-  await expect(line).toHaveText("Starts adjusting after 3 weighed days · 1 so far");
+  const panel = page.getByTestId("tmr-outlook-learning");
+  await expect(panel).toHaveAttribute("data-active", "false");
+  await expect(panel.getByTestId("tmr-outlook-learn-status")).toContainText(
+    "Self-correcting from day 3 · 1 weighed so far",
+  );
+  await expect(panel.getByTestId("tmr-outlook-learn-correction")).toContainText("Starts on day 3");
   await expect(page.getByTestId("tmr-outlook-corrected")).toHaveCount(0);
 });
 
 test("an active correction shows its days and percent beside the raw model value", async ({ page }) => {
   const learned = { active: true, factor: 1.069, pct: 6.9, n_days: 4, min_days: 3, clamp_pct: 25 };
-  await page.route(/\/api\/forecast\/outlook$/, (route) => route.fulfill({ json: outlook({ learned }) }));
-  await signIn(page, { lang: "id", path: "/app/tomorrow" });
-  await expect(page.getByTestId("tmr-outlook-learning")).toHaveText(
-    "Belajar dari 4 hari tertimbang · koreksi +6.9%",
+  await page.route(/\/api\/forecast\/outlook(\?.*)?$/, (route) =>
+    route.fulfill({ json: outlook({ learned }) }),
   );
+  await signIn(page, { lang: "id", path: "/app/tomorrow" });
+  const panel = page.getByTestId("tmr-outlook-learning");
+  await expect(panel).toHaveAttribute("data-active", "true");
+  await expect(panel.getByTestId("tmr-outlook-learn-status")).toContainText(
+    "Mengoreksi diri · 4 hari tertimbang",
+  );
+  await expect(panel.getByTestId("tmr-outlook-learn-correction")).toContainText("+6.9%");
   const tomorrow = page.locator("[data-testid=tmr-outlook-day][data-when=tomorrow]");
   await expect(tomorrow.locator(".tmr-ol-value")).toHaveText("8.640 t");
   await expect(tomorrow.getByTestId("tmr-outlook-corrected")).toHaveText("Disesuaikan 9.236 t");
