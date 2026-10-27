@@ -6,11 +6,18 @@ product
 
 ## Users
 
-Pythia is built for city waste-agency command-center operators (its case provider is DLH DKI Jakarta; Pythia is not a DLH product), fleet supervisors, field coordinators, and evaluators judging whether the prototype can support real operational decisions. Users need to identify urgent conditions, inspect evidence, compare recommendations, and dispatch an action without searching across unrelated panels.
+Pythia is built for city waste agencies (B2G); its first case is Jakarta, with public data from DLH DKI Jakarta (Pythia is not a DLH product). It has two working surfaces:
+
+- **Dispatcher console** (`/app`): the dispatcher on shift plans tomorrow, checks morning readiness, watches the TPA gate, manages work orders (SPJ, the DKI surat jalan) and closes the day. The supervisor works in the same console: Supervisor mode is a sidebar toggle that turns the Tomorrow page into the review-and-approve view. Administrators manage accounts and WhatsApp in Settings; WhatsApp messages go out in one language chosen there (Indonesian by default).
+- **Driver app** (`/driver`): drivers on budget Android phones receive the instruction, follow the stops, tap in at the gate, photograph the weigh ticket and report damage, also offline.
+
+Users need to see what needs a person now, check the evidence, and act without searching across unrelated panels.
 
 ## Product Purpose
 
-Pythia unifies waste-fleet supervision, route compliance, TPA queue management, waste-volume forecasting, weather and event drivers, and integrated resource planning. Success means a user can move from an operational signal to a defensible decision and field action while understanding which inputs are simulated, modeled, cached, or externally sourced.
+Pythia turns a forecast into a day that runs: tonnes per district for tomorrow and an outlook up to 30 days ahead, a daily truck plan within the landfill gate caps, one work order and gate slot per truck, and a close-of-day recap from weighbridge tickets that feeds a bounded correction back into the forecast. Ana, the assistant, answers questions from read-only tools and drafts messages, instructions or escalations that the dispatcher sends, edits or dismisses; she never dispatches or approves on her own. Success means a dispatcher can move from a signal to a defensible decision and a field action while seeing which inputs are observed, modelled, simulated or assumed.
+
+The 3D twin, the XR tabletop and the simulated second city are legacy demo code, not product features.
 
 ## Brand Personality
 

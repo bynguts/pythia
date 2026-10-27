@@ -2,12 +2,15 @@
 
 Dokumen ini menjabarkan ambang batas dan alur yang dipakai sistem Pythia untuk mengambil
 keputusan operasional. Ini adalah sumber jawaban utama Ana saat ditanya "kenapa rekomendasi ini?"
+Produk Pythia punya dua permukaan: konsol dispatcher (`/app`: Operasi, Kesiapan pagi, Gerbang TPA,
+Surat jalan, Besok, Armada & sopir, Laporan, Pengaturan) dan aplikasi sopir (`/driver`). Layar
+briefing lama (twin `/twin`, XR `/xr`) masih ada di kode tetapi bukan bagian produk.
 
 ## A. Antrean TPA Bantargebang (Case 1)
 
-- Status antrean (KPI, panel TPA, beacon peta & twin) = **jam puncak model** dari hari simulasi
+- Status antrean (KPI dan halaman Gerbang TPA) = **jam puncak model** dari hari simulasi
   metrik harian (`queue_simulation.modelled_peak_hour`), dilabeli "modelled peak hour HH:00" —
-  bukan jam dinding saat ini dan bukan pengukuran. Di twin, harinya = hari skenario yang dipilih.
+  bukan jam dinding saat ini dan bukan pengukuran.
 - Ambang batas KPI snapshot (`fleet.data.command_center_snapshot`): wait < 45 menit -> green
   ("Green corridor clear. Normal dispatch speed approved."); wait >= 45 -> yellow, dan >= 90 -> red;
   keduanya memakai rekomendasi "Delay departures of non-essential trucks by 30-45 minutes to relieve
@@ -19,7 +22,7 @@ keputusan operasional. Ini adalah sumber jawaban utama Ana saat ditanya "kenapa 
 
 ## B. Risiko / Spike Volume Sampah (Case 2)
 
-- **Skala risiko yang dipakai semua layar** (Fleet, Twin, XR, Forecast, Planning) adalah
+- **Skala risiko yang dipakai semua layar konsol dan Ana** adalah
   `engine.spike_risk`. Spike satu hari = prakiraan kecamatan dibanding **hari normal**-nya:
   model yang sama, tanggal yang sama, tanpa hujan dan tanpa event (`engine.NORMAL_DAY_BASIS`).
   - >= 25% di atas hari normal -> `critical` (`engine.RISK_CRITICAL_RATIO` = 1,25).
@@ -27,8 +30,8 @@ keputusan operasional. Ini adalah sumber jawaban utama Ana saat ditanya "kenapa 
   - >= 3% di atas hari normal -> `elevated` (`engine.RISK_ELEVATED_RATIO` = 1,03).
   - Selain itu `normal`.
 - "Berisiko" (at risk) = `high` atau `critical` (`engine.AT_RISK_LEVELS`). Itulah hitungan
-  "Districts at risk" di twin dan XR, daftar "High-risk districts" di Forecast, dan syarat judul
-  "{kecamatan} butuh tambahan kapasitas" di ringkasan eksekutif Planning. Minggu tanpa hari hujan
+  kecamatan berisiko di halaman Besok dan outlook (`kecamatan_at_risk`), dan syarat judul
+  "{kecamatan} butuh tambahan kapasitas" di ringkasan eksekutif. Minggu tanpa hari hujan
   besar sering tidak punya kecamatan berisiko; layar lalu menampilkan keadaan kosong, bukan contoh.
   Contoh tetap (sample) hanya muncul saat backend tidak terjangkau, dengan label "offline sample".
 - Efek hujan dan event adalah asumsi perencanaan yang ditetapkan tangan, bukan efek yang dipelajari
@@ -42,24 +45,23 @@ keputusan operasional. Ini adalah sumber jawaban utama Ana saat ditanya "kenapa 
 - Karena target latih memakai aturan bertangga (10 mm dan 30 mm), model tidak mempelajari efek
   tambahan di atas 30 mm. Jangan menafsirkan selisih antara, misalnya, hujan lebat dan ekstrem sebagai
   efek terukur (asumsi perencanaan).
-- Efek hujan yang disajikan (`engine.rain_response_block`, `weather.rain_response` pada scene twin)
+- Efek hujan yang disajikan (`engine.rain_response_block`, field `rain_response` pada prakiraan per kecamatan)
   dibaca dari respons model pada grid 1 mm, dibuat tidak pernah turun saat hujan bertambah, dan tidak
   pernah di bawah hari normal kering. Respons mentah model sempat sedikit negatif pada hujan ringan
   (3–8 mm), yaitu derau di sekitar target yang tidak punya efek di bawah 10 mm; kini dibatasi pada
   hari normal. Di atas hujan harian terbesar data latih (`engine.TRAINING_RAIN_MAX_MM` = 96,7 mm)
-  efeknya ditahan pada nilai itu (`held_at_mm`, `beyond_training_range`); twin dan XR menyebutnya.
+  efeknya ditahan pada nilai itu (`held_at_mm`, `beyond_training_range`) dan respons menandainya.
 - Hujan skenario (what-if) hanya dihitung pada harinya sendiri (`weather.carry_over.scenario` = false).
   Hujan **prakiraan** tetap masuk fitur `rain_3d`, jumlah hujan 3 hari bergulir seperti saat latih
   (`engine.rolling_rain_3d`, `engine.RAIN_3D_WINDOW_DAYS`), jadi ikut dihitung pada dua hari
-  berikutnya (`weather.days[i].carried_rain_mm`). Twin dan XR menandai hari kering seperti itu
-  "hujan prakiraan hari sebelumnya masih dihitung".
+  berikutnya. Payload scene briefing lama menyebut sisa hujan itu `weather.days[i].carried_rain_mm`.
 - Kata hujan tanpa angka mm dibaca Ana sebagai kategori hujan harian BMKG
   (`scenario.RAIN_CATEGORIES`) dan dijalankan pada nilai wakil yang dinyatakan:
   - ringan 5–20 mm/hari -> 10 mm;
   - sedang 20–50 mm/hari -> 35 mm;
   - lebat 50–100 mm/hari -> 75 mm;
   - sangat lebat 100–150 mm/hari -> 125 mm;
-  - ekstrem > 150 mm/hari -> 150 mm (batas atas twin, jadi batas bawah kategori).
+  - ekstrem > 150 mm/hari -> 150 mm (batas bawah kategori).
 - `predicted_tons = baseline_tons * (1 + spike)`.
 - Output per kecamatan (42 model kecamatan) menyertakan kebutuhan: tim kru, jam-orang (person-hours),
   tong/bin, truk, dan fuel/CO2. Satuan baku ada di `app/core/units.py` dan disertakan sebagai `units`
@@ -88,7 +90,8 @@ keputusan operasional. Ini adalah sumber jawaban utama Ana saat ditanya "kenapa 
 - Jumlah kedatangan truk per hari = median ritasi harian dari data penimbangan Bantargebang (data.go.id);
   jumlah jalur timbang, durasi timbang dan durasi ritase adalah asumsi model, bukan pengukuran fasilitas.
 - Metrik utama: "menit antre TPA per truk" (rata-rata, P95, CI 95% dari replikasi ber-seed), berlabel SIMULATED,
-  tersedia di `GET /api/tpa/queue-metric` dan `landfill_queue.minutes_per_truck` pada scene twin Jakarta.
+  tersedia di `GET /api/tpa/queue-metric` dan dipakai halaman Besok serta nilai per 1.000 rit
+  (`GET /api/reports/value-model`).
 - `queue_reduction_percent` diturunkan dari metrik yang sama (baseline_wait vs optimized_wait).
 - Tujuannya mereduksi antrean TPA pada jam sibuk dengan meratakan kedatangan.
 
@@ -117,6 +120,7 @@ keputusan operasional. Ini adalah sumber jawaban utama Ana saat ditanya "kenapa 
 
 ## G. A* Dynamic Rerouting
 
+- Simulasi ini tersedia lewat tool Ana (`simulate_astar_reroute`), bukan langkah alur harian konsol.
 - Saat `traffic_jam_active`, sistem menyalakan simulasi kemacetan; A* mencari rute pemulihan
   dari posisi truk (ORIGIN) menuju TPA Bantargebang; output `active_route` + recovery route.
 
