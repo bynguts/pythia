@@ -225,7 +225,7 @@ test("an active correction shows its days and percent beside the raw model value
   await expect(panel.getByTestId("tmr-outlook-learn-status")).toContainText(
     "Mengoreksi diri · 4 hari tertimbang",
   );
-  await expect(panel.getByTestId("tmr-outlook-learn-correction")).toContainText("+6.9%");
+  await expect(panel.getByTestId("tmr-outlook-learn-correction")).toContainText("+6,9%");
   const tomorrow = page.locator("[data-testid=tmr-outlook-day][data-when=tomorrow]");
   await expect(tomorrow.locator(".tmr-ol-value")).toHaveText("8.640 t");
   await expect(tomorrow.getByTestId("tmr-outlook-corrected")).toHaveText("Disesuaikan 9.236 t");

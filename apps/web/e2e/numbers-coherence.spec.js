@@ -1,4 +1,4 @@
-// wave9 numbers coherence: one "today" (GET /api/baseline/today) behind every headline,
+// Numbers coherence: one "today" (GET /api/baseline/today) behind every headline,
 // one fleet denominator ("52 aktif / 59 unit") on every screen, and a recommendation that
 // never asks for more trucks than the pilot fleet has (teardown v4 T1, F4, R1).
 import { expect, test } from "@playwright/test";
@@ -30,7 +30,7 @@ async function apiJson(page, path) {
 
 const numberOf = async (locator) => Number(await locator.getAttribute("data-value"));
 
-// "52 aktif / 59 unit" → { active: 52, total: 59 }. wave13 Operations: the "Truk di jalan"
+// "52 aktif / 59 unit" → { active: 52, total: 59 }. Operations: the "Truk di jalan"
 // KPI prints "52/ 59", so "aktif" and "unit" are optional.
 async function denominatorOf(locator) {
   const text = (await locator.textContent()) || "";
@@ -48,7 +48,7 @@ async function expectFleetDenominator(page, locator) {
   }).toPass({ timeout: 20000 });
 }
 
-// wave13: Tomorrow prints the forecast API's own day: total, districts and city-wide trucks.
+// Tomorrow prints the forecast API's own day: total, districts and city-wide trucks.
 test("Tomorrow prints the same numbers as the forecast API", async ({ page }) => {
   const token = await signIn(page, "/app/tomorrow");
   const total = page.getByTestId("plan-total");
@@ -108,9 +108,9 @@ test("Tomorrow's tonnes match the XR tabletop's tomorrow", async ({ page }) => {
     .toBe(tonnes);
 });
 
-// wave13 Operations: the "Truk di jalan" KPI prints "52 / 59", the baseline's own count of
+// Operations: the "Truk di jalan" KPI prints "52 / 59", the baseline's own count of
 // the simulated fleet. The fleet desk's safety tab and the old drivers screen have no route
-// in the wave 13 console, so the roster check stays on the API.
+// In the console, so the roster check stays on the API.
 test("every screen shows the same fleet denominator", async ({ page }) => {
   const token = await signIn(page, "/app/operations");
   await expectFleetDenominator(page, page.getByTestId("kpi-trucks").locator(".ui-kpi-value"));
@@ -126,7 +126,7 @@ test("every screen shows the same fleet denominator", async ({ page }) => {
   if (safety.classification !== "OBSERVED_APP_EVENTS") expect(safety.trucks.length).toBe(fleet.total);
 });
 
-// wave13: the plan never uses more trucks than the pilot fleet has in service, and says
+// The plan never uses more trucks than the pilot fleet has in service, and says
 // which of them a field fact held back.
 test("the plan never uses more trucks than the pilot fleet has in service", async ({ page }) => {
   test.setTimeout(180000);
@@ -203,9 +203,9 @@ test("Reports' tomorrow tonnes are the Tomorrow page's forecast", async ({ page 
   await expect(summary).not.toContainText("1.234");
 });
 
-// wave11 numbers: a queue figure says which quantity it is. The modelled peak hour's wait
+// Numbers: a queue figure says which quantity it is. The modelled peak hour's wait
 // per truck and the whole day's average per truck are the weighbridge stage of one
-// simulated normal day, so they differ by definition. wave13 Operations: with no gate slot
+// Simulated normal day, so they differ by definition. Operations: with no gate slot
 // for now, the gate KPI shows the peak hour's wait and says it is the modelled peak.
 test("the peak-hour wait and the day average name different quantities", async ({ page }) => {
   const status = await apiJson(page, "/tpa/queue-status");
@@ -229,7 +229,7 @@ test("the peak-hour wait and the day average name different quantities", async (
   await expect(tile.locator(".ui-kpi-sub")).toHaveText(`per truk, puncak model ${hour}`);
 });
 
-// wave11 numbers: trucks are units (tonnes / truck capacity per shift), gate trips are rit
+// Numbers: trucks are units (tonnes / truck capacity per shift), gate trips are rit
 // from the real weighing data, and the tonnage is modelled generation read against SIPSN.
 test("trucks, gate trips and tonnage each carry their own definition", async ({ page }) => {
   const baseline = await apiJson(page, "/baseline/today?days=7");
@@ -240,7 +240,7 @@ test("trucks, gate trips and tonnage each carry their own definition", async ({ 
   expect(baseline.tonnage_reference.classification).toBe("REAL");
   expect(baseline.provenance.tonnage).toBe("MODEL_OUTPUT");
 
-  // wave13: Tomorrow's trucks tile states its unit (tonnes per truck), not gate trips.
+  // Tomorrow's trucks tile states its unit (tonnes per truck), not gate trips.
   await signIn(page, "/app/tomorrow");
   const trucks = page.getByTestId("tmr-res-trucks");
   await expect(trucks).toContainText(`${baseline.units.truck_capacity_tons} t per truk`, { timeout: 30000 });
@@ -249,8 +249,8 @@ test("trucks, gate trips and tonnage each carry their own definition", async ({ 
   await expect(trucks).toHaveAttribute("title", /^Berbasis kapasitas/);
 });
 
-// wave11 numbers: the safety panel's gate waits are example dwells per simulated truck,
-// never output of the weighbridge queue model. wave13: the safety panel has no route in the
+// Numbers: the safety panel's gate waits are example dwells per simulated truck,
+// never output of the weighbridge queue model. The safety panel has no route in the
 // console, so the API's basis is what is checked.
 test("simulated gate waits say they are examples, not the queue model", async ({ page }) => {
   const token = await signIn(page, "/app/operations");
@@ -262,7 +262,7 @@ test("simulated gate waits say they are examples, not the queue model", async ({
   expect(safety.gate_wait_basis).toContain("not drawn from the weighbridge queue model");
 });
 
-// wave11 numbers: "Open in XR" lands on the twin's selected day, so the tabletop and the
+// Numbers: "Open in XR" lands on the twin's selected day, so the tabletop and the
 // twin print the same date and the same city tonnage for one scenario (judge: XR said
 // Mon 26 / 9,505 t while the twin said Tue 27 / 9,548 t).
 test("the twin hands XR its selected day: same date and the same tonnes", async ({ page }) => {
@@ -297,7 +297,7 @@ test("the twin hands XR its selected day: same date and the same tonnes", async 
   await expect(page.getByTestId("xr-total")).toHaveText(`${Math.round(twin.tons).toLocaleString("id-ID")} t`);
 });
 
-// wave11 numbers: the decision-room briefing's "today" queue and the twin HUD's queue are
+// Numbers: the decision-room briefing's "today" queue and the twin HUD's queue are
 // one simulation (scenario_queue_metric on today's forecast tonnes vs its normal day), so
 // the twin screen never shows two answers for today's weighbridge wait.
 test("the briefing's today queue is the twin HUD's queue", async ({ page }) => {

@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-// wave13 lane L: the public landing page at "/" and the designed sign-in behind "Sign in".
+// The public landing page at "/" and the designed sign-in behind "Sign in".
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("pythia_lang", "en"));
 });

@@ -55,7 +55,7 @@ GENERATED_WASTE_QUANTITY = {
     "not": "landfill intake: the tonnage weighed in at TPST Bantargebang is a different quantity",
 }
 
-# The decision room's weekly briefing (gsc wave 10): at most three what-ifs, each one
+# The decision room's weekly briefing: at most three what-ifs, each one
 # the forecast and queue models really compute. Twin, the XR table and Rencana read
 # them by id, so all three show one scenario with one set of numbers.
 BRIEFING_SCENARIOS: dict[str, dict[str, Any]] = {

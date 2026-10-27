@@ -1,4 +1,4 @@
-// wave9 map clarity, wave 13 Operations: an SPJ route numbers only its planned stops, the
+// Map clarity, Operations: an SPJ route numbers only its planned stops, the
 // reference layers stay off on the Operations map, the one-line legend explains what is
 // drawn in both languages, and the floating map chrome never overlaps.
 import { expect, test } from "@playwright/test";
@@ -57,7 +57,7 @@ async function stubRoutes(page) {
   await page.route(/\/api\/spj\/active-path\//, (route) =>
     route.fulfill({ json: { has_active_spj: true, has_reference_path: true, path: roadPath() } }),
   );
-  // wave9 fleet composition: the map no longer fetches /routes/osrm on its own; it draws
+  // Fleet composition: the map no longer fetches /routes/osrm on its own; it draws
   // the route of the selected decision, so the stub injects one decision (first in queue).
   await page.route(/\/api\/command-center(\?|$)/, async (route) => {
     let response;
@@ -110,7 +110,7 @@ test("an SPJ route numbers only its planned stops, capped per SPJ", async ({ pag
   expect(spj.destinations).toBe(2);
 });
 
-// wave 13: the Operations map shows the fleet and its decisions; the registry, TPS and
+// The Operations map shows the fleet and its decisions; the registry, TPS and
 // heat layers stay off and the legend never explains a hidden layer.
 test("the reference layers stay off on the Operations map", async ({ page }) => {
   await signIn(page);

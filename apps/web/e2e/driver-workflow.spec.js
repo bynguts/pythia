@@ -76,13 +76,13 @@ test("driver runs full SPJ flow: pretrip, stop evidence, receipt", async ({ page
   const pretripLoaded = page.waitForResponse((response) =>
     response.url().includes(`/pretrip/today/${TEST_TRUCK}`),
   );
-  // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
+  // The shared account searches its truck instead of a 59-row list.
   await page.getByTestId("driver-truck-search").fill("T-220");
   await page.locator('[data-testid="pick-T-220"]').click();
   await page.getByTestId("driver-pick-start").click();
   await pretripLoaded;
 
-  // ── Pre-trip (wave 13: on the Instructions tab; the done banner on a re-run) ──
+  // ── Pre-trip (on the Instructions tab; the done banner on a re-run) ──
   // The form flips to done when /pretrip/today resolves — never hold a locator across that async boundary.
   await page.getByTestId("driver-tab-instruksi").click();
   // The route map has no header; the truck chip is on the other tabs.
@@ -98,7 +98,7 @@ test("driver runs full SPJ flow: pretrip, stop evidence, receipt", async ({ page
   }
   await expect(doneBadge).toBeVisible({ timeout: 15000 });
 
-  // ── Stop proof (wave 13): "Saya sudah tiba" opens arrival photo → weight by type
+  // ── Stop proof: "Saya sudah tiba" opens arrival photo → weight by type
   // (one scale photo for the fractions) → officer name + photo → "Selesaikan titik" ──
   await page.getByTestId("driver-tab-rute").click();
   await page.getByRole("button", { name: "Saya sudah tiba" }).click();
@@ -206,7 +206,7 @@ test("driver is offered the newest receipt-pending SPJ, not the oldest", async (
   const newer = await completedSpj(TEST_TRUCK);
 
   await page.goto("/driver");
-  // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
+  // The shared account searches its truck instead of a 59-row list.
   await page.getByTestId("driver-truck-search").fill(TEST_TRUCK);
   await page.locator(`[data-testid="pick-${TEST_TRUCK}"]`).click();
   await page.getByTestId("driver-pick-start").click();
@@ -234,7 +234,7 @@ test("pretrip with a TIDAK item auto-creates a damage report", async ({ page, co
   await page.evaluate(() => localStorage.removeItem("pythia_driver"));
   await page.reload({ waitUntil: "domcontentloaded" });
 
-  // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
+  // The shared account searches its truck instead of a 59-row list.
   await page.getByTestId("driver-truck-search").fill(PRETTRIP_TRUCK);
   await page.locator(`[data-testid="pick-${PRETTRIP_TRUCK}"]`).click();
 
@@ -273,7 +273,7 @@ test("admin sees damage report and resolves it", async ({ page }) => {
   const rep = await create.json();
 
   try {
-    // Wave 13: damage reports live in the Fleet & drivers damage table.
+    // Damage reports live in the Fleet & drivers damage table.
     await page.goto("/app/fleet", { waitUntil: "domcontentloaded" });
     const row = page.getByTestId("damage-table").locator("tbody tr").filter({ hasText: note });
     await expect(row).toBeVisible({ timeout: 20000 });
@@ -333,7 +333,7 @@ test("admin sees spj evidence summary after driver flow", async ({ page }) => {
     },
   });
 
-  // Wave 13: the evidence summary is the Work orders detail pane.
+  // The evidence summary is the Work orders detail pane.
   await page.goto("/app/work-orders", { waitUntil: "domcontentloaded" });
   await page.getByTestId("wo-search").fill(spj.spj_number);
   const row = page.getByTestId("wo-row").filter({ hasText: spj.spj_number });

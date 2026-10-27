@@ -1,4 +1,4 @@
-// #R7-R8, wave13 Tomorrow: the day plan treats kecamatan rit quotas, gate caps and dated
+// #R7-R8, Tomorrow: the day plan treats kecamatan rit quotas, gate caps and dated
 // facility rules as hard limits, and the page states what the plan leaves short instead of
 // hiding it; the plan day (not a fixed flag) sets weekday or weekend; the driver app shows
 // an approved plan's dispatch from the Indonesian template; the profile carries the role.
@@ -190,8 +190,8 @@ test("a real day plan never uses more rit than a district quota", async ({ page 
   }
 });
 
-// wave10 driver-field-app: /field merged into /driver; the plan instruction shows in its Instruksi tab.
-// #w14-walk: the card renders the plan's structured trips (fields), not the Indonesian template text.
+// /field merged into /driver; the plan instruction shows in its Instruksi tab.
+// The card renders the plan's structured trips (fields), not the Indonesian template text.
 test("the driver app finds a simulated truck and shows its approved plan as trips in Indonesian", async ({
   page,
 }) => {
@@ -242,5 +242,5 @@ test("profile shows the signed-in role", async ({ page }) => {
   await signIn(page);
   await page.goto("/app/tomorrow");
   await expect(page.getByTestId("profile-role")).toHaveText("Pengatur armada");
-  await expect(page.getByTestId("profile-account")).toHaveAttribute("title", "Akun demo bersama: dispatcher");
+  await expect(page.getByTestId("profile-account")).toHaveAttribute("title", "Masuk sebagai dispatcher");
 });

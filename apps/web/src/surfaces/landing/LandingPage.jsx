@@ -25,7 +25,7 @@ import {
   Warehouse,
   Wrench,
 } from "lucide-react";
-import { useLanguage } from "../../shared/i18n/index.jsx";
+import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { Logo } from "../../shared/ui/Logo.jsx";
 import { Mascot } from "../../shared/ui/Mascot.jsx";
 import { PixelBand } from "../../shared/ui/PixelBand.jsx";
@@ -389,7 +389,7 @@ export function LandingPage() {
                   </div>
                   <div className="land-panel-foot">
                     <span>{t("l_s1_peak")}</span>
-                    <strong>9,123 t</strong>
+                    <strong>{new Intl.NumberFormat(localeFor(lang)).format(9123)} t</strong>
                   </div>
                 </div>
               </div>

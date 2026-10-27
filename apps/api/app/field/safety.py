@@ -328,6 +328,9 @@ def driver_state(truck_code: str, now: datetime | None = None) -> dict[str, Any]
     if observed:
         return truck_payload(truck_code, observed.get(truck_code), override, OBSERVED, now)
     simulated = simulated_activity(now, [truck_code])
+    # One driver's own gate state is never a seeded example: the "queue over 3 hours,
+    # supervisor notified" notice needs this driver's observed gate arrival.
+    simulated[truck_code]["gate"] = None
     return truck_payload(truck_code, simulated[truck_code], override, SIMULATED, now)
 
 

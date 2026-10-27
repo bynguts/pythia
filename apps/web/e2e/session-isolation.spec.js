@@ -23,7 +23,7 @@ test("a driver signing in on a second tab keeps the supervisor's command-center 
     localStorage.setItem("pythia_token", token);
     localStorage.setItem("pythia_role", role);
   }, supervisor);
-  // wave 13: "/" is the public landing; the console lives under /app.
+  // "/" is the public landing; the console lives under /app.
   await page.goto("/app/operations", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("workspace-navigation")).toBeVisible({ timeout: 20000 });
 
@@ -50,7 +50,7 @@ test("a driver signing in on a second tab keeps the supervisor's command-center 
   expect((await session.json()).role).toBe("supervisor");
 
   // Signing out of the command center leaves the driver's session (and its outbox) alone.
-  // wave11 design system: log out lives in the profile menu (no sidebar footer).
+  // Log out lives in the profile menu (no sidebar footer).
   await page.getByTestId("profile-button").click();
   await page.getByTestId("profile-logout").click();
   expect(await page.evaluate(commandSession)).toEqual([null, null, null]);

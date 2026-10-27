@@ -1,4 +1,4 @@
-// Wave 13 lane l strings (id). Keys are prefixed "l_"; only lane l edits this file.
+// Strings (id). Keys are prefixed "l_".
 export const lId = {
   l_announce_new: "Baru",
   l_announce_text: "Prakiraan 7 hari di halaman Besok, terisi dari cuaca, acara, dan hari libur",
@@ -39,13 +39,13 @@ export const lId = {
   l_sig1_n: "kini",
   l_sig2_t: "Antrean gerbang Bantargebang",
   l_sig2_s: "Prediksi tunggu · model antrean",
-  l_sig2_n: "2m",
+  l_sig2_n: "2 mnt",
   l_sig3_t: "Hujan hari Rabu",
   l_sig3_s: "Prakiraan Open-Meteo",
-  l_sig3_n: "5m",
+  l_sig3_n: "5 mnt",
   l_sig4_t: "Rabu adalah puncaknya",
   l_sig4_s: "Prakiraan tertinggi minggu ini",
-  l_sig4_n: "12m",
+  l_sig4_n: "12 mnt",
   l_sig5_t: "Truk keluar dari jalan",
   l_sig5_s: "Kapasitas cadangan ditugaskan",
   l_sig5_n: "1j",
@@ -62,7 +62,7 @@ export const lId = {
   l_col_fc_b: "Prakiraan harian untuk 42 kecamatan, dengan cuaca, hari libur, dan acara terbaca otomatis.",
   l_col_field: "Lapangan",
   l_col_field_hi: "Surat jalan kertas mudah hilang.",
-  l_col_field_b: "Surat jalan digital, cek pra-perjalanan, dan tiket timbang, bahkan saat sinyal hilang.",
+  l_col_field_b: "Surat jalan digital, cek pra-jalan, dan tiket timbang, bahkan saat sinyal hilang.",
 
   l_how_h2_a: "Berhenti menebak beban besok.",
   l_how_h2_b: "Ketahui.",
@@ -107,7 +107,7 @@ export const lId = {
     "Armada, gerbang TPA, prakiraan, rencana, dan kerja lapangan di satu tempat, sehingga sinyal di peta menjadi surat jalan dalam menit yang sama.",
   l_plat_cta1: "Lihat rencana besok",
   l_plat_cta2: "Baca cara kerja datanya",
-  l_plat_url: "pythia.app/tomorrow",
+  l_plat_url: "pythia.web.id/app/tomorrow",
   l_f1_t: "Peta armada",
   l_f1_b:
     "Cek-in perhentian terakhir tiap truk, koridornya, dan perhentian berikutnya. Pelacakan GPS langsung segera hadir.",
@@ -120,10 +120,10 @@ export const lId = {
   l_f5_t: "Rencana mingguan",
   l_f5_b: "CP-SAT mengalokasikan truk, kru, dan shift terhadap prakiraan.",
   l_f6_t: "Surat jalan digital",
-  l_f6_b: "Surat jalan SPJ dengan persetujuan pengawas dan jejak audit.",
+  l_f6_b: "Surat jalan dengan persetujuan pengawas dan jejak audit.",
   l_f7_t: "Aplikasi sopir",
   l_f7_b:
-    "Aplikasi ponsel offline-first dengan panduan rute 2D dan panduan TPA, AR opsional saat berjalan kaki, dan cek pra-perjalanan.",
+    "Aplikasi ponsel offline-first dengan panduan rute 2D dan panduan TPA, AR opsional saat berjalan kaki, dan cek pra-jalan.",
   l_f8_t: "Ana, asisten",
   l_f8_b: "Menjawab dari data yang sama dengan alat bantunya, dan berkata jujur saat tak bisa.",
   l_day1_h: "Yang berubah di hari pertama",
@@ -184,7 +184,7 @@ export const lId = {
     "Pada total bulanan, galat 4,32% (MAPE) dalam uji balik pada timbangan nyata Bantargebang, dibanding 4,98% untuk pembanding naif. Prakiraan harian per kecamatan mengisi rencana yang disetujui pengawas sebelum sampai ke sopir.",
   l_faq5_q: "Apakah aplikasi sopir berfungsi offline?",
   l_faq5_a:
-    "Ya. Bukti perhentian, cek pra-perjalanan, dan tiket timbang antre di ponsel dan terkirim saat sinyal kembali.",
+    "Ya. Bukti perhentian, cek pra-jalan, dan tiket timbang antre di ponsel dan terkirim saat sinyal kembali.",
   l_faq6_q: "Bisakah dipakai untuk kota lain?",
   l_faq6_a:
     "Pythia dibangun di atas kecamatan, fasilitas, dan catatan ritasi sebuah kota, jadi kota lain membutuhkan datanya sendiri. Bicarakan dengan tim apa yang diperlukan.",

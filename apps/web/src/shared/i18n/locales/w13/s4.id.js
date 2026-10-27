@@ -1,4 +1,4 @@
-// Wave 13 lane s4 strings (id). Keys are prefixed "s4_"; only lane s4 edits this file.
+// Strings (id). Keys are prefixed "s4_".
 export const s4Id = {
   // Gerbang TPA
   s4_title: "Gerbang TPA",
@@ -66,7 +66,7 @@ export const s4Id = {
 
   // Surat perintah kerja
   s4_wo_title: "Surat perintah",
-  s4_wo_crumb: "SPJ",
+  s4_wo_crumb: "Surat jalan",
   s4_wo_sub: "{active} aktif · {proof} menunggu bukti · draf langsung dari rencana yang disetujui",
   s4_wo_tabs: "Kelompok surat perintah",
   s4_wo_tab_active: "Aktif",
@@ -75,7 +75,7 @@ export const s4Id = {
   s4_wo_tab_closed: "Selesai",
   s4_wo_new: "Surat perintah baru",
   s4_wo_list: "Surat perintah",
-  s4_wo_search: "SPJ, truk atau sopir",
+  s4_wo_search: "Surat jalan, truk atau sopir",
   s4_wo_search_label: "Cari surat perintah",
   s4_wo_stops_count: "{done} dari {total} perhentian",
   s4_wo_state_proof: "Bukti kurang",
@@ -105,18 +105,18 @@ export const s4Id = {
   s4_wo_ask_proof: "Minta bukti ke sopir",
   s4_wo_proof_request: "Mohon kirim foto dan berat untuk {spj}.",
   s4_wo_proof_sent: "Permintaan terkirim ke sopir.",
-  s4_wo_close: "Tutup SPJ",
+  s4_wo_close: "Tutup surat jalan",
   s4_wo_activate: "Aktifkan",
   s4_wo_activate_later: "Bisa diaktifkan pada {date}, sesuai tanggalnya.",
-  s4_wo_cancel: "Batalkan SPJ",
+  s4_wo_cancel: "Batalkan surat jalan",
   s4_wo_err_session: "Sesi berakhir. Masuk lagi.",
   s4_wo_err_forbidden: "Peran ini tidak memiliki izin untuk tindakan itu.",
   s4_wo_network_error: "Server tidak dapat dijangkau.",
-  s4_wo_override_label: "Pengecualian supervisor: alasan menutup tanpa bukti (minimal 10 karakter)",
+  s4_wo_override_label: "Pengecualian pengawas: alasan menutup tanpa bukti (minimal 10 karakter)",
   s4_wo_override_short: "Tulis minimal 10 karakter.",
   s4_wo_override_submit: "Tutup dengan pengecualian",
   s4_wo_override_cancel: "Tutup",
-  s4_wo_override_note: "Menutup tanpa bukti butuh pengecualian supervisor",
+  s4_wo_override_note: "Menutup tanpa bukti butuh pengecualian pengawas",
   s4_wo_stops: "Perhentian dan bukti",
   s4_wo_done_at: "Selesai {time}",
   s4_wo_arrived: "Tiba",
@@ -147,7 +147,7 @@ export const s4Id = {
   s4_audit_complete_stop: "Perhentian {n} selesai",
   s4_audit_skip_stop: "Perhentian {n} dilewati",
   s4_audit_complete: "Ditutup",
-  s4_audit_override: "Ditutup dengan pengecualian supervisor",
+  s4_audit_override: "Ditutup dengan pengecualian pengawas",
   s4_audit_cancel: "Dibatalkan",
   s4_audit_gate_arrival: "Tiba di gerbang",
   s4_audit_receipt: "Tiket timbang dikirim",

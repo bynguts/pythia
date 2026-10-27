@@ -1,4 +1,4 @@
-/* Wave 16: "New message from dispatch" banner at the top of the driver app's body. In the
+/* "New message from dispatch" banner at the top of the driver app's body. In the
    flow (not floating), so it never covers a button; no card border, a tinted fill. */
 .drv-msg-alert {
   display: flex;

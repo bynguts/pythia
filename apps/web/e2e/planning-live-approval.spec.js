@@ -1,4 +1,4 @@
-// wave12 live approval, wave13 Tomorrow: a dispatcher submits the plan and keeps the page
+// Live approval, Tomorrow: a dispatcher submits the plan and keeps the page
 // open; a supervisor approves it elsewhere (here through the API). Within one 15 s poll the
 // dispatcher's page says it is approved, by whom, and how many work orders it drafted.
 import { expect, test } from "@playwright/test";

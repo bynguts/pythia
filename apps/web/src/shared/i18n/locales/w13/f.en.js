@@ -1,4 +1,4 @@
-// Wave 13 lane f strings (en). Keys are prefixed "f_"; only lane f edits this file.
+// Strings (en). Keys are prefixed "f_".
 export const fEn = {
   f_nav_operations: "Operations",
   f_nav_readiness: "Morning readiness",

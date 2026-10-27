@@ -1,4 +1,4 @@
-// Wave 13 lane f strings (id). Keys are prefixed "f_"; only lane f edits this file.
+// Strings (id). Keys are prefixed "f_".
 export const fId = {
   f_nav_operations: "Operasi",
   f_nav_readiness: "Kesiapan pagi",
@@ -36,8 +36,8 @@ export const fId = {
   f_sync_of: "{n} dari {m} ponsel tersinkron",
   f_sync_one: "1 ponsel tersinkron",
   f_sync_hint: "Truk yang aplikasi sopirnya menghubungi server ini dalam {m} menit terakhir",
-  f_driver_n: "Pengemudi {n}",
-  f_driver_simulated: "Pengemudi simulasi: nama pengganti armada demo",
+  f_driver_n: "Sopir {n}",
+  f_driver_simulated: "Sopir simulasi: nama pengganti armada demo",
   f_bell: "Perlu tindakan Anda",
   f_ask_ana: "Tanya Ana",
   f_ana_title: "Ana",

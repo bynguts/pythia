@@ -1,4 +1,4 @@
-// Wave 13 lane d1 strings (en). Keys are prefixed "d1_"; only lane d1 edits this file.
+// Strings (en). Keys are prefixed "d1_".
 export const d1En = {
   // Sign in (F2CI6P) and sign in again (D2vpX)
   d1_login_title: "Pythia Driver",
@@ -107,7 +107,7 @@ export const d1En = {
   d1_gate_slot: "Gate slot at {facility} · {start}–{end}",
   d1_model: "Model",
   d1_model_title: "Model output: a planned time, not a measured one.",
-  d1_stop_area: "Kec. {name}",
+  d1_stop_area: "{name} district",
   d1_stop_tons: "about {t} t",
   d1_reason: "Forecast for {areas}.",
   d1_accept: "Accept instruction",

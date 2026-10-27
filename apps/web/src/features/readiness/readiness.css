@@ -1,4 +1,4 @@
-/* Morning readiness (lane S2). Scoped with .rdy-; built on the --f-* tokens. */
+/* Morning readiness. Scoped with .rdy-; built on the --f-* tokens. */
 .rdy {
   display: flex;
   flex-direction: column;

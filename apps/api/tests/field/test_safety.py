@@ -307,6 +307,26 @@ def test_empty_server_falls_back_to_a_labelled_simulated_scenario(stores):
     assert safety.sweep_gate_alerts(payload["trucks"], now=NOW) == []
 
 
+def test_simulated_scenario_never_gives_one_driver_a_gate_alert(stores, monkeypatch):
+    # #gate-numbers: the driver's "queue over 3 hours" notice must come from that
+    # driver's observed gate arrival, not from the seeded example dwells.
+    monkeypatch.setattr(safety, "simulated_fleet_codes", lambda: [f"T-{n:03d}" for n in range(1, 60)])
+    seeded = [
+        t["truck_code"]
+        for t in safety.overview(now=NOW)["trucks"]
+        if t["gate_wait_minutes"] is not None and t["gate_wait_minutes"] >= safety.GATE_ALERT_MIN
+    ]
+    assert seeded  # the labelled fleet scenario still exercises the alert
+    for code in seeded:
+        state = safety.driver_state(code, now=NOW)
+        assert state["classification"] == safety.SIMULATED
+        assert (state["gate_wait_minutes"], state["gate_state"], state["gate_arrived_at"]) == (
+            None,
+            None,
+            None,
+        )
+
+
 def test_observed_events_replace_the_simulation_without_mixing(stores):
     _pretrip(stores, "T-330", NOW - timedelta(minutes=90))
     payload = safety.overview(now=NOW)

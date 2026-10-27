@@ -156,7 +156,7 @@ def test_stagger_endpoint_returns_simulation_not_fixed_numbers(api_client, auth_
 
 
 def test_fleet_carbon_constants_are_labelled_demo_constants(api_client):
-    # gsc review n22: the saving and compliance figures are fixed numbers, not a computation.
+    # The saving and compliance figures are fixed numbers, not a computation.
     body = api_client.get("/api/fleet/carbon").json()
     assert body["classification"] == "DEMO_CONSTANT"
     assert "not measured" in body["source"]
@@ -231,7 +231,7 @@ def test_queue_metric_endpoint_is_the_unscaled_normal_day(api_client):
     assert body["normal_day"]["trucks_per_day"] == body["trucks_per_day"]
 
 
-# ── gsc review M3: /api/twin/scene must not buy a fresh simulation per request ──
+# ── /api/twin/scene must not buy a fresh simulation per request ──
 
 
 def test_normal_day_is_simulated_once_however_it_is_requested():
@@ -268,7 +268,7 @@ def test_scenario_within_half_a_step_is_the_normal_day():
     assert tiny["trucks_per_day"] == trucks
 
 
-# ── gsc review n24: a malformed month in the weighing file is skipped ──
+# ── A malformed month in the weighing file is skipped ──
 
 
 def test_malformed_months_in_the_weighing_file_are_skipped(tmp_path, monkeypatch):
@@ -288,7 +288,7 @@ def test_malformed_months_in_the_weighing_file_are_skipped(tmp_path, monkeypatch
     assert "202401-202402" in source
 
 
-# ── gsc review m8 / n23: "trucks in queue" is the queue, not arrivals per hour ──
+# ── "trucks in queue" is the queue, not arrivals per hour ──
 
 
 def test_tpa_status_separates_queue_from_arrivals():
@@ -480,7 +480,7 @@ def test_tpa_wait_recommendation_names_the_stagger_slot():
     assert "20 minutes" not in yellow["recommendation"]
 
 
-# ── wave10 twin decision room: a weighbridge lane closed is a labelled what-if ──
+# ── Twin decision room: a weighbridge lane closed is a labelled what-if ──
 
 
 def test_default_lanes_keep_the_normal_day_and_its_cache_key():

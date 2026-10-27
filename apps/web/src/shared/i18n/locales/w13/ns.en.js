@@ -1,4 +1,4 @@
-// Wave 15 lane ns strings (English).
+// Strings (English).
 // Needs-you next steps and rule citations: keys come from GET /api/ops/needs-you
 // (`next_step.key`, `rule.key`), params fill the {placeholders}.
 export const nsEn = {

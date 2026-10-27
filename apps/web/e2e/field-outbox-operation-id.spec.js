@@ -2,7 +2,7 @@ import { test, expect, request } from "@playwright/test";
 
 // a queued instruction confirmation carries one operation id from the moment
 // it is queued, and every flush retry re-sends that same id, so the backend's
-// #44 replay guard keeps the confirmation exactly-once. wave10
+// #44 replay guard keeps the confirmation exactly-once.
 // driver-field-app: runs on the driver app's Instruksi tab (/field merged).
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 

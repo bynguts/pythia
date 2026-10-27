@@ -1,5 +1,5 @@
 :root {
-  /* Wave 13 palette (docs/design/pythia-redesign.pen variables + export-handoff/html).
+  /* Palette (docs/design/pythia-redesign.pen variables + export-handoff/html).
      --f-* are the source of truth; the --ui-* names below are remapped onto them so
      pre-redesign components inherit the new world. */
   --f-white: #ffffff;
@@ -130,7 +130,7 @@
   --space-6: 32px;
   --space-7: 40px;
   --space-8: 64px;
-  /* Wave 13 console: a 56 px top bar beside the sidebar. Phones add a 64 px bottom nav. */
+  /* The console: a 56 px top bar beside the sidebar. Phones add a 64 px bottom nav. */
   --ui-topbar-height: var(--f-topbar-height);
   --ui-bottomnav-height: 64px;
   --ui-bottomnav-space: calc(var(--ui-bottomnav-height) + env(safe-area-inset-bottom, 0px) + 16px);

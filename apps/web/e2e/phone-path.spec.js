@@ -41,7 +41,7 @@ test("a fresh phone on /driver signs in as the driver in place and keeps the dee
   expect(await page.evaluate(() => localStorage.getItem("pythia_token"))).toBeNull();
 });
 
-// wave10 driver-field-app: /field now redirects to the driver app's Instruksi tab, behind the same gate.
+// /field now redirects to the driver app's Instruksi tab, behind the same gate.
 test("a token the backend no longer knows brings the sign-in back on /field", async ({ page }) => {
   await freshPhone(page, "id");
   await page.evaluate(() => localStorage.setItem("pythia_field_token", "token-from-before-a-restart"));
@@ -83,27 +83,24 @@ test("dispatcher adds a DEMO stop at the device position and it is stored DEMO-l
     localStorage.setItem("pythia_token", token);
     localStorage.setItem("pythia_role", role);
   }, principal);
-  // Wave 13: a work order is drafted from Work orders → New work order.
+  // A work order is drafted from Work orders → New work order.
   await page.goto("/app/work-orders", { waitUntil: "domcontentloaded" });
   await page.getByTestId("wo-new").click();
   const demo = page.getByTestId("spj-demo-stop");
-  await expect(demo).toHaveText(/DEMO/);
-  await expect(page.getByText(/Hanya DEMO: .*35 m/)).toBeVisible();
+  await expect(demo).toHaveText(/Tambah titik di lokasi saya/);
+  await expect(page.getByText(/Menambah titik di posisi GPS ponsel ini.*35 m/)).toBeVisible();
   // #spj-demo-leg: a DEMO stop needs a real TPS stop before it, so it is stop 2 and
   // the leg into it starts on the road network (the AR street path follows it).
   await demo.click();
   await expect(page.getByText(/Tambah titik TPS dulu/)).toBeVisible();
-  await expect(page.getByTestId("spj-demo-badge")).toHaveCount(0);
   const site = await page.locator("#spj-sites option").first().getAttribute("value", { timeout: 15000 });
   await page.getByRole("combobox", { name: "Cari lokasi TPS…" }).fill(site);
   await page.getByRole("button", { name: "Tambah titik", exact: true }).click();
   await demo.click();
-  await expect(page.getByTestId("spj-demo-badge")).toHaveText("DEMO");
-  await expect(page.locator(".spj-stop-list")).toContainText("DEMO · Lokasi operator");
+  await expect(page.locator(".spj-stop-list")).toContainText("Lokasi operator");
   // gsc-2026 n17: a second DEMO stop gets a distinct name, so saving does not hit the duplicate-stop 409.
   await demo.click();
-  await expect(page.getByTestId("spj-demo-badge")).toHaveCount(2);
-  await expect(page.locator(".spj-stop-list")).toContainText("DEMO · Lokasi operator 2");
+  await expect(page.locator(".spj-stop-list")).toContainText("Lokasi operator 2");
 
   await page.getByRole("combobox", { name: "Kendaraan" }).selectOption(DEMO_TRUCK);
   await page.getByRole("button", { name: "Simpan draf" }).click();

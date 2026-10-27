@@ -46,7 +46,7 @@ WEIGHBRIDGE_ASSUMPTION = (
 
 
 # What every queue number measures, so screens that show different ones name them apart
-# (wave11 numbers): the stage is the weighbridge only, and each figure is one of these
+# (numbers): the stage is the weighbridge only, and each figure is one of these
 # quantities. Arrivals are gate trips (ritasi): one truck can make several a day.
 QUEUE_STAGE = (
     "weighbridge (gate) stage only: minutes from gate arrival to the start of weighing; "

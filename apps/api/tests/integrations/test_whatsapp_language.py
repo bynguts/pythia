@@ -81,10 +81,13 @@ def test_the_language_comes_from_settings_then_env_then_indonesian(wa_settings, 
         wa.set_message_language("fr")
 
 
-def test_simulated_driver_names_read_in_the_message_language():
-    assert driver_display("Pengemudi Sim 03", "en") == "Driver Sim 03"
-    assert driver_display("Supir Pythia", "en") == "Pythia driver"
-    assert driver_display("Pengemudi Sim 03", "id") == "Pengemudi Sim 03"
+def test_simulated_driver_names_read_as_the_console_shows_them():
+    assert driver_display("Pengemudi Sim 03", "en") == "Driver 3"
+    assert driver_display("Pengemudi Sim 03", "id") == "Sopir 3"
+    assert driver_display("Sopir Pythia", "en") == "Pythia driver"
+    assert driver_display("Supir Pythia", "id") == "Sopir Pythia"
+    assert driver_display("Pengemudi Budi", "en") == "Driver Budi"
+    assert driver_display("Pengemudi Budi", "id") == "Pengemudi Budi"
 
 
 def test_the_gate_safety_alert_follows_the_language():
@@ -143,10 +146,10 @@ def test_alert_driver_and_group_messages_are_one_language(api_client, auth_heade
     group = texts[1]
     if lang == "en":
         assert group.startswith("⚠️ PYTHIA OPERATIONAL ALERT ⚠️")
-        assert "Driver Sim 03" in group and "Pengemudi" not in group
+        assert "Driver 3" in group and "Pengemudi" not in group
     else:
         assert group.startswith("⚠️ PERINGATAN OPERASIONAL PYTHIA ⚠️")
-        assert "Pengemudi Sim 03" in group
+        assert "Sopir 3" in group
 
 
 @pytest.mark.parametrize("lang", ["en", "id"])

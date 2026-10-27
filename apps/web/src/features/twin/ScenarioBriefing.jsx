@@ -86,7 +86,7 @@ export function ScenarioBriefing({ scenarioId, onSelect, onApply, onOpenTable, o
       <h2 id="twin-briefing-title" className="twin-panel-title">
         {t("dr_title")}
       </h2>
-      {/* wave11 twin: the three clicks of the decision, the current one marked. */}
+      {/* The three clicks of the decision, the current one marked. */}
       <ol
         className="twin-briefing-steps"
         aria-label={t("w11twin_steps_label")}
@@ -103,7 +103,7 @@ export function ScenarioBriefing({ scenarioId, onSelect, onApply, onOpenTable, o
           </li>
         ))}
       </ol>
-      {/* wave11 twin: the week's scenarios as a flat work rail, one row each. */}
+      {/* The week's scenarios as a flat work rail, one row each. */}
       <div className="twin-briefing-choices" role="group" aria-labelledby="twin-briefing-title">
         {TWIN_SCENARIOS.map(({ id }) => {
           const Icon = SCENARIO_ICONS[id];

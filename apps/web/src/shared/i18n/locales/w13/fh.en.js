@@ -1,6 +1,6 @@
 // Outlook horizon on the Tomorrow page (en): the 7 / 14 / 30-day switch, the horizon summary,
 // the daily strip and chart, the weighbridge-learning panel and the monthly proof lines. Keys
-// are prefixed "fh_"; only the horizon lane edits this file.
+// are prefixed "fh_"; only this file uses them.
 export const fhEn = {
   fh_days_heading: "Next {n} days · city-wide, t/day",
   fh_days_label: "City-wide waste per day, next {n} days",

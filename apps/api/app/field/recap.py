@@ -1,4 +1,4 @@
-"""Close-of-day recap: what the plan promised against what the app recorded (wave 12 lane E).
+"""Close-of-day recap: what the plan promised against what the app recorded.
 
 Read-only. Every figure comes from records on this server (SPJ, receipts, gate
 arrivals, driver exceptions, damage reports) or from the stored plans (MODEL_OUTPUT).
@@ -151,8 +151,8 @@ def _summary_parts(data: dict[str, Any]) -> dict[str, list[str]]:
         f"recorded tonnage {tons} t" if tons is not None else "no recorded tonnage yet",
     ]
     if fc["planned_tons"] is not None:
-        id_parts.append(f"rencana (MODEL) {fc['planned_tons']} t")
-        en_parts.append(f"plan (MODEL) {fc['planned_tons']} t")
+        id_parts.append(f"rencana (prakiraan) {fc['planned_tons']} t")
+        en_parts.append(f"plan (forecast) {fc['planned_tons']} t")
     if delta["tons"] is not None:
         id_parts.append(f"selisih {delta['tons']:+} t ({delta['pct']:+}%)")
         en_parts.append(f"delta {delta['tons']:+} t ({delta['pct']:+}%)")

@@ -8,7 +8,7 @@ const STEPS = [
   { number: "03", label: "w10num_step_approval" },
 ];
 
-// wave11 planning: three full-width stages on one surface each, read top to bottom.
+// Planning: three full-width stages on one surface each, read top to bottom.
 // Each stage puts its input on the left and its result on the right, so no stage
 // leaves a hole beside a longer neighbour. The stepper follows the real state:
 // the forecast loads, a plan is built, a plan is approved.

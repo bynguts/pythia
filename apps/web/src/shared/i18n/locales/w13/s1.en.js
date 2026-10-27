@@ -1,4 +1,4 @@
-// Wave 13 lane s1 strings (en). Keys are prefixed "s1_"; only lane s1 edits this file.
+// Strings (en). Keys are prefixed "s1_".
 export const s1En = {
   // Page head
   s1_greet_morning: "Good morning, {role}",

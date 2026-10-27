@@ -1,4 +1,4 @@
-// wave13 Settings (T6NMuR): sections, honest integration statuses, the provenance table, the
+// Settings (T6NMuR): sections, honest integration statuses, the provenance table, the
 // audit log and the language switch.
 import { expect, test } from "@playwright/test";
 

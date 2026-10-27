@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-// #79 / wave13 lane L: every visible and assistive sign-in string follows ID/EN through one
+// #79: every visible and assistive sign-in string follows ID/EN through one
 // catalog; the selected locale is available before authentication and persists after login.
 const GATE = "/app";
 

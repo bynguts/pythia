@@ -1,6 +1,6 @@
-// Wave 16 lane ea strings (Bahasa Indonesia): draf dari Ana atau saran Pythia yang ditinjau
+// Strings (Bahasa Indonesia): draf dari Ana atau saran Pythia yang ditinjau
 // dan diubah operator sebelum dikirim; kiriman ke satu sopir; eskalasi; pemberitahuan pesan sopir.
-// Nada: yakin, aktif, langkah berikutnya lebih dulu (scratchpad w16-voice.md).
+// Nada: yakin, aktif, langkah berikutnya lebih dulu.
 export const eaId = {
   ea_send: "Kirim",
   ea_edit: "Ubah",

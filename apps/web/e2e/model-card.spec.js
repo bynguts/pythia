@@ -2,7 +2,7 @@
 // naive baseline on REAL data, read from the API, and labels synthetic-target resolutions.
 // #w8-audit-320: the audit page holding it never overflows a 320 px phone, even when an
 // imported evidence run carries long unbroken provenance.
-// wave9 settings: that content now lives in Settings → Sumber data & model, collapsed by default.
+// That content now lives in Settings → Sumber data & model, collapsed by default.
 import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";

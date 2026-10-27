@@ -735,7 +735,7 @@ textarea {
 /* Joined strip: the 1px gap over a hairline-coloured ground draws the dividers,
    so they hold whether the cells sit in a row or stack on a phone. */
 
-/* ── wave11 fleet (w11fleet): Armada as the approved desk ──────────────────
+/* ── Fleet: Armada as the approved desk ──────────────────
    docs/design/export/app-fleet.png: an edge-to-edge metric strip, a left work
    rail of flat rows, a full-bleed map with a floating legend pill and a mono
    provenance chip, and the staggered-dispatch figures at the rail's foot.

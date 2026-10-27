@@ -321,7 +321,7 @@ def create_driver_exception(
     return {**rec.public(), "replayed": False}
 
 
-# What a driver sees of an operator's follow-up on their report (wave 13).
+# What a driver sees of an operator's follow-up on their report.
 _DRIVER_REPORT_STATUS = {None: "sent", "OPEN": "seen", "DISPATCHED": "seen", "RESOLVED": "handled"}
 
 

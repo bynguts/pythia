@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 // #49: role-specific install entry points. The web app manifest must offer
 // Field and Driver shortcuts so installed apps can jump straight into the
 // right workspace. #85: install metadata (name/description/shortcuts) is
-// localized — EN default (wave 13), ID opt-in via pythia_lang.
+// localized — EN default, ID opt-in via pythia_lang.
 test("both manifests serve valid metadata with field and driver shortcuts", async ({ request }) => {
   for (const [href, lang, name] of [
     ["/manifest.id.webmanifest", "id", "Pythia"],
@@ -18,7 +18,7 @@ test("both manifests serve valid metadata with field and driver shortcuts", asyn
     expect(manifest.start_url).toBe("/");
     expect(manifest.display).toBe("standalone");
 
-    // #49: role shortcuts. wave10 driver-field-app: /field merged into the
+    // #49: role shortcuts. /field merged into the
     // driver app, so the field shortcut opens its Instruksi tab.
     const urls = manifest.shortcuts.map((s) => s.url);
     expect(urls).toContain("/driver?tab=instruksi");

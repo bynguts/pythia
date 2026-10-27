@@ -69,7 +69,7 @@ export function DriverAnalytics() {
   const stale = Boolean(data && (error || now - Date.parse(data.sampled_at) > 30000));
   const deviations = drivers.filter((driver) => driver.deviation_violated);
   const damaged = drivers.filter((driver) => driver.is_damaged);
-  // wave11 drivers: the attention rail lists every flagged unit, the widest deviation first,
+  // Drivers: the attention rail lists every flagged unit, the widest deviation first,
   // then damaged units; its first row is the old single "operational priority".
   const flagged = [
     ...[...deviations].sort((a, b) => (b.deviation_meters ?? 0) - (a.deviation_meters ?? 0)),

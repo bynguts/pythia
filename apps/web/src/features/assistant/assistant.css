@@ -261,7 +261,7 @@
   }
 }
 
-/* ── Wave 13 Ask Ana drawer (lane S5): docs/design/export-handoff/html/ana_drawer.html ──
+/* ── Ask Ana drawer: docs/design/export-handoff/html/ana_drawer.html ──
    The drawer owns the header and the scroll frame; the panel fills it. Prefix: ana-. */
 .ana.assistant-chat-shell {
   display: flex;

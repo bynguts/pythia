@@ -1,4 +1,4 @@
-"""Ana's propose_action: a validated draft for the operator, never a send (wave 16)."""
+"""Ana's propose_action: a validated draft for the operator, never a send."""
 
 from __future__ import annotations
 

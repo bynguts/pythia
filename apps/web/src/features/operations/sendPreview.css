@@ -1,4 +1,4 @@
-/* Wave 16 "Send to the driver of T-047?" preview: a tinted block inside its row or answer,
+/* "Send to the driver of T-047?" preview: a tinted block inside its row or answer,
    not a card of its own (no border, no shadow), like the reassign confirmation. */
 .send-preview {
   display: flex;

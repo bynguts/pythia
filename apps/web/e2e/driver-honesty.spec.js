@@ -1,7 +1,7 @@
 // #drv6-honesty: H1 and H3 in /driver. An arrival geotag without a GPS fix is
 // shown and sent as approximate ("Lokasi perkiraan, bukan GPS"), never as
 // GPS; the simulated roster stays machine-readable (data-provenance="simulated"
-// plus a title) on the picker and on the driver's name, as wave 13's thin labels.
+// plus a title) on the picker and on the driver's name, as thin labels.
 import { expect, test } from "@playwright/test";
 import { apiLogin, cancelSpj, createActiveSpj, finishPretrip, openDriver, PHOTO } from "./lib/driverSpj.js";
 
@@ -52,7 +52,7 @@ test("with a GPS fix the geotag shows GPS and its accuracy", async ({ page, cont
     await card.getByTestId("arrival-input").setInputFiles(PHOTO);
     const geotag = card.getByTestId("arrival-geotag");
     await expect(geotag).toHaveAttribute("data-geotag", "gps", { timeout: 20000 });
-    // Wave 13 (rq5U9): the line reads "Lokasi terlampir"; the accuracy is its title.
+    // Design rq5U9: the line reads "Lokasi terlampir"; the accuracy is its title.
     await expect(geotag).toHaveText("Lokasi terlampir");
     await expect(geotag).toHaveAttribute("title", "Lokasi GPS ±12 m");
   } finally {

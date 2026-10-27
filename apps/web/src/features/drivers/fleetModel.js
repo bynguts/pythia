@@ -1,4 +1,4 @@
-// Pure derivations for the Fleet & drivers screen (lane S2).
+// Pure derivations for the Fleet & drivers screen.
 import { clockTime, jakartaToday } from "../readiness/clock.js";
 
 const WEEK_MS = 7 * 24 * 3600 * 1000;

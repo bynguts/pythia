@@ -126,7 +126,7 @@ def test_deviation_trigger_ignores_suppressed_trucks():
     assert feed.snapshot() == []
 
 
-# ── gsc review m11: every deviation surface reads the same suppression ──
+# ── Every deviation surface reads the same suppression ──
 
 # A simulated position far (tens of km) from T-001's corridor.
 OFF_CORRIDOR = {"lat": -6.6, "lng": 107.3}
@@ -183,7 +183,7 @@ def test_trip_history_does_not_count_deviations_for_a_demo_spj():
     assert demo["deviation_suppressed"] == "demo_spj"
 
 
-# ── gsc review m12: a failed SPJ lookup is "unknown", not "not DEMO" ──
+# ── A failed SPJ lookup is "unknown", not "not DEMO" ──
 
 
 def test_failed_lookup_is_unknown_and_never_suppresses():

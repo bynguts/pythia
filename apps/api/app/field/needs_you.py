@@ -1,4 +1,4 @@
-"""The dispatcher's "Needs you" feed: every open item that wants a decision, one list (wave 13).
+"""The dispatcher's "Needs you" feed: every open item that wants a decision, one list.
 
 Read-only. It gathers what other stores already hold and adds no fact of its own:
 
@@ -584,7 +584,7 @@ def _guidance(item: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             min_kg=OCR_TOLERANCE_MIN_KG,
         )
     if kind == "escalation":
-        # Lane ea catalog: the supervisor's step, and that an operator raised it.
+        # The supervisor's step, and that an operator raised it.
         return (
             {"key": "ea_step_escalation", "params": {"by": facts.get("raised_by") or ""}},
             {"id": "ESCALATION", "value": None, "unit": None, "key": "ea_rule_escalation", "params": {}},

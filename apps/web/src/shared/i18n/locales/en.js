@@ -19,7 +19,7 @@ export const en = {
   drv11_tpa_wait_desc:
     "Finish {n} more stops. Gate guidance, the weighbridge queue and the receipt photo appear here.",
   login_session_expired: "Your session ended because the server restarted. Sign in again.",
-  // wave11 twin: the decision room's staggered answer and its three steps.
+  // The decision room's staggered answer and its three steps.
   w11twin_row_queue_staggered: "With staggered departures (min/truck)",
   w11twin_steps_label: "Decision steps",
   w11twin_step_pick: "Pick a scenario",
@@ -37,13 +37,12 @@ export const en = {
   asst_scn_queue_scaled: "scenario-scaled",
   asst_scn_snapped: "Adjusted to the twin's presets (asked: {asked_rain} mm, {asked_crowd} people).",
   // gsc P0-3 demo stop
-  spj_demo_stop: "DEMO stop at my location",
+  spj_demo_stop: "Add a stop at my location",
   spj_demo_locating: "Getting your location…",
-  spj_demo_hint:
-    "DEMO only: adds a stop at this device's GPS position (arrival radius 35 m). It is not an operational TPS.",
+  spj_demo_hint: "Adds a stop at this phone's GPS position (35 m arrival radius).",
+  spj_receipt_source: "Read from the ticket photo",
   spj_demo_name: "Operator location",
-  spj_demo_badge: "DEMO",
-  // wave9 fleet map: legend, layers and route card
+  // Legend, layers and route card
   fmap_legend: "Map legend",
   fmap_legend_short: "Legend",
   fmap_legend_vehicles: "Vehicles",
@@ -80,19 +79,19 @@ export const en = {
   fmap_search_placeholder: "Search trucks, TPS, districts…",
   fmap_search_label: "Search map",
   fmap_offline: "Offline map: street tiles unreachable",
-  spj_demo_denied: "Location permission denied. Allow location access to place a DEMO stop.",
+  spj_demo_denied: "Location permission denied. Allow location access to add a stop at your location.",
   spj_demo_unavailable: "Location is unavailable on this device. Try again outdoors or check GPS.",
   spj_demo_needs_stop:
-    "Add a TPS stop first: the DEMO stop then follows it as stop 2, so its leg starts on a road.",
+    "Add a TPS stop first: the stop at your location then follows it as stop 2, so its leg starts on a road.",
   login_submit: "Sign in",
-  // w11design: shell and shared UI vocabulary
+  // Shell and shared UI vocabulary
   w11design_close: "Close",
   w11design_home: "Pythia, go to Fleet",
   w11design_status_online: "Server connected",
   w11design_status_offline: "Server unreachable, using backup data",
   w11design_status_sim: "Simulated",
   w11design_status_demo: "Demo city",
-  // w10num: coherent numbers (baseline, forecast, planning, fleet denominators)
+  // Coherent numbers (baseline, forecast, planning, fleet denominators)
   w10num_fleet_denominator: "{active} active / {total} units",
   w10num_fleet_pilot: "Pilot fleet",
   w10num_n_of_m: "{n} of {m}",
@@ -104,7 +103,7 @@ export const en = {
   w10num_close: "Close",
   w10num_show_fewer: "Show fewer",
   w10num_show_top8: "Show top 8",
-  w10num_show_all_kec: "Show all ({n} kecamatan)",
+  w10num_show_all_kec: "Show all ({n} districts)",
   w10num_today: "Today",
   w10num_min_short: "min",
   w10num_hour_fmt: "{h}:00",
@@ -123,17 +122,17 @@ export const en = {
   w10num_rain_assumed_dry: "no forecast: assumed dry",
   w10num_fc_tabs_label: "Forecast sections",
   w10num_fc_tab_summary: "Summary",
-  w10num_fc_tab_kecamatan: "By kecamatan",
+  w10num_fc_tab_kecamatan: "By district",
   w10num_fc_tab_facilities: "Facilities",
   w10num_fc_tab_events: "Events",
-  w10num_fc_all_kecamatan: "See all {n} kecamatan",
+  w10num_fc_all_kecamatan: "See all {n} districts",
   w10num_week_trend: "Next 7 days: {range} per day (model output)",
-  w10num_kec_title: "Waste forecast by kecamatan",
-  w10num_kec_total: "{n} kecamatan, {t} t/day in total.",
-  w10num_kec_total_scenario: "{n} kecamatan, {t} t/day in total (today without the scenario: {base} t).",
+  w10num_kec_title: "Waste forecast by district",
+  w10num_kec_total: "{n} districts, {t} t/day in total.",
+  w10num_kec_total_scenario: "{n} districts, {t} t/day in total (today without the scenario: {base} t).",
   w10num_kec_resources: "{trucks} trucks / {crews} crews / {hours} person-hours",
   w10num_kec_horizon: "{days}-day total {total} t · peak {date} ({peak} t)",
-  w10num_kec_search: "Search kecamatan",
+  w10num_kec_search: "Search districts",
   w10num_kec_city_filter: "Filter by city",
   w10num_kec_all_cities: "All cities",
   w10num_kec_detail_sub: "Model forecast against its normal day",
@@ -186,7 +185,7 @@ export const en = {
   w10num_mi_within_range: "{from}–{to} months ahead: inside the backtested horizon",
   w10num_mi_outside_range: "{from}–{to} months ahead: outside the backtested horizon",
   w10num_mi_quantity:
-    "A different quantity: tonnage weighed in at Bantargebang, not waste generated in the kecamatan.",
+    "A different quantity: tonnage weighed in at Bantargebang, not waste generated in the district.",
   w10num_wx_title: "Weather forecast",
   w10num_wx_sub: "Jakarta's 7-day rain, a driver of waste volume and fleet readiness.",
   w10num_wx_source_forecast: "Open-Meteo forecast",
@@ -195,14 +194,14 @@ export const en = {
   w10num_wx_trend: "Rainfall impact trend",
   w10num_wx_advice_critical:
     "Delay low-priority departures, protect flood-prone TPS routes and prepare backup crews.",
-  w10num_wx_advice_high: "Stage backup trucks near at-risk kecamatan and watch the landfill queue timing.",
+  w10num_wx_advice_high: "Stage backup trucks near at-risk districts and watch the landfill queue timing.",
   w10num_wx_advice_watch: "Watch the rain bands and keep departure times flexible.",
   w10num_wx_advice_normal: "The normal dispatch plan can continue.",
   w10num_fac_title: "TPS facility readiness",
-  w10num_fac_sub: "Today's waste against the estimated TPS capacity per kecamatan, and where to add sites.",
+  w10num_fac_sub: "Today's waste against the estimated TPS capacity per district, and where to add sites.",
   w10num_fac_loading: "Preparing the facility analysis…",
   w10num_fac_unavailable: "The facility analysis is unavailable.",
-  w10num_fac_critical: "critical kecamatan",
+  w10num_fac_critical: "critical districts",
   w10num_fac_gap: "capacity gap per day",
   w10num_fac_trips: "extra trips per day",
   w10num_fac_sites: "new TPS sites",
@@ -300,11 +299,11 @@ export const en = {
   w10num_permit_missing: "No permit",
   w10num_no_assignments: "No truck assignments generated.",
   w10num_exec_point_peak:
-    "Largest increase {pct} in {district}; {n} at-risk kecamatan above their normal day.",
+    "Largest increase {pct} in {district}; {n} at-risk districts above their normal day.",
   w10num_exec_point_shortfall:
     "Deploy the whole pilot fleet reserve ({reserve} trucks); still {short} trucks short. Request city or partner trucks, or shift schedules.",
   w10num_exec_point_covered: "Covered by the pilot fleet reserve: {deploy} of {reserve} trucks.",
-  w10num_exec_point_normal: "Every kecamatan is within its normal day; no extra trucks are needed.",
+  w10num_exec_point_normal: "Every district is within its normal day; no extra trucks are needed.",
   w10num_exec_scenario_note: "This summary is for the scenario, not today's forecast.",
   w10num_ft_summary:
     "simulated, refreshed every 8 s · {damaged} need maintenance · {deviations} route deviations",
@@ -362,7 +361,7 @@ export const en = {
   w10num_drv_next_step: "Next step",
   w10num_drv_next_deviation: "Review this vehicle's route evidence before contacting the driver.",
   w10num_drv_next_damage: "Review vehicle damage reports before the next assignment.",
-  // w10num: end
+  // End of coherent numbers
   login_error: "Invalid username or password.",
   login_error_unreachable: "Can't reach the Pythia server. Check the connection and try again.",
   login_username_placeholder: "e.g. dispatcher",
@@ -574,6 +573,8 @@ export const en = {
   set_wa_logout_failed: "Could not disconnect WhatsApp. Try again.",
   set_wa_readonly:
     "Read-only: only a dispatcher or administrator can link, disconnect or change the alert group.",
+  set_wa_link_admin_only:
+    "On this server only the administrator links, disconnects or changes the WhatsApp alert group.",
   set_wa_no_access: "Your role cannot view the WhatsApp status.",
   set_wa_unofficial:
     "The prototype gateway uses Baileys, an unofficial WhatsApp Web client. A government pilot would use the WhatsApp Business Platform.",
@@ -846,7 +847,7 @@ export const en = {
   asst_scn_extra_trucks: "Extra trucks",
   asst_scn_extra_crews: "Extra crews",
   asst_scn_at_risk: "Districts at risk",
-  asst_scn_queue: "TPA weighbridge queue, day average min/truck (unstaggered → staggered, SIMULATED)",
+  asst_scn_queue: "TPA weighbridge queue, day average min/truck (unstaggered → staggered)",
   asst_scn_top: "Most affected",
   asst_scn_plan: "Ana's plan",
   asst_scn_sources: "Data sources",
@@ -871,7 +872,7 @@ export const en = {
   asst_trace_inputs: "{rain} mm · {crowd} people · venue {venue} · day +{day}",
   asst_trace_districts: "{n} districts · {date}",
   asst_trace_trucks: "{n} trucks required",
-  asst_trace_queue: "{n} trucks/day simulated",
+  asst_trace_queue: "{n} trucks/day",
   // App shell (#15)
   shell_sidebar_label: "Pythia main navigation",
   shell_brand_sub: "Waste operations command center",
@@ -1018,7 +1019,7 @@ export const en = {
   twin_xr: "Open in AR/XR",
   // Landfill beacon: the modelled peak hour and the day average of one simulated day.
   twin_queue_peak_hour: "Peak hour {hour} (modelled)",
-  asst_scn_queue_band: "Range {low}–{high}: unstaggered wait across departure spreads (SIMULATED)",
+  asst_scn_queue_band: "Range {low}–{high}: unstaggered wait across departure spreads",
   units_crew_per_truck: "1 crew per truck ({n} workers)",
   twin_queue_none: "No weighbridge feed",
   twin_queue_class: "Queue data: {class}",
@@ -1267,7 +1268,7 @@ export const en = {
   exec_point_queue:
     "The TPA Bantargebang weighbridge wait at the modelled peak hour averages {n} minutes per truck (simulated).",
   exec_queue_title: "TPA Bantargebang queue (simulated)",
-  // wave11 numbers: the real reference beside the model figure, and trucks (units) vs trips.
+  // Numbers: the real reference beside the model figure, and trucks (units) vs trips.
   w11num_tonnage_ref:
     "SIPSN {year} reference: {t} t/day (waste generated, yearly average, real data). Rain or an event lifts one day above it; landfill intake is lower.",
   w11num_trips_ref: "{n} TPA gate trips/day (real median, normal day); one truck can make several trips",
@@ -1348,7 +1349,7 @@ export const en = {
   drv_switch: "Change",
   drv_kicker: "Have a safe shift",
   drv_no_spj: " — no active dispatch order yet",
-  drv_pretrip_title: "Pre-trip inspection",
+  drv_pretrip_title: "Pre-trip check",
   drv_pretrip_done_badge: "DONE",
   drv_pretrip_done_desc: "Today's inspection is already recorded. Continue with your assignment.",
   drv_pretrip_checking: "Checking today's inspection…",
@@ -1395,7 +1396,7 @@ export const en = {
   drv_receipt_intro: "All stops are done. Upload the loaded truck weighing receipt photo from {destination}.",
   drv_receipt_photo_label: "Weighing receipt photo",
   drv_receipt_reading: "Reading the numbers on the receipt…",
-  drv_receipt_suggested: "Suggestion from {source}: {n} kg. {extra}",
+  drv_receipt_suggested: "{source}: {n} kg. {extra}",
   drv_receipt_confirm_hint: "Match it with the receipt before confirming.",
   drv_receipt_unavailable: "Automatic reading is unavailable. Enter the number from the receipt manually.",
   drv_receipt_unreadable: "The numbers on the receipt are unreadable. Enter the printed weight manually.",
@@ -1711,7 +1712,7 @@ export const en = {
   xl_lite: "Lite mode",
   xl_lite_hint:
     "For low-memory phones and slow data: simpler shapes, a smaller satellite image, no shadows. The forecast numbers and labels stay the same.",
-  // wave 6: driver field-readiness (/driver)
+  // Driver field-readiness (/driver)
   drv6_photo_size: "Photo {size}",
   drv6_photo_size_from: "Photo {size} (original {orig})",
   drv6_photo_too_big: "Photo too large (max 25 MB)",
@@ -1880,7 +1881,7 @@ export const en = {
   pln6_hist_deviations: "{n} deviations",
   pln6_hist_compliant: "On route",
   pln6_hist_pts: "{n} pts",
-  pln6_profile_account: "Shared demo account: {u}",
+  pln6_profile_account: "Signed in as {u}",
   pln6_profile_role_administrator: "Administrator",
   pln6_profile_role_supervisor: "Supervisor",
   pln6_profile_role_dispatcher: "Dispatcher",
@@ -1900,7 +1901,7 @@ export const en = {
   spj6_geo_approx:
     "Approximate, not GPS: the phone had no position fix, so the stop's own coordinates were stored",
   spj6_geo_far: "More than 150 m from the stop: check",
-  // Wave 7 driver: bound session, camera-first receipt, recorded weights (H10).
+  // Bound session, camera-first receipt, recorded weights (H10).
   drv7_receipt_camera: "Photograph receipt & send",
   drv7_receipt_gross_label: "Gross weight on the ticket (kg, optional)",
   drv7_receipt_tare_label: "Empty-truck tare (kg, optional)",
@@ -1921,7 +1922,7 @@ export const en = {
   // Receipt review on the dashboard (reviewer-side weighbridge-ticket OCR).
   spj7_receipt_title: "Weighbridge receipt review",
   spj7_receipt_needs_review: "Receipt needs review",
-  spj7_receipt_badge_unreviewed: "MODEL OUTPUT · not confirmed",
+  spj7_receipt_badge_unreviewed: "Model reading · not confirmed",
   spj7_receipt_badge_confirmed: "OCR reading · confirmed by {who}",
   spj7_receipt_badge_corrected: "Corrected by {who}",
   spj7_receipt_badge_driver_manual: "Entered by driver · not confirmed",
@@ -1946,15 +1947,15 @@ export const en = {
   spj7_receipt_photo_close: "Shrink receipt photo",
   // #w8-twin: the present chip marks a held rain effect; the rain label says it in full.
   w8_twin_hud_rain_held: "{rain} (held)",
-  // wave12: what an ETA is, by the backend's eta_source (never "AI").
+  // What an ETA is, by the backend's eta_source (never "AI").
   w12_eta_osrm: "OSRM routing duration",
   w12_eta_fallback: "fallback estimate",
   w12_eta_sim: "simulated",
-  // wave12: live approval in Rencana step 03.
+  // Live approval in Rencana step 03.
   w12_approved_by: "Approved by {role} · {time}",
-  w12_spj_drafts: "{n} draft work orders created from the plan (MODEL); each needs a person to activate it.",
+  w12_spj_drafts: "{n} draft work orders created from the approved plan; each needs a person to activate it.",
   w12_spj_missing: "{n} trucks without a draft: {trucks}.",
-  // wave12: the plan day's drivers, filled automatically (/forecast/tomorrow).
+  // The plan day's drivers, filled automatically (/forecast/tomorrow).
   w12_drivers_title: "Filled in automatically: weather, events, permits and holidays for this day.",
   w12_driver_weather: "Weather: {mm} mm rain forecast (Open-Meteo) · effect {effect}",
   w12_driver_weather_none: "Weather: no forecast for this day yet · effect {effect}",
@@ -1965,7 +1966,7 @@ export const en = {
   w12_driver_weekend: "Weekend",
   w12_driver_with_events: "With these events: {t} t",
   w12_effect_unknown: "not quantified",
-  // wave12: readiness board and daily recap (Fleet record tabs).
+  // Readiness board and daily recap (Fleet record tabs).
   w12_tab_readiness: "Readiness",
   w12_tab_recap: "Daily recap",
   w12_loading: "Loading…",
@@ -1999,7 +2000,7 @@ export const en = {
   w12_recap_overrides: "{n} supervisor overrides",
   w12_recap_receipts_pending_review: "{n} receipts awaiting review",
   w12_recap_summary: "Summary of the day",
-  // wave12: gate-slot holds in the TPA queue tab.
+  // Gate-slot holds in the TPA queue tab.
   w12_gate_title: "Gate-slot holds for today",
   w12_gate_no_plan: "No approved plan for today, so there are no gate slots to balance yet.",
   w12_gate_no_holds: "Every planned truck already has a slot with a short modelled wait: no hold needed.",

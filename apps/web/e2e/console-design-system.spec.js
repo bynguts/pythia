@@ -1,4 +1,4 @@
-// Wave 13 design system: the approved console (docs/design/export-handoff) is a light sidebar
+// The approved console (docs/design/export-handoff) is a light sidebar
 // beside the page on desktop and an off-canvas panel behind a menu button on phones; Archivo
 // carries page titles and Inter the text; simulated values wear a thin label (data-provenance
 // plus a tooltip), never a big badge.

@@ -1,4 +1,4 @@
-// w15 value model: Reports shows the value per 1,000 gate trips from the real API, labelled
+// Value model: Reports shows the value per 1,000 gate trips from the real API, labelled
 // SIMULATED x ASSUMPTION, with its low / base / high strip, the without-vs-with table and every
 // parameter's rationale one tap away.
 import { expect, test } from "@playwright/test";

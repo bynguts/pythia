@@ -1,4 +1,4 @@
-// Wave 13 console primitives (lane F). Styles: ./ui.css, loaded globally from
+// The console primitives. Styles: ./ui.css, loaded globally from
 // styles/index.css; every class is prefixed `ui-`.
 export { Button } from "./Button.jsx";
 export { Card } from "./Card.jsx";

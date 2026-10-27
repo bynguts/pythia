@@ -336,9 +336,9 @@ def test_local_fallback_answers_in_english_with_the_scenario_card(fake_scene):
     )
     answer = result["answer"]
     assert answer.startswith("Local mode")
-    assert "MODEL OUTPUT" in answer and "not an observation" in answer
+    assert "model forecast" in answer and "not an observation" in answer
     assert "Gambir" in answer and "13 trucks" in answer and "+3 trucks" in answer
-    assert "42.5 min/truck" in answer and "SIMULATED" in answer
+    assert "42.5 min/truck" in answer and "simulated" in answer
     # The queue is scaled to the scenario, not a baseline-only figure.
     assert "scaled to this scenario" in answer and "1,400 trucks/day" in answer and "1,233" in answer
     assert "not recomputed" not in answer

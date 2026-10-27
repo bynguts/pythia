@@ -37,7 +37,7 @@ function detail(payload, t) {
     .join(" · ");
 }
 
-// wave13 Settings, Audit log: the operational event log (GET /history, history:read).
+// Settings, Audit log: the operational event log (GET /history, history:read).
 export function AuditLogPanel() {
   const { t, lang } = useLanguage();
   const locale = localeFor(lang);

@@ -1,4 +1,4 @@
-// wave11 driver: the driver PWA in the approved world. Four bottom tabs in shift order
+// The driver PWA in the approved world. Four bottom tabs in shift order
 // (Instruksi, Rute, TPA, Lapor), one task per screen: the current stop is the hero of the
 // route screen with a 64 px start button, other stops are flat rows, and the landfill
 // (gate, weighbridge, receipt camera) is its own TPA tab that opens by itself once every
@@ -67,7 +67,7 @@ for (const width of [390, 320]) {
   test(`four bottom tabs in shift order, pinned to the bottom at ${width} px`, async ({ page, request }) => {
     await openWith(page, request, fakeSpj(["pending", "pending"]), { width });
     const tabs = page.locator(".driver-tabs .driver-tab");
-    // Wave 13: the design's order, Instructions / Route / Report / TPA.
+    // The design's order, Instructions / Route / Report / TPA.
     await expect(tabs).toContainText(["Instruksi", "Rute", "Lapor", "TPA"]);
     await expect(page.getByTestId("driver-tab-rute")).toHaveAttribute("aria-current", "page");
     const nav = await box(page.locator(".driver-tabs"));
@@ -87,7 +87,7 @@ test("the route screen leads with the current stop; the rest are in the all-stop
 }) => {
   await openWith(page, request, fakeSpj(["completed", "pending", "pending"]));
 
-  // Wave 13: a full-bleed map with the current stop in the bottom sheet.
+  // A full-bleed map with the current stop in the bottom sheet.
   const route = page.getByTestId("driver-route-overview");
   await expect(route).toBeVisible({ timeout: 15000 });
   await expect(route.getByTestId("driver-route-map")).toBeVisible();
@@ -127,7 +127,7 @@ test("with every stop done the app opens on the TPA tab and its one action is th
   await expect(page.getByTestId("driver-tab-tpa")).toHaveAttribute("aria-current", "page");
   const delivery = page.getByTestId("delivery-card");
   await expect(delivery).toBeVisible({ timeout: 15000 });
-  // Wave 13: one action at the gate first ("I'm at the gate"), then the ticket camera.
+  // One action at the gate first ("I'm at the gate"), then the ticket camera.
   const gate = await box(delivery.getByTestId("gate-arrival"));
   expect(gate.height).toBeGreaterThanOrEqual(48);
   await expect(page.getByTestId("destination-card")).toContainText("TPST Bantargebang");

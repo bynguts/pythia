@@ -1,4 +1,4 @@
-// wave12 readiness and recap: the Fleet record tabs carry the morning readiness board
+// Readiness and recap: the Fleet record tabs carry the morning readiness board
 // (one row per truck, ready or its blockers, under the counts) and the close-of-day recap
 // (recorded vs planned, gate wait, incidents, evidence gaps and the day's summary), both
 // read from the real API and labelled as recorded in the app or as model output.

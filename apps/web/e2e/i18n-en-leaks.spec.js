@@ -42,7 +42,7 @@ test.describe("English mode has no Indonesian interface copy", () => {
     await signInEnglish(page);
   });
 
-  // Wave 13: every console page, its Settings sections and the twin briefing room.
+  // Every console page, its Settings sections and the twin briefing room.
   const paths = [
     "app/operations",
     "app/readiness",
@@ -66,7 +66,7 @@ test.describe("English mode has no Indonesian interface copy", () => {
     });
   }
 
-  // wave 13: the Ask Ana drawer is portalled outside <main>; it follows the locale too.
+  // The Ask Ana drawer is portalled outside <main>; it follows the locale too.
   test("the Ask Ana drawer renders English only", async ({ page }) => {
     await page.goto("/app/operations?ana=1&lang=en", { waitUntil: "domcontentloaded" });
     const drawer = page.getByTestId("ana-drawer");

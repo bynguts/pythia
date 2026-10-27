@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BellRing, MessageSquare, X } from "lucide-react";
 import { useLanguage } from "../../shared/i18n/index.jsx";
+import { dispatchBody } from "./driverText.js";
 import "./message-alert.css";
 
 // Starts with "pythia_driver" so a sign-out or a truck change clears it with the rest.
@@ -21,6 +22,12 @@ function writeSeen(truckCode, ids) {
   } catch {
     // Without storage the banner shows again after a reload; nothing is lost.
   }
+}
+
+// The plan's dispatches are stored in Indonesian; the driver sees the plan label or the localized template.
+function dispatchText(dispatch, t) {
+  if (dispatch.manager_id === "operations_optimizer") return t("drv6_instr_plan");
+  return dispatchBody({ ...dispatch, instruction: String(dispatch.instruction || "") }, t);
 }
 
 function notificationsSupported() {
@@ -70,7 +77,7 @@ export function useMessageAlerts(truckCode, feed) {
     for (const dispatch of fresh) {
       if (notified.current.has(dispatch.id)) continue;
       notified.current.add(dispatch.id);
-      notify(t("ea_drv_notify_title"), String(dispatch.instruction || ""), `pythia-dispatch-${dispatch.id}`);
+      notify(t("ea_drv_notify_title"), dispatchText(dispatch, t), `pythia-dispatch-${dispatch.id}`);
     }
   }, [fresh, t]);
 
@@ -115,7 +122,7 @@ export function MessageAlert({ fresh, onOpen, onClose }) {
           {fresh.length === 1 ? t("ea_drv_new_title") : t("ea_drv_new_n").replace("{n}", fresh.length)}
         </p>
         <p className="drv-msg-alert-text" data-testid="driver-message-alert-text">
-          {latest.instruction}
+          {dispatchText(latest, t)}
         </p>
         {permission === "default" && (
           <div className="drv-msg-alert-optin">

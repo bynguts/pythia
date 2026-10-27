@@ -260,11 +260,11 @@ class AssistantTests(unittest.TestCase):
 
         tomorrow = (today() + timedelta(days=1)).isoformat()
         for question, lang, expected in (
-            ("berapa ton besok?", "id", f"Besok ({tomorrow}), sampah se-kota (MODEL OUTPUT): 7,100 t/hari."),
+            ("berapa ton besok?", "id", f"Besok ({tomorrow}), sampah se-kota (hasil model): 7,100 t/hari."),
             (
                 "how many tonnes tomorrow?",
                 "en",
-                f"Tomorrow ({tomorrow}), city-wide waste (MODEL OUTPUT): 7,100 t/day.",
+                f"Tomorrow ({tomorrow}), city-wide waste (model forecast): 7,100 t/day.",
             ),
         ):
             with (
@@ -356,14 +356,14 @@ class AssistantTests(unittest.TestCase):
                 "berapa ton sampah 30 hari ke depan?",
                 "id",
                 30,
-                f"Sampah se-kota, 30 hari ke depan (MODEL OUTPUT): total 241,000 t, rata-rata 8,033 t/hari, "
+                f"Sampah se-kota, 30 hari ke depan (hasil model): total 241,000 t, rata-rata 8,033 t/hari, "
                 f"puncak {peak} sebesar 9,000 t, 520 truk saat puncak.",
             ),
             (
                 "how much waste over the next two weeks?",
                 "en",
                 14,
-                f"City-wide waste, next 14 days (MODEL OUTPUT): 113,000 t in total, 8,071 t/day on average, "
+                f"City-wide waste, next 14 days (model forecast): 113,000 t in total, 8,071 t/day on average, "
                 f"peak {peak} at 9,000 t, 520 trucks at the peak.",
             ),
         ):
@@ -441,7 +441,7 @@ class AssistantTests(unittest.TestCase):
             patch("app.assistant.assistant.urlopen", side_effect=timeout),
         ):
             result = answer_with_openai_if_configured("berapa antrean TPA?", {}, tool_ctx=None)
-        self.assertEqual(observed["seconds"], 18)
+        self.assertEqual(observed["seconds"], 45)
         self.assertEqual(result["provider"], "local")
         self.assertEqual(result["fallback_reason"], "timeout")
         self.assertIn("Layanan LLM gagal (waktu habis)", result["answer"])

@@ -1,5 +1,5 @@
 // Outlook on the Tomorrow page (en): the week ahead and the monthly model backtest. Keys are
-// prefixed "ol_"; only the outlook lane edits this file.
+// prefixed "ol_"; only this file uses them.
 export const olEn = {
   ol_title: "Outlook",
   ol_aside: "Inputs fill themselves: weather, events, holidays",

@@ -57,7 +57,7 @@ class TimbanganOcrTests(unittest.TestCase):
         self.assertEqual(result["weight_kg"], 12340)
         self.assertEqual(result["gross_kg"], 12340)
         self.assertEqual(result["confidence"], "high")
-        self.assertIn("gutsai-vision", result["source"])
+        self.assertIn("vision-ocr", result["source"])
         self.assertEqual(calls[0]["url"], "https://vision.example/v1/chat/completions")
         self.assertEqual(calls[0]["headers"]["Authorization"], "Bearer example-key")
         self.assertEqual(calls[0]["json_body"]["model"], "gemini-3.8-flash")

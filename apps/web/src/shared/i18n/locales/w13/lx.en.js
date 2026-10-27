@@ -1,4 +1,4 @@
-// Wave 16 lane lx strings (English): one language per mode. API values that reach the
+// Strings (English): one language per mode. API values that reach the
 // screen as codes or fixed Indonesian templates (plan status, component codes, audit
 // events, error codes, plan stop names) are said here in the UI language.
 export const lxEn = {
@@ -7,7 +7,7 @@ export const lxEn = {
   lx_plan_status_approved: "approved",
   lx_plan_status_returned: "returned",
   lx_plan_status_withdrawn: "withdrawn",
-  lx_pdf_alloc_source: "CP-SAT · SIMULATED fleet",
+  lx_pdf_alloc_source: "CP-SAT · pilot fleet",
   lx_basis:
     "assumption: {lanes} weighbridge lanes x {tph} trucks/h ({cycle}-min weigh cycle); not a facility measurement",
   lx_basis_whatif:
@@ -122,16 +122,16 @@ export const lxEn = {
   lx_src_local_parser: "Deterministic local parser (rules, no LLM): rain mm, crowd size, venue, day",
   lx_src_run_scenario: "run_scenario: the /api/twin/scene forecast, snapped to the twin presets",
   lx_src_bmkg: "BMKG daily rainfall categories (mm/day); representative value assumed",
-  lx_src_district_model: "Prophet + XGBoost per kecamatan, SILIKA DLH 2023 baseline",
+  lx_src_district_model: "Prophet + XGBoost per district, SILIKA DLH 2023 baseline",
   lx_instr_gate_hold: "Hold departure {m} min; new gate slot {start}–{end} (simulated)",
   lx_bridge_operational: "operating",
   lx_bridge_degraded: "overloaded",
   lx_safety_note_simulated:
-    "SIMULATED: seeded demo scenario over the simulated fleet; no driver's duty or gate wait was observed.",
+    "Example scenario: seeded demo over the simulated fleet; no driver's duty or gate wait was observed.",
   lx_safety_note_observed:
     "Observed app events on this server: pre-trip checks, work order activations, gate arrivals and weighbridge receipts (local WIB day).",
-  lx_stop_plan_name: "Plan point · Kec. {kec}",
-  lx_stop_plan_address: "Centre of Kec. {kec} (planning point, not a TPS address)",
+  lx_stop_plan_name: "Plan point · {kec} district",
+  lx_stop_plan_address: "Centre of {kec} district (planning point, not a TPS address)",
   lx_stop_tps_address: "{place} (SILIKA DLH 2023 TPS coordinates)",
   lx_wa_lang_title: "Message language",
   lx_wa_lang_label: "WhatsApp message language",

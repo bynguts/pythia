@@ -1,4 +1,4 @@
-"""Gate-slot assignment and hold recommendations at the Bantargebang weighbridge (wave 12 gap 3)."""
+"""Gate-slot assignment and hold recommendations at the Bantargebang weighbridge."""
 
 from datetime import date, datetime, timedelta
 

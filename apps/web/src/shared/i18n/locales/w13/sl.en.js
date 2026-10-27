@@ -1,10 +1,10 @@
-// Wave 15 lane sl strings (English).
+// Strings (English).
 export const slEn = {
   sl_seal_ok: "Sealed · {hash}",
   sl_seal_broken: "Seal broken",
   sl_seal_legacy: "Recorded before sealing",
   sl_checks_title: "Checks to review (rules, not AI)",
-  sl_check_ocr: "reads the ticket OCR, MODEL OUTPUT",
+  sl_check_ocr: "from the ticket OCR reading",
   sl_check_ticket_document: "Ticket photo",
   sl_check_ocr_vs_entered: "OCR vs recorded gross",
   sl_check_ticket_arithmetic: "Ticket arithmetic",

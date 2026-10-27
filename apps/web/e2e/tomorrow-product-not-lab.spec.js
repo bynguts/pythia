@@ -1,4 +1,4 @@
-// wave11 planning, wave13 Tomorrow: product, not lab. The page has no sliders or number
+// Tomorrow is a product, not a lab. The page has no sliders or number
 // inputs (the field-fact box is the only thing typed), the stepper follows the real state,
 // one primary action shows at a time, and every modelled or simulated figure keeps its
 // provenance in data-provenance plus a tooltip (no on-screen badges since 2026-10-27).

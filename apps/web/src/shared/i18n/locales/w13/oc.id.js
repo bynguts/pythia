@@ -1,4 +1,4 @@
-// Wave 15 lane oc strings (Indonesian).
+// Strings (Indonesian).
 export const ocId = {
   oc_weigh_ticket_read: "Bacaan model dari foto, cocokkan dengan kertasnya:",
   oc_weigh_ticket_no: "Tiket",

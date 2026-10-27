@@ -290,8 +290,10 @@ function Recommendation({ board, onChanged, t, lang }) {
 }
 
 function Arrivals({ safety, t, lang }) {
-  const rows = latestArrivals(safety?.trucks);
+  // Arrivals are observed driver-app events only: the safety overview's seeded example
+  // dwells would list trucks the "Arrived today" count (weighbridge receipts) never saw.
   const simulated = safety && safety.classification !== "OBSERVED";
+  const rows = simulated ? [] : latestArrivals(safety?.trucks);
   return (
     <Card
       title={
@@ -331,14 +333,21 @@ function Kpis({ day, board, safety, recap, queue, t, lang, nowMin }) {
   const slots = board?.slots || [];
   const simulatedGate = safety && safety.classification !== "OBSERVED";
   const model = { provenance: "model", hint: t("s4_model_title") };
-  const peak = peakSlot(slots);
+  // With no gate slots, the peak is the queue model's peak hour: the same figure Operations shows.
+  const slotPeak = peakSlot(slots);
+  const queueHour = day === "today" && Number.isFinite(queue?.modelled_hour) ? queue.modelled_hour : null;
+  const peak = slotPeak
+    ? { start: slotPeak.start, wait: slotPeak.expected_wait_min }
+    : queueHour !== null && Number.isFinite(queue.avg_wait_minutes)
+      ? { start: `${String(queueHour).padStart(2, "0")}:00`, wait: queue.avg_wait_minutes }
+      : null;
   const peakKpi = (
     <Kpi
       testId="gate-kpi-peak"
       label={t("s4_kpi_peak")}
       {...model}
       value={peak ? peak.start : "—"}
-      sub={peak ? t("s4_per_truck_wait").replace("{n}", minutes(peak.expected_wait_min, lang)) : null}
+      sub={peak ? t("s4_per_truck_wait").replace("{n}", minutes(peak.wait, lang)) : null}
     />
   );
 
@@ -381,7 +390,7 @@ function Kpis({ day, board, safety, recap, queue, t, lang, nowMin }) {
   const waiting = useBoard ? Math.round(live.queue_carried_in || 0) : queue?.trucks_in_queue;
   const arrived = recap?.actual?.ritasi;
   const planned = recap?.forecast?.planned_trips ?? (plannedTotal(slots) || null);
-  const longest = longestWait(safety?.trucks);
+  const longest = simulatedGate ? null : longestWait(safety?.trucks);
   const limit = safety?.gate_alert_at_minutes;
   return (
     <KpiStrip variant="surface" label={t("s4_kpis_label")}>
@@ -407,8 +416,6 @@ function Kpis({ day, board, safety, recap, queue, t, lang, nowMin }) {
       <Kpi
         testId="gate-kpi-longest"
         label={t("s4_kpi_longest")}
-        provenance={simulatedGate ? "simulated" : undefined}
-        hint={simulatedGate ? t("s4_sim_title") : undefined}
         value={longest ? minutes(longest.gate_wait_minutes, lang) : "—"}
         unit={longest ? t("s4_min") : null}
         sub={

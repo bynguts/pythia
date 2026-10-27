@@ -1,4 +1,4 @@
-// #w13-driver-trip: the route and TPA screens read GET /driver/trip/{truck} (sent the
+// The route and TPA screens read GET /driver/trip/{truck} (sent the
 // phone's position rounded to ~100 m): a road ETA only for the stop it was computed
 // for, the plan's tons per stop and the gate slot as model output, the modelled gate
 // queue as bars, and a call button only when a dispatch number is set up. The Report
@@ -179,7 +179,7 @@ test("the TPA screen shows the slot's modelled wait, the drive and the queue bar
   await expect(page.getByText("Antrean di gerbang, 2 jam ke depan")).toBeVisible();
 });
 
-// #w14-walk: before the "leave at" time the arrival follows that departure, not the
+// Before the "leave at" time the arrival follows that departure, not the
 // current clock ("Leave at 08:30 · you'll arrive ~03:30" at 03:00).
 test.describe("before the departure time", () => {
   test.use({ timezoneId: "Asia/Jakarta" });

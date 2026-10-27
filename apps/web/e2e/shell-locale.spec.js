@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
-// #15 / wave 13: the console shell follows the selected locale (sidebar, search, top
+// #15: the console shell follows the selected locale (sidebar, search, top
 // bar, Ask Ana, profile menu), English is the default, and the language lives in the
 // profile menu on desktop and on the phone's off-canvas sidebar.
 async function signIn(page, { role = "dispatcher", lang } = {}) {

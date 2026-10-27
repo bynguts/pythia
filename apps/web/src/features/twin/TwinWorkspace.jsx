@@ -592,7 +592,7 @@ export function TwinWorkspace({ onCityChange }) {
       view,
       animate,
       reducedMotion,
-      // wave11 twin: the simulated fleet only in footage mode; the room shows risk.
+      // The simulated fleet only in footage mode; the room shows risk.
       showTrucks: PRESENT,
     };
     if (mapReady) draw();
@@ -1022,7 +1022,7 @@ export function TwinWorkspace({ onCityChange }) {
   const scenarioHelper = (...parts) =>
     [t("dr_kpi_scenario").replace("{name}", kpiName), ...parts].filter(Boolean).join(" · ");
   const peakIsScenario = kpiWhatIf && scene?.summary?.peak_date === summary.date && kpiScenario;
-  // wave11 twin: every number in the strip carries the scene's class as its bare label.
+  // Every number in the strip carries the scene's class as its bare label.
   const metricClass = scene?.provenance?.districts?.class;
   const metricSource =
     scene && metricClass ? { source: classLabel(metricClass), sourceKind: provKind(metricClass) } : {};
@@ -1487,7 +1487,7 @@ export function TwinWorkspace({ onCityChange }) {
       data-testid="twin-workspace"
       aria-labelledby="twin-title"
     >
-      {/* wave11 twin: the title sits in the strip's band, above the decision rail. */}
+      {/* The title sits in the strip's band, above the decision rail. */}
       <header className="twin-heading">
         <h1 id="twin-title">{t("twin_title")}</h1>
         <p className="sr-only">{t("twin_sub")}</p>
@@ -1516,7 +1516,7 @@ export function TwinWorkspace({ onCityChange }) {
 
         <div className="twin-stage">
           {(askOpen || !PRESENT) && (
-            // wave11 twin: one decision room beside the map. Ask Pythia leads, the
+            // One decision room beside the map. Ask Pythia leads, the
             // scenario briefing (numbers, approve, the table) follows, then the
             // what-if controls.
             <div className="twin-side" data-testid="twin-side">
@@ -1620,7 +1620,7 @@ export function TwinWorkspace({ onCityChange }) {
                 aria-label={t("dr_tpa_toggle").replace("{name}", landfillName)}
                 onClick={() => setLandfillOpen((open) => !open)}
               >
-                {/* wave11 twin: folded, the card reads like the comp: the queue before → after. */}
+                {/* Folded, the card reads like the comp: the queue before → after. */}
                 {!landfillOpen && queueMetricOk && (
                   <span className="is-metric" data-testid="twin-landfill-metric">
                     <small>{t("w11twin_queue_card")}</small>
@@ -1786,7 +1786,7 @@ export function TwinWorkspace({ onCityChange }) {
               </div>
               {basemapOffline && <small className="twin-legend-note">{t("twin_offline_basemap")}</small>}
             </div>
-            {/* wave11 twin: the layers' provenance is the map's mono footer chip. */}
+            {/* The layers' provenance is the map's mono footer chip. */}
             <div className="twin-provenance-bar">
               {provenance.length > 0 && (
                 <button

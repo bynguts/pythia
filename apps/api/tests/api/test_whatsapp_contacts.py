@@ -79,7 +79,7 @@ def test_reading_contacts_requires_admin(api_client, auth_headers, contacts_file
 
 
 def test_unmatched_driver_name_falls_back_and_is_logged_once(contacts_file, monkeypatch, caplog):
-    # gsc review n27: contact keys must be the fleet's driver names ("Pengemudi Sim NN").
+    # Contact keys must be the fleet's driver names ("Pengemudi Sim NN").
     monkeypatch.setattr(wa_router, "_UNMATCHED_DRIVERS_LOGGED", set())
     config = {"drivers": {"Pengemudi Sim 01": "6281234567890@c.us"}}
     with caplog.at_level("WARNING", logger=wa_router.logger.name):

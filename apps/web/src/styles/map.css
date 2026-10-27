@@ -58,7 +58,7 @@
   background: #b42318;
 }
 
-/* wave11 map perf: the critical pulse is a ring that animates only transform and opacity,
+/* Map perf: the critical pulse is a ring that animates only transform and opacity,
    so it runs on the compositor; the old box-shadow pulse repainted the marker every frame. */
 .truck-marker.is-critical::before {
   content: "";
@@ -518,7 +518,7 @@
   grid-column: 1 / -1;
 }
 
-/* wave9 map overlays: one column of chrome per corner so nothing overlaps.
+/* Map overlays: one column of chrome per corner so nothing overlaps.
    top-left: data notice, then search + legend; top-right: MapLibre controls
    (reset view included); bottom-left: layers toggle and route card;
    bottom-right: scale + attribution. */

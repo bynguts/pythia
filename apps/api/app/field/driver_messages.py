@@ -1,4 +1,4 @@
-"""Who receives what: one routing rule for messages, instructions and escalations (wave 16).
+"""Who receives what: one routing rule for messages, instructions and escalations.
 
 - A message or instruction for **one truck** goes only to that truck's driver: the driver
   app's inbox (a dispatch row the driver acknowledges) and, when the contact registry

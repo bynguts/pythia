@@ -1,4 +1,4 @@
-/* Wave 13 lane L: the public landing page (GdhGj). Scoped under .land; built on the --f-* tokens. */
+/* The public landing page (GdhGj). Scoped under .land; built on the --f-* tokens. */
 .land {
   --l-paper: var(--f-paper, #f4f3ee);
   --l-paper-2: var(--f-paper-2, #eae8df);

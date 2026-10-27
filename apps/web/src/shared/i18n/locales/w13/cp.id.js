@@ -1,4 +1,4 @@
-// Wave 16 lane "compose": baris Pengaturan → Data dan asal-usul untuk sistem simulasi dan
+// Baris Pengaturan → Data dan asal-usul untuk sistem simulasi dan
 // model milik Pythia, karena layar tidak lagi memakai lencana asal data.
 export const cpId = {
   cp_sys_fleet: "Armada pilot",

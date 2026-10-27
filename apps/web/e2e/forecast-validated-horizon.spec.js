@@ -1,5 +1,5 @@
 // #forecast-honesty: the one forecast backtested on real data (Bantargebang monthly intake)
-// is under Settings → Data and provenance (wave13), and every month says whether it is inside the backtested
+// is under Settings → Data and provenance, and every month says whether it is inside the backtested
 // 1–3-month horizon. The exported PDF states the assumed current-practice baseline, its
 // band and the SIMULATED class instead of "all trucks at peak".
 import { expect, test } from "@playwright/test";

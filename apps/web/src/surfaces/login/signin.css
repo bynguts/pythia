@@ -1,4 +1,4 @@
-/* Wave 13 lane L: the command-centre sign-in (Q3EJb). Scoped under .si-shell; built on --f-* tokens. */
+/* The command-centre sign-in (Q3EJb). Scoped under .si-shell; built on --f-* tokens. */
 .si-shell {
   --s-ink: var(--f-ink, #1c1b19);
   --s-green: var(--f-green, #1f6b45);

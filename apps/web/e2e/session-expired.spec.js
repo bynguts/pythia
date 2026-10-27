@@ -1,5 +1,5 @@
-// wave10 session: tokens live in the backend's memory, so a restart invalidates every
-// stored console session. Wave 13: the page stays under the session-ended modal, and
+// Session: tokens live in the backend's memory, so a restart invalidates every
+// stored console session. The page stays under the session-ended modal, and
 // "Sign in again" opens the sign-in in place, keeping the deep link, instead of
 // leaving every panel empty on 401s.
 import { expect, test } from "@playwright/test";

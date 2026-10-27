@@ -1,4 +1,4 @@
-// Wave 13 lane s3 strings (en). Keys are prefixed "s3_"; only lane s3 edits this file.
+// Strings (en). Keys are prefixed "s3_".
 export const s3En = {
   // Page head
   s3_title: "Tomorrow, {date}",

@@ -1,4 +1,4 @@
-// The hand-off into Rencana (w10num <-> w10twin contract):
+// The hand-off into Rencana (shared by the numbers and twin screens):
 // /planning?scenario=<id>&rain_mm=<n>&attendance=<n>&venue=<gbk|jis|monas>&lat=&lng=&lanes=<n>&date=<YYYY-MM-DD>
 // Every parameter is optional; without them Rencana starts from today's baseline.
 // `lanes` (open weighbridge lanes, 1..WEIGHBRIDGE_LANES) changes only the simulated TPA queue.

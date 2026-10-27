@@ -1,6 +1,6 @@
 // #drv6-lowend: R1, R2 and R4 for /driver on a 2 GB phone without ARCore.
 // AR is offered only after a capability check and never blocks a step;
-// primary driver controls are at least 48 px (wave 13) with no overflow at 320 px;
+// Primary driver controls are at least 48 px with no overflow at 320 px;
 // pre-trip is two taps and an instruction one; the route downloads at most
 // 250 KB gzip of JS before the first interaction (no map, 3D or PDF chunks).
 import { gzipSync } from "node:zlib";
@@ -43,7 +43,7 @@ test("a 2 GB phone without ARCore gets no AR button and finishes the stop with 4
               );
             }
           });
-        // Wave 13: 48 px drawn buttons, 44 px icon and link hit boxes.
+        // 48 px drawn buttons, 44 px icon and link hit boxes.
         check(".drt-btn", 48);
         check(".drt-icon-btn", 44);
         check(".drt-chip-btn", 44);

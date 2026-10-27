@@ -1,4 +1,4 @@
-// #v3-9 (teardown v3 §9), wave13 Tomorrow: percentages carry their own sign. A change that
+// #v3-9 (teardown v3 §9), Tomorrow: percentages carry their own sign. A change that
 // rounds to zero prints "0%", a fall prints "−2%", never "+0%" or "+-2%", in the forecast's
 // change against today and in "Why it moved".
 import { expect, test } from "@playwright/test";

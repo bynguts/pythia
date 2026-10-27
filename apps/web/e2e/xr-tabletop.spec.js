@@ -252,7 +252,7 @@ test.describe("XR tabletop twin", () => {
     expect(prevented).toEqual({ header: true, controls: true, credit: true, spacer: false });
   });
 
-  // Wave 13: English is the default, so the Indonesian checks pin ?lang=id.
+  // English is the default, so the Indonesian checks pin ?lang=id.
   test("the boot fallback is localised", async ({ page }) => {
     await page.route(/\/assets\/XrTabletop-[^/]+\.js$/, async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 1500));

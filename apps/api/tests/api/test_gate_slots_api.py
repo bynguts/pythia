@@ -1,4 +1,4 @@
-"""GET /api/gate/slots and accepting a hold recommendation (wave 12 gap 3)."""
+"""GET /api/gate/slots and accepting a hold recommendation."""
 
 from __future__ import annotations
 
@@ -222,7 +222,7 @@ def test_an_accepted_hold_carries_the_operators_edited_text(
     from app.api.routers import whatsapp as wa_router
 
     monkeypatch.setattr(wa_router, "CONTACTS_FILE", tmp_path / "absent.json")
-    # Wave 16: the console previews the hold message and the operator may edit it before sending.
+    # The console previews the hold message and the operator may edit it before sending.
     trucks = [f"GE{i:03d}-{uuid.uuid4().hex[:4]}" for i in range(int(CAPACITY_PER_SLOT) + 1)]
     _approve_plan(day, [_dispatch(t, day, gate_slot=_slot_at_nine(day)) for t in trucks])
     rec = _board(api_client, auth_headers, day)["recommendations"][0]

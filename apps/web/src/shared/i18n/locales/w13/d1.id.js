@@ -1,4 +1,4 @@
-// Wave 13 lane d1 strings (id). Keys are prefixed "d1_"; only lane d1 edits this file.
+// Strings (id). Keys are prefixed "d1_".
 export const d1Id = {
   // Sign in (F2CI6P) and sign in again (D2vpX)
   d1_login_title: "Pythia Sopir",
@@ -61,7 +61,7 @@ export const d1Id = {
   d1_safety_observed: "Jam tugas tercatat oleh aplikasi ini.",
 
   // Pre-trip check (EIqeR)
-  d1_pretrip_title: "Cek sebelum jalan",
+  d1_pretrip_title: "Cek pra-jalan",
   d1_pretrip_progress: "{n} dari {total} dicek",
   d1_item_rem: "Rem",
   d1_item_mesin: "Mesin",
@@ -82,7 +82,7 @@ export const d1Id = {
   d1_rest_ok: "Sisanya OK",
   d1_submit: "Kirim",
   d1_sending: "Mengirim…",
-  d1_pretrip_loading: "Memeriksa cek sebelum jalan hari ini…",
+  d1_pretrip_loading: "Memeriksa cek pra-jalan hari ini…",
 
   // Instructions (yNOwN)
   d1_greet_morning: "Selamat pagi",
@@ -90,9 +90,9 @@ export const d1Id = {
   d1_greet_evening: "Selamat malam",
   d1_trips_today: "{n} ritase hari ini",
   d1_trip_today: "1 ritase hari ini",
-  d1_pretrip_done: "Cek sebelum jalan selesai {time}",
-  d1_pretrip_done_plain: "Cek sebelum jalan selesai",
-  d1_pretrip_todo: "Cek sebelum jalan belum dilakukan. Lakukan sebelum berangkat.",
+  d1_pretrip_done: "Cek pra-jalan selesai {time}",
+  d1_pretrip_done_plain: "Cek pra-jalan selesai",
+  d1_pretrip_todo: "Cek pra-jalan belum dilakukan. Lakukan sebelum berangkat.",
   d1_pretrip_note_one: "1 catatan ringan terkirim",
   d1_pretrip_notes: "{n} catatan ringan terkirim",
   d1_pretrip_serious: "Truk tidak aman dikemudikan · dispatcher diberi tahu",
@@ -130,7 +130,7 @@ export const d1Id = {
   d1_empty_route_title: "Tidak ada instruksi baru",
   d1_empty_route_body: "Sisa titik di rute hari ini: {n}",
   d1_open_route: "Buka rute",
-  d1_start_pretrip: "Mulai cek sebelum jalan",
+  d1_start_pretrip: "Mulai cek pra-jalan",
   d1_queue_title: "{n} menunggu sinyal",
   d1_queue_title_one: "1 menunggu sinyal",
   d1_queue_sub: "Terkirim sendiri saat ada sinyal. Lanjutkan kerja.",

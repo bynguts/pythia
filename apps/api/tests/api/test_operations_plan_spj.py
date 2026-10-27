@@ -1,4 +1,4 @@
-"""Approving a day plan creates one draft SPJ per truck (wave 12, gap 1).
+"""Approving a day plan creates one draft SPJ per truck.
 
 The draft is "Rencana {plan_id} (MODEL)": dated the plan day, one centroid stop
 per distinct kecamatan, the first trip's facility as destination and the gate

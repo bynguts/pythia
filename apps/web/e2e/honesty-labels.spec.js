@@ -1,5 +1,5 @@
 // gsc-2026 P0-4/P0-5: simulated and modelled figures say so in both languages and never
-// claim "live". Wave 13 retired the fleet desk's queue, stagger and A* panels (and their old
+// claim "live". The redesign retired the fleet desk's queue, stagger and A* panels (and their old
 // fixed 47→19 / 116→48 / 58.6% figures). Founder decision 2026-10-27: no on-screen
 // Model / Simulated badges; provenance stays in data-provenance plus a tooltip, and
 // Settings → Data and provenance is the one place that names every source.
@@ -26,7 +26,7 @@ async function signIn(page, lang) {
   await page.reload({ waitUntil: "domcontentloaded" });
 }
 
-// gsc teardown #3, wave 13 Operations: the fleet is a simulated pilot fleet and the gate
+// Teardown #3, Operations: the fleet is a simulated pilot fleet and the gate
 // queue is model output, so the KPI strip never claims "live" / "langsung"; with no gate slot
 // for now, the gate tile falls back to the queue model and names its modelled peak hour
 // (never the wall-clock hour of a modelled profile).
@@ -82,7 +82,7 @@ const LOGIN_COPY = {
 };
 
 for (const lang of ["id", "en"]) {
-  // wave10 login: the product login names no client; the "prototype for the DLH case"
+  // The product login names no client; the "prototype for the DLH case"
   // footer is gone, and the story still never presents itself as a DLH product.
   test(`login proof strings are sourced and present no client's product (${lang})`, async ({ page }) => {
     const copy = LOGIN_COPY[lang];
@@ -96,7 +96,7 @@ for (const lang of ["id", "en"]) {
   });
 }
 
-// #honesty, wave13 Tomorrow: the forecast keeps data-provenance="model" (no Model badge since
+// #honesty, Tomorrow: the forecast keeps data-provenance="model" (no Model badge since
 // 2026-10-27), the simulated pilot fleet says so in data-provenance and a tooltip (no badge,
 // never "live"), and the page reads as a decision brief, not a DLH document.
 for (const [lang, fleetTitle] of [
@@ -121,7 +121,7 @@ for (const [lang, fleetTitle] of [
   });
 }
 
-// #N1 (teardown v3), wave13: an unreachable forecast never falls back to a canned sample.
+// #N1 (teardown v3): an unreachable forecast never falls back to a canned sample.
 // The card says the forecast couldn't load, prints no tonnage, and the plan can't be built.
 for (const [lang, error] of [
   ["id", "Prakiraan besok gagal dimuat."],

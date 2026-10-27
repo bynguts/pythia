@@ -18,7 +18,7 @@ function ocrBlock(overrides = {}) {
     tare_kg: null,
     net_kg: null,
     confidence: "high",
-    source: "gutsai-vision (stub)",
+    source: "vision-ocr (stub)",
     classification: "MODEL_OUTPUT",
     label: "MODEL OUTPUT: weighbridge-ticket OCR suggestion, not a recorded weight",
     status: "unreviewed",
@@ -131,7 +131,7 @@ test("a dispatcher confirms the OCR suggestion and the recorded gross follows it
   await stubSpj(page, state);
   const review = await openDetail(page, page.request, "dispatcher");
 
-  await expect(review.getByTestId("spj-receipt-ocr-badge")).toHaveText("MODEL OUTPUT · belum dikonfirmasi");
+  await expect(review.getByTestId("spj-receipt-ocr-badge")).toHaveText("Bacaan model · belum dikonfirmasi");
   await expect(review.getByTestId("spj-receipt-ocr-suggestion")).toContainText("15.200 kg");
   // The OCR reading is not a recorded weight until someone confirms it.
   await expect(review.getByTestId("spj-receipt-recorded")).toContainText("Bruto belum dicatat");
@@ -182,13 +182,13 @@ test("a role without dispatch:create sees the suggestion but no review buttons",
   await stubSpj(page, state);
   const review = await openDetail(page, page.request, "executive");
 
-  await expect(review.getByTestId("spj-receipt-ocr-badge")).toHaveText("MODEL OUTPUT · belum dikonfirmasi");
+  await expect(review.getByTestId("spj-receipt-ocr-badge")).toHaveText("Bacaan model · belum dikonfirmasi");
   await expect(review.getByRole("button", { name: "Cocok" })).toHaveCount(0);
   await expect(review.getByRole("button", { name: "Koreksi" })).toHaveCount(0);
   await expect(review).toContainText("Hanya dispatcher atau pengawas");
 });
 
-// #w14-walk: weights the driver typed are the driver's, not a MODEL OUTPUT, and the
+// Weights the driver typed are the driver's, not a MODEL OUTPUT, and the
 // dispatcher is asked to check them against the photo rather than to type them again.
 test("weights the driver typed read as entered by the driver, not as OCR output", async ({ page }) => {
   const driverTyped = {
@@ -211,10 +211,10 @@ test("weights the driver typed read as entered by the driver, not as OCR output"
   const review = await openDetail(page, page.request, "dispatcher");
 
   const badge = review.getByTestId("spj-receipt-ocr-badge");
-  await expect(badge).toHaveText("Diisi pengemudi · belum dikonfirmasi");
+  await expect(badge).toHaveText("Diisi sopir · belum dikonfirmasi");
   await expect(badge).not.toContainText("MODEL OUTPUT");
   const hint = review.getByTestId("spj-receipt-ocr-suggestion");
-  await expect(hint).toContainText("Cocokkan berat dari pengemudi");
+  await expect(hint).toContainText("Cocokkan berat dari sopir");
   await expect(hint).not.toContainText("manual");
   await expect(review.getByTestId("spj-receipt-recorded")).toContainText("Bruto 14.820 kg");
 

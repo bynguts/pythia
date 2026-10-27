@@ -246,7 +246,7 @@ def test_ask_runs_the_twin_scenario_tool_without_login(api_client, clock, monkey
     # The trace names the local parser first: never an LLM on this public route.
     assert scenario["trace"][0]["class"] == "LOCAL_PARSER"
     assert [step["step"] for step in scenario["trace"]][:2] == ["parse_scenario", "run_scenario"]
-    assert "MODEL OUTPUT" in body["answer"]
+    assert "prakiraan model" in body["answer"] or "model forecast" in body["answer"]
     # The question is not stored.
     assert recorded == []
 
@@ -395,7 +395,7 @@ def test_ask_session_code_is_validated(api_client, clock):
     assert res.status_code == 422
 
 
-# wave10 decision room: "Sepakati rencana" on a briefing scenario becomes a session note
+# Decision room: "Sepakati rencana" on a briefing scenario becomes a session note
 # Rencana can read, with the server-counted devices; never an official approval.
 @pytest.fixture()
 def no_agreements():

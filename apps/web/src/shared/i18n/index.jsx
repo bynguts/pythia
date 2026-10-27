@@ -51,7 +51,7 @@ const LanguageContext = createContext({
   t: (key) => key,
 });
 
-// Wave 13: English is the default; index.html sets <html lang="id"> only when the
+// English is the default; index.html sets <html lang="id"> only when the
 // operator chose Indonesian (pythia_lang or ?lang=id).
 export function LanguageProvider({ children }) {
   const [lang, setLangState] = useState(() => (document.documentElement.lang === "id" ? "id" : "en"));

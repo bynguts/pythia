@@ -12,6 +12,35 @@ export function instructionText(text, t) {
   );
 }
 
+// A plan dispatch rendered from its language-neutral fields (template "plan_dispatch_v1");
+// any other dispatch keeps the stored text through instructionText.
+export function dispatchBody(dispatch, t) {
+  const fields = dispatch?.fields;
+  if (fields?.template !== "plan_dispatch_v1") return instructionText(dispatch?.instruction, t);
+  const fill = (key, values) =>
+    Object.entries(values).reduce((text, [name, value]) => text.replace(`{${name}}`, value), t(key));
+  const lines = [
+    fill("fm_pd_head", { plan: fields.plan_id, date: fields.plan_date, truck: fields.truck_code }),
+  ];
+  for (const stop of fields.stops || []) {
+    lines.push(
+      fill("fm_pd_stop", {
+        order: stop.order,
+        shift: stop.shift,
+        window: stop.window ? ` (${stop.window})` : "",
+        tons: Math.round(stop.tons),
+        district: stop.kecamatan,
+        facility: stop.facility_display || stop.facility,
+      }),
+    );
+  }
+  const areas = (fields.reason?.areas || []).map((a) =>
+    fill("fm_pd_area", { district: a.kecamatan, tons: Math.round(a.forecast_tons) }),
+  );
+  if (areas.length) lines.push(fill("fm_pd_reason", { areas: areas.join(", ") }));
+  return lines.join("\n");
+}
+
 // The safety classification's provenance note: the API's English label, or the same in Indonesian.
 export function safetyNote(safety, t, lang) {
   const classification = String(safety?.classification || "");

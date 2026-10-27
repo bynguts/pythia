@@ -307,7 +307,7 @@ def skip_spj_stop(
     body: SpjStopSkipBody,
     principal: dict = Depends(require_any_principal("dispatch:create")),
 ) -> dict[str, Any]:
-    """Dispatch skips a stop it will not collect (wave 13), e.g. a TPS reported empty.
+    """Dispatch skips a stop it will not collect, e.g. a TPS reported empty.
 
     The stop becomes ``skipped``: not collected and never counted as completed.
     409 when the stop is already completed or the SPJ is not active.
@@ -405,7 +405,7 @@ def spj_audit(
 ) -> dict[str, Any]:
     """Audit trail for one SPJ: lifecycle actions and supervisor overrides.
 
-    `plan_events` (wave 13) adds, for an SPJ drafted from a plan, the plan's
+    `plan_events` adds, for an SPJ drafted from a plan, the plan's
     proposal and approval and its dispatch to the truck (sent, confirmed), from
     the plan and dispatch stores; it is empty for any other SPJ.
     """

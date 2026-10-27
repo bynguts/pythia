@@ -1,4 +1,4 @@
-// wave13 Reports (y3BicK): the close of the day reads the API, labels what is modelled, and
+// Reports (y3BicK): the close of the day reads the API, labels what is modelled, and
 // never invents a number. The API is stubbed so every figure is known.
 import { expect, test } from "@playwright/test";
 

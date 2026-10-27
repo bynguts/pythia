@@ -101,7 +101,7 @@ function reportedAt(exception) {
   return Number.isNaN(at) ? 0 : at;
 }
 
-// wave11 fleet: repeat reports (same truck, same kind, same open/handled state) are one row
+// Repeat reports (same truck, same kind, same open/handled state) are one row
 // carrying a count; the row shows the latest report's words and time.
 export function groupExceptions(exceptions, handled) {
   const groups = new Map();
@@ -134,7 +134,7 @@ export function DriverExceptionAlerts({ exceptions, handled, onHandled, onWhatsA
 
   if (!exceptions.length) return null;
 
-  // wave11 fleet: one follow-up per report, so closing a grouped row closes every report in it.
+  // One follow-up per report, so closing a grouped row closes every report in it.
   async function markHandled(group) {
     try {
       for (const exception of group) {
@@ -171,7 +171,7 @@ export function DriverExceptionAlerts({ exceptions, handled, onHandled, onWhatsA
       {rows.map(({ latest: exception, reports, who }) => {
         const danger = DANGER_KINDS.has(exception.kind);
         const time = exceptionTime(exception, lang);
-        // wave11 fleet: the meta is the driver's own words; ids never reach the operator.
+        // The meta is the driver's own words; ids never reach the operator.
         const meta = [
           exception.note || t("w11fleet_exc_no_note"),
           exception.stop_index != null && t("w10fleet_exc_stop").replace("{n}", exception.stop_index + 1),

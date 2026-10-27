@@ -373,7 +373,7 @@ export function ReceiptReview({ spj, act, pendingAction, words }) {
           : ocr.gross_kg == null
             ? t(ocr.confidence === "low" ? "drv_receipt_unreadable" : "drv_receipt_unavailable")
             : t("drv_receipt_suggested")
-                .replace("{source}", ocr.source || "OCR")
+                .replace("{source}", t("spj_receipt_source"))
                 .replace("{n}", number(ocr.gross_kg))
                 .replace("{extra}", reviewed ? "" : t("drv_receipt_confirm_hint"))
                 .trim();
@@ -791,7 +791,7 @@ export function SpjCreateForm({ onCreated }) {
           {words.addStop}
         </button>
       </div>
-      <div className="spj-demo-stop">
+      <div className="spj-demo-stop" data-provenance="simulated">
         <button
           type="button"
           className="compact-enforce-btn"
@@ -808,12 +808,7 @@ export function SpjCreateForm({ onCreated }) {
         <ul className="spj-stop-list">
           {stops.map((s, i) => (
             <li key={i}>
-              {i + 1}. {s.name} ({s.kecamatan})
-              {s.demo && (
-                <span className="pill provenance-sim" data-testid="spj-demo-badge">
-                  {t("spj_demo_badge")}
-                </span>
-              )}
+              {i + 1}. {s.demo ? s.name.replace(/^DEMO · /, "") : s.name} ({s.kecamatan})
               <button
                 type="button"
                 aria-label={`${words.removeStop}: ${s.name}`}

@@ -55,7 +55,7 @@ function useTripsToday() {
   return trips;
 }
 
-// wave11 fleet: the big mono figure is the number alone; the words around it (in the
+// The big mono figure is the number alone; the words around it (in the
 // locale's own order) are sans units, so "Puncak 09.00: ±89 mnt/truk" still reads whole.
 function MetricValue({ text, number }) {
   const at = number ? text.indexOf(number) : -1;
@@ -138,7 +138,7 @@ export function FleetOperations({
   // Repeat reports from one truck count once, as they are listed once.
   const openExceptionRows = groupExceptions(exceptions, handledExceptions).filter((row) => !row.who);
   const actionCount = alerts.length + openExceptionRows.length;
-  // wave11 fleet: the modelled TPA peak (SIMULATED) is one more row of work in the list.
+  // The modelled TPA peak (SIMULATED) is one more row of work in the list.
   const queueRow =
     kpis.tpa_wait_minutes != null
       ? {
@@ -168,7 +168,7 @@ export function FleetOperations({
     if (alert) onFocusTruck(alert.truck_code);
   }
 
-  // wave11 fleet: the queue tile headlines Pythia's answer, the staggered day mean per truck
+  // The queue tile headlines Pythia's answer, the staggered day mean per truck
   // (the same statistic as the rail foot); the unstaggered mean and the modelled peak hour
   // sit under it. Until the metric arrives it shows the peak alone, as before.
   const peakText = t("w10num_tpa_peak")
@@ -264,7 +264,7 @@ export function FleetOperations({
     <section className="fleet-workspace workspace-page ui-bleed-page" data-testid="fleet-workspace">
       <h1 className="sr-only">{t("w10fleet_title")}</h1>
 
-      {/* wave11 fleet: strip and deck share exactly one viewport under the top bar. */}
+      {/* Strip and deck share exactly one viewport under the top bar. */}
       <div className="fleet-desk">
         {metrics.length > 0 && (
           <div className="metric-strip is-bleed fleet-metrics" data-testid="metric-strip">
@@ -280,7 +280,7 @@ export function FleetOperations({
                 <span className="metric-label">{metric.label}</span>
                 <MetricValue text={metric.value} number={metric.number} />
                 {metric.meta && <small className="metric-meta">{metric.meta}</small>}
-                {/* wave11 fleet: the helper is the tile's provenance label (sources and basis). */}
+                {/* The helper is the tile's provenance label (sources and basis). */}
                 <small className={`prov prov-${metric.source} prov-bare`}>{metric.helper}</small>
               </button>
             ))}

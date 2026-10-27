@@ -39,7 +39,7 @@ export async function assertNoLeftoverActiveSpj(token, truck = "T-210") {
   const list = await ctx.get(`${API}/spj`, { headers: { Authorization: `Bearer ${token}` } });
   expect(list.ok()).toBeTruthy();
   const { spj = [] } = await list.json();
-  // Wave 13: an approved plan drafts its own work orders ("Rencana PLAN-…"); those are plan
+  // An approved plan drafts its own work orders ("Rencana PLAN-…"); those are plan
   // state, not a scenario's leftover.
   const leftovers = spj.filter(
     (s) =>

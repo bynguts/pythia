@@ -247,7 +247,7 @@ function useDriverManifest(lang) {
 // L3: one field app. The old /field instructions are the Instruksi tab and the
 // exception buttons the Lapor tab; ?tab= keeps the choice in the URL so the
 // back button and the /field redirect land on the right tab.
-// Wave 13: four tabs in the order of the design (instructions, route, report,
+// Four tabs in the order of the design (instructions, route, report,
 // TPA). Without ?tab= the app opens on TPA once every stop is done or a receipt
 // is still owed, on the route while a stop is pending, else on instructions.
 const TAB_IDS = ["instruksi", "rute", "lapor", "tpa"];
@@ -308,7 +308,7 @@ export default function DriverApp() {
   const safety = useDriverSafety(driver?.truck_code);
   const instructionFeed = useDispatchInstructions(driver?.truck_code);
   const reloadInstructions = instructionFeed.reload;
-  // Wave 16: a message from dispatch that arrives while the app is open (banner + phone alert).
+  // A message from dispatch that arrives while the app is open (banner + phone alert).
   const messageAlerts = useMessageAlerts(driver?.truck_code, instructionFeed);
   const planInstructions = useStructuredInstructions(driver?.truck_code);
   const blocked = safetyBlocksNewWork(safety);

@@ -1,4 +1,4 @@
-// Wave 15 lane oc strings (English).
+// Strings (English).
 export const ocEn = {
   oc_weigh_ticket_read: "Model reading from the photo, check it against the paper:",
   oc_weigh_ticket_no: "Ticket",

@@ -37,7 +37,7 @@ async function waitForTwin(page, predicate = "true") {
   });
 }
 
-// Wave 13: the twin is the full-screen briefing room at /twin, outside the console nav.
+// The twin is the full-screen briefing room at /twin, outside the console nav.
 async function openTwin(page) {
   await page.goto("/twin");
   await expect(page.getByTestId("twin-workspace")).toBeVisible();
@@ -322,7 +322,7 @@ test("district blocks have no wireframe stripes, labels sit on top without overl
   expect(state.flowBundled).toBe(34);
   expect((await layer("twin-flows")).count).toBe(9);
 
-  // The map names the top three districts the risk list ranks, in that order (wave11 twin:
+  // The map names the top three districts the risk list ranks, in that order (twin:
   // fewer names so the at-risk colour reads first).
   const listed = await page
     .getByTestId("twin-risk-list")

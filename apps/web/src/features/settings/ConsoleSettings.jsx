@@ -16,7 +16,7 @@ import { TeamAccess } from "./TeamAccess.jsx";
 import "./settings.css";
 import "./settings-console.css";
 
-// wave13 Settings (T6NMuR): a section list on the left, one column on the right. The section
+// Settings (T6NMuR): a section list on the left, one column on the right. The section
 // lives in ?tab=; /audit redirects to ?tab=data and the old ?tab=whatsapp opens the
 // integrations with WhatsApp expanded.
 const TABS = [

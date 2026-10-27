@@ -1,4 +1,4 @@
-// wave13 Tomorrow, supervisor mode: the reviewer can send a plan back with a note instead of
+// Tomorrow, supervisor mode: the reviewer can send a plan back with a note instead of
 // approving it. The plan leaves the inbox, the dispatcher's page shows "Returned" with the
 // note (live, within one poll), and Rebuild is the way forward. At phone width the review
 // footer keeps 44 px targets and the page never scrolls sideways.

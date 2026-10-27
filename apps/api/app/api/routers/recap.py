@@ -1,4 +1,4 @@
-"""Close-of-day recap: actual vs forecast (wave 12 lane E)."""
+"""Close-of-day recap: actual vs forecast."""
 
 from __future__ import annotations
 

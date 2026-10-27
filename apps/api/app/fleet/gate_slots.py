@@ -1,4 +1,4 @@
-"""Gate-slot assignment for approved plan dispatches (wave 12 lane C).
+"""Gate-slot assignment for approved plan dispatches.
 
 A planned truck's first TPST Bantargebang gate arrival is its shift start plus one
 mean collection round, snapped to the 15-minute stagger slot. A slot holds what the

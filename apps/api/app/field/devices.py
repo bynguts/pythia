@@ -1,4 +1,4 @@
-"""Driver phones seen by this server: a last-seen heartbeat per truck (wave 13).
+"""Driver phones seen by this server: a last-seen heartbeat per truck.
 
 Every truck-scoped read or write of a driver-role session (instructions poll,
 pre-trip, safety, exceptions, gate arrival) passes ``ensure_truck_access``,

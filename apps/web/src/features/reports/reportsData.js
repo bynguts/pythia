@@ -1,6 +1,6 @@
 import { apiGet } from "../../shared/api/client.js";
 
-// Wave 13 Reports (lane S5): everything the close-of-day page reads, shaped for display.
+// Reports: everything the close-of-day page reads, shaped for display.
 // Each source can fail on its own (a role may lack a permission): the page then shows "—"
 // or an empty list for that part instead of failing as a whole.
 

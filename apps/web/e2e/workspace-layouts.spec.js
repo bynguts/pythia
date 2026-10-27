@@ -20,7 +20,7 @@ async function signIn(page) {
 
 test.beforeEach(async ({ page }) => signIn(page));
 
-// Wave 13 retired the fleet deck (work rail, metric-strip queue links, "Dokumen armada" tabs,
+// The redesign retired the fleet deck (work rail, metric-strip queue links, "Dokumen armada" tabs,
 // deck layer panel) and the forecast/planning workspaces; Operations, Work orders and Tomorrow
 // replace them and carry their own specs; this file keeps their page-level layout checks.
 test("mobile twin keeps the landfill tag inside the canvas and the controls off the timeline", async ({
@@ -58,7 +58,7 @@ test("mobile twin keeps the landfill tag inside the canvas and the controls off 
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
-// wave 13: Tomorrow replaces the forecast and planning workspaces with one four-step flow.
+// Tomorrow replaces the forecast and planning workspaces with one four-step flow.
 test("tomorrow presents forecast, facts, allocation and approval as one flow", async ({ page }) => {
   await page.goto("/app/tomorrow", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("tomorrow-page")).toBeVisible({ timeout: 20000 });
@@ -77,7 +77,7 @@ test("data sources section exposes provenance and model suitability evidence", a
   await expect(page.getByRole("heading", { name: "Resolusi yang didukung" })).toBeVisible();
 });
 
-// wave 13: Operations is map-first. The KPI strip sits above the map, and the
+// Operations is map-first. The KPI strip sits above the map, and the
 // "Needs you" queue sits on the map's left edge instead of in a rail beside it.
 test("operations opens map-first with the KPI strip and the needs-you queue", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 960 });

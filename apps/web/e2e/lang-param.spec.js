@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
-// Wave 13: English is the default, so the stored language here is Indonesian and
+// English is the default, so the stored language here is Indonesian and
 // English can only come from ?lang=en.
 async function signIn(page) {
   await page.goto("/");

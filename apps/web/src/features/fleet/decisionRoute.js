@@ -32,7 +32,7 @@ export function routeSource(t, route) {
   return t("w10fleet_route_source").replace("{s}", t(key) !== key ? t(key) : route?.source || "—");
 }
 
-// wave12: what an ETA is (OSRM road duration, a fixed-speed fallback, or simulated), by
+// What an ETA is (OSRM road duration, a fixed-speed fallback, or simulated), by
 // the backend's eta_source key. No key, no label.
 const ETA_SOURCE_KEYS = {
   osrm_duration: "w12_eta_osrm",

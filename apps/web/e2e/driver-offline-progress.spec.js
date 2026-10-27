@@ -22,7 +22,7 @@ const STOPS = [
   { name: "TPS Luring B", kecamatan: "Cilandak", address: "Jl. B", lat: -6.291, lng: 106.792 },
 ];
 
-// Wave 13: done stops are rows in the route's "Semua titik" sheet.
+// Done stops are rows in the route's "Semua titik" sheet.
 async function expectQueuedStop(page) {
   await page.getByTestId("driver-all-stops").click();
   const row = page.getByTestId("driver-stops-sheet").getByTestId("stop-0");
@@ -31,7 +31,7 @@ async function expectQueuedStop(page) {
   await page.keyboard.press("Escape");
 }
 
-// Wave 13: the waiting-for-signal list (count and last sync time) is on the
+// The waiting-for-signal list (count and last sync time) is on the
 // Instructions tab; the top bar's pill carries the count elsewhere.
 async function openQueue(page) {
   await page.getByTestId("driver-tab-instruksi").click();
@@ -184,7 +184,7 @@ test("a 16 h old queue and last-sync time survive a reload and still sync", asyn
     const pill = page.getByTestId("driver-sync-pill");
     await expect(pill).toHaveAttribute("title", `Terakhir sinkron ${hhmm}`);
     await expect(page.getByTestId("driver-queued-count")).toHaveText("1 menunggu");
-    // wave11 driver: the only stop is done on this phone, so the app opens on its TPA
+    // The only stop is done on this phone, so the app opens on its TPA
     // tab; the stop row (with its on-phone badge) is on the Rute tab.
     await expect(page.getByTestId("driver-tab-tpa")).toHaveAttribute("aria-current", "page");
     await page.getByTestId("driver-tab-rute").click();

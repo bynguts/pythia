@@ -15,7 +15,7 @@ function horizonStats(row) {
   return { days: series.length, total: series.reduce((sum, day) => sum + day.predicted_tons, 0), peak };
 }
 
-// wave11 forecast: one ranked, flat list of districts (heaviest first, as the API
+// Forecast: one ranked, flat list of districts (heaviest first, as the API
 // sorts them): rank, name and what it needs, then the tonnage and its risk on the
 // right. The bar is decorative; the text carries the amount once. A selectable list
 // puts a real button on the name so the row works from the keyboard.

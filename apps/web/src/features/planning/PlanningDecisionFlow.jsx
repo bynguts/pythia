@@ -27,7 +27,7 @@ function daysFromToday(iso) {
 }
 
 // Teardown v4 R2: Rencana opens on today's forecast (the same baseline as Prediksi
-// and the twin). wave12: its inputs fill themselves; a what-if arrives only as a twin,
+// and the twin). Its inputs fill themselves; a what-if arrives only as a twin,
 // Ana or event hand-off (?scenario=…, scenarioLink.js), and then every figure carries a
 // "Skenario" label.
 export function PlanningDecisionFlow({
@@ -99,7 +99,7 @@ export function PlanningDecisionFlow({
   }, [inboxOpen]);
   const reviewPlan = plan || inboxPlan;
 
-  // wave12: the proposer learns of the approval live. While this page's plan waits, read
+  // The proposer learns of the approval live. While this page's plan waits, read
   // it by id every 15 s; the poll ends once it is approved, replaced or the page closes.
   const waitingPlanId = plan?.status === "proposed" ? plan.plan_id : null;
   useEffect(() => {
@@ -162,7 +162,7 @@ export function PlanningDecisionFlow({
     return () => controller.abort();
   }, [handoff, lanesOpen]);
 
-  // wave12: the day's inputs fill themselves (Open-Meteo rain, official events, submitted
+  // The day's inputs fill themselves (Open-Meteo rain, official events, submitted
   // permits, holidays) and /forecast/tomorrow explains each as a driver. Forecast week only.
   const [dayDrivers, setDayDrivers] = useState(null);
   useEffect(() => {
@@ -614,7 +614,7 @@ export function PlanningDecisionFlow({
               </div>
             </div>
 
-            {/* wave12: no manual sliders; a what-if arrives only as a hand-off (?scenario=…). */}
+            {/* No manual sliders; a what-if arrives only as a hand-off (?scenario=…). */}
             {scenarioActive && (
               <button
                 className="text-button"

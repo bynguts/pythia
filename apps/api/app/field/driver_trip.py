@@ -1,4 +1,4 @@
-"""The driver's trip at a glance: next stop, gate slot and the gate queue ahead (wave 13).
+"""The driver's trip at a glance: next stop, gate slot and the gate queue ahead.
 
 Every figure says where it comes from, and a figure without a source is
 ``None`` with a ``reason``:

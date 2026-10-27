@@ -1,4 +1,4 @@
-"""Morning readiness board: one row per truck, with the blockers that stop it rolling (wave 12 lane B)."""
+"""Morning readiness board: one row per truck, with the blockers that stop it rolling."""
 
 from __future__ import annotations
 

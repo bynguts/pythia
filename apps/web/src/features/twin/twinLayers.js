@@ -4,7 +4,7 @@
 import { ArcLayer, ColumnLayer, LineLayer, PathLayer, PolygonLayer, ScatterplotLayer } from "@deck.gl/layers";
 import { TripsLayer } from "@deck.gl/geo-layers";
 
-// wave11 twin: the city is a calm stone base and only risk carries colour, so
+// The city is a calm stone base and only risk carries colour, so
 // the scene reads at a glance: which districts are at risk under the scenario.
 // High and critical follow tokens.css (--ui-warning / --ui-danger), lifted for lit
 // 3D faces; elevated is a pale amber "watch". Mirrored as --twin-risk-* in

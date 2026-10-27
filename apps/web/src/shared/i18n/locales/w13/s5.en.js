@@ -1,4 +1,4 @@
-// Wave 13 lane s5 strings (en). Keys are prefixed "s5_"; only lane s5 edits this file.
+// Strings (en). Keys are prefixed "s5_".
 export const s5En = {
   // Reports (y3BicK)
   s5_rp_title: "Today, closed",
@@ -223,7 +223,7 @@ export const s5En = {
   s5_ana_tool_get_daily_recap: "Daily recap",
   s5_ana_tool_get_forecast_outlook: "Forecast outlook",
   s5_ana_tool_propose_action: "Draft for you",
-  // w15 value model: value per 1,000 gate trips, SIMULATED x ASSUMPTION.
+  // Value model: value per 1,000 gate trips, SIMULATED x ASSUMPTION.
   s5_vm_title: "Value per 1,000 gate trips",
   s5_vm_sub: "Queue truck-hours the stagger returns to the fleet, per 1,000 truck arrivals at Bantargebang.",
   s5_vm_tag: "Model · Simulated × assumption",

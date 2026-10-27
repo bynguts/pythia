@@ -1,7 +1,7 @@
 // #drv6-dispatch: audit gap 2 (D2). Dispatcher instructions and approved-plan
 // assignments reach /driver: the card polls /dispatch/{truck}, renders the
 // backend text as it arrives, and "Terima instruksi" is one tap (queued when
-// offline). Wave 13: a plan with a gate slot leads with its departure time.
+// offline). A plan with a gate slot leads with its departure time.
 import { expect, test } from "@playwright/test";
 import { API, apiLogin, authHeaders, openDriver } from "./lib/driverSpj.js";
 
@@ -37,7 +37,7 @@ test("a dispatcher instruction shows on /driver and one tap on Terima instruksi 
   await item.getByTestId("driver-instruction-ready").click();
   await expect(item).toHaveCount(0);
   await expect.poll(() => dispatchStatus(request, token, dispatch.id)).toBe("READY");
-  // #w14-walk: the screen says the instruction was accepted and the tab badge drops
+  // The screen says the instruction was accepted and the tab badge drops
   // at once, not "Belum ada instruksi" beside a badge of 1 until the next poll.
   await expect(page.getByTestId("driver-instructions-empty-title")).toHaveText(
     /^Instruksi diterima \d\d:\d\d$/,
@@ -90,7 +90,7 @@ test("an instruction accepted offline queues the confirmation and syncs it on re
 
   await context.setOffline(false);
   await expect.poll(() => dispatchStatus(request, token, dispatch.id), { timeout: 30000 }).toBe("READY");
-  // #w14-walk: once synced the screen is live again, never "could not load" beside "Synced".
+  // Once synced the screen is live again, never "could not load" beside "Synced".
   const title = page.getByTestId("driver-instructions-empty-title");
   await expect(title).toHaveText(/^Instruksi diterima \d\d:\d\d$/);
   await expect(page.getByTestId("driver-instructions-cached")).toHaveCount(0, { timeout: 10000 });
@@ -155,14 +155,14 @@ test("a plan instruction leads with the departure time and tags the modelled gat
   // Founder decision 2026-10-27: no Model badge; the planned time keeps its provenance.
   await expect(item.getByTestId("driver-instruction-depart")).toHaveAttribute("data-provenance", "model");
   await expect(item.getByText("Model", { exact: true })).toHaveCount(0);
-  await expect(item).toContainText("Kec. Kalideres");
+  await expect(item).toContainText("Kalideres district");
   await expect(item).toContainText("Trip plan · 1 trip");
   // Problems go back with a reason instead of an acceptance.
   await item.getByTestId("driver-instruction-cant").click();
   await expect(item.getByTestId("driver-instruction-reason")).toBeVisible();
 });
 
-// #w14-walk: the real /operations/instructions shape nests the trips under `fields`;
+// The real /operations/instructions shape nests the trips under `fields`;
 // tomorrow's plan says so and renders in the UI language, never as the Indonesian text.
 test("tomorrow's approved plan reads as tomorrow's instruction, in English, from the real backend", async ({
   page,
@@ -191,7 +191,7 @@ test("tomorrow's approved plan reads as tomorrow's instruction, in English, from
   const item = page.getByTestId(`driver-instruction-${ids[0]}`);
   await expect(item).toBeVisible({ timeout: 20000 });
   await expect(item.getByTestId("driver-instruction-day")).toHaveText("Tomorrow's instruction");
-  await expect(item).toContainText(`Kec. ${first.fields.stops[0].kecamatan}`);
+  await expect(item).toContainText(`${first.fields.stops[0].kecamatan} district`);
   await expect(item).toContainText("Forecast for");
   await expect(item).not.toContainText("angkut");
   await expect(item).not.toContainText("Alasan");

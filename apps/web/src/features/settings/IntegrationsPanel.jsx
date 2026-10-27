@@ -14,7 +14,7 @@ function fill(template, values) {
   return Object.entries(values).reduce((text, [key, v]) => text.replaceAll(`{${key}}`, v), template);
 }
 
-// wave13 Settings, Integrations (T6NMuR). A status comes from the endpoint that reads the
+// Settings, Integrations (T6NMuR). A status comes from the endpoint that reads the
 // integration; one that cannot be read shows a grey dot, never "connected".
 export function IntegrationsPanel({ canManage, openWhatsApp, onToggleWhatsApp, onOpenData }) {
   const { t } = useLanguage();

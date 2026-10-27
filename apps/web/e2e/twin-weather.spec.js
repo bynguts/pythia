@@ -212,7 +212,7 @@ test("the landfill beacon names its queue basis against the Fleet queue", async 
   await pinWeather(page, { input: "assumed_dry" });
   await page.goto("/twin");
   await waitForTwin(page);
-  // wave10 T2: the beacon's queue detail (and its basis) opens on tap.
+  // The beacon's queue detail (and its basis) opens on tap.
   await page.getByTestId("twin-landfill-tag").click();
   await expect(page.getByTestId("twin-landfill-tag")).toContainText(
     "Normal day (no rain, no event): same basis as the Fleet queue",

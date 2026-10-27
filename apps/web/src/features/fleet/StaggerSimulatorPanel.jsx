@@ -75,9 +75,9 @@ export function QueueMetricHeadline({ metric, loading, testId }) {
   );
 }
 
-// wave11 fleet: the rail's foot, unstaggered vs staggered wait from the same seeded
+// The rail's foot, unstaggered vs staggered wait from the same seeded
 // queue metric as the TPA tab, with its provenance in one mono line.
-// wave11 fleet: one read of the day-mean queue metric, shared by the strip tile and the
+// One read of the day-mean queue metric, shared by the strip tile and the
 // rail foot so both name the same statistic.
 export function useQueueMetric() {
   const [metric, setMetric] = useState(null);
@@ -154,7 +154,7 @@ function mayDispatch() {
 export function StaggerSimulatorPanel() {
   const { t, lang } = useLanguage();
   const [metric, setMetric] = useState(null);
-  // wave12: per-truck gate-slot holds for today's approved plans (GET /api/gate/slots).
+  // Per-truck gate-slot holds for today's approved plans (GET /api/gate/slots).
   const [gate, setGate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(null);

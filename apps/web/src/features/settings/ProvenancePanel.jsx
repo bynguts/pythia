@@ -18,7 +18,7 @@ const LABEL = {
   calibrated_synthetic: { tone: "neutral", key: "s5_set_label_simulated" },
 };
 
-// wave13 Settings, Data and provenance (T6NMuR): one row per source, with the label it
+// Settings, Data and provenance (T6NMuR): one row per source, with the label it
 // earns. Rows come from GET /data/provenance; the systems below them are Pythia's own
 // model, simulations and the live inputs that the registry does not list.
 export function ProvenancePanel() {

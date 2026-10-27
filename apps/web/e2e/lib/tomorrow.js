@@ -1,4 +1,4 @@
-// Shared steps for the wave13 Tomorrow specs (/app/tomorrow): sign in with a language and
+// Shared steps for the Tomorrow specs (/app/tomorrow): sign in with a language and
 // supervisor mode, pick a plan day of the forecast week that no approved plan holds, and
 // build (and submit) the plan from the page.
 import { expect } from "@playwright/test";

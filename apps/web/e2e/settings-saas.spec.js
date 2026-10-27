@@ -1,4 +1,4 @@
-// wave11 settings: Settings reads as a SaaS settings page (a section list, setting groups of
+// Settings reads as a SaaS settings page (a section list, setting groups of
 // hairline rows, roles as a table, data sources as a calm registry) and Sopir as a metric strip,
 // a table and a flat attention rail. Every number keeps its provenance label.
 import { expect, test } from "@playwright/test";

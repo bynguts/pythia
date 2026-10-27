@@ -89,7 +89,7 @@ test("driver pretrip, stop and receipt surfaces localize end to end", async ({ p
       localStorage.removeItem("pythia_driver");
     }, principal.token);
     await page.goto("/driver");
-    // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
+    // The shared account searches its truck instead of a 59-row list.
     await page.getByTestId("driver-truck-search").fill(TEST_TRUCK);
     await page.locator(`[data-testid="pick-${TEST_TRUCK}"] button`).click();
     await page.getByTestId("driver-pick-start").click();
@@ -111,7 +111,7 @@ test("driver pretrip, stop and receipt surfaces localize end to end", async ({ p
 
     // The route sheet appears once the active SPJ poll lands (8s interval).
     await expect(page.getByRole("heading", { name: /Stop 1: TPS E2E/ })).toBeVisible({ timeout: 20000 });
-    // Wave 13: "I've arrived" opens the stop proof; its three steps read in English.
+    // "I've arrived" opens the stop proof; its three steps read in English.
     await page.getByRole("button", { name: "I've arrived" }).click();
     const proof = page.getByTestId("stop-proof");
     await expect(proof.getByText("Arrival photo", { exact: true })).toBeVisible();

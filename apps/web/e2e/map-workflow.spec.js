@@ -11,7 +11,7 @@ let authHeaders;
 // per-test beforeEach reset) makes the shared jam state deterministic.
 test.describe.configure({ mode: "serial" });
 
-// Map truthfulness E2E: render, deviation coloring, heatmap, TPA marker. Wave 13: the map
+// Map truthfulness E2E: render, deviation coloring, heatmap, TPA marker. The map
 // is the Operations screen's (/app/operations); "/" is the public landing page.
 const OPS = "/app/operations";
 test.beforeEach(async ({ page }) => {
@@ -37,7 +37,7 @@ test("map canvas renders (not blank)", async ({ page }) => {
   await expect(canvas).toBeVisible({ timeout: 15000 });
 });
 
-// Wave 13: Operations has no replay control; a cold load still never asks for per-truck
+// Operations has no replay control; a cold load still never asks for per-truck
 // breadcrumbs (the aggregate map truth carries every trail).
 test("cold Operations load requests no per-truck breadcrumbs", async ({ page }) => {
   const breadcrumbRequests = [];
@@ -64,7 +64,7 @@ test("actual routes colored by violation state", async ({ page }) => {
   expect(kinds).toContain("actual-violation");
 });
 
-// Wave 13 honesty, thin: every pin and the trucks KPI say "simulated" in their tooltip and
+// Honesty, thin: every pin and the trucks KPI say "simulated" in their tooltip and
 // data-provenance; live GPS is a "Coming soon" chip, never implied.
 test("pins and the trucks KPI are labelled simulated; live GPS is Coming soon", async ({ page }) => {
   await page.goto(OPS, { waitUntil: "domcontentloaded" });
@@ -184,7 +184,7 @@ async function verifiedJamCleared(page) {
 // in the caller can restore the cleared state even on failure.
 async function runJamDiversionScenario(page) {
   await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=true`, { headers: authHeaders });
-  // Wave 13: Operations shows no reroute monitor; the API and the drawn layers are checked.
+  // Operations shows no reroute monitor; the API and the drawn layers are checked.
   // The AI engine loop may independently clear/re-set the global jam flag, and
   // the demo jam is position-relative (truck cruising): wait until the server
   // actually applies a diversion before asserting the diverted-state payloads.
@@ -320,7 +320,7 @@ async function restoreScenario(page) {
   );
 }
 
-// Wave 13: Operations has no basemap switch and keeps the reference layers off, but the
+// Operations has no basemap switch and keeps the reference layers off, but the
 // layers stay registered so the Fleet & drivers map (and a later toggle) can show them.
 test("TPS and WR layers stay registered on the Operations map", async ({ page }) => {
   await page.goto(OPS, { waitUntil: "domcontentloaded" });

@@ -1,4 +1,4 @@
-// Wave 16 lane "compose": the Settings → Data and provenance rows for Pythia's own
+// The Settings → Data and provenance rows for Pythia's own
 // simulated and modelled systems, now that the screens carry no provenance badges.
 export const cpEn = {
   cp_sys_fleet: "Pilot fleet",

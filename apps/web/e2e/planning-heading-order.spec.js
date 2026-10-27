@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { signIn } from "./lib/tomorrow.js";
 
-// #37, wave13: the Tomorrow page's headings follow a contiguous outline (h1 → h2 → h3, no
+// #37: the Tomorrow page's headings follow a contiguous outline (h1 → h2 → h3, no
 // skipped levels) independent of visual styling.
 test("tomorrow headings follow a contiguous outline and pass axe", async ({ page }) => {
   await signIn(page, { lang: "id", path: "/app/tomorrow" });

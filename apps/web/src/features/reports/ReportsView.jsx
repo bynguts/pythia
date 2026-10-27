@@ -23,7 +23,7 @@ function fill(template, values) {
   return Object.entries(values).reduce((text, [key, v]) => text.replaceAll(`{${key}}`, v), template);
 }
 
-// wave13 Reports (y3BicK): the day's close. Every figure is a record on this server or a
+// Reports (y3BicK): the day's close. Every figure is a record on this server or a
 // stored plan; a figure the day has not produced reads "—", never zero.
 export function ReportsView() {
   const { t, lang } = useLanguage();

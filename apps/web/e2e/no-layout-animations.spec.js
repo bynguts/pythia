@@ -123,10 +123,10 @@ test("driver app progress bar animates without layout properties", async ({ page
     const pretripLoaded = page.waitForResponse((response) =>
       response.url().includes(`/pretrip/today/${TEST_TRUCK}`),
     );
-    // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
+    // The shared account searches its truck instead of a 59-row list.
     await page.getByTestId("driver-truck-search").fill(TEST_TRUCK);
     await page.locator(`[data-testid="pick-${TEST_TRUCK}"]`).click();
-    // Wave 13: the pick is confirmed with "Start with T-…".
+    // The pick is confirmed with "Start with T-…".
     await page.getByTestId("driver-pick-start").click();
     await pretripLoaded;
     await page.waitForTimeout(800);

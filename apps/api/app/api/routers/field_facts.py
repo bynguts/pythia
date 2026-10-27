@@ -1,4 +1,4 @@
-"""Field facts CRUD: the planning loop's only manual input (wave 13)."""
+"""Field facts CRUD: the planning loop's only manual input."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Drivers this week: trips, proof, gate punctuality and duty from field records (wave 13).
+"""Drivers this week: trips, proof, gate punctuality and duty from field records.
 
 Read-only, from records on this server only (SPJ, receipts, gate arrivals,
 pre-trips) plus the approved plans' modelled gate slots. A column a driver has

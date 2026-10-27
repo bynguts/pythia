@@ -1,4 +1,4 @@
-// #w16-escalate: Ana drafts, the operator decides. A draft from /assistant/query
+// Ana drafts, the operator decides. A draft from /assistant/query
 // (`proposed_actions`) shows as a card with its recipient, channels and full text; Edit changes
 // the text, Send posts it with the operator's own token, and only that truck's driver gets it:
 // the driver app shows a new-message banner and the tab badge, and the driver's answer flows

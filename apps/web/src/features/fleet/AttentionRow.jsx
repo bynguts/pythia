@@ -1,6 +1,6 @@
 import { ArrowRight } from "lucide-react";
 
-// wave11 fleet: one row anatomy for everything in "Perlu tindakan", in the shared flat-row
+// One row anatomy for everything in "Perlu tindakan", in the shared flat-row
 // markup (.ui-row): a tinted icon square, a one-line title, a one-line meta, green action
 // links and a small mono aside (time, status or provenance). Hand-rolled instead of
 // <ListRow> because the rail rows carry their own classes and data attributes.

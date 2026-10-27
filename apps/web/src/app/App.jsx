@@ -109,7 +109,7 @@ function useSessionCheck(authenticated, onExpired) {
   }, [authenticated]);
 }
 
-// wave10 L3: /field merged into /driver; its instructions are the Instruksi tab.
+// L3: /field merged into /driver; its instructions are the Instruksi tab.
 function FieldRedirect() {
   const params = new URLSearchParams(useLocation().search);
   params.set("tab", "instruksi");
@@ -128,7 +128,7 @@ function Home() {
   );
 }
 
-// Wave 13: pre-console paths redirect to their /app home, query kept.
+// Pre-console paths redirect to their /app home, query kept.
 function MovedRoute({ from }) {
   const { search } = useLocation();
   return <Navigate to={movedPath(from, search)} replace />;

@@ -432,7 +432,7 @@ test.describe("XR tabletop — interactive scenario and shared session", () => {
     await expect(page.getByTestId("xr-queue")).toHaveText(
       "Day average 55.4 min/truck without stagger → 24 with Pythia stagger",
     );
-    // wave11 numbers: the peak-hour wait is per truck, so it never reads as the day mean.
+    // Numbers: the peak-hour wait is per truck, so it never reads as the day mean.
     await expect(page.getByTestId("xr-queue-peak")).toHaveText(
       "Without stagger · Peak hour 09:00 (modelled): 230 trucks queued · 90 min wait per truck",
     );

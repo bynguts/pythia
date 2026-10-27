@@ -1,4 +1,4 @@
-// wave11 twin: Kota 3D and the XR table read as one decision room in the approved world.
+// Kota 3D and the XR table read as one decision room in the approved world.
 // The twin's title shares the metric strip's band above a flush white rail (Ask Pythia
 // first, then the week's scenarios as a flat list, then the controls); the map runs full
 // bleed with white instrument pills and a mono provenance footer chip. Every strip number
@@ -6,7 +6,7 @@
 import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
-// --ui-forest-900 maps onto the wave 13 --f-green-deep (#174F33).
+// --ui-forest-900 maps onto the --f-green-deep (#174F33).
 const FOREST_900 = "rgb(23, 79, 51)";
 
 async function signIn(page, lang = "en") {

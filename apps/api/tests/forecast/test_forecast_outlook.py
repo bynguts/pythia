@@ -150,7 +150,7 @@ def test_ana_answers_next_week_and_next_month_from_the_outlook(api_client, week_
     result = answer_with_openai_if_configured("Berapa ton minggu depan dan bulan depan?", {}, tool_ctx=ctx)
     assert result["tools_used"] == ["get_forecast_outlook"]
     first = outlook["week"]["days"][0]
-    assert first["date"] in result["answer"] and "MODEL OUTPUT" in result["answer"]
+    assert first["date"] in result["answer"] and "hasil model" in result["answer"]
     assert f"MAPE {outlook['monthly_intake']['backtest']['mape_model_pct']}%" in result["answer"]
     intake = outlook["monthly_intake"]
     assert intake["months"][0]["month"] in result["answer"]

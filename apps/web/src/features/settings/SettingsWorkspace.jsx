@@ -9,9 +9,9 @@ import { TeamAccess } from "./TeamAccess.jsx";
 import { WhatsAppIntegration } from "./WhatsAppIntegration.jsx";
 import "./settings.css";
 
-// wave9 settings: where an operator configures Pythia. The section lives in ?tab=
+// Where an operator configures Pythia. The section lives in ?tab=
 // (whatsapp is the default), so /audit can redirect to ?tab=data.
-// wave11 settings: a settings page in the SaaS sense: a section list on the left (a segmented
+// A settings page in the SaaS sense: a section list on the left (a segmented
 // control on phones) and one plain column of setting groups on the right.
 const SECTIONS = [
   { id: "whatsapp", groupKey: "set_group_integrations", key: "set_tab_whatsapp", icon: MessageCircle },

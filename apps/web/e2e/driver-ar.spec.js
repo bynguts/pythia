@@ -189,7 +189,7 @@ test.describe("AR navigator with camera + compass", () => {
     try {
       await openDriver(page, principal, truck);
       const stop0 = page.getByTestId("stop-0");
-      // Wave 13: AR is a round button on the route sheet of the current stop.
+      // AR is a round button on the route sheet of the current stop.
       const open = stop0.getByTestId("ar-nav-open");
       await expect(open).toBeVisible({ timeout: 20000 });
       const box = await open.boundingBox();
@@ -324,7 +324,7 @@ test.describe("AR navigator with camera + compass", () => {
       await page.clock.install();
       await context.setGeolocation(ARRIVED);
       await openDriver(page, principal, truck, "en");
-      // Wave 13: AR is a round button on the route sheet of the current stop.
+      // AR is a round button on the route sheet of the current stop.
       await page.getByTestId("stop-0").getByTestId("ar-nav-open").click();
       const nav = page.getByTestId("ar-navigator");
       await expect(nav).toHaveAttribute("data-view", "camera", { timeout: 15000 });
@@ -373,7 +373,7 @@ test.describe("AR navigator fallbacks", () => {
     const { truck } = await createActiveSpj(headers);
     try {
       await openDriver(page, principal, truck, "en");
-      // Wave 13: AR is a round button on the route sheet of the current stop.
+      // AR is a round button on the route sheet of the current stop.
       await page.getByTestId("stop-0").getByTestId("ar-nav-open").click();
       const nav = page.getByTestId("ar-navigator");
       await expect(nav).toHaveAttribute("data-view", "compass");
@@ -438,7 +438,7 @@ test.describe("AR navigator fallbacks", () => {
     );
     // The /driver sign-in gate needs a valid field session even when the data is stubbed.
     await openDriver(page, await apiLogin(), truck);
-    // Wave 13: AR is a round button on the route sheet of the current stop.
+    // AR is a round button on the route sheet of the current stop.
     await page.getByTestId("stop-0").getByTestId("ar-nav-open").click();
     await expect(page.getByTestId("ar-no-coordinate")).toContainText("Titik ini belum punya koordinat");
     await expect(page.getByTestId("ar-arrow")).toHaveCount(0);

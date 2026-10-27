@@ -6,7 +6,7 @@ import { expect, test } from "@playwright/test";
  * Scenario: the backend becomes unreachable while the browser network stays
  * up. The service worker serves the cached /api response with stale metadata,
  * and the instructions must say they are cached, with the age of the cached
- * data — never shown as live. wave10 driver-field-app: /field merged into the
+ * Data — never shown as live. /field merged into the
  * driver app's Instruksi tab.
  */
 

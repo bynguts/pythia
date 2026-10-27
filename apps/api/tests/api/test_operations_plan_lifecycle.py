@@ -1,4 +1,4 @@
-"""Plan lifecycle (wave 13): return with a note, withdraw, swap two trucks before approval."""
+"""Plan lifecycle: return with a note, withdraw, swap two trucks before approval."""
 
 from __future__ import annotations
 

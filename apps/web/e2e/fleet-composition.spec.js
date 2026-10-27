@@ -1,4 +1,4 @@
-// wave13 Operations composition (U0H9au): the old /fleet link lands on Operations; a
+// Operations composition (U0H9au): the old /fleet link lands on Operations; a
 // deviation card carries one reroute, drawn on the map only while the card is open, and
 // sends it to that driver after a preview the dispatcher may edit; the head's buttons reach
 // the existing flows; the Indonesian screen has no English backend prose; phones stack the
@@ -120,7 +120,7 @@ test("a deviation has one reroute, drawn on the map only while its card is open"
   await expect(routeRow).toHaveCount(1);
 });
 
-// #w16-escalate: the reroute is previewed as the driver will read it, may be edited, and goes
+// The reroute is previewed as the driver will read it, may be edited, and goes
 // to that one driver only (POST /api/driver/messages), then the follow-up is logged.
 test("Send route to driver previews the message, sends the edited text and logs the follow-up", async ({
   page,

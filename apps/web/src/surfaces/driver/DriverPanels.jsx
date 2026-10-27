@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { apiFetch, FIELD_TOKEN_KEY } from "../../shared/api/client.js";
 import { useLanguage } from "../../shared/i18n/index.jsx";
-import { safetyNote } from "./driverText.js";
+import { dispatchBody, safetyNote } from "./driverText.js";
 import { enqueueDriverOperation, markDriverSynced, OutboxStorageFullError } from "./DriverOutbox.js";
 import { clockTime, pendingInstructions, queuedDispatchIds, safetyNotices } from "./driverHelpers.js";
 
@@ -65,7 +65,7 @@ export function SafetyBanner({ safety }) {
 }
 
 // The notice lines and their provenance badge, shared by the banner and the
-// route map's safety pop-over (wave 13).
+// Route map's safety pop-over.
 export function SafetyLines({ safety }) {
   const { t, lang } = useLanguage();
   const notices = safetyNotices(safety);
@@ -98,12 +98,11 @@ export function SafetyLines({ safety }) {
       ))}
       {label && (
         <span
-          className="driver-badge driver-provenance"
+          className="driver-provenance-note"
           data-testid="driver-safety-label"
-          title={safetyNote(safety, t, lang)}
-        >
-          {label}
-        </span>
+          data-provenance={classification.startsWith("SIMULATED") ? "simulated" : "observed"}
+          title={safetyNote(safety, t, lang) || label}
+        />
       )}
     </>
   );
@@ -337,7 +336,7 @@ export function InstructionCard({ feed, blocked, outboxItems, say, showEmpty = f
                   ? t("drv6_instr_plan")
                   : t("drv6_instr_dispatch")}
               </span>
-              <p className="driver-instruction-text">{dispatch.instruction}</p>
+              <p className="driver-instruction-text">{dispatchBody(dispatch, t)}</p>
               {time && <p className="driver-muted">{t("drv6_instr_time").replace("{time}", time)}</p>}
               {blocked && <p className="driver-held">{t("drv6_safety_held")}</p>}
               <label className="driver-label" htmlFor={reasonId}>
@@ -419,7 +418,7 @@ export function SyncStatus({ lastSync, pending, flushing, online, onRetry }) {
   );
 }
 
-// Wave 13: the header chip of the trip screens. "Synced" only when nothing is
+// The header chip of the trip screens. "Synced" only when nothing is
 // waiting and the phone is online; otherwise it says what is held on the phone.
 export function SyncChip({ online, pending = 0, flushing = false }) {
   const { t } = useLanguage();

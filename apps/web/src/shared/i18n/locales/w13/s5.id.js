@@ -1,4 +1,4 @@
-// Wave 13 lane s5 strings (id). Keys are prefixed "s5_"; only lane s5 edits this file.
+// Strings (id). Keys are prefixed "s5_".
 export const s5Id = {
   // Reports (y3BicK)
   s5_rp_title: "Hari ini, selesai",
@@ -23,7 +23,7 @@ export const s5Id = {
   s5_rp_gate_sub: "per truk · terlama {n} mnt",
   s5_rp_gate_none: "Belum ada kedatangan gerbang tercatat",
   s5_rp_min: "mnt",
-  s5_rp_error: "Galat backtest sampah masuk bulanan",
+  s5_rp_error: "Galat uji mundur sampah masuk bulanan",
   s5_rp_error_model: "Model",
   s5_rp_error_sub: "Bantargebang, data riil",
   s5_rp_error_sub_period: "Bantargebang, data riil · {period}",
@@ -75,7 +75,7 @@ export const s5Id = {
   s5_rp_carry_plan: "Rencana {day} disetujui",
   s5_rp_carry_plan_sub: "Disetujui pukul {time}",
   s5_rp_carry_plan_pending: "Rencana {day} belum disetujui",
-  s5_rp_carry_plan_pending_sub: "Menunggu supervisor",
+  s5_rp_carry_plan_pending_sub: "Menunggu pengawas",
 
   // Settings (T6NMuR)
   s5_set_title: "Pengaturan",
@@ -144,13 +144,13 @@ export const s5Id = {
   s5_set_sys_weather: "Open-Meteo",
   s5_set_sys_weather_feeds: "Hujan per kecamatan",
   s5_set_sys_weather_fresh: "Dibaca saat prakiraan dibuat",
-  s5_set_sys_driver: "Aplikasi pengemudi",
+  s5_set_sys_driver: "Aplikasi sopir",
   s5_set_sys_driver_feeds: "Perhentian, foto, bobot",
-  s5_set_sys_driver_fresh: "Sesuai catatan pengemudi, aman luring",
+  s5_set_sys_driver_fresh: "Sesuai catatan sopir, aman luring",
   s5_src_sipsn_timbulan_2018_2025_dki: "Timbulan sampah kota (SIPSN)",
   s5_src_sipsn_timbulan_2018_2025_dki_feeds: "Dasar prakiraan",
   s5_src_bantargebang_hasil_penimbangan: "Catatan timbangan Bantargebang",
-  s5_src_bantargebang_hasil_penimbangan_feeds: "Backtest sampah masuk bulanan",
+  s5_src_bantargebang_hasil_penimbangan_feeds: "Uji mundur sampah masuk bulanan",
   s5_src_data_truk_sampah_dki: "Sensus truk DKI",
   s5_src_data_truk_sampah_dki_feeds: "Komposisi armada",
   s5_src_dki_tps: "Lokasi TPS",
@@ -224,7 +224,7 @@ export const s5Id = {
   s5_ana_tool_get_daily_recap: "Rekap harian",
   s5_ana_tool_get_forecast_outlook: "Prakiraan ke depan",
   s5_ana_tool_propose_action: "Draf untuk Anda",
-  // w15 model nilai: nilai per 1.000 ritase gerbang, SIMULASI x ASUMSI.
+  // Model nilai: nilai per 1.000 ritase gerbang, SIMULASI x ASUMSI.
   s5_vm_title: "Nilai per 1.000 ritase gerbang",
   s5_vm_sub:
     "Jam-truk antrean yang dikembalikan stagger ke armada, per 1.000 kedatangan truk di Bantargebang.",
@@ -244,7 +244,7 @@ export const s5Id = {
   s5_vm_row_wait_without: "Tunggu gerbang tanpa stagger (rata-rata, menit)",
   s5_vm_row_wait_with: "Tunggu gerbang dengan stagger (rata-rata, menit)",
   s5_vm_row_truck_h: "Jam-truk antrean yang kembali",
-  s5_vm_row_driver_h: "Jam dinas pengemudi yang kembali",
+  s5_vm_row_driver_h: "Jam dinas sopir yang kembali",
   s5_vm_row_fuel: "Solar idle yang dihemat (L)",
   s5_vm_row_alert: "Ritase di atas alarm gerbang {m} menit (tanpa → dengan)",
   s5_vm_params: "Parameter dan sumber",

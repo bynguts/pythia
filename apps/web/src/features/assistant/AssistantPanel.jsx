@@ -14,7 +14,7 @@ const PROMPTS = ["asst_prompt1_q", "asst_prompt2_q", "asst_prompt3_q"];
 // fallback question is localized, and the chosen language is sent on the
 // wire so the answer language is requested explicitly and preserved for
 // the conversation.
-// wave13 (fgZyf): rendered inside the console's Ask Ana drawer, which owns the header.
+// Design fgZyf: rendered inside the console's Ask Ana drawer, which owns the header.
 // An answer names the tools it ran and who produced it; nothing here invents options.
 export function AssistantPanel() {
   const { t, lang } = useLanguage();

@@ -1,4 +1,4 @@
-// Wave 6 driver specs: shared setup. Each spec uses its own truck so runs do
+// Driver specs: shared setup. Each spec uses its own truck so runs do
 // not collide; every SPJ a test creates is cancelled in `finally`.
 import { expect } from "@playwright/test";
 
@@ -100,7 +100,7 @@ export async function finishPretrip(page) {
 }
 
 // Arrival + officer evidence for the current stop (an SPJ without on-site weighing).
-// Wave 13: "I've arrived" on the route sheet opens the stop proof screen.
+// "I've arrived" on the route sheet opens the stop proof screen.
 export async function completeCurrentStop(page, stopIndex, { officer = "Petugas Uji" } = {}) {
   const tab = page.getByTestId("driver-tab-rute");
   if ((await tab.count()) && (await tab.getAttribute("aria-current")) !== "page") await tab.click();

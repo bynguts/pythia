@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { signIn } from "./lib/tomorrow.js";
 
-// #68, wave13: the Tomorrow page's headings, cards and inputs follow the selected locale
+// #68: the Tomorrow page's headings, cards and inputs follow the selected locale
 // (English by default, Indonesian selectable).
 const COPY = {
   en: {

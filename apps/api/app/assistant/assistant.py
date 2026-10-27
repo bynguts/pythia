@@ -26,13 +26,13 @@ from app.assistant.scenario import (
     with_parse_step,
 )
 from app.assistant.tools import ToolContext, execute_tool, run_tools_pass, tool_schemas
-from app.core.env import today
+from app.core.env import getenv, today
 from app.integrations.whatsapp import message_language
 
 # Per-request gateway timeouts, and the budget for the whole multi-step tool loop.
-_GATEWAY_TIMEOUT = 18
+_GATEWAY_TIMEOUT = int(getenv("ASSISTANT_TIMEOUT_SECONDS") or 45)
 _IMAGE_GATEWAY_TIMEOUT = 30
-_AGENT_DEADLINE_SECONDS = 45
+_AGENT_DEADLINE_SECONDS = max(60, _GATEWAY_TIMEOUT + 15)
 # Model calls per question; the last call is offered no tools, so it must answer.
 _MAX_AGENT_STEPS = 4
 # Tool executions per model turn, and across the whole question.
@@ -77,7 +77,7 @@ SYSTEM_PROMPT = (
     "untuk sapaan atau penjelasan umum. Jika butuh prakiraan kecamatan, minta include_kecamatan=true "
     "pada get_predictions; untuk prakiraan kota saja, jangan minta itu. Untuk pertanyaan what-if "
     "(hujan mm, event/konser + jumlah pengunjung, venue, hari), panggil run_scenario dan sebutkan bahwa "
-    "angkanya MODEL OUTPUT, bukan pengamatan. Jika hujan disebut dengan kata (gerimis, hujan deras/lebat, "
+    "angkanya prakiraan model, bukan pengamatan; tandai prakiraan sebagai prakiraan model dalam bahasa jawaban. Jika hujan disebut dengan kata (gerimis, hujan deras/lebat, "
     "sangat lebat, ekstrem; light/heavy/very heavy/extreme rain) tanpa mm, isi rain_category, bukan "
     "rainfall_mm, dan sebutkan nilai kategori BMKG yang dipakai; jika scenario.snapped_to_twin_presets bernilai true, "
     "katakan bahwa nilai diminta (scenario.requested) disesuaikan ke preset twin. Semua tool bersifat baca-saja: "
@@ -219,9 +219,9 @@ def _tomorrow_answer(result: dict[str, Any], lang: str) -> str | None:
     if day is None:
         return None
     parts = [
-        f"Tomorrow ({day['date']}), city-wide waste (MODEL OUTPUT): {day['total_tons']:,.0f} t/day."
+        f"Tomorrow ({day['date']}), city-wide waste (model forecast): {day['total_tons']:,.0f} t/day."
         if en
-        else f"Besok ({day['date']}), sampah se-kota (MODEL OUTPUT): {day['total_tons']:,.0f} t/hari."
+        else f"Besok ({day['date']}), sampah se-kota (hasil model): {day['total_tons']:,.0f} t/hari."
     ]
     if day.get("corrected_tons") is not None:
         parts.append(
@@ -263,9 +263,9 @@ def _outlook_answer(result: dict[str, Any], lang: str) -> str:
             for d in week["days"]
         )
         parts = [
-            f"City-wide waste per day, next {n} days (MODEL OUTPUT): {days}."
+            f"City-wide waste per day, next {n} days (model forecast): {days}."
             if en
-            else f"Sampah se-kota per hari, {n} hari ke depan (MODEL OUTPUT): {days}."
+            else f"Sampah se-kota per hari, {n} hari ke depan (hasil model): {days}."
         ]
     else:
         totals = [d["total_tons"] for d in week["days"]]
@@ -280,10 +280,10 @@ def _outlook_answer(result: dict[str, Any], lang: str) -> str:
             (f", {trucks} trucks at the peak" if en else f", {trucks} truk saat puncak") if trucks else ""
         )
         parts = [
-            f"City-wide waste, next {n} days (MODEL OUTPUT): {total:,.0f} t in total, {avg:,.0f} t/day on "
+            f"City-wide waste, next {n} days (model forecast): {total:,.0f} t in total, {avg:,.0f} t/day on "
             f"average, peak {peak_date} at {peak:,.0f} t{at_peak}."
             if en
-            else f"Sampah se-kota, {n} hari ke depan (MODEL OUTPUT): total {total:,.0f} t, rata-rata "
+            else f"Sampah se-kota, {n} hari ke depan (hasil model): total {total:,.0f} t, rata-rata "
             f"{avg:,.0f} t/hari, puncak {peak_date} sebesar {peak:,.0f} t{at_peak}."
         ]
         if summary.get("corrected_total_tons") is not None:
@@ -311,10 +311,10 @@ def _outlook_answer(result: dict[str, Any], lang: str) -> str:
                 f"{m['month']} {m['tons_per_day']:,.0f} t/" + ("day" if en else "hari") for m in within
             )
             parts.append(
-                f"Bantargebang intake, next months (MODEL OUTPUT, data through {through}, within the "
+                f"Bantargebang intake, next months (model forecast, data through {through}, within the "
                 f"1-3 month backtest): {months}."
                 if en
-                else f"Asupan TPST Bantargebang bulan ke depan (MODEL OUTPUT, data s.d. {through}, di dalam "
+                else f"Asupan TPST Bantargebang bulan ke depan (hasil model, data s.d. {through}, di dalam "
                 f"horizon backtest 1-3 bulan): {months}."
             )
         if beyond:

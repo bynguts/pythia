@@ -1,4 +1,4 @@
-/* Wave 13 lane S4: TPA gate (WDyPY). Every class is prefixed `gate-`; colours come from tokens.css. */
+/* TPA gate (WDyPY). Every class is prefixed `gate-`; colours come from tokens.css. */
 .gate-page {
   display: flex;
   flex-direction: column;

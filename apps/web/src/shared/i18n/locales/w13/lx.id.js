@@ -1,4 +1,4 @@
-// Wave 16 lane lx strings (Indonesian): satu bahasa per mode. Nilai API yang tampil
+// Strings (Indonesian): satu bahasa per mode. Nilai API yang tampil
 // sebagai kode atau templat Indonesia tetap (status rencana, kode komponen, peristiwa
 // audit, kode galat, nama titik rencana) diucapkan di sini dalam bahasa UI.
 export const lxId = {
@@ -7,7 +7,7 @@ export const lxId = {
   lx_plan_status_approved: "disetujui",
   lx_plan_status_returned: "dikembalikan",
   lx_plan_status_withdrawn: "ditarik",
-  lx_pdf_alloc_source: "CP-SAT · armada SIMULATED",
+  lx_pdf_alloc_source: "CP-SAT · armada uji coba",
   lx_basis:
     "asumsi: {lanes} jalur jembatan timbang x {tph} truk/jam (siklus timbang {cycle} menit); bukan pengukuran fasilitas",
   lx_basis_whatif:
@@ -34,12 +34,12 @@ export const lxId = {
   lx_err_truck_in_plan: "Truk {truck} sudah ada di rencana ini.",
   lx_err_truck_damaged: "Truk {truck} sedang rusak.",
   lx_err_duty_blocked:
-    "Truk {truck} sudah bertugas {h} jam {m} menit hari ini (batas {limit} jam). SPJ baru diblokir demi keselamatan sopir; pengawas dapat memberi override dengan alasan.",
-  lx_err_spj_started: "SPJ sudah aktif; batalkan dan buat ulang.",
-  lx_err_override_reason_short: "Override memerlukan alasan minimal {n} karakter.",
-  lx_err_spj_not_draft: "Hanya SPJ draf yang dapat diaktifkan.",
-  lx_err_spj_no_stops: "SPJ memerlukan minimal satu titik sebelum diaktifkan.",
-  lx_err_spj_truck_busy: "Truk {truck} sudah memiliki SPJ aktif.",
+    "Truk {truck} sudah bertugas {h} jam {m} menit hari ini (batas {limit} jam). surat jalan baru diblokir demi keselamatan sopir; pengawas dapat memberi pengecualian dengan alasan.",
+  lx_err_spj_started: "Surat jalan sudah aktif; batalkan dan buat ulang.",
+  lx_err_override_reason_short: "Pengecualian memerlukan alasan minimal {n} karakter.",
+  lx_err_spj_not_draft: "Hanya surat jalan draf yang dapat diaktifkan.",
+  lx_err_spj_no_stops: "Surat jalan memerlukan minimal satu titik sebelum diaktifkan.",
+  lx_err_spj_truck_busy: "Truk {truck} sudah memiliki surat jalan aktif.",
   lx_yes: "ya",
   lx_no: "tidak",
   lx_audit_straight_fallback: "Diaktifkan dengan geometri jalan belum terselesaikan (garis lurus)",
@@ -70,13 +70,13 @@ export const lxId = {
   lx_evt_operations_plan_swapped: "Truk rencana ditukar",
   lx_evt_operations_plan_withdrawn: "Rencana ditarik",
   lx_evt_safety_duty_block: "Batas jam kerja memblokir keberangkatan",
-  lx_evt_safety_duty_override: "Override batas jam kerja diberikan",
+  lx_evt_safety_duty_override: "Pengecualian batas jam kerja diberikan",
   lx_evt_safety_gate_alert: "Peringatan tunggu lama di gerbang",
-  lx_evt_safety_override_used: "Override jam kerja dipakai",
-  lx_evt_spj_completed_by_override: "SPJ diselesaikan dengan override",
+  lx_evt_safety_override_used: "Pengecualian jam kerja dipakai",
+  lx_evt_spj_completed_by_override: "Surat jalan diselesaikan dengan pengecualian",
   lx_evt_spj_receipt_reviewed: "Tiket timbang ditinjau",
   lx_evt_spj_receipt_submitted: "Tiket timbang dikirim",
-  lx_evt_spj_stop_skipped: "Titik SPJ dilewati",
+  lx_evt_spj_stop_skipped: "Titik surat jalan dilewati",
   lx_evt_whatsapp_alert: "Peringatan WhatsApp",
   lx_evt_whatsapp_alert_group: "Grup peringatan WhatsApp diatur",
   lx_evt_whatsapp_gateway_start: "Gateway WhatsApp dijalankan",
@@ -87,7 +87,7 @@ export const lxId = {
   lx_akey_to_truck: "ke truk",
   lx_akey_plan_id: "rencana",
   lx_akey_plan_date: "tanggal rencana",
-  lx_akey_spj_id: "SPJ",
+  lx_akey_spj_id: "Surat jalan",
   lx_akey_dispatch_id: "instruksi",
   lx_akey_alert_id: "peringatan",
   lx_akey_actor: "oleh",
@@ -128,9 +128,9 @@ export const lxId = {
   lx_bridge_operational: "beroperasi",
   lx_bridge_degraded: "kelebihan beban",
   lx_safety_note_simulated:
-    "SIMULATED: skenario demo berbenih atas armada simulasi; jam kerja sopir dan tunggu di gerbang tidak diamati.",
+    "Skenario contoh: demo berbenih atas armada simulasi; jam kerja sopir dan tunggu di gerbang tidak diamati.",
   lx_safety_note_observed:
-    "Event aplikasi teramati di server ini: cek pra-perjalanan, aktivasi SPJ, kedatangan di gerbang, dan tanda terima jembatan timbang (hari lokal WIB).",
+    "Event aplikasi teramati di server ini: cek pra-jalan, aktivasi surat jalan, kedatangan di gerbang, dan tanda terima jembatan timbang (hari lokal WIB).",
   lx_stop_plan_name: "Rencana · Kec. {kec}",
   lx_stop_plan_address: "Titik tengah Kec. {kec} (perencanaan, bukan alamat TPS)",
   lx_stop_tps_address: "{place} (koordinat TPS SILIKA DLH 2023)",
@@ -143,10 +143,10 @@ export const lxId = {
   lx_wa_lang_saved: "Bahasa pesan tersimpan. Pesan WhatsApp berikutnya memakai bahasa ini.",
   lx_wa_lang_failed: "Bahasa pesan belum tersimpan. Coba lagi.",
   lx_wa_remind_head: "Pengingat Pythia sebelum berangkat",
-  lx_wa_remind_pretrip: "pre-trip belum diisi",
+  lx_wa_remind_pretrip: "cek pra-jalan belum diisi",
   lx_wa_remind_instruction: "instruksi belum dikonfirmasi",
   lx_wa_remind_and: " dan ",
-  lx_wa_remind_reco: "Isi pre-trip dan konfirmasi instruksi di aplikasi Pythia sebelum berangkat",
+  lx_wa_remind_reco: "Isi cek pra-jalan dan konfirmasi instruksi di aplikasi Pythia sebelum berangkat",
   lx_wa_in_id: "dalam bahasa Indonesia",
   lx_wa_in_en: "dalam bahasa Inggris",
 };

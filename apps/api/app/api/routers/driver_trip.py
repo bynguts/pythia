@@ -1,4 +1,4 @@
-"""Driver trip view (wave 13): next stop ETA, gate slot and the queue ahead, for the driver's own truck."""
+"""Driver trip view: next stop ETA, gate slot and the queue ahead, for the driver's own truck."""
 
 from __future__ import annotations
 

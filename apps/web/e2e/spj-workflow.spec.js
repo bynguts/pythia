@@ -90,7 +90,7 @@ test("a dispatcher finds a draft work order and activates it", async ({ page }) 
   }
 });
 
-// #w14-walk: tomorrow's plan draft cannot be worked today; Activate says which day it opens.
+// Tomorrow's plan draft cannot be worked today; Activate says which day it opens.
 test("a draft for tomorrow cannot be activated today and says when it can", async ({ page }) => {
   const headers = await signIn(page, "dispatcher", "en");
   const supervisor = await page.request.post(`${API}/auth/login`, {
@@ -142,7 +142,7 @@ test("a work order is created, closed by a supervisor override and cancelled, ea
     await form.locator("select").first().selectOption("T-209");
     for (let i = 0; i < 2; i += 1) {
       await form.locator("input[list='spj-sites']").fill(site);
-      await form.getByRole("button", { name: "Tambah titik" }).click();
+      await form.getByRole("button", { name: "Tambah titik", exact: true }).click();
     }
     const responsePromise = page.waitForResponse(
       (response) => response.url().endsWith("/api/spj") && response.request().method() === "POST",

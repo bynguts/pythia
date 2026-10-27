@@ -1,4 +1,4 @@
-// wave13 Operations (docs/design/export-handoff/U0H9au.png): a flat strip of four KPIs over
+// Operations (docs/design/export-handoff/U0H9au.png): a flat strip of four KPIs over
 // a full-width map; the "Needs you" panel floats on the map's left and the Bantargebang gate
 // card sits in its bottom-right corner. Each open item offers one action, and every action
 // writes the existing API (follow-up log, gate holds, stop skip, plan reassign).
@@ -296,7 +296,7 @@ test("each action writes the existing API with the item's own ids", async ({ pag
     });
   await expect.poll(() => latest("whatsapp")?.body?.truck_code).toBe("T-E2A");
 
-  // Gate peak (#w16-escalate): Accept first previews each held driver's message; Send then takes
+  // Gate peak: Accept first previews each held driver's message; Send then takes
   // every recommended hold with the text that driver will read.
   await row(page, "gate_peak").getByTestId("needs-action-accept").click();
   const holdPreview = row(page, "gate_peak").getByTestId("needs-send-preview");

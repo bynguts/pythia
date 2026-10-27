@@ -1,4 +1,4 @@
-// Wave 13 lane d2 strings (id). Keys are prefixed "d2_"; only lane d2 edits this file.
+// Strings (id). Keys are prefixed "d2_".
 export const d2Id = {
   d2_back: "Kembali",
   d2_close: "Tutup",
@@ -27,7 +27,7 @@ export const d2Id = {
   d2_route_head_to: "Menuju {name}",
   d2_route_arrive: "tiba",
   d2_route_gate_slot: "Slot gerbang {time}",
-  d2_route_message: "Kirim pesan ke dispatch",
+  d2_route_message: "Kirim pesan ke dispatcher",
   d2_route_call: "Telepon dispatch",
   d2_stop_skipped: "DILEWATI",
   d2_route_arrived: "Saya sudah tiba",

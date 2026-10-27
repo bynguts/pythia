@@ -7,7 +7,7 @@ import { MetricStrip } from "../../shared/ui/MetricStrip.jsx";
 
 const POLL_MS = 60000;
 
-// wave12: the close-of-day recap (GET /api/recap/daily) as a plain list: recorded vs
+// The close-of-day recap (GET /api/recap/daily) as a plain list: recorded vs
 // planned tonnes, gate wait and incidents, then the evidence gaps and the day's summary.
 // A figure the day has not recorded reads "—", never zero.
 export function DailyRecapList() {

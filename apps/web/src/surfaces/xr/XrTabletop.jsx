@@ -70,7 +70,7 @@ import {
 import { IMAGERY_CREDIT } from "../../features/twin/cityBase3d.js";
 import "./xr.css";
 
-// wave11: the cream canvas of the approved world (tokens.css --ui-cream).
+// The cream canvas of the approved world (tokens.css --ui-cream).
 const BACKGROUND = "#f4ede3";
 const VR_ANCHOR = new THREE.Vector3(0, 1.0, -0.7);
 const MIN_SCALE = 0.3;

@@ -1,4 +1,4 @@
-/* Wave 13 console frame (lane F): sidebar + top bar, per docs/design/export-handoff/html/shell.html. */
+/* The console frame: sidebar + top bar, per docs/design/export-handoff/html/shell.html. */
 
 .cx {
   display: grid;
@@ -649,7 +649,7 @@
   min-height: 100dvh;
 }
 
-/* Lane L replaces the landing stub. */
+/* Replaces the landing stub. */
 .landing-stub {
   display: grid;
   place-content: center;

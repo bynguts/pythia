@@ -33,7 +33,7 @@ const IS_AUTOMATION = typeof navigator !== "undefined" && Boolean(navigator.webd
 function resolveStreetsStyle() {
   return IS_AUTOMATION ? MAP_STYLE : STREETS_STYLE_URL;
 }
-// wave11 map perf: the cruise loop moves trucks at most this often (~10 Hz).
+// Map perf: the cruise loop moves trucks at most this often (~10 Hz).
 const CRUISE_STEP_MS = 100;
 // Off-screen trucks still catch up this often, so panning never reveals a stale one.
 const CRUISE_OFFSCREEN_MS = 1000;
@@ -118,7 +118,7 @@ function mapVisibleTrucks(trucks, focusCode = null) {
     .map(({ truck }) => truck);
 }
 
-// Wave 13 Operations pins (console variant): a pill with a lucide glyph and the truck
+// Operations pins (console variant): a pill with a lucide glyph and the truck
 // code. DOM markers cannot hold React icons, so the glyphs are lucide's own SVG nodes.
 const PIN_GLYPHS = {
   truck: [
@@ -177,34 +177,16 @@ function tokenColor(name, fallback) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
 
-function dataClass(value, lang) {
-  const classes = {
-    SIMULATED: ["Simulasi", "Simulated"],
-    MODEL_OUTPUT: ["Hasil model", "Model output"],
-    REAL: ["Data riil", "Real data"],
-    PROXY: ["Proksi", "Proxy"],
-  };
-  return classes[value]?.[lang === "id" ? 0 : 1] || value || (lang === "id" ? "Simulasi" : "Simulated");
+function countUnit(value, lang, base) {
+  return translate(lang, `fm_${base}_${Number(value) === 1 ? "one" : "many"}`);
 }
-
-function countUnit(value, lang, id, singular, plural) {
-  return lang === "id" ? id : Number(value) === 1 ? singular : plural;
-}
-
-const ACTIVITY_ID = {
-  maintenance_hold: "Ditahan untuk perawatan",
-  returning: "Kembali ke depo",
-  dumping_at_tpa: "Antre / bongkar di TPA",
-  loading_at_tps: "Muat sampah di TPS",
-  hauling_to_tpa: "Menuju TPA",
-};
 
 const DAMAGE_NOTE_ID = {
   "Hydraulic compactor leak — held at depot": "Kebocoran hidraulik pemadat — ditahan di depo",
   "Brake service due — limited duty": "Servis rem diperlukan — tugas dibatasi",
   "Tire replacement scheduled": "Penggantian ban dijadwalkan",
   "Engine overheating — backup dispatched": "Mesin terlalu panas — armada cadangan dikirim",
-  "Compactor fault reported by driver": "Kerusakan pemadat dilaporkan pengemudi",
+  "Compactor fault reported by driver": "Kerusakan pemadat dilaporkan sopir",
   "No open work order": "Tidak ada perintah kerja terbuka",
 };
 
@@ -250,18 +232,13 @@ function metersBetween(a, b) {
 }
 
 function renderTruckPopup(truckData, truthData, followingCode, lang = "id") {
+  const tr = (key) => translate(lang, key);
   const isAnom = truckData?.deviation?.violated;
   const statusTxt = isAnom
-    ? lang === "id"
-      ? "Pelanggaran Koridor"
-      : "Route violation"
+    ? tr("fm_status_violation")
     : truckData?.is_damaged
-      ? lang === "id"
-        ? "Kerusakan Armada"
-        : "Fleet damage"
-      : lang === "id"
-        ? "Sesuai Koridor Normal"
-        : "Normal corridor";
+      ? tr("fm_status_damage")
+      : tr("fm_status_normal");
   const rawStr = truthData?.raw_gps
     ? `${truthData.raw_gps.lat.toFixed(5)}, ${truthData.raw_gps.lng.toFixed(5)}`
     : "—";
@@ -269,52 +246,37 @@ function renderTruckPopup(truckData, truthData, followingCode, lang = "id") {
     ? `${truthData.snapped_gps.lat.toFixed(5)}, ${truthData.snapped_gps.lng.toFixed(5)}`
     : "—";
   const snapCode = truthData?.provenance?.snapped_gps || "RAW_GPS_UNSNAPPED";
-  const snapSrc =
-    lang === "id"
-      ? {
-          SIMULATED_NO_SNAP: "Simulasi tanpa penyelarasan",
-          RAW_GPS_UNSNAPPED: "GPS mentah belum diselaraskan",
-          FALLBACK_DEGRADED: "Penyelarasan tidak tersedia",
-        }[snapCode] || snapCode
-      : snapCode;
+  const snapKey = `fm_snap_${snapCode}`;
+  const snapSrc = tr(snapKey) !== snapKey ? tr(snapKey) : snapCode;
   const devM = Math.round(truthData?.deviation_m ?? truckData?.deviation?.distance_meters ?? 0);
   const speed = truckData?.latest_position?.speed_kmh ?? "?";
   const updated = truckData?.latest_position?.updated_seconds_ago ?? "?";
+  const activityKey = `fm_act_${truckData?.activity?.state}`;
   const activityTxt = truckData?.activity?.state
-    ? `${lang === "id" ? "Aktivitas" : "Activity"}: ${lang === "id" ? ACTIVITY_ID[truckData.activity.state] || truckData.activity.label : truckData.activity.label}`
+    ? `${tr("fm_activity")}: ${tr(activityKey) !== activityKey ? tr(activityKey) : truckData.activity.label}`
     : "";
   const damageTxt =
     truckData?.is_damaged && truckData?.damage_status?.note
-      ? `${lang === "id" ? "Kerusakan" : "Damage"}: ${localizedDamage(truckData.damage_status.note, lang)}`
+      ? `${tr("fm_damage")}: ${localizedDamage(truckData.damage_status.note, lang)}`
       : "";
-  const distLabel =
-    lang === "id"
-      ? `${devM} m dari koridor resmi · ${speed} km/jam`
-      : `${devM} m from assigned road · ${speed} km/h`;
-  const trackBtn =
-    followingCode === truckData.truck_code
-      ? lang === "id"
-        ? "Berhenti Lacak"
-        : "Stop tracking"
-      : lang === "id"
-        ? "Lacak Truk"
-        : "Track";
-  const dispatchBtn =
-    lang === "id" ? `Kirim Instruksi ${truckData.truck_code}` : `Dispatch ${truckData.truck_code}`;
-  const fitBtn = lang === "id" ? "Tampilkan Seluruh Rute" : "Fit route";
+  const distLabel = tr("fm_dist_label").replace("{m}", devM).replace("{speed}", speed);
+  const trackBtn = followingCode === truckData.truck_code ? tr("fm_track_stop") : tr("fm_track");
+  const dispatchBtn = tr("fm_dispatch").replace("{code}", truckData.truck_code);
+  const fitBtn = tr("fm_fit");
 
   return `
-      <div class="map-popup">
+      <div class="map-popup" data-provenance="simulated" title="${tr("fm_prov_truck")}">
         <strong>${truckData.truck_code}</strong>
-        <span>${formatDriverName(truckData.driver_name, (key) => translate(lang, key)).label} - ${truckData.assigned_zone}</span>
+        <span>${formatDriverName(truckData.driver_name, tr).label} - ${truckData.assigned_zone}</span>
         <p>${statusTxt}</p>
         ${activityTxt ? `<small>${activityTxt}</small>` : ""}
         ${damageTxt ? `<small>${damageTxt}</small>` : ""}
         <small>${distLabel}</small>
-        <small>${lang === "id" ? "GPS mentah" : "Raw GPS"}: ${rawStr}</small>
-        <small>${lang === "id" ? "Titik terselaraskan" : "Snapped position"}: ${snapStr} (${snapSrc})</small>
-        <small>${lang === "id" ? "Diperbarui" : "Updated"} ${updated} ${countUnit(updated, lang, "detik lalu", "second ago", "seconds ago")}</small>
-        <p class="popup-src">${lang === "id" ? "SIMULASI · bukan GPS langsung" : "SIMULATION · not live GPS"}</p>
+        <small>${tr("fm_raw_gps")}: ${rawStr}</small>
+        <small>${tr("fm_snapped")}: ${snapStr} (${snapSrc})</small>
+        <small>${tr("fm_updated")
+          .replace("{n}", updated)
+          .replace("{unit}", countUnit(updated, lang, "second"))}</small>
         <button class="popup-track" data-track="${truckData.truck_code}">${trackBtn}</button>
         <button class="popup-dispatch" data-truck="${truckData.truck_code}">${dispatchBtn}</button>
         <button class="popup-fit" data-fit="${truckData.truck_code}">${fitBtn}</button>
@@ -440,7 +402,7 @@ export function LiveFleetMap({
   focusRequest = null,
   // Teardown v4 M3: the selected decision's one route, drawn only while it is selected.
   decisionRoute = null,
-  // Wave 13 Operations: "console" draws the designed chrome (pill pins, own zoom buttons,
+  // Operations: "console" draws the designed chrome (pill pins, own zoom buttons,
   // Coming-soon chip, one-line legend) instead of the classic search row and controls.
   variant = "classic",
   // console: truck code -> pin tone ("selected" | "danger" | "warn" | "off" | "normal").
@@ -707,9 +669,8 @@ export function LiveFleetMap({
         map,
         coords[Math.floor(coords.length / 2)],
         new maplibregl.Popup({ offset: 20 }).setHTML(
-          `<div class="map-popup"><h4>${mapLabel("Koridor penugasan", "Assigned corridor")}</h4>` +
-            `<p>${mapLabel("Truk", "Truck")} ${p.truckCode || "—"} · ${coords.length} ${mapLabel("titik mengikuti jalan", "road-following points")}</p>` +
-            `<p class="popup-src">${mapLabel("SIMULASI · rute rencana", "SIMULATION · planned route")}</p></div>`,
+          `<div class="map-popup" data-provenance="simulated" title="${translate(languageRef.current, "fm_prov_route")}"><h4>${mapLabel("Koridor penugasan", "Assigned corridor")}</h4>` +
+            `<p>${mapLabel("Truk", "Truck")} ${p.truckCode || "—"} · ${coords.length} ${mapLabel("titik mengikuti jalan", "road-following points")}</p></div>`,
         ),
         { zoom: Math.max(12, map.getZoom()), offset: [0, -60], duration: 450 },
       );
@@ -725,9 +686,8 @@ export function LiveFleetMap({
         map,
         coords[Math.floor(coords.length / 2)],
         new maplibregl.Popup({ offset: 20 }).setHTML(
-          `<div class="map-popup"><h4>${isViolation ? mapLabel("Segmen pelanggaran rute", "Route violation segment") : mapLabel("Pergerakan aktual", "Actual movement")}</h4>` +
-            `<p>${mapLabel("Truk", "Truck")} ${p.truckCode || "—"} · ${coords.length} ${mapLabel("titik jalur simulasi", "simulated route points")}</p>` +
-            `<p class="popup-src">${mapLabel("SIMULASI · jejak perjalanan", "SIMULATION · breadcrumb trail")}</p></div>`,
+          `<div class="map-popup" data-provenance="simulated" title="${translate(languageRef.current, "fm_prov_trail")}"><h4>${isViolation ? mapLabel("Segmen pelanggaran rute", "Route violation segment") : mapLabel("Pergerakan aktual", "Actual movement")}</h4>` +
+            `<p>${mapLabel("Truk", "Truck")} ${p.truckCode || "—"} · ${coords.length} ${mapLabel("titik jalur simulasi", "simulated route points")}</p></div>`,
         ),
         { zoom: Math.max(12, map.getZoom()), offset: [0, -60], duration: 450 },
       );
@@ -762,27 +722,23 @@ export function LiveFleetMap({
     if (!mapInstance) return;
     const controls = [
       [".maplibregl-ctrl-zoom-in", "Perbesar", "Zoom in"],
-      [".maplibregl-ctrl-zoom-out", "Perkecil", "Zoom out"],
-      [
-        ".maplibregl-ctrl-compass",
-        "Seret untuk memutar peta, klik untuk menghadap utara",
-        "Drag to rotate map, click to reset north",
-      ],
-      [".maplibregl-ctrl-fullscreen", "Masuk layar penuh", "Enter fullscreen"],
-      [".maplibregl-ctrl-attrib-button", "Tampilkan atribusi", "Toggle attribution"],
+      [".maplibregl-ctrl-zoom-out", "fm_ctrl_zoom_out"],
+      [".maplibregl-ctrl-compass", "fm_ctrl_compass"],
+      [".maplibregl-ctrl-fullscreen", "fm_ctrl_fullscreen"],
+      [".maplibregl-ctrl-attrib-button", "fm_ctrl_attrib"],
     ];
-    for (const [selector, id, en] of controls) {
+    for (const [selector, key] of controls) {
       const node = mapInstance.getContainer().querySelector(selector);
       if (!node) continue;
-      node.setAttribute("title", lang === "id" ? id : en);
-      node.setAttribute("aria-label", lang === "id" ? id : en);
+      node.setAttribute("title", translate(lang, key));
+      node.setAttribute("aria-label", translate(lang, key));
     }
     // MapLibre has no public runtime locale setter. New popups inherit the
     // locale from map construction, so relabel their close control on insertion.
     const container = mapInstance.getContainer();
     const labelPopupClose = () => {
       container.querySelectorAll(".maplibregl-popup-close-button").forEach((button) => {
-        const label = lang === "id" ? "Tutup popup" : "Close popup";
+        const label = translate(lang, "fm_popup_close");
         button.setAttribute("aria-label", label);
         button.setAttribute("title", label);
       });
@@ -941,16 +897,16 @@ export function LiveFleetMap({
           const element = document.createElement("button");
           element.className = "truck-marker event-permit-marker";
           element.type = "button";
-          element.setAttribute("aria-label", `${lang === "id" ? "Acara" : "Event"}: ${ev.name}`);
+          element.setAttribute("aria-label", `${translate(lang, "fm_event")}: ${ev.name}`);
 
           const popup = new maplibregl.Popup({ offset: 25 }).setHTML(`
-              <div class="event-popup" style="color: #0f172a; padding: 6px;">
-                <h4 style="margin: 0 0 6px; font-weight: bold;">${lang === "id" ? "Acara" : "Event"}: ${ev.name}</h4>
-                <p style="margin: 0 0 4px; font-size: 11px;"><b>${lang === "id" ? "Izin" : "Permit"}:</b> ${ev.permit_number}</p>
-                <p style="margin: 0 0 4px; font-size: 11px;"><b>${lang === "id" ? "Perkiraan" : "Forecast"}:</b> ${Number(ev.predicted_waste_tons).toLocaleString(lang === "id" ? "id-ID" : "en-US")} ${countUnit(ev.predicted_waste_tons, lang, "ton sampah", "ton of waste", "tons of waste")}</p>
-                <p style="margin: 0 0 4px; font-size: 11px;"><b>${lang === "id" ? "Kru lapangan" : "Field crews"}:</b> ${ev.crews_required} ${countUnit(ev.crews_required, lang, "tim", "team", "teams")} · ${ev.workers_required} ${countUnit(ev.workers_required, lang, "orang", "person", "people")}</p>
-                <p style="margin: 0; font-size: 11px;"><b>${lang === "id" ? "Armada cadangan" : "Backup fleet"}:</b> ${ev.trucks_required} ${countUnit(ev.trucks_required, lang, "truk", "truck", "trucks")}</p>
-                <p class="popup-src" style="margin: 6px 0 0;">${dataClass(ev.data_class, lang)} · ${lang === "id" && ev.data_note === "Illustrative event; not official DLH permit data." ? "Acara ilustratif; bukan data izin resmi DLH." : ev.data_note || (lang === "id" ? "Acara ilustratif; bukan data izin resmi DLH." : "Illustrative event; not official DLH permit data.")}</p>
+              <div class="event-popup" data-provenance="simulated" style="color: #0f172a; padding: 6px;">
+                <h4 style="margin: 0 0 6px; font-weight: bold;">${translate(lang, "fm_event")}: ${ev.name}</h4>
+                <p style="margin: 0 0 4px; font-size: 11px;"><b>${translate(lang, "fm_event_permit")}:</b> ${ev.permit_number}</p>
+                <p style="margin: 0 0 4px; font-size: 11px;"><b>${translate(lang, "fm_event_forecast")}:</b> ${Number(ev.predicted_waste_tons).toLocaleString(lang === "id" ? "id-ID" : "en-US")} ${countUnit(ev.predicted_waste_tons, lang, "ton")}</p>
+                <p style="margin: 0 0 4px; font-size: 11px;"><b>${translate(lang, "fm_event_crews")}:</b> ${ev.crews_required} ${countUnit(ev.crews_required, lang, "team")} · ${ev.workers_required} ${countUnit(ev.workers_required, lang, "person")}</p>
+                <p style="margin: 0; font-size: 11px;"><b>${translate(lang, "fm_event_fleet")}:</b> ${ev.trucks_required} ${countUnit(ev.trucks_required, lang, "truck")}</p>
+                <p class="popup-src" style="margin: 6px 0 0;">${lang === "id" || !ev.data_note ? translate(lang, "fm_event_note") : ev.data_note}</p>
               </div>
             `);
 
@@ -1160,9 +1116,8 @@ export function LiveFleetMap({
           if (!feature) return;
           const coordinates = feature.geometry.coordinates.slice();
           const popup = new maplibregl.Popup({ offset: 18 }).setHTML(
-            `<div class="map-popup"><h4>${feature.properties?.label || mapLabel("Titik kemacetan", "Congestion point")}</h4>` +
-              `<p>${mapLabel("Hambatan aktif pada pengalihan rute A*.", "Active A* rerouting hazard.")}</p>` +
-              `<p class="popup-src">${mapLabel("SIMULASI · skenario lalu lintas", "SIMULATION · traffic scenario")}</p></div>`,
+            `<div class="map-popup" data-provenance="simulated" title="${translate(languageRef.current, "fm_prov_traffic")}"><h4>${feature.properties?.label || mapLabel("Titik kemacetan", "Congestion point")}</h4>` +
+              `<p>${mapLabel("Hambatan aktif pada pengalihan rute A*.", "Active A* rerouting hazard.")}</p></div>`,
           );
           focusMapPin(map, coordinates, popup, { zoom: 15.5 });
         });
@@ -1508,14 +1463,13 @@ export function LiveFleetMap({
         el.className = "tpa-marker";
         el.title = q.facility_name || "TPA";
         const popup = new maplibregl.Popup({ offset: 18 }).setHTML(
-          `<div class="map-popup"><h4>${q.facility_name || "TPA Bantargebang"}</h4>` +
+          `<div class="map-popup" data-provenance="model" title="${translate(languageRef.current, "fm_prov_queue")}"><h4>${q.facility_name || "TPA Bantargebang"}</h4>` +
             (q.modelled_hour != null
               ? `<p>${mapLabel("Jam puncak model", "Modelled peak hour")} <b>${String(q.modelled_hour).padStart(2, "0")}:00</b></p>`
               : "") +
-            `<p><b>${q.trucks_in_queue}</b> ${countUnit(q.trucks_in_queue, languageRef.current, "truk antre", "truck queued", "trucks queued")}</p>` +
+            `<p><b>${q.trucks_in_queue}</b> ${countUnit(q.trucks_in_queue, languageRef.current, "queued")}</p>` +
             `<p>${mapLabel("Waktu tunggu", "Wait")}: <b>${q.avg_wait_minutes} ${mapLabel("menit", "min")}</b> (P95 ${q.p95_wait_minutes})</p>` +
-            `<p>${q.weighbridge_status === "OPERATIONAL" ? mapLabel("Jembatan timbang beroperasi", "Weighbridge operational") : q.weighbridge_status === "DEGRADED (Overload)" ? mapLabel("Jembatan timbang terbebani", "Weighbridge overloaded") : q.weighbridge_status}</p>` +
-            `<p class="popup-src">${mapLabel("HASIL MODEL · simulasi antrean", "MODEL OUTPUT · queue simulation")}</p></div>`,
+            `<p>${q.weighbridge_status === "OPERATIONAL" ? mapLabel("Jembatan timbang beroperasi", "Weighbridge operational") : q.weighbridge_status === "DEGRADED (Overload)" ? mapLabel("Jembatan timbang terbebani", "Weighbridge overloaded") : q.weighbridge_status}</p></div>`,
         );
         const marker = new maplibregl.Marker({ element: el }).setLngLat([q.lng, q.lat]).addTo(map);
         attachFocusableMarker(el, map, [q.lng, q.lat], popup, { zoom: 15 });
@@ -1539,9 +1493,8 @@ export function LiveFleetMap({
         el.className = "unlicensed-marker";
         el.title = a.plate;
         const popup = new maplibregl.Popup({ offset: 16 }).setHTML(
-          `<div class="map-popup"><h4>${mapLabel("Kolektor tanpa izin", "Unlicensed collector")}</h4>` +
-            `<p><b>${a.plate}</b></p><p>${a.message}</p>` +
-            `<p class="popup-src">${dataClass(a.data_class, languageRef.current)} · ${mapLabel("pencocokan registri", "registry match")}</p></div>`,
+          `<div class="map-popup" data-provenance="simulated" title="${translate(languageRef.current, "fm_prov_registry")}"><h4>${mapLabel("Kolektor tanpa izin", "Unlicensed collector")}</h4>` +
+            `<p><b>${a.plate}</b></p><p>${a.message}</p></div>`,
         );
         const marker = new maplibregl.Marker({ element: el }).setLngLat([a.lng, a.lat]).addTo(map);
         attachFocusableMarker(el, map, [a.lng, a.lat], popup, { zoom: 15.5 });
@@ -2061,9 +2014,8 @@ export function LiveFleetMap({
     el.className = "playback-marker";
     const marker = new maplibregl.Marker({ element: el }).setLngLat([trail[0].lng, trail[0].lat]).addTo(map);
     const popup = new maplibregl.Popup({ offset: 16 }).setHTML(
-      `<div class="map-popup"><h4>${playbackTruck} ${lang === "id" ? "putar ulang" : "playback"}</h4>` +
-        `<p>${lang === "id" ? "Penanda pemutaran riwayat perjalanan." : "Trip movement replay marker."}</p>` +
-        `<p class="popup-src">${lang === "id" ? "SIMULASI · jejak perjalanan" : "SIMULATION · breadcrumb trail"}</p></div>`,
+      `<div class="map-popup" data-provenance="simulated" title="${translate(lang, "fm_prov_trail")}"><h4>${translate(lang, "fm_playback").replace("{code}", playbackTruck)}</h4>` +
+        `<p>${translate(lang, "fm_playback_note")}</p></div>`,
     );
     attachFocusableMarker(el, map, () => marker.getLngLat(), popup, { zoom: 15 });
     playbackMarkerRef.current = marker;
@@ -2087,7 +2039,7 @@ export function LiveFleetMap({
 
   // Continuous cruise: one global rAF loop moves all engine-registered trucks.
   // rAF auto-pauses on hidden tabs; dt clamp in the engine prevents jumps.
-  // wave11 map perf: each Marker.setLngLat costs a projection, a style write and one more
+  // Map perf: each Marker.setLngLat costs a projection, a style write and one more
   // rAF inside MapLibre, and ran for every truck on every frame. Now the loop steps at
   // ~10 Hz, does nothing while the map moves (MapLibre repositions markers itself then),
   // writes a truck only when its rounded screen pixel changed, and lets off-screen trucks
@@ -2167,7 +2119,7 @@ export function LiveFleetMap({
           : null;
       push({
         id: "truck-" + t.truck_code,
-        kind: lang === "id" ? "Truk" : "Truck",
+        kind: translate(lang, "fm_search_truck"),
         label: t.truck_code,
         sub: `${formatDriverName(t.driver_name, (key) => translate(lang, key)).label} · ${t.assigned_zone}`,
         coords,
@@ -2182,7 +2134,7 @@ export function LiveFleetMap({
     (heatSearch || []).forEach((h) =>
       push({
         id: "kel-" + h.label,
-        kind: lang === "id" ? "Wilayah" : "District",
+        kind: translate(lang, "fm_search_district"),
         label: h.label,
         sub: h.sub,
         coords: h.coords,
@@ -2191,9 +2143,9 @@ export function LiveFleetMap({
     (eventPermits || []).forEach((ev) =>
       push({
         id: "ev-" + ev.id,
-        kind: lang === "id" ? "Acara" : "Event",
+        kind: translate(lang, "fm_search_event"),
         label: ev.name,
-        sub: `${lang === "id" ? "perkiraan" : "forecast"} ${ev.predicted_waste_tons} t`,
+        sub: `${translate(lang, "fm_search_forecast")} ${ev.predicted_waste_tons} t`,
         coords: [ev.lng, ev.lat],
       }),
     );
@@ -2215,7 +2167,7 @@ export function LiveFleetMap({
     setSearchQuery("");
     const popup = new maplibregl.Popup({ offset: 20 }).setHTML(
       `<div class="map-popup"><h4>${item.label}</h4><p>${item.sub || item.kind}</p>` +
-        `<p class="popup-src">${item.kind} · ${lang === "id" ? "pencarian peta" : "map search"}</p></div>`,
+        `<p class="popup-src">${item.kind} · ${translate(lang, "fm_search_source")}</p></div>`,
     );
     focusMapPin(map, item.coords, popup, { zoom: 13.5 });
   }
@@ -2479,7 +2431,7 @@ export function LiveFleetMap({
           onToggle={(e) => setLegendOpen(e.currentTarget.open)}
         >
           <summary aria-label={t("fmap_legend")} title={t("fmap_legend")}>
-            {/* wave11 fleet: the folded legend still names the three marker colours. */}
+            {/* The folded legend still names the three marker colours. */}
             <span className="map-key-peek" aria-hidden="true">
               {[
                 ["truck-ok", "w11fleet_key_ok"],
@@ -2544,9 +2496,7 @@ export function LiveFleetMap({
 
       {followTruck && (
         <button className="map-follow-chip" onClick={() => setFollowTruck(null)}>
-          {lang === "id"
-            ? `Mengikuti ${followTruck} — ketuk untuk berhenti`
-            : `Following ${followTruck} — tap to stop`}
+          {t("fm_following").replace("{code}", followTruck)}
         </button>
       )}
 

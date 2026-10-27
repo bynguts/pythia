@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
-// #83 (w13 S2): the Fleet & drivers damage table follows ID/EN for headings, columns,
+// #83: the Fleet & drivers damage table follows ID/EN for headings, columns,
 // severity/status presentation and actions.
 // Raw API enums stay untouched; only presentation translates.
 async function signIn(page, lang) {

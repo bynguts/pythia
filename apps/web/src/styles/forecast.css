@@ -153,7 +153,7 @@
   overflow-wrap: anywhere;
 }
 
-/* w10num (teardown v4 F5): the TPA panel's two labelled numbers, peak vs now. */
+/* Teardown v4 F5: the TPA panel's two labelled numbers, peak vs now. */
 .tpa-headline-pair {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
@@ -182,7 +182,7 @@
   font-size: var(--fs-caption);
 }
 
-/* ── wave11 forecast (Prediksi) ──────────────────────────────────────────────
+/* ── Forecast (Prediksi) ──────────────────────────────────────────────
    District demand is the primary surface (~70%): a ranked flat list. Drivers
    sit in one context rail split by hairlines; the city table is the evidence.
    Every selector is scoped under .forecast-workspace to outrank legacy layers. */

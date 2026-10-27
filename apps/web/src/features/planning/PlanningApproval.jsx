@@ -9,7 +9,7 @@ export function ScenarioPanel({ mode, children }) {
 
 // Step 03's authority column: who may decide, what the plan holds, and the one
 // next action. Without a plan it points back to step 02 instead of sitting empty.
-// wave11: the plan may come from another browser (the approver's inbox); it then says
+// The plan may come from another browser (the approver's inbox); it then says
 // who proposed it and when. A role that may not approve waits for one that may.
 export function PlanningApproval({ plan, planLoading, approved, approvePlan, role, canApprove, fromInbox }) {
   const { lang, t } = useLanguage();
@@ -146,7 +146,7 @@ export function PlanningApproval({ plan, planLoading, approved, approvePlan, rol
           {t("w12_approved_by").replace("{role}", approver).replace("{time}", approvedAt)}
         </p>
       )}
-      {/* wave12: approval drafts one SPJ per truck; a draft is model output until a person
+      {/* Approval drafts one SPJ per truck; a draft is model output until a person
           activates it, and a truck without one is named, never silently dropped. */}
       {approved && drafts && (
         <p

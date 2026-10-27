@@ -1,4 +1,4 @@
-// #safety (w13 S2): the Fleet & drivers "Duty hours today" card and its alert tile read the duty hours
+// #safety: the Fleet & drivers "Duty hours today" card and its alert tile read the duty hours
 // against the 10 h / 12 h marks from /safety/overview and keep the simulated provenance. The reasoned
 // override that needs spj:override now lives on Morning readiness (readiness-board.spec.js).
 import { expect, test } from "@playwright/test";

@@ -1,4 +1,4 @@
-/* Wave 13 Reports (lane S5): docs/design/export-handoff/html/reports.html. Prefix: rp-. */
+/* Reports: docs/design/export-handoff/html/reports.html. Prefix: rp-. */
 
 .rp {
   display: flex;
@@ -360,7 +360,7 @@
   font-size: 13px;
 }
 
-/* w15 value per 1,000 gate trips: a heading, a three-level strip, a table and the parameters. */
+/* Value per 1,000 gate trips: a heading, a three-level strip, a table and the parameters. */
 /* A section of its own on the paper: more air above its heading than inside it. */
 .rp-value {
   display: flex;

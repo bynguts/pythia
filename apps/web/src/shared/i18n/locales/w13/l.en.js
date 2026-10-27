@@ -1,4 +1,4 @@
-// Wave 13 lane l strings (en). Keys are prefixed "l_"; only lane l edits this file.
+// Strings (en). Keys are prefixed "l_".
 export const lEn = {
   // Landing: announcement, nav, hero
   l_announce_new: "New",
@@ -114,7 +114,7 @@ export const lEn = {
     "Fleet, landfill gate, forecast, plan and field work in one place, so a signal on the map becomes a work order in the same minute.",
   l_plat_cta1: "See tomorrow's plan",
   l_plat_cta2: "Read how the data works",
-  l_plat_url: "pythia.app/tomorrow",
+  l_plat_url: "pythia.web.id/app/tomorrow",
   l_f1_t: "Live fleet map",
   l_f1_b:
     "Every truck's last stop check-in, its corridor and its next stop. Live GPS tracking is coming soon.",

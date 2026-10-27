@@ -23,7 +23,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/app/operations", { waitUntil: "domcontentloaded" });
 });
 
-// Wave 13 Operations: the AI router's reroute is the deviation card's "Pythia suggests",
+// Operations: the AI router's reroute is the deviation card's "Pythia suggests",
 // sent with one button; there is no simulate button on the dispatcher's screen.
 test("the deviation card carries the AI reroute without a simulate button", async ({ page }) => {
   const card = page.locator('[data-testid=action-row][data-kind="deviation"]').first();
@@ -42,8 +42,8 @@ test("the gate queue KPI is labelled as model output", async ({ page }) => {
   await expect(tile.locator("[data-provenance=model]")).toHaveCount(1);
 });
 
-// wave9 fleet composition: carbon is not a dispatch task (teardown v4 F8); still true on
-// the wave 13 Operations screen.
+// Fleet composition: carbon is not a dispatch task (teardown v4 F8); still true on
+// The Operations screen.
 test("operations carries no carbon panel", async ({ page }) => {
   await expect(page.getByTestId("metric-strip")).toBeVisible({ timeout: 15000 });
   await expect(page.getByTestId("carbon-panel")).toHaveCount(0);

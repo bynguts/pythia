@@ -1,8 +1,8 @@
 // #drv6-safety: R5/R6 in /driver. The banner polls GET /api/safety/driver/{truck}
 // (contract owned by the safety agent; stubbed here): 10 h warns, 12 h holds
 // new SPJ work unless a supervisor override exists, a gate wait over 3 h says
-// the supervisor was told. The classification label stays visible; a 404 or
-// an error hides the notices. Wave 13: the notices live behind the shield
+// the supervisor was told. The classification label lives in a tooltip; a 404 or
+// an error hides the notices. The notices live behind the shield
 // toggle on the route map (an orange dot marks the toggle when one is up).
 import { expect, test } from "@playwright/test";
 import {
@@ -65,14 +65,17 @@ test("the safety banner follows the duty and gate states and holds new work at t
     await expect(page.getByTestId("driver-safety-toggle")).toHaveClass(/is-alert/);
     await openSafety(page);
     await expect(page.getByTestId("driver-safety-warn")).toHaveText("Jam kerja 10 jam: istirahat segera");
-    await expect(page.getByTestId("driver-safety-label")).toHaveText("SIMULASI");
+    const label = page.getByTestId("driver-safety-label");
+    await expect(label).toHaveAttribute("data-provenance", "simulated");
+    await expect(label).toHaveAttribute("title", /^Skenario contoh:/);
+    await expect(label).toHaveText("");
     await expect(start).toBeEnabled();
 
     response = { status: 200, json: payload({ duty_minutes: 725, duty_state: "blocked" }) };
     await page.reload();
     await openSafety(page);
     await expect(page.getByTestId("driver-safety-blocked")).toContainText(
-      "Batas 12 jam: SPJ baru butuh izin pengawas",
+      "Batas 12 jam: surat jalan baru butuh izin pengawas",
     );
     await expect(start).toBeDisabled();
     await expect(page.getByTestId("stop-held")).toBeVisible();
@@ -108,8 +111,10 @@ test("the safety banner follows the duty and gate states and holds new work at t
     await expect(page.getByTestId("driver-safety-gate")).toHaveText(
       "Antre > 3 jam: pengawas sudah diberi tahu",
     );
-    // The long English backend label becomes a short badge in the driver's language.
-    await expect(page.getByTestId("driver-safety-label")).toHaveText("Tercatat dari aplikasi");
+    // The long English backend label becomes a tooltip in the driver's language (no on-screen badge).
+    const observed = page.getByTestId("driver-safety-label");
+    await expect(observed).toHaveAttribute("data-provenance", "observed");
+    await expect(observed).toHaveAttribute("title", /^Event aplikasi teramati/);
 
     response = { status: 500, json: { detail: "boom" } };
     await page.reload();

@@ -1,4 +1,4 @@
-// #21, wave13 Tomorrow: the plan derives from the inputs on the page. Field facts are the only
+// #21, Tomorrow: the plan derives from the inputs on the page. Field facts are the only
 // manual input: a fact that keeps a truck in the workshop takes it out of the rebuilt plan,
 // the plan records the fact it applied, and the trucks KPI names the held truck. Removing
 // the fact and rebuilding brings the truck back into the solver's fleet.

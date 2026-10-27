@@ -1,4 +1,4 @@
-"""Ana's human-in-the-loop proposals: she may draft a send, never make one (wave 16).
+"""Ana's human-in-the-loop proposals: she may draft a send, never make one.
 
 ``propose_action`` validates a draft against a small whitelist and returns it as data.
 It writes nothing, sends nothing and records nothing; the console shows the draft as a

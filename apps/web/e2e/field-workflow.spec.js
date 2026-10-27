@@ -1,6 +1,6 @@
 import { test, expect, request } from "@playwright/test";
 
-// wave10 driver-field-app: /field merged into /driver; the field instruction
+// /field merged into /driver; the field instruction
 // behaviours below run against the driver app's Instruksi tab.
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
@@ -176,7 +176,7 @@ for (const [width, height] of [
     const item = page.getByTestId(`driver-instruction-${dispatch.id}`);
     await expect(item).toBeVisible({ timeout: 10000 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2)).toBe(true);
-    // Wave 13: a problem goes back through "Can't do this?", which reveals the reason field.
+    // A problem goes back through "Can't do this?", which reveals the reason field.
     const cant = item.getByTestId("driver-instruction-cant");
     await expectMinimumTouchTarget(cant);
     await cant.click();
@@ -195,7 +195,7 @@ for (const [width, height] of [
   });
 }
 
-// Wave 13: Operations sends a free-text instruction from its drawer; a double tap still
+// Operations sends a free-text instruction from its drawer; a double tap still
 // persists one dispatch, signed by the operator's role.
 test("a new instruction from Operations persists one dispatch despite a double tap", async ({ page }) => {
   const { api, token } = await authenticatedApi();
@@ -245,7 +245,7 @@ test("a new instruction from Operations persists one dispatch despite a double t
   }
 });
 
-// #w14-walk: the fleet snapshot can land seconds after Operations opens. Meanwhile the
+// The fleet snapshot can land seconds after Operations opens. Meanwhile the
 // drawer lists the fleet registry's trucks, says it is loading until then, and never sends
 // an instruction without a truck.
 test("the instruction drawer lists trucks before the fleet snapshot and never sends empty", async ({

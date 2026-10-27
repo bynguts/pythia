@@ -1,4 +1,4 @@
-"""One-driver messages, escalations and the routing rule behind them (wave 16).
+"""One-driver messages, escalations and the routing rule behind them.
 
 A message for one truck reaches only that truck's driver: the app inbox, plus a private
 WhatsApp when the contact registry has a real number. Never the alert group.

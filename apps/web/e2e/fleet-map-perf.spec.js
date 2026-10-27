@@ -1,4 +1,4 @@
-// wave11 map perf: the fleet map stays smooth on a budget phone. The cruise loop that glides
+// Map perf: the fleet map stays smooth on a budget phone. The cruise loop that glides
 // the trucks writes marker positions at a bounded rate (about 10 steps a second, a truck only
 // when its screen pixel changes), does no marker work while the operator pans or zooms
 // (MapLibre repositions the markers itself then), and stops under reduced motion, where each
@@ -88,9 +88,9 @@ test("reduced motion: no cruise, trucks sit on their reported fix", async ({ pag
   expect(perf.writes).toBe(0);
 });
 
-// wave11 map cap: the founder asked for a lighter map. It draws at most 10 trucks, the
+// Map cap: the founder asked for a lighter map. It draws at most 10 trucks, the
 // off-corridor truck always among them, and the legend says how many of the fleet are shown
-// (wave 13: the Operations map's one-line legend, always open).
+// (the Operations map's one-line legend, always open).
 test("the map draws at most ten trucks and keeps the off-corridor one", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);

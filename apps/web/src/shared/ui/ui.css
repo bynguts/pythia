@@ -1,4 +1,4 @@
-/* Wave 13 console primitives (lane F). Values follow docs/design/export-handoff/html;
+/* The console primitives. Values follow docs/design/export-handoff/html;
    colours come from the --f-* tokens in styles/tokens.css. */
 
 /* ── Button: 44 px hit box, drawn face inside ─────────────────────────── */

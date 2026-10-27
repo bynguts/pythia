@@ -24,6 +24,7 @@ const ROLE_NAMES = ["administrator", "supervisor", "dispatcher", "executive", "a
 function actorLabel(actor, t) {
   if (!actor) return "";
   if (ACTOR_NAMES[actor]) return ACTOR_NAMES[actor];
+  if (actor === "seed") return t("drv6_instr_plan");
   const role = ACTOR_ROLES[actor] || actor;
   if (ROLE_NAMES.includes(role)) return t(`pln6_profile_role_${role}`);
   return actor.charAt(0).toUpperCase() + actor.slice(1);

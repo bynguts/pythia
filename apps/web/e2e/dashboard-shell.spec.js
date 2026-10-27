@@ -28,7 +28,7 @@ async function expectMinimumTouchTarget(locator) {
 
 test.beforeEach(async ({ page }) => signIn(page));
 
-// Wave 13: the console sidebar groups seven pages under Today and Plan; Settings sits below a
+// The console sidebar groups seven pages under Today and Plan; Settings sits below a
 // separator. A click marks the item current and the page renders its one h1 inside <main>.
 const PAGES = [
   ["operations", "Operasi"],

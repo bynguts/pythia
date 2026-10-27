@@ -16,7 +16,7 @@ test("tomorrow's gate slots stay within capacity and each shows its modelled wai
 
   // The queue KPI is the city-wide gate model, not this plan's result.
   await expect(page.getByTestId("tmr-kpi-queue").locator("..")).toContainText(
-    "with every trip slotted · city-wide gate model",
+    "every trip slotted · city-wide gate model",
   );
 
   await page.getByTestId("tmr-view-gate").click();

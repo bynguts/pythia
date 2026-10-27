@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "../api/client.js";
+import { localeFor } from "../i18n/index.jsx";
 
 // gsc n28: the offline fallback uses the backend's curated simulated trucks
 // (app/fleet/data.py: same codes, plates and "Pengemudi Sim NN" names).
@@ -234,12 +235,17 @@ export function spikeRisk(tons, normalTons) {
   return { spike_percent: Math.round((ratio - 1) * 1000) / 10, risk_level: level };
 }
 
-// A spike percent with its own sign: "+3%", "0%", "−2%" (never "+-2%").
+// A spike percent with its own sign: "+3%", "0%", "−2%" (never "+-2%"), decimals in the UI
+// language ("+11,3%" in Indonesian). The provider sets <html lang> before it renders.
 export function signedPercent(value) {
   const n = value == null || value === "" ? NaN : Number(value);
   if (!Number.isFinite(n)) return "—";
   const rounded = Math.round(n * 10) / 10;
-  return `${rounded > 0 ? "+" : rounded < 0 ? "−" : ""}${Math.abs(rounded)}%`;
+  const lang = typeof document !== "undefined" && document.documentElement.lang === "id" ? "id" : "en";
+  const digits = new Intl.NumberFormat(localeFor(lang), { maximumFractionDigits: 1 }).format(
+    Math.abs(rounded),
+  );
+  return `${rounded > 0 ? "+" : rounded < 0 ? "−" : ""}${digits}%`;
 }
 
 // Data honesty (teardown v3 N1): a live snapshot keeps its own predictions, even

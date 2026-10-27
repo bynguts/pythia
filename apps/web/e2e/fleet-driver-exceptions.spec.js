@@ -1,5 +1,5 @@
-// wave9 driver exceptions: a quick report from the driver app (POST /api/driver/exceptions)
-// surfaces in the Operations "Needs you" panel (wave 13, GET /api/ops/needs-you) as its own
+// Driver exceptions: a quick report from the driver app (POST /api/driver/exceptions)
+// Surfaces in the Operations "Needs you" panel (GET /api/ops/needs-you) as its own
 // item, accident first as urgent, and closes through the alert follow-up log.
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";

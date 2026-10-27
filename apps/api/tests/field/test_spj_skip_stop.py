@@ -1,4 +1,4 @@
-"""Skipping an SPJ stop (wave 13): not collected, never completed, and it does not block the route."""
+"""Skipping an SPJ stop: not collected, never completed, and it does not block the route."""
 
 from __future__ import annotations
 

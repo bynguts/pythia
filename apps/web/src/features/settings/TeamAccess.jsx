@@ -2,7 +2,7 @@ import { useLanguage } from "../../shared/i18n/index.jsx";
 import { ROLE_PERMISSIONS } from "./roles.js";
 
 // Read-only: roles and what each can do. Accounts are managed on the server.
-// wave11 settings: one table, a row per role; on phones each row stacks.
+// One table, a row per role; on phones each row stacks.
 export function TeamAccess({ role }) {
   const { t } = useLanguage();
   return (

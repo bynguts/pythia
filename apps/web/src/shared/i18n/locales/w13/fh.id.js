@@ -1,6 +1,6 @@
 // Horizon prakiraan di halaman Besok (id): pilihan 7 / 14 / 30 hari, ringkasan rentang, strip
 // dan grafik harian, panel belajar dari jembatan timbang dan baris bukti bulanan. Kunci
-// berawalan "fh_"; hanya lane horizon yang mengubah berkas ini.
+// berawalan "fh_"; hanya berkas ini yang memakainya.
 export const fhId = {
   fh_days_heading: "{n} hari ke depan · se-kota, t/hari",
   fh_days_label: "Sampah se-kota per hari, {n} hari ke depan",
@@ -54,6 +54,6 @@ export const fhId = {
   fh_months_lebaran:
     "Paling tajam di bulan Lebaran (diarsir): galat {lebaran}% lebih kecil dari aturan sederhana, {normal}% di bulan biasa.",
   fh_months_more: "{months} terbuka begitu data timbangan Bantargebang terbaru masuk.",
-  fh_months_pending: "Angka akurasi muncul di sini setelah backtest dijalankan.",
+  fh_months_pending: "Angka akurasi muncul di sini setelah uji mundur dijalankan.",
   fh_months_unavailable: "Angka asupan bulanan muncul di sini setelah model asupan dimuat.",
 };

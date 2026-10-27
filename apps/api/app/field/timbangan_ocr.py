@@ -1,6 +1,6 @@
 """Read the whole weighbridge ticket (or scale display) via a vision model.
 
-The provider is GutsAI vision when ``GUTS_API_KEY`` is set, otherwise the
+The provider is the vision provider when ``GUTS_API_KEY`` is set, otherwise the
 OpenAI-compatible gateway (``OPENAI_API_KEY`` / ``OPENAI_BASE_URL`` with
 ``OPENAI_VISION_MODEL`` or ``OPENAI_MODEL``).
 
@@ -59,7 +59,7 @@ def _default_http_post(url: str, headers: dict, json_body: dict, timeout: float)
 
 
 def _provider() -> dict[str, str] | None:
-    """GutsAI vision when its key is set, else the OpenAI-compatible gateway; None without a key."""
+    """the vision provider when its key is set, else the OpenAI-compatible gateway; None without a key."""
     guts_key = os.getenv("GUTS_API_KEY")
     if guts_key:
         model = os.getenv("GUTS_VISION_MODEL") or "gemini-3.8-flash"
@@ -67,7 +67,7 @@ def _provider() -> dict[str, str] | None:
             "api_key": guts_key,
             "base_url": os.getenv("GUTS_BASE_URL") or "https://api.gutsai.id/v1",
             "model": model,
-            "source": f"gutsai-vision ({model})",
+            "source": f"vision-ocr ({model})",
         }
     openai_key = os.getenv("OPENAI_API_KEY")
     if openai_key:

@@ -44,7 +44,7 @@ export function buildTomorrowReportHtml({ t, number, title, subtitle, forecast, 
     <p>${escape(subtitle)}</p>
     ${
       forecast
-        ? `<h2>${escape(t("s3_fc_title"))} (MODEL OUTPUT)</h2>
+        ? `<h2>${escape(t("s3_fc_title"))}</h2>
     <p><b>${number(forecast.total_tonnage_t)} t</b> · ${escape(
       t("s3_fc_districts").replace("{n}", forecast.kecamatan_count),
     )}</p>

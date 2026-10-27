@@ -1,4 +1,4 @@
-"""Morning readiness board: per truck, can it roll today (wave 12 lane B).
+"""Morning readiness board: per truck, can it roll today.
 
 Aggregates facts that already live in separate stores (pre-trip, duty, the plan
 instruction ack, SPJ, damage, service) into one row per truck. Read-only: it

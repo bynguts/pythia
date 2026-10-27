@@ -1,4 +1,4 @@
-"""Gate-slot recommendations for the Bantargebang weighbridge (wave 12 lane C).
+"""Gate-slot recommendations for the Bantargebang weighbridge.
 
 The board reads the gate slots of approved plans; accepting a hold sends the
 truck one plain dispatch instruction. The plan's own instructions are untouched.

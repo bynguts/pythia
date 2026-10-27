@@ -51,7 +51,7 @@ test("scentinel evidence renders as external simulation with visible gates", asy
   });
   expect(importRes.status).toBe(201);
 
-  // Authenticate then open Settings → Data sources & model (wave9 settings: the audit
+  // Authenticate then open Settings → Data sources & model (settings: the audit
   // workspace moved there) and expand the registry, which holds the evidence rail.
   await page.goto("/");
   await page.evaluate((token) => {

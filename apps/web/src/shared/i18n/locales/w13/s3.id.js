@@ -1,4 +1,4 @@
-// Wave 13 lane s3 strings (id). Keys are prefixed "s3_"; only lane s3 edits this file.
+// Strings (id). Keys are prefixed "s3_".
 export const s3Id = {
   // Page head
   s3_title: "Besok, {date}",
@@ -7,9 +7,9 @@ export const s3Id = {
   s3_crumb_sub: "Rencana untuk {date}",
   s3_sub_dispatcher: "Prakiraan sudah masuk. Tambahkan fakta lapangan, susun rencana, kirim untuk disetujui.",
   s3_sub_waiting:
-    "Dikirim ke supervisor pukul {time}. Halaman ini diperbarui begitu disetujui atau dikembalikan.",
+    "Dikirim ke pengawas pukul {time}. Halaman ini diperbarui begitu disetujui atau dikembalikan.",
   s3_sub_approved: "Disetujui pukul {time}. Setiap sopir sudah menerima titik angkut dan slot gerbangnya.",
-  s3_sub_returned: "Supervisor mengembalikan rencana ini. Baca catatannya, lalu susun ulang.",
+  s3_sub_returned: "Pengawas mengembalikan rencana ini. Baca catatannya, lalu susun ulang.",
   s3_sub_supervisor: "{who} mengirim rencana ini pukul {time}. Tinjau, lalu kirim ke para sopir.",
   s3_sub_supervisor_none: "Belum ada rencana yang menunggu persetujuan Anda. Prakiraan besok ada di bawah.",
   s3_export_pdf: "Ekspor PDF",
@@ -30,7 +30,7 @@ export const s3Id = {
   s3_note_facts_none: "belum ada",
   s3_note_solver_time: "CP-SAT · {s} dtk",
   s3_note_solver: "CP-SAT",
-  s3_note_supervisor: "Supervisor",
+  s3_note_supervisor: "Pengawas",
   s3_note_your_turn: "Giliran Anda",
   s3_note_approved: "Disetujui",
   s3_note_returned: "Dikembalikan",
@@ -170,7 +170,7 @@ export const s3Id = {
   s3_failed_http: "Server tidak menyusun rencana (HTTP {status}). Tidak ada yang berubah.",
   s3_failed_network: "Server tidak dapat dihubungi. Tidak ada yang berubah.",
   s3_supervisor_none_title: "Tidak ada yang menunggu persetujuan",
-  s3_supervisor_none_body: "Saat pengatur armada mengirim rencana besok, rencana itu muncul di sini.",
+  s3_supervisor_none_body: "Saat dispatcher mengirim rencana besok, rencana itu muncul di sini.",
   s3_returned_title: "Dikembalikan oleh {who}",
   s3_returned_note: "“{note}”",
   s3_withdraw: "Tarik kembali",
@@ -181,11 +181,11 @@ export const s3Id = {
   s3_footer_moved: "Anda memindahkan {n} truk",
   s3_footer_moved_one: "Anda memindahkan 1 truk",
   s3_footer_drag: "seret baris untuk menukar",
-  s3_footer_sent: "Dikirim ke supervisor pukul {time}",
+  s3_footer_sent: "Dikirim ke pengawas pukul {time}",
   s3_footer_approved: "Disetujui oleh {who} pukul {time} · {n} surat jalan disiapkan",
   s3_footer_returned: "Dikembalikan pukul {time}",
   s3_rebuild: "Susun ulang",
-  s3_submit: "Kirim ke supervisor",
+  s3_submit: "Kirim ke pengawas",
   s3_submit_error: "Rencana gagal dikirim. Coba lagi.",
   s3_open_work_orders: "Buka surat jalan",
   s3_approve_note:
@@ -195,7 +195,7 @@ export const s3Id = {
   s3_return: "Kembalikan dengan catatan",
   s3_approve: "Setujui dan kirim",
   s3_approve_error: "Persetujuan gagal. Tidak ada yang terkirim.",
-  s3_return_label: "Catatan untuk pengatur armada",
+  s3_return_label: "Catatan untuk dispatcher",
   s3_return_placeholder: "Apa yang perlu diubah?",
   s3_return_send: "Kembalikan",
   s3_return_cancel: "Batal",

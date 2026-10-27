@@ -1,4 +1,4 @@
-// wave10 driver-field-app: /driver is the one field app — driver sign-in, truck search, the
+// /driver is the one field app — driver sign-in, truck search, the
 // /field merge (Instruksi tab), offline exception buttons, the TPA guide card, small screens.
 import { expect, test } from "@playwright/test";
 import { API, apiLogin, authHeaders } from "./lib/driverSpj.js";
@@ -59,7 +59,7 @@ async function expectTargets(page, selector, min) {
 test("the driver sign-in is titled for drivers and drops the command-centre story", async ({ page }) => {
   await freshPhone(page);
   await page.goto("/driver");
-  // Wave 13 (F2CI6P): the driver app's own sign-in.
+  // Design F2CI6P: the driver app's own sign-in.
   await expect(page.getByTestId("driver-login")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Pythia Sopir" })).toBeVisible();
   await expect(page.getByText("Masuk ke Pythia")).toHaveCount(0);
@@ -185,7 +185,7 @@ test("an exception button queues offline, counts as waiting for signal, then syn
   expect(mine[0].reported_by).toBe("driver");
 });
 
-// #w14-walk: after the last stop the SPJ is closed (selesai) and waits for its weigh ticket;
+// After the last stop the SPJ is closed (selesai) and waits for its weigh ticket;
 // the Rute tab says the route is finished and leads to the TPA instead of "no dispatch order".
 test("the Rute tab after the last stop shows a finished route, then the closed one", async ({
   page,
@@ -279,12 +279,12 @@ test("the TPA gate screen shows the modelled wait and queue labelled as model ou
   });
   await openDriver(page, token);
 
-  // wave11 driver: every stop is done, so the app opens on its TPA tab; the route
+  // Every stop is done, so the app opens on its TPA tab; the route
   // overview now lives on the Rute tab, one task per screen.
   await expect(page.getByTestId("driver-tab-tpa")).toHaveAttribute("aria-current", "page");
   await page.getByTestId("driver-tab-rute").click();
 
-  // Wave 13: the route map with every stop listed in the "Semua titik" sheet.
+  // The route map with every stop listed in the "Semua titik" sheet.
   await expect(page.getByTestId("driver-route-overview")).toBeVisible();
   await expect(page.getByTestId("driver-route-all-done")).toBeVisible();
   await page.getByTestId("driver-all-stops").click();

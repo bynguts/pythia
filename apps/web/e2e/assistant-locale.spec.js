@@ -4,7 +4,7 @@ const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
 // #76: the assistant interface follows ID/EN — greeting, prompts, input, upload
 // controls, error and offline fallbacks — and requests the answer language
-// explicitly on the wire. wave13: the assistant lives in the Ask Ana drawer.
+// explicitly on the wire. The assistant lives in the Ask Ana drawer.
 async function openAssistant(page, lang) {
   await page.goto("/");
   const response = await page.request.post(`${API}/auth/login`, {

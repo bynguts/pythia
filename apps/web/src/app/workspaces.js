@@ -10,7 +10,7 @@ import {
   Warehouse,
 } from "lucide-react";
 
-// Wave 13: the console lives under /app/<id>. Groups follow the design's sidebar
+// The console lives under /app/<id>. Groups follow the design's sidebar
 // (Today, Plan); Settings is pinned below a separator.
 export const WORKSPACES = [
   { id: "operations", key: "f_nav_operations", group: "today", icon: RadioTower },
@@ -33,7 +33,7 @@ export function workspacePath(id) {
   return `/app/${id}`;
 }
 
-// Pre-wave-13 paths: old deep links land on their new home, query kept (plus
+// Pre-redesign paths: old deep links land on their new home, query kept (plus
 // the given tab, which wins over one already in the query).
 export const MOVED_PATHS = {
   fleet: { to: "operations" },

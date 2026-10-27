@@ -1,4 +1,4 @@
-"""wave9 settings: the WhatsApp connection screen's API (status, alert group, test send)."""
+"""Settings: the WhatsApp connection screen's API (status, alert group, test send)."""
 
 import json
 import re

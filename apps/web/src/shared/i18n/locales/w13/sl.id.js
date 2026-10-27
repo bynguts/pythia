@@ -1,10 +1,10 @@
-// Wave 15 lane sl strings (Indonesian).
+// Strings (Indonesian).
 export const slId = {
   sl_seal_ok: "Tersegel · {hash}",
   sl_seal_broken: "Segel rusak",
   sl_seal_legacy: "Dicatat sebelum penyegelan",
   sl_checks_title: "Pemeriksaan yang perlu ditinjau (aturan, bukan AI)",
-  sl_check_ocr: "membaca OCR tiket, MODEL OUTPUT",
+  sl_check_ocr: "dari bacaan OCR tiket",
   sl_check_ticket_document: "Foto tiket",
   sl_check_ocr_vs_entered: "OCR vs bruto tercatat",
   sl_check_ticket_arithmetic: "Hitungan tiket",

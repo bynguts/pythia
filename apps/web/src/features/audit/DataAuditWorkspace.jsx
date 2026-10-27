@@ -267,9 +267,9 @@ function sourceNote(note, lang, copy) {
   return LIMITATIONS_ID[note] || `${copy.originalNote}: ${note}`;
 }
 
-// wave9 settings: rendered as the "Sumber data & model" section of Settings (?tab=data),
+// Rendered as the "Sumber data & model" section of Settings (?tab=data),
 // condensed: the summary strip stays open, the model card and the registry are collapsed.
-// wave11 settings: a calm registry: one joined strip, then two disclosure rows in one box;
+// A calm registry: one joined strip, then two disclosure rows in one box;
 // the registry opens onto a table with the evidence columns below it, never a side rail.
 export function DataAuditWorkspace() {
   const { lang, t } = useLanguage();

@@ -1,4 +1,4 @@
-// wave13 Tomorrow: "Why it moved" lists only the drivers the forecast filled in by itself and
+// Tomorrow: "Why it moved" lists only the drivers the forecast filled in by itself and
 // says honestly what is not modelled: an event without a location is "not modelled", a
 // holiday's effect is "—" (not 0%), a dry day is no rain, never a made-up uplift.
 import { expect, test } from "@playwright/test";

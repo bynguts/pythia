@@ -81,14 +81,14 @@ test("offline stop submission queues durably, survives reload, and syncs on reco
       localStorage.removeItem("pythia_driver");
     }, principal.token);
     await page.goto("/driver");
-    // wave10 driver-field-app: the shared account searches its truck instead of a 59-row list.
+    // The shared account searches its truck instead of a 59-row list.
     await page.getByTestId("driver-truck-search").fill(TEST_TRUCK);
     await page.locator(`[data-testid="pick-${TEST_TRUCK}"]`).click();
     await page.getByTestId("driver-pick-start").click();
 
     // Pretrip online first (it gates the stop form) — only when today's
     // inspection has not been recorded yet (server-side daily gate).
-    // Wave 13: the check lives on the Instructions tab.
+    // The check lives on the Instructions tab.
     await page.getByTestId("driver-tab-instruksi").click();
     const done = page.getByTestId("pretrip-done");
     const startCheck = page.getByTestId("driver-start-pretrip");
@@ -105,7 +105,7 @@ test("offline stop submission queues durably, survives reload, and syncs on reco
       timeout: 20000,
     });
 
-    // Wave 13: "I've arrived" on the route sheet opens the stop proof screen.
+    // "I've arrived" on the route sheet opens the stop proof screen.
     await page.getByTestId("stop-start").click();
     await expect(page.getByTestId("stop-proof")).toBeVisible();
 
@@ -134,7 +134,7 @@ test("offline stop submission queues durably, survives reload, and syncs on reco
     await page.getByTestId("officer-name").fill("Budi");
     await page.getByTestId("stop-finish").click();
 
-    // Durable queue indicator — not a dead error toast alone. Wave 13: the route
+    // Durable queue indicator — not a dead error toast alone. The route
     // map has no top bar; its trip card shows the offline chip with the count.
     await expect(page.getByTestId("driver-trip-card").getByTestId("drt-sync")).toHaveAttribute(
       "data-sync",

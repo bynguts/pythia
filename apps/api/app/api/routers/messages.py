@@ -1,4 +1,4 @@
-"""Operator-approved sends to one driver, and escalations to the supervisor (wave 16).
+"""Operator-approved sends to one driver, and escalations to the supervisor.
 
 Every call here is an operator's click (an assistant proposal, a Needs-you suggestion
 or a gate hold, previewed and possibly edited first) made with the operator's own token.

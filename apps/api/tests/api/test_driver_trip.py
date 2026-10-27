@@ -1,4 +1,4 @@
-"""/api/driver/trip/{truck} and the driver's own exception list (wave 13 driver gaps)."""
+"""/api/driver/trip/{truck} and the driver's own exception list."""
 
 from __future__ import annotations
 

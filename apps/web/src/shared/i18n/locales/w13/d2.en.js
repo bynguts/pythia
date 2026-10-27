@@ -1,4 +1,4 @@
-// Wave 13 lane d2 strings (en). Keys are prefixed "d2_"; only lane d2 edits this file.
+// Strings (en). Keys are prefixed "d2_".
 export const d2En = {
   d2_back: "Back",
   d2_close: "Close",

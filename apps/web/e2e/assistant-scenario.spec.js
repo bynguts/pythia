@@ -114,7 +114,7 @@ test("what-if answer shows plan, sources, provenance and opens the twin with the
   // equal truck and crew counts name the one-crew-per-truck rule from the payload's crew size.
   await expect(card.locator(".is-queue dd").first()).toHaveText("42.5 (31.2–47.9) → 18");
   await expect(page.getByTestId("assistant-scenario-queue-band")).toHaveText(
-    "Range 31.2–47.9: unstaggered wait across departure spreads (SIMULATED)",
+    "Range 31.2–47.9: unstaggered wait across departure spreads",
   );
   await expect(page.getByTestId("assistant-scenario-crew-rule")).toHaveText("1 crew per truck (4 workers)");
   await expect(page.getByTestId("assistant-scenario-snapped")).toHaveCount(0);

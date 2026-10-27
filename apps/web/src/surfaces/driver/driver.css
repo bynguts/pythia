@@ -1,4 +1,4 @@
-/* Driver PWA (/driver). Wave 13: the founder's approved driver screens
+/* Driver PWA (/driver). The founder's approved driver screens
    (docs/design/export-handoff/drv_*.html, 390 px): warm paper canvas, white
    panels with hairlines, one green, Archivo headings over Inter, 48 px buttons
    with 15 px labels, sized for a gloved hand on a budget phone in direct sun.
@@ -538,7 +538,7 @@ textarea.driver-input {
   }
 }
 
-/* ══ Wave 13 driver core (lane D1): .drv-* ═══════════════════════════════════ */
+/* ══ driver core: .drv-* ═══════════════════════════════════ */
 
 .driver-tab svg {
   color: var(--f-faint, #726e66);

@@ -50,7 +50,7 @@ async function postJson(path, body) {
   return { ok: response.ok, status: response.status, data };
 }
 
-// Wave 13 Tomorrow (iNFo4) and its supervisor mode (x4toSC): tomorrow's forecast and what
+// Tomorrow (iNFo4) and its supervisor mode (x4toSC): tomorrow's forecast and what
 // moved it, the field facts (the only manual input), the CP-SAT pilot-fleet plan built from
 // both, and the submit → approve / return loop. No sliders: every other input fills itself.
 export function TomorrowPage() {

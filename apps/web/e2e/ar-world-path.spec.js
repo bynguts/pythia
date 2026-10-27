@@ -461,7 +461,7 @@ async function openAr(page, lang = "en") {
     { token: principal.token, lang, truck: TRUCK },
   );
   await page.goto("/driver");
-  // Wave 13: AR is a button on the route screen's stop sheet, next to "Saya sudah tiba".
+  // AR is a button on the route screen's stop sheet, next to "Saya sudah tiba".
   const open = page.getByTestId("stop-1").getByTestId("ar-nav-open");
   await expect(open).toBeVisible({ timeout: 20000 });
   await open.click();

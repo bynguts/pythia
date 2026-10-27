@@ -37,7 +37,7 @@ function MapPanel({
   const { t } = useLanguage();
   return (
     <section className="panel map-panel">
-      {/* wave11 fleet: the map's provenance is one outlined mono footer chip. */}
+      {/* The map's provenance is one outlined mono footer chip. */}
       <p className="map-data-notice" data-testid="map-provenance">
         <span>{t("w10fleet_map_sim")}</span>
         <span aria-hidden="true">·</span>
@@ -68,9 +68,9 @@ const MAP_LAYER_KEYS = [
   ["wr", "fmap_wr"],
 ];
 
-// Wave 13: the pre-redesign workspaces (fleet, forecast, planning, drivers,
+// The pre-redesign workspaces (fleet, forecast, planning, drivers,
 // settings) without their old shell. The console page stubs render one each until
-// their lane replaces it; scenario hand-offs between them travel in the URL.
+// their replacement page takes over; scenario hand-offs between them travel in the URL.
 export function LegacyWorkspace({ workspace: activeWorkspace }) {
   const { t } = useLanguage();
   const navigate = useNavigate();

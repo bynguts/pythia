@@ -9,7 +9,7 @@ const POLL_MS = 30000;
 // A hard stop: the truck may not leave until a supervisor acts.
 const HARD_BLOCKERS = ["duty_blocked"];
 
-// wave12: the morning readiness board (GET /api/readiness) as a plain list: the counts,
+// The morning readiness board (GET /api/readiness) as a plain list: the counts,
 // then one row per truck saying it is ready or naming what holds it. Plain on purpose;
 // the founder styles it.
 export function ReadinessList() {

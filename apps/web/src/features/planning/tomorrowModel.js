@@ -1,4 +1,4 @@
-// Pure helpers for the Tomorrow page (wave 13): plan grouping, the pre-submit checks and
+// Pure helpers for the Tomorrow page: plan grouping, the pre-submit checks and
 // time formatting. Every number comes from the API payloads; nothing here invents one.
 
 const JAKARTA = "Asia/Jakarta";

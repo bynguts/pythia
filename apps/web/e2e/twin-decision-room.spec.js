@@ -1,4 +1,4 @@
-// wave10 twin decision room: the twin is where this week's scenario is decided. A briefing
+// Twin decision room: the twin is where this week's scenario is decided. A briefing
 // scenario puts today's canonical baseline (the Prediksi / Rencana figures) beside the
 // scenario, goes to Rencana, and opens on the XR table with the same numbers; the table's
 // agreement reaches the plan as a session note. /xr says why AR is off and links back.

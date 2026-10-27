@@ -77,7 +77,7 @@ test("asking a what-if applies rain, venue and day in place and shows the tool t
   );
   // The landfill beacon names the modelled peak hour of the selected day, never the wall clock,
   // and puts that day's average beside the peak-hour wait so the two never read as a contradiction.
-  // wave10 T2: its queue detail opens on tap.
+  // Its queue detail opens on tap.
   await page.getByTestId("twin-landfill-tag").click();
   await expect(page.getByTestId("twin-landfill-tag")).toContainText(
     /Peak hour \d{2}:00 \(modelled\): [\d,]+ trucks queued · [\d,]+ min wait/,
@@ -98,7 +98,7 @@ test("asking a what-if applies rain, venue and day in place and shows the tool t
   await expect(card.getByTestId("assistant-trace-forecast_model")).toContainText("Prophet + XGBoost");
   await expect(card.getByTestId("assistant-trace-resource_rule")).toContainText("PLANNING RULE");
   await expect(card.getByTestId("assistant-trace-queue_simulation")).toContainText("SIMULATED");
-  // Approval stays with the operator on Tomorrow (wave 13); XR opens on the same scenario.
+  // Approval stays with the operator on Tomorrow; XR opens on the same scenario.
   await expect(card.getByTestId("assistant-review-plan")).toHaveAttribute("href", "/app/tomorrow");
   await expect(card.getByTestId("assistant-review-plan")).toHaveText("Review & approve in Tomorrow");
   await expect(card.getByTestId("assistant-open-xr")).toHaveAttribute("href", /rainfall_mm=120/);

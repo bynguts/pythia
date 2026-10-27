@@ -1,4 +1,4 @@
-// Pure derivations over GET /api/readiness for the Morning readiness screen (lane S2).
+// Pure derivations over GET /api/readiness for the Morning readiness screen.
 import { fromCatalog } from "../../shared/i18n/index.jsx";
 
 // Pre-trip item key -> i18n key of its name.

@@ -143,7 +143,7 @@ def test_stop_endpoint_accepts_demo_flag(api_client, auth_headers):
         api_client.post(f"/api/spj/{spj_id}/cancel", headers=headers)
 
 
-# ── gsc review M2: the DEMO exemptions cannot be claimed with a free-text location_type ──
+# ── The DEMO exemptions cannot be claimed with a free-text location_type ──
 
 
 @pytest.mark.parametrize("spoof", ["DEMO", "demo", " Demo "])
@@ -201,7 +201,7 @@ def test_spoofed_demo_location_type_is_a_409(api_client, auth_headers):
         api_client.post(f"/api/spj/{spj_id}/cancel", headers=headers)
 
 
-# ── gsc review n18: the DEMO routing exemption covers only legs touching a DEMO stop ──
+# ── The DEMO routing exemption covers only legs touching a DEMO stop ──
 
 JAKARTA_STOP = (-6.1754, 106.8272)
 

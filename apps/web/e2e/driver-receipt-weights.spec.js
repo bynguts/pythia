@@ -1,4 +1,4 @@
-// #drv7-receipt / wave 13 weigh ticket: at the gate the driver photographs the
+// #drv7-receipt / weigh ticket: at the gate the driver photographs the
 // ticket; with no OCR engine (e2e) the gross and tare are typed from the paper.
 // The shift summary shows gross, tare and net exactly as the server recorded
 // them (H10), an invalid tare blocks sending, and a ticket queued offline says

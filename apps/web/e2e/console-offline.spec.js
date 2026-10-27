@@ -3,7 +3,7 @@ import { cancelSpjIndependently, disposeCleanupContext } from "./lib/spjCleanup.
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
 
-// Wave 13: when the API drops, the TPA gate and Work orders keep the last data on screen and say
+// When the API drops, the TPA gate and Work orders keep the last data on screen and say
 // since when ("Showing data from HH:MM") instead of blanking into an error state.
 async function signIn(page, role = "dispatcher") {
   await page.goto("/");

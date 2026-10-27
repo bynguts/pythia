@@ -1,4 +1,4 @@
-"""Field facts: what the dispatcher knows that no feed carries (wave 13).
+"""Field facts: what the dispatcher knows that no feed carries.
 
 "Gate lane 3 closed 08:00-10:00", "T-112 stays in the workshop", "clean-up day
 in Kembangan". These are the only manual input of the planning loop: weather,

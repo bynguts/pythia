@@ -1,4 +1,4 @@
-/* Fleet & drivers (lane S2). Scoped with .flt-; built on the --f-* tokens. */
+/* Fleet & drivers. Scoped with .flt-; built on the --f-* tokens. */
 .flt {
   display: flex;
   flex-direction: column;

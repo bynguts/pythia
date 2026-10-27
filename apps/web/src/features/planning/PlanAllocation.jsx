@@ -87,7 +87,7 @@ export function AllocationKpis({ plan, rows, fleetSize, held, board, queueMetric
                 .replace("{b}", number(queueAfter, 1))
             : "—"}
         </dd>
-        <dd className="tmr-kpi-note">{t("s3_kpi_queue_note")}</dd>
+        <dd className="tmr-kpi-note">{t("gq_kpi_queue_note")}</dd>
       </div>
     </dl>
   );

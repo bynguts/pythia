@@ -230,7 +230,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "description": (
                 "Skenario what-if baca-saja (hujan mm, event + jumlah pengunjung, venue, hari ke-N) pada "
                 "prakiraan kecamatan yang sama dengan Twin: kecamatan paling berisiko, tonase tambahan, "
-                "truk/kru, metrik antrean TPA, rencana, sumber data, dan tautan Twin/XR. MODEL OUTPUT."
+                "truk/kru, metrik antrean TPA, rencana, sumber data, dan tautan Twin/XR. Prakiraan model."
             ),
             "parameters": {
                 "type": "object",
@@ -288,7 +288,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "dipelajari dari jembatan timbang, dan asupan TPST Bantargebang "
                 "3 bulan ke depan (model rata-rata 12 bulan yang disesuaikan kalender, diuji balik pada data timbangan "
                 "nyata; bulan di luar horizon backtest 1-3 bulan ditandai) beserta galat backtest (MAPE). Hanya baca. "
-                "Pakai untuk 'berapa ton minggu depan / 2 minggu / 30 hari / bulan depan'. Semua angka MODEL OUTPUT."
+                "Pakai untuk 'berapa ton minggu depan / 2 minggu / 30 hari / bulan depan'. Semua angka prakiraan model."
             ),
             "parameters": {
                 "type": "object",
@@ -307,7 +307,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "get_daily_recap",
             "description": (
-                "Rekap penutupan hari: rencana (MODEL) vs realisasi tercatat di aplikasi (SPJ, tanda terima, "
+                "Rekap penutupan hari: rencana (prakiraan) vs realisasi tercatat di aplikasi (SPJ, tanda terima, "
                 "tonase), antre gerbang, insiden, dan celah bukti. Hanya baca. Nilai null berarti belum ada data."
             ),
             "parameters": {

@@ -124,7 +124,7 @@ export function straightLineEta(from, to) {
   };
 }
 
-// GET /driver/trip/{truck} (lane BE): road ETA from the phone's own position,
+// GET /driver/trip/{truck}: road ETA from the phone's own position,
 // the gate slot, the plan's tons per stop, the modelled gate queue and the
 // dispatch phone. Each figure keeps its source; a missing one stays null and
 // the screens fall back to their labelled estimates. The position is rounded

@@ -1,4 +1,4 @@
-"""Console-wide operational feeds (wave 13): the "Needs you" list and driver-phone sync."""
+"""Console-wide operational feeds: the "Needs you" list and driver-phone sync."""
 
 from __future__ import annotations
 

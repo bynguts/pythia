@@ -1,4 +1,4 @@
-// #w15-ocr: the vision model reads the whole weighbridge ticket. Its gross and
+// The vision model reads the whole weighbridge ticket. Its gross and
 // tare pre-fill the weigh sheet, the ticket number and plate show as a model
 // reading to check, and a photo that is not a ticket asks for a retake.
 // The OCR endpoint is stubbed; the receipt goes to the real backend.

@@ -6,7 +6,7 @@ import { signedPercent } from "../../shared/hooks/useSnapshot.js";
 // `source` (teardown v3 N1): "live" is the backend's list, which may honestly be
 // empty; "sample" is the offline fallback, shown only when the backend is
 // unreachable and badged as not a forecast; "loading" shows neither.
-// wave11 forecast: the evidence section is the surface; this is a plain table in it.
+// Forecast: the evidence section is the surface; this is a plain table in it.
 export function PredictionPanel({ predictions: livePredictions, source = "live" }) {
   const { t } = useLanguage();
   const sample = source === "sample";

@@ -1,6 +1,6 @@
 // #drv6-session: item 9. When the backend restarts and forgets the field
-// session, the next driver write turns the app into "Masuk lagi" (wave 13,
-// D2vpX "Signed out"): no raw English server detail, the password signs in
+// session, the next driver write turns the app into "Masuk lagi"
+// (design D2vpX "Signed out"): no raw English server detail, the password signs in
 // again in place, and the deep link stays.
 import { expect, test } from "@playwright/test";
 import { API, apiLogin, authHeaders, openDriver } from "./lib/driverSpj.js";

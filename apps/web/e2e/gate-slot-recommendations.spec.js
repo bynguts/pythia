@@ -1,4 +1,4 @@
-// wave13 TPA gate (/app/gate): the board and its recommendation come from GET /api/gate/slots
+// TPA gate (/app/gate): the board and its recommendation come from GET /api/gate/slots
 // (SIMULATED). "Accept and send" sends each hold to its driver; without an approved plan the card
 // says there is nothing to balance yet.
 import { expect, test } from "@playwright/test";

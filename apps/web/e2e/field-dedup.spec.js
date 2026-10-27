@@ -1,6 +1,6 @@
 import { test, expect, request } from "@playwright/test";
 
-// #44: repeated taps must not enqueue duplicate confirmations. wave10
+// #44: repeated taps must not enqueue duplicate confirmations.
 // driver-field-app: the /field app merged into /driver, whose outbox replaces
 // a repeated (instruction, answer) instead of adding to it; an answered
 // instruction leaves the list, so it takes one answer. Flush retries keep

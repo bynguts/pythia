@@ -24,7 +24,7 @@ async function signIn(page, lang = "id") {
 
 const MIN = 44;
 
-// Wave 13: the console shell and each page's buttons keep a 44x44 hit box (the drawn
+// The console shell and each page's buttons keep a 44x44 hit box (the drawn
 // control may be smaller inside it) at phone and tablet widths, without page overflow.
 test("primary controls meet the 44x44 touch target at 390 and 768px", async ({ page }) => {
   test.setTimeout(120000);
@@ -66,7 +66,7 @@ test("primary controls meet the 44x44 touch target at 390 and 768px", async ({ p
   }
 });
 
-// Wave 13: the phone's off-canvas sidebar (search, nav, supervisor switch, profile) and the
+// The phone's off-canvas sidebar (search, nav, supervisor switch, profile) and the
 // Operations map's own zoom and locate buttons keep the same 44x44 hit box.
 test("sidebar and map controls meet the 44x44 touch target at 390 and 768px", async ({ page }) => {
   await signIn(page);

@@ -1,4 +1,4 @@
-// Clock and duration formatting shared by Morning readiness and Fleet & drivers (lane S2).
+// Clock and duration formatting shared by Morning readiness and Fleet & drivers.
 const JAKARTA = "Asia/Jakarta";
 
 // "HH:MM" in Jakarta time for an ISO timestamp, or null when it is missing or unparseable.

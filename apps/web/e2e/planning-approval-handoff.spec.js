@@ -1,4 +1,4 @@
-// wave11 plan approval handoff, wave13 Tomorrow: a dispatcher builds the plan and sends it to
+// Plan approval handoff, Tomorrow: a dispatcher builds the plan and sends it to
 // the supervisor in one browser; the supervisor turns on supervisor mode in another, sees the
 // same plan (who proposed it, "Your turn") and approves it. The dispatcher can build and
 // submit but never approve.

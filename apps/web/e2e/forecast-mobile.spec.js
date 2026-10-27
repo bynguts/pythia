@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { API, freeDay, signIn } from "./lib/tomorrow.js";
 
-// #71, wave13: the Tomorrow page never forces page-level horizontal overflow from 320 px to
+// #71: the Tomorrow page never forces page-level horizontal overflow from 320 px to
 // the 1024 px console minimum, with a built plan on screen; the allocation table scrolls
 // inside its own wrap.
 test("tomorrow never overflows the page at mobile and tablet widths", async ({ page }) => {

@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { signIn } from "./lib/tomorrow.js";
 
-// #42, wave13: the Tomorrow forecast exposes its numbers as text (no aria-label on plain
+// #42: the Tomorrow forecast exposes its numbers as text (no aria-label on plain
 // elements), and the page passes axe for prohibited ARIA and contrast.
 test("tomorrow's forecast is readable as text and passes axe", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });

@@ -1,5 +1,5 @@
 /* Model card in Settings → Data sources & model (features/audit/ModelCard.jsx).
-   wave11 settings: flat inside its disclosure: hairline rows, numbers in tabular figures,
+   Settings: flat inside its disclosure: hairline rows, numbers in tabular figures,
    the verdict as a status dot and words, never a coloured box. */
 .audit-model-card {
   min-width: 0;

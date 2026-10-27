@@ -1,7 +1,7 @@
-// Wave 13 per-lane catalogs. Each lane owns one pair of files, <lane>.en.js and
-// <lane>.id.js, exporting a named object (`<lane>En`, `<lane>Id`) whose keys carry
-// the lane prefix (`s1_needs_you_title`). The pairs merge here and then over the
-// base catalogs in ../../index.jsx, so a lane never edits en.js / id.js.
+// Per-area catalogs. Each area owns one pair of files, <area>.en.js and
+// <area>.id.js, exporting a named object (`<area>En`, `<area>Id`) whose keys carry
+// the area prefix (`s1_needs_you_title`). The pairs merge here and then over the
+// base catalogs in ../../index.jsx, so en.js / id.js stay untouched.
 import { d1En } from "./d1.en.js";
 import { d1Id } from "./d1.id.js";
 import { d2En } from "./d2.en.js";
@@ -36,6 +36,10 @@ import { cpEn } from "./cp.en.js";
 import { cpId } from "./cp.id.js";
 import { eaEn } from "./ea.en.js";
 import { eaId } from "./ea.id.js";
+import { fmEn } from "./fm.en.js";
+import { fmId } from "./fm.id.js";
+import { gqEn } from "./gq.en.js";
+import { gqId } from "./gq.id.js";
 
 export const w13En = {
   ...fEn,
@@ -55,6 +59,8 @@ export const w13En = {
   ...cpEn,
   ...lxEn,
   ...eaEn,
+  ...fmEn,
+  ...gqEn,
 };
 export const w13Id = {
   ...fId,
@@ -74,4 +80,6 @@ export const w13Id = {
   ...cpId,
   ...lxId,
   ...eaId,
+  ...fmId,
+  ...gqId,
 };

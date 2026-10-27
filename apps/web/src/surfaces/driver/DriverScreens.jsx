@@ -42,7 +42,7 @@ import {
 } from "./driverHelpers.js";
 import { instructionText } from "./driverText.js";
 
-// Wave 13 driver core (lane D1): the top bar, the sync pill, the safety gate,
+// Driver core: the top bar, the sync pill, the safety gate,
 // the instructions screen, the waiting-for-signal and signed-out states and the
 // tab bar, drawn to docs/design/export-handoff (drv_*.html, 390 px).
 

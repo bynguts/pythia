@@ -1,4 +1,4 @@
-// #w13 S2: Morning readiness (/app/readiness). The board is read from the real API; the action flows
+// Morning readiness (/app/readiness). The board is read from the real API; the action flows
 // (swap to backup, ask for a duty override, WhatsApp, activate) run against a stubbed board so each one
 // has a truck to act on, and the requests they post are asserted.
 import { expect, test } from "@playwright/test";
@@ -148,7 +148,7 @@ test("swap to backup shows the backup card and posts the reassign", async ({ pag
   await page.goto("/app/readiness");
   await expect(page.getByText("First departure 06:00 · 2 of 5 trucks ready to roll")).toBeVisible();
   const card = page.getByTestId("readiness-swap-card");
-  await expect(card).toContainText("Backup T-140 passed pretrip at 05:08");
+  await expect(card).toContainText("Backup T-140 passed the pre-trip check at 05:08");
   await expect(card).toContainText("3 planned trips");
   await expect(card).toContainText("08:45 gate slot");
   await expect(page.getByTestId("readiness-swap")).toHaveText("Swap to T-140");

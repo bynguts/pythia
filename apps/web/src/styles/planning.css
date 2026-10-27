@@ -301,7 +301,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── wave11 planning (Rencana) ──────────────────────────────────────────────
+/* ── Planning (Rencana) ──────────────────────────────────────────────
    One stepper strip, then three full-width stages. Each stage is the only
    surface; inside it, input sits left and result right with one hairline
    between them, so no stage leaves a hole beside a longer neighbour. Every

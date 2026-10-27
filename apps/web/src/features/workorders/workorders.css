@@ -1,4 +1,4 @@
-/* Wave 13 lane S4: Work orders (GKQWY). Every class is prefixed `wo-`; colours come from tokens.css. */
+/* Work orders (GKQWY). Every class is prefixed `wo-`; colours come from tokens.css. */
 .wo-page {
   display: flex;
   flex-direction: column;

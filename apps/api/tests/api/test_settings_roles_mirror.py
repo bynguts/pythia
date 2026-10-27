@@ -1,4 +1,4 @@
-"""wave9 settings: the read-only "Tim & akses" list must describe the roles the server enforces."""
+"""Settings: the read-only "Tim & akses" list must describe the roles the server enforces."""
 
 import re
 from pathlib import Path

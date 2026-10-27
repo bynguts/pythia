@@ -1,4 +1,4 @@
-/* Wave 13 lane D2: driver trip screens (route map, stop proof, report, TPA gate,
+/* Driver trip screens (route map, stop proof, report, TPA gate,
    weigh ticket, shift summary). Built to docs/design/export-handoff drv_*.html at
    390 px. Every class is scoped .drt-; colours come from the --f-* tokens. */
 

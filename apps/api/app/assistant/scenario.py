@@ -494,7 +494,12 @@ def scenario_answer(result: dict[str, Any], language: str) -> str:
     s, sc = result["summary"], result["scenario"]
     english = language == "en"
     city = "Ho Chi Minh City" if result["city"] == "hcmc" else "Jakarta"
-    label = result["classification"].replace("_", " ")
+    modelled = result["classification"] == "MODEL_OUTPUT"
+    label = (
+        ("model forecast" if modelled else "simulated scenario")
+        if english
+        else ("prakiraan model" if modelled else "skenario simulasi")
+    )
     when = sc["date"]
 
     def describe(rain: float, attendance: int, venue: str | None) -> str:
@@ -558,7 +563,7 @@ def scenario_answer(result: dict[str, Any], language: str) -> str:
                 else "same truck arrivals as a normal day"
             )
             lines.append(
-                f"- TPA queue (SIMULATED, {scope}): {queue['baseline_mean']:g} min/truck unstaggered, "
+                f"- TPA queue (simulated, {scope}): {queue['baseline_mean']:g} min/truck unstaggered, "
                 f"{queue['staggered_mean']:g} min/truck with staggered dispatch."
             )
         lines.append("Ana only recommends — open the scenario in the Twin or XR to review it with the team.")
@@ -606,7 +611,7 @@ def scenario_answer(result: dict[str, Any], language: str) -> str:
                 else "kedatangan truk sama dengan hari normal"
             )
             lines.append(
-                f"- Antrean TPA (SIMULASI, {scope}): {queue['baseline_mean']:g} menit/truk tanpa penjadwalan, "
+                f"- Antrean TPA (simulasi, {scope}): {queue['baseline_mean']:g} menit/truk tanpa penjadwalan, "
                 f"{queue['staggered_mean']:g} menit/truk dengan staggered dispatch."
             )
         lines.append("Ana hanya merekomendasikan — buka skenario di Twin atau XR untuk ditinjau bersama tim.")

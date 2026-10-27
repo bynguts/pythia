@@ -1,4 +1,4 @@
-"""Morning readiness board: one row per truck (wave 12 lane B)."""
+"""Morning readiness board: one row per truck."""
 
 from __future__ import annotations
 

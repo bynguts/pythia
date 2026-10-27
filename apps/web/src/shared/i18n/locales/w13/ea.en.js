@@ -1,6 +1,6 @@
-// Wave 16 lane ea strings (English): drafts Ana or Pythia suggests, previewed and edited
+// Strings (English): drafts Ana or Pythia suggests, previewed and edited
 // before an operator sends them; one-driver delivery; escalations; driver message alerts.
-// Voice: confident, active, the next step first (scratchpad w16-voice.md).
+// Voice: confident, active, the next step first.
 export const eaEn = {
   ea_send: "Send",
   ea_edit: "Edit",

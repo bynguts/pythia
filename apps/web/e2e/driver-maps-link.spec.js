@@ -1,6 +1,6 @@
 // #drv6-maps: audit gap 5 (D5). In-cab navigation: every open stop and the
 // destination have a "Buka rute di Google Maps" link with the coordinates.
-// Wave 13: the links live in the route screen's "Semua titik" sheet.
+// The links live in the route screen's "Semua titik" sheet.
 import { expect, test } from "@playwright/test";
 import { apiLogin, cancelSpj, createActiveSpj, openDriver } from "./lib/driverSpj.js";
 

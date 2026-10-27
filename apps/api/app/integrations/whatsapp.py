@@ -129,13 +129,19 @@ def wa_text(key: str, lang: str | None = None, **params: Any) -> str:
     return WA_TEMPLATES[key][lang].format(**params)
 
 
+_SIMULATED_DRIVER = re.compile(r"^Pengemudi Sim\s+0*(\d+)$", re.IGNORECASE)
+
+
 def driver_display(name: str, lang: str) -> str:
-    """A fleet driver name in the message language: 'Pengemudi Sim 03' reads 'Driver Sim 03' in English."""
+    """A fleet driver name as the console shows it: 'Pengemudi Sim 03' reads 'Sopir 3' / 'Driver 3'."""
+    match = _SIMULATED_DRIVER.match(name.strip())
+    if match:
+        return f"{'Driver' if lang == 'en' else 'Sopir'} {match.group(1)}"
+    if name in ("Supir Pythia", "Sopir Pythia"):
+        return "Pythia driver" if lang == "en" else "Sopir Pythia"
     if lang != "en":
         return name
-    if name == "Supir Pythia":
-        return "Pythia driver"
-    return re.sub(r"^(Pengemudi|Supir)\b", "Driver", name)
+    return re.sub(r"^(Pengemudi|Supir|Sopir)\b", "Driver", name)
 
 
 def build_alert_message(truck_code: str, issue: str, recommendation: str, lang: str | None = None) -> str:
