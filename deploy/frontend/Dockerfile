@@ -24,5 +24,6 @@ FROM nginx:1.27-alpine
 
 COPY --from=build /src/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY pythia-security.conf /etc/nginx/snippets/pythia-security.conf
 
 EXPOSE 80
