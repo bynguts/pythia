@@ -279,7 +279,9 @@ export default function DriverApp() {
     const next = new URLSearchParams(searchParams);
     if (id) next.set("tab", id);
     else next.delete("tab");
-    setSearchParams(next, { replace: true });
+    // A tab change is a history step: the phone's back button returns to the previous tab
+    // instead of leaving the driver app.
+    setSearchParams(next);
   };
   const [session, setSession] = useState(() => readDriverSession());
   const [pickedDriver, setPickedDriver] = useState(() => readPickedDriver());

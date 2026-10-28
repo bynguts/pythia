@@ -1,7 +1,9 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   ExternalLink,
   Flag,
   LocateFixed,
@@ -28,8 +30,10 @@ import {
 import { instructionText } from "./driverText.js";
 import { stopText } from "../../shared/format/stopText.js";
 import { SafetyLines, SyncChip } from "./DriverPanels.jsx";
+import { recordReport, ReportSheet } from "./ExceptionPanel.jsx";
 import { StopProof } from "./StopProof.jsx";
 import { etaLabelKey, haversineKm, readPhoto, straightLineEta, useDriverTrip } from "./tripApi.js";
+import { useBackCloses } from "./useBackCloses.js";
 import "./driver-trip.css";
 
 const DriverRouteMap = lazy(() => import("./DriverRouteMap.jsx"));
@@ -354,6 +358,11 @@ export function RouteScreen({
   const [mapFailed, setMapFailed] = useState(false);
   const [fitKey, setFitKey] = useState(0);
   const [ar, setAr] = useState(null);
+  // "Message dispatch": the report sheet for a free-text message, over the map.
+  const [messageOpen, setMessageOpen] = useState(false);
+  // Folded to its title so the map shows; a swipe down folds it, a swipe up or a tap opens it.
+  const [folded, setFolded] = useState(false);
+  const dragRef = useRef(null);
   const position = usePhonePosition(!ar);
   const trip = useDriverTrip(driver?.truck_code, position);
   const gateSlot = trip.gateSlot || planSlot;
@@ -421,6 +430,29 @@ export function RouteScreen({
     setProof(null);
     setTimeout(() => arriveRef.current?.focus(), 0);
   }, []);
+
+  // The phone's back button closes whatever covers the route before it leaves the app.
+  const closeOverlays = useCallback(() => {
+    setAr(null);
+    setProof(null);
+    setAllStops(false);
+    setMessageOpen(false);
+  }, []);
+  useBackCloses("route-overlay", Boolean(ar || proof || allStops || messageOpen), closeOverlays);
+
+  // dragRef: { y, swiped } of the current press; a swipe also swallows the click after it.
+  const onGrabStart = (event) => {
+    dragRef.current = { y: event.clientY, swiped: false };
+  };
+  const onGrabEnd = (event) => {
+    const press = dragRef.current;
+    if (!press) return;
+    const dy = event.clientY - press.y;
+    if (Math.abs(dy) > 24) {
+      press.swiped = true;
+      setFolded(dy > 0);
+    }
+  };
 
   if (!spj || stops.length === 0) return null;
 
@@ -596,9 +628,34 @@ export function RouteScreen({
             )}
           </p>
 
-          <article className="drt-sheet" data-testid={stop ? `stop-${pendingIndex}` : "driver-route-dest"}>
-            <span className="drt-handle" aria-hidden="true" />
-            <div className="drt-sheet-head">
+          <article
+            className={`drt-sheet${folded ? " is-folded" : ""}`}
+            data-testid={stop ? `stop-${pendingIndex}` : "driver-route-dest"}
+          >
+            <button
+              type="button"
+              className="drt-grab"
+              aria-expanded={!folded}
+              aria-label={t(folded ? "d2_route_sheet_show" : "d2_route_sheet_hide")}
+              data-testid="driver-sheet-toggle"
+              onPointerDown={onGrabStart}
+              onPointerUp={onGrabEnd}
+              onPointerCancel={() => (dragRef.current = null)}
+              onClick={() => {
+                // A swipe already decided; a plain tap (or Enter) toggles.
+                const swiped = dragRef.current?.swiped;
+                dragRef.current = null;
+                if (!swiped) setFolded((value) => !value);
+              }}
+            >
+              <span className="drt-handle" aria-hidden="true" />
+              {folded ? (
+                <ChevronUp size={14} aria-hidden="true" />
+              ) : (
+                <ChevronDown size={14} aria-hidden="true" />
+              )}
+            </button>
+            <div className="drt-sheet-head" onPointerDown={onGrabStart} onPointerUp={onGrabEnd}>
               <div className="drt-sheet-title">
                 <h2>
                   {stop && (
@@ -651,7 +708,8 @@ export function RouteScreen({
                 type="button"
                 className="drt-message"
                 data-testid="driver-message-dispatch"
-                onClick={onOpenInstructions}
+                aria-haspopup="dialog"
+                onClick={() => setMessageOpen(true)}
               >
                 <span>{t("d2_route_message")}</span>
                 <ChevronRight size={16} aria-hidden="true" />
@@ -681,7 +739,10 @@ export function RouteScreen({
                 className="drt-btn is-primary"
                 data-testid="stop-start"
                 disabled={blocked}
-                onClick={() => setProof({})}
+                onClick={() => {
+                  setFolded(false);
+                  setProof({});
+                }}
               >
                 <MapPinCheck size={18} aria-hidden="true" /> {t("d2_route_arrived")}
               </button>
@@ -712,6 +773,21 @@ export function RouteScreen({
           </article>
         </div>
       </div>
+
+      {messageOpen && (
+        <ReportSheet
+          kind="driver_message"
+          driver={driver}
+          spj={spj}
+          stopIndex={pendingIndex}
+          say={say}
+          onSent={(entry) => {
+            recordReport(entry);
+            setMessageOpen(false);
+          }}
+          onClose={() => setMessageOpen(false)}
+        />
+      )}
 
       {allStops && (
         <StopsSheet

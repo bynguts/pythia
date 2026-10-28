@@ -1,18 +1,28 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, CheckCircle2, Construction, PackageX, Siren, TriangleAlert, Truck } from "lucide-react";
+import {
+  Camera,
+  CheckCircle2,
+  Construction,
+  MessageSquare,
+  PackageX,
+  Siren,
+  TriangleAlert,
+  Truck,
+} from "lucide-react";
 import { apiFetch } from "../../shared/api/client.js";
 import { localeFor, useLanguage } from "../../shared/i18n/index.jsx";
 import { AttentionAction, AttentionRow } from "./AttentionRow.jsx";
 
 const POLL_MS = 15000;
 // Accidents first, then what takes a truck out of service, then curbside exceptions.
-const KIND_RANK = { accident: 0, truck_breakdown: 1, road_closed: 2, tps_empty: 3 };
+const KIND_RANK = { accident: 0, truck_breakdown: 1, road_closed: 2, tps_empty: 3, driver_message: 4 };
 const DANGER_KINDS = new Set(["accident", "truck_breakdown"]);
 const EXCEPTION_ICONS = {
   accident: Siren,
   truck_breakdown: Truck,
   road_closed: Construction,
   tps_empty: PackageX,
+  driver_message: MessageSquare,
 };
 
 // The follow-up log keys on any alert id; driver reports use their own prefix.

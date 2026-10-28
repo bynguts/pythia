@@ -16,7 +16,7 @@ from app.api.state import _OPERATIONS_PLAN_STORE
 from app.core.units import GATE_ALERT_MIN, MIN_TRIPS_FOR_FLAG
 from app.field import safety
 from app.field.damage_reports import DAMAGE_STORE
-from app.field.driver_exceptions import EXCEPTION_STORE, KINDS
+from app.field.driver_exceptions import EXCEPTION_STORE, INCIDENT_KINDS
 from app.field.spj import SPJ_STORE
 
 FORECAST_CLASSIFICATION = "MODEL_OUTPUT"
@@ -26,7 +26,7 @@ PLAN_LIMIT = 200
 # Share of a truck's trips with a driver exception from which the recap flags it for review.
 EXCEPTION_RATE_FLAG = 0.25
 # An empty TPS is the stop's problem, not the truck's: it does not count against the truck.
-_TRUCK_EXCEPTION_KINDS = tuple(kind for kind in KINDS if kind != "tps_empty")
+_TRUCK_EXCEPTION_KINDS = tuple(kind for kind in INCIDENT_KINDS if kind != "tps_empty")
 
 
 def _local_date(iso: str | None) -> str | None:
@@ -97,7 +97,7 @@ def _spj_facts(day: str) -> dict[str, Any]:
 
 
 def _incidents(day: str) -> dict[str, Any]:
-    kinds = {kind: 0 for kind in KINDS}
+    kinds = {kind: 0 for kind in INCIDENT_KINDS}
     for exc in EXCEPTION_STORE.list():
         if exc.kind in kinds and _local_date(exc.reported_at or exc.created_at) == day:
             kinds[exc.kind] += 1

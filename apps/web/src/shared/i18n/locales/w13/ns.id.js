@@ -6,6 +6,7 @@ export const nsId = {
   ns_step_breakdown: "Cari truk cadangan untuk sisa ritase {truck}.",
   ns_step_breakdown_backup: "Pindahkan ritase {truck} ke truk cadangan {to}.",
   ns_step_road_closed: "Kirim rute memutar jalan yang ditutup untuk {truck}.",
+  ns_step_driver_message: "Baca lalu balas sopir {truck}.",
   ns_step_tps: "Cek {stop} dengan petugas TPS.",
   ns_step_tps_skip: "Pastikan dengan petugas TPS, lalu lewati {stop}.",
   ns_step_gate_peak: "Terima penundaan untuk {n} truk di slot {slot}.",
@@ -24,6 +25,7 @@ export const nsId = {
   ns_rule_accident: "Aturan: sopir melaporkan kecelakaan",
   ns_rule_truck_breakdown: "Aturan: sopir melaporkan truk mogok",
   ns_rule_road_closed: "Aturan: sopir melaporkan jalan ditutup",
+  ns_rule_driver_message: "Aturan: sopir mengirim pesan ke dispatch",
   ns_rule_tps_empty: "Aturan: sopir melaporkan TPS kosong ({reports}×)",
   ns_rule_damage_heavy: "Aturan: laporan kerusakan berat masih terbuka",
   ns_rule_gate_peak:

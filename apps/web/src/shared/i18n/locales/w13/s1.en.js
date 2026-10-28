@@ -94,6 +94,11 @@ export const s1En = {
   s1_send_route: "Send route to driver",
   s1_route_sent: "Route sent to {truck}. Marked handled.",
   s1_route_sent_note: "Reroute sent from Operations",
+  s1_dm_title: "Message from the driver of {truck}",
+  s1_dm_reply: "Reply",
+  s1_dm_reply_text: "Message received. Dispatch is on it and will update you here.",
+  s1_dm_replied: "Reply sent to {truck}. Marked handled.",
+  s1_dm_replied_note: "Driver's message answered from Operations",
   s1_mark_handled: "Mark handled",
 
   s1_acc_title: "Accident · {truck}",

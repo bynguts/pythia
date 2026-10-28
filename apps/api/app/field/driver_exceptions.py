@@ -21,7 +21,10 @@ TABLE = "pythia_driver_exceptions"
 
 # tps_empty: the TPS is empty or the waste was not put out (the most common
 # curbside exception); road_closed: the planned road is blocked.
-KINDS = ("tps_empty", "road_closed", "truck_breakdown", "accident")
+# "driver_message" is a free-text note to dispatch (the driver app's "Message dispatch").
+KINDS = ("tps_empty", "road_closed", "truck_breakdown", "accident", "driver_message")
+# What the day's recap counts as an incident: everything but a plain message.
+INCIDENT_KINDS = tuple(kind for kind in KINDS if kind != "driver_message")
 # These two take the truck out of service, so they also file a damage report.
 VEHICLE_KINDS = ("truck_breakdown", "accident")
 

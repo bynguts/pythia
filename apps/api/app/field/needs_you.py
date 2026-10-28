@@ -6,6 +6,7 @@ Read-only. It gathers what other stores already hold and adds no fact of its own
 - ``accident`` / ``truck_breakdown`` / ``road_closed`` / ``tps_empty``: today's
   driver exception reports (field records); open heavy damage reports also count
   as a breakdown;
+- ``driver_message``: a driver's own note to dispatch (field record), answered with a reply;
 - ``gate_peak``: unaccepted hold recommendations of today's gate-slot board (queue model);
 - ``duty_warn`` / ``duty_blocked``: duty hours from **observed** app events only.
   The safety module's seeded scenario is not an alert (blocking and WhatsApp
@@ -44,6 +45,7 @@ CATEGORIES = {
     "accident": "trucks",
     "truck_breakdown": "trucks",
     "road_closed": "trucks",
+    "driver_message": "trucks",
     "duty_warn": "trucks",
     "duty_blocked": "trucks",
     "gate_peak": "gate",
@@ -214,6 +216,7 @@ def _exceptions(day: str, follow_ups: dict[str, dict[str, Any]]) -> tuple[list[d
             "accident": ["escalate", "mark_handled"],
             "truck_breakdown": ["reassign", "mark_handled"],
             "road_closed": ["send_route", "mark_handled"],
+            "driver_message": ["reply", "mark_handled"],
         }[exc.kind]
         items.append(
             _item(
@@ -503,6 +506,8 @@ def _guidance(item: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         rule = _rule("damage_heavy", "DAMAGE_SEVERITY", "berat")
     elif kind in ("accident", "truck_breakdown", "road_closed", "tps_empty"):
         rule = _rule(kind, "DRIVER_EXCEPTION", kind, reports=facts.get("reports", 1))
+    if kind == "driver_message":
+        return _step("driver_message", truck=truck), _rule("driver_message", "DRIVER_MESSAGE", "message")
     if kind == "accident":
         return _step("accident", truck=truck), rule
     if kind == "truck_breakdown":

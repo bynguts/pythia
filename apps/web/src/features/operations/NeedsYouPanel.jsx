@@ -6,6 +6,7 @@ import {
   Construction,
   Hourglass,
   Megaphone,
+  MessageSquare,
   Package,
   Route,
   Send,
@@ -39,6 +40,7 @@ const KIND_LOOK = {
   duty_warn: { icon: Timer, tone: "amber" },
   duty_blocked: { icon: Timer, tone: "red" },
   escalation: { icon: Megaphone, tone: "amber" },
+  driver_message: { icon: MessageSquare, tone: "blue" },
 };
 
 function fill(text, values) {
@@ -160,6 +162,13 @@ export function describe(item, { t, lang, alert }) {
         action: "plan_relief",
       };
     }
+    case "driver_message":
+      // A driver's own note from "Message dispatch"; the answer is a reply to that driver.
+      return {
+        title: fill(t("s1_dm_title"), { truck }),
+        sub: facts.note || "",
+        action: "reply",
+      };
     case "escalation":
       return {
         title: fill(t("ea_esc_title"), { subject: facts.subject || "" }),
@@ -186,6 +195,7 @@ const ACTION_KEYS = {
   skip_stop: "s1_skip_stop",
   plan_relief: "s1_plan_relief",
   reassign: "s1_reassign",
+  reply: "s1_dm_reply",
 };
 
 /**
@@ -258,7 +268,7 @@ export function NeedsYouPanel({ feed, alerts, openId, onSelect, onFocusTruck, tr
       setConfirming(item.id);
       return;
     }
-    if (action === "send_route" || action === "accept") {
+    if (action === "send_route" || action === "accept" || action === "reply") {
       // A message to a driver is previewed (and editable) before it is sent.
       setPreviewing(item.id);
       return;
@@ -310,7 +320,12 @@ export function NeedsYouPanel({ feed, alerts, openId, onSelect, onFocusTruck, tr
         to: to(item.truck_code),
         channels: channels[item.truck_code] || null,
         lang: waLang,
-        text: view.route ? fill(driverT("ea_route_text"), { route: routeName(driverT, view.route) }) : "",
+        text:
+          item.kind === "driver_message"
+            ? driverT("s1_dm_reply_text")
+            : view.route
+              ? fill(driverT("ea_route_text"), { route: routeName(driverT, view.route) })
+              : "",
       },
     ];
   }
@@ -331,6 +346,15 @@ export function NeedsYouPanel({ feed, alerts, openId, onSelect, onFocusTruck, tr
           lang,
         ),
       });
+    } else if (item.kind === "driver_message") {
+      // The reply goes to that driver only (app inbox, private WhatsApp when a number exists).
+      await apiPost(
+        "/driver/messages",
+        { truck_code: item.truck_code, text: texts[item.id], kind: "message", source: "needs_you" },
+        { headers: { "X-Operation-Id": operationId } },
+      );
+      await followUp(item, "RESOLVED", t("s1_dm_replied_note"));
+      done = fill(t("s1_dm_replied"), { truck: item.truck_code });
     } else {
       await apiPost(
         "/driver/messages",

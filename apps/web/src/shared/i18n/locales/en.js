@@ -494,6 +494,7 @@ export const en = {
   drv10_exc_intro: "One tap. A photo is optional. Reports are kept when there is no signal.",
   drv10_exc_tps_empty: "TPS empty / waste not put out",
   drv10_exc_road_closed: "Road closed",
+  drv10_exc_driver_message: "Message to dispatch",
   drv10_exc_truck_breakdown: "Truck broken down",
   drv10_exc_accident: "Accident",
   drv10_exc_call_112: "Anyone hurt? Call 112",

@@ -410,3 +410,33 @@ def test_ticket_arithmetic_rule_cites_the_tolerance_and_the_feed_batches_ticket_
     )
     feed._receipt_checks(feed.local_today().isoformat(), {})
     assert all(isinstance(t, dict) for t in seen)  # one batch lookup, never None (a query per receipt)
+
+
+def test_a_driver_message_waits_for_a_reply_and_is_not_an_incident(api_client, auth_headers, truck):
+    """'Message dispatch' in the driver app: a note in Needs you, answered with a reply, never counted
+    as an incident in the day's recap."""
+    from app.field import recap
+
+    res = api_client.post(
+        "/api/driver/exceptions",
+        json={
+            "kind": "driver_message",
+            "truck_code": truck,
+            "note": "Ban serep belum diganti, boleh lanjut?",
+        },
+        headers=auth_headers("driver"),
+    )
+    assert res.status_code == 201, res.text
+    [item] = _mine(_feed(api_client, auth_headers), truck)
+    assert item["kind"] == "driver_message" and item["category"] == "trucks"
+    assert item["actions"] == ["reply", "mark_handled"] and item["classification"] == "FIELD"
+    assert item["facts"]["note"] == "Ban serep belum diganti, boleh lanjut?"
+    assert item["next_step"]["key"] == "ns_step_driver_message"
+    assert item["rule"]["key"] == "ns_rule_driver_message"
+    assert "driver_message" not in recap._incidents(feed.local_today().isoformat())["exceptions"]
+    api_client.post(
+        "/api/alert/follow-up",
+        json={"alert_id": item["id"], "status": "RESOLVED", "note": "Reply sent"},
+        headers=auth_headers("dispatcher"),
+    )
+    assert _mine(_feed(api_client, auth_headers), truck) == []

@@ -497,6 +497,7 @@ export const id = {
   drv10_exc_intro: "Satu tekan. Foto boleh. Laporan tetap tersimpan saat tanpa sinyal.",
   drv10_exc_tps_empty: "TPS kosong / sampah tidak keluar",
   drv10_exc_road_closed: "Jalan tertutup",
+  drv10_exc_driver_message: "Pesan ke dispatch",
   drv10_exc_truck_breakdown: "Truk rusak",
   drv10_exc_accident: "Kecelakaan",
   drv10_exc_call_112: "Ada korban? Telepon 112",

@@ -4,6 +4,7 @@ import {
   ChevronRight,
   Construction,
   MapPin,
+  MessageSquare,
   PackageX,
   PhoneCall,
   Send,
@@ -25,6 +26,8 @@ const KINDS = [
   { kind: "road_closed", icon: Construction },
   { kind: "truck_breakdown", icon: Truck },
   { kind: "accident", icon: Siren },
+  // Free text to dispatch; also opened from "Message dispatch" on the route.
+  { kind: "driver_message", icon: MessageSquare },
 ];
 
 const REPORT_POLL_MS = 60000;
@@ -89,6 +92,13 @@ function writeLog(list) {
   }
 }
 
+// Keeps a sent report (or message) in this phone's recent list, newest first.
+export function recordReport(entry) {
+  const next = [entry, ...readLog().filter((e) => e.op !== entry.op)];
+  writeLog(next);
+  return next.slice(0, 5);
+}
+
 function newOperationId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return `exc-${crypto.randomUUID()}`;
   return `exc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -123,7 +133,7 @@ function reportTime(iso, lang) {
   return `${date.toLocaleDateString(localeFor(lang), { weekday: "short" })} ${time}`;
 }
 
-function ReportSheet({ kind, driver, spj, stopIndex, say, onSent, onClose }) {
+export function ReportSheet({ kind, driver, spj, stopIndex, say, onSent, onClose }) {
   const { t, lang } = useLanguage();
   const [photo, setPhoto] = useState(null);
   const [note, setNote] = useState("");
@@ -216,6 +226,8 @@ function ReportSheet({ kind, driver, spj, stopIndex, say, onSent, onClose }) {
   };
 
   const vehicle = kind === "truck_breakdown" || kind === "accident";
+  // A message is only its text: nothing to send until something is written.
+  const message = kind === "driver_message";
   const locTitle =
     fix === undefined
       ? t("drv6_geo_locating")
@@ -317,11 +329,13 @@ function ReportSheet({ kind, driver, spj, stopIndex, say, onSent, onClose }) {
           className="drt-btn is-primary"
           data-testid="exc-send"
           onClick={send}
-          disabled={busy}
+          disabled={busy || (message && !note.trim())}
         >
           <Send size={18} aria-hidden="true" /> {busy ? t("drv_syncing") : t("d2_exc_send")}
         </button>
-        <p className="drt-note is-small">{vehicle ? t("drv10_exc_vehicle_note") : t("d2_exc_stop_stays")}</p>
+        <p className="drt-note is-small">
+          {t(message ? "d2_exc_message_foot" : vehicle ? "drv10_exc_vehicle_note" : "d2_exc_stop_stays")}
+        </p>
       </section>
     </>
   );
@@ -339,11 +353,7 @@ export function ExceptionPanel({ driver, spj, stopIndex, outboxItems, say }) {
   const openerRef = useRef(null);
   const reportStatus = useReportStatus(driver?.truck_code, `${log.length}:${outboxItems.length}`);
 
-  const record = (entry) => {
-    const next = [entry, ...readLog().filter((e) => e.op !== entry.op)];
-    writeLog(next);
-    setLog(next.slice(0, 5));
-  };
+  const record = (entry) => setLog(recordReport(entry));
 
   const close = () => {
     setKind(null);
@@ -366,7 +376,7 @@ export function ExceptionPanel({ driver, spj, stopIndex, outboxItems, say }) {
           <button
             key={k}
             type="button"
-            className={`drt-kind${k === "accident" ? " is-danger" : ""}`}
+            className={`drt-kind${k === "accident" ? " is-danger" : ""}${k === "driver_message" ? " is-wide" : ""}`}
             data-testid={`exc-${k}`}
             aria-pressed={kind === k}
             aria-haspopup="dialog"

@@ -94,6 +94,11 @@ export const s1Id = {
   s1_send_route: "Kirim rute ke sopir",
   s1_route_sent: "Rute terkirim ke {truck}. Ditandai selesai.",
   s1_route_sent_note: "Rute pengalihan dikirim dari Operasi",
+  s1_dm_title: "Pesan dari sopir {truck}",
+  s1_dm_reply: "Balas",
+  s1_dm_reply_text: "Pesan diterima. Dispatch menindaklanjuti dan mengabari Anda di sini.",
+  s1_dm_replied: "Balasan terkirim ke {truck}. Ditandai selesai.",
+  s1_dm_replied_note: "Pesan sopir dibalas dari Operasi",
   s1_mark_handled: "Tandai ditangani",
 
   s1_acc_title: "Kecelakaan · {truck}",

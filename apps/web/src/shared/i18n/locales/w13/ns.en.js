@@ -7,6 +7,7 @@ export const nsEn = {
   ns_step_breakdown: "Find a backup truck for the remaining trips of {truck}.",
   ns_step_breakdown_backup: "Move the trips of {truck} to backup {to}.",
   ns_step_road_closed: "Send {truck} a route around the closed road.",
+  ns_step_driver_message: "Read it and reply to the driver of {truck}.",
   ns_step_tps: "Check {stop} with the TPS officer.",
   ns_step_tps_skip: "Confirm with the TPS officer, then skip {stop}.",
   ns_step_gate_peak: "Accept the hold for {n} truck(s) in the {slot} slot.",
@@ -26,6 +27,7 @@ export const nsEn = {
   ns_rule_accident: "Rule: driver reported an accident",
   ns_rule_truck_breakdown: "Rule: driver reported a breakdown",
   ns_rule_road_closed: "Rule: driver reported a closed road",
+  ns_rule_driver_message: "Rule: a driver wrote to dispatch",
   ns_rule_tps_empty: "Rule: driver reported an empty TPS ({reports}×)",
   ns_rule_damage_heavy: "Rule: open damage report rated heavy",
   ns_rule_gate_peak:

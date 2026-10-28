@@ -876,6 +876,38 @@
   gap: 12px;
 }
 
+/* The grab strip: a tap or a swipe folds the sheet to its title so the map shows. */
+.drt-grab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  min-height: var(--tap-min, 44px);
+  margin: -8px 0 -12px;
+  padding: 0;
+  border: 0;
+  color: var(--f-faint, #726e66);
+  background: none;
+  cursor: grab;
+  touch-action: none;
+}
+
+.drt-grab:focus-visible {
+  outline: 2px solid var(--f-green);
+  outline-offset: -2px;
+  border-radius: 10px;
+}
+
+.drt-sheet-head {
+  touch-action: pan-x;
+}
+
+.drt-sheet.is-folded > :not(.drt-grab):not(.drt-sheet-head) {
+  display: none;
+}
+
 .drt-sheet-title {
   display: flex;
   flex: 1 1 0;
@@ -1130,6 +1162,10 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.drt-kind.is-wide {
+  grid-column: 1 / -1;
 }
 
 .drt-kind {

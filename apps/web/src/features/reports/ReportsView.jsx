@@ -17,7 +17,7 @@ import "./reports.css";
 
 const POLL_MS = 60000;
 // Follow-up notes Operations writes from the catalog (NeedsYouPanel), in the writer's language.
-const RECORDED_NOTES = ["s1_escalate_note", "s1_route_sent_note", "s1_reassigned_note"];
+const RECORDED_NOTES = ["s1_escalate_note", "s1_route_sent_note", "s1_reassigned_note", "s1_dm_replied_note"];
 
 function fill(template, values) {
   return Object.entries(values).reduce((text, [key, v]) => text.replaceAll(`{${key}}`, v), template);
