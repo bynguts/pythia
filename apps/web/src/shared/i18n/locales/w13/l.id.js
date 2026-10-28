@@ -28,7 +28,7 @@ export const lId = {
   l_problem_a: "Jakarta menghasilkan sekitar 8.700 ton sampah per hari.",
   l_problem_b: "Sebagian besar rencananya hanya tebakan.",
   l_problem_p:
-    "Truk berangkat lewat rute kemarin, mengantre berjam-jam di gerbang TPA, dan tak ada yang melihat Rabu hujan datang. Pythia mengubah masing-masing menjadi keputusan yang bisa diambil sebelum pukul 06.00.",
+    "Truk berangkat lewat rute kemarin, mengantre berjam-jam di gerbang TPA (sekitar 430.000 jam-truk setahun menurut model antrean kami), dan tak ada yang melihat Rabu hujan datang. Pythia mengubah masing-masing menjadi keputusan yang bisa diambil sebelum pukul 06.00.",
   l_problem_note: "Sumber: SIPSN (KLHK), DKI Jakarta 2024, sekitar 8.700 t per hari.",
   l_sig_title: "Contoh yang diangkat Pythia",
   l_sig1_t: "Truk keluar dari koridornya",
@@ -49,11 +49,11 @@ export const lId = {
   l_col_fleet: "Armada",
   l_col_fleet_hi: "Rute melenceng, tak ada yang tahu.",
   l_col_fleet_b:
-    "Pythia memeriksa setiap truk terhadap koridornya dan mengirim rute koreksi ke ponsel sopir.",
+    "Pythia memeriksa posisi yang dilaporkan setiap truk terhadap koridornya dan menyiapkan rute koreksi untuk ponsel sopir.",
   l_col_gate: "Gerbang TPA",
   l_col_gate_hi: "Semua truk tiba pukul 09.00.",
   l_col_gate_b:
-    "Gelombang pemberangkatan bertahap menyebar kedatangan. Dalam simulasi, waktu tunggu di tahap gerbang turun dari sekitar 57 menjadi sekitar 6 menit per truk.",
+    "Gelombang pemberangkatan bertahap menyebar kedatangan. Dalam simulasi, waktu tunggu di tahap gerbang turun dari sekitar 57 menjadi sekitar 6 menit per truk: sekitar 385.000 jam-truk setahun kembali ke jalan.",
   l_col_fc: "Prakiraan",
   l_col_fc_hi: "Beban besok hanya tebakan.",
   l_col_fc_b: "Prakiraan harian untuk 42 kecamatan, dengan cuaca, hari libur, dan acara terbaca otomatis.",

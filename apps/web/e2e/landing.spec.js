@@ -24,6 +24,9 @@ test("landing renders its story with one main landmark", async ({ page }) => {
   // Claims stay within what the data shows: trips (not trucks), no daily error band, no deployment.
   const body = page.locator("body");
   await expect(body).toContainText("1,228 trips a day");
+  // The yearly queue cost comes from apps/api/data/models/queue_cost_per_year.json.
+  await expect(body).toContainText("about 430,000 truck-hours a year");
+  await expect(body).toContainText("about 385,000 truck-hours a year back on the road");
   await expect(body).not.toContainText(/error band|Running today|trucks a day/);
   // No on-screen provenance tags or "built on" label; provenance lives in tooltips and Settings.
   await expect(body).not.toContainText(/Model output|Real data|Open map|Built on open data/i);

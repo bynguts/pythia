@@ -203,7 +203,10 @@ its origin.
 cut the mean weighbridge wait on a normal day from 57.1 to 5.6 minutes per truck, a 90 %
 reduction, in Pythia's seeded gate-queue simulation driven by the real median of 1,228
 daily trips. Current practice spans 35.2–65.9 minutes across 10–60-minute departure
-spreads.
+spreads. Over a year (1,228 trips × 365 days) that queue is about **430,000 truck-hours**
+(band 263,000–492,000), and staggered slots return about **385,000** of them, plus roughly
+0.96 million litres of idle diesel at an assumed 2.5 L/h (`ml/scripts/queue_cost_per_year.py`,
+`apps/api/data/models/queue_cost_per_year.json`).
 
 ---
 

@@ -32,7 +32,7 @@ export const lEn = {
   l_problem_a: "Jakarta makes about 8,700 tonnes of waste a day.",
   l_problem_b: "Most of the plan is a guess.",
   l_problem_p:
-    "Trucks leave on yesterday's routes, queue for hours at the landfill gate, and nobody sees the rainy Wednesday coming. Pythia turns each of these into a decision someone can make before 06:00.",
+    "Trucks leave on yesterday's routes, queue for hours at the landfill gate (about 430,000 truck-hours a year in our queue model), and nobody sees the rainy Wednesday coming. Pythia turns each of these into a decision someone can make before 06:00.",
   l_problem_note: "Source: SIPSN (KLHK), DKI Jakarta 2024, about 8,700 t a day.",
   l_sig_title: "Examples of what Pythia raises",
   l_sig1_t: "A truck left its corridor",
@@ -53,11 +53,11 @@ export const lEn = {
   l_col_fleet: "Fleet",
   l_col_fleet_hi: "Routes drift and no one sees it.",
   l_col_fleet_b:
-    "Pythia checks every truck against its corridor and sends a corrected route to the driver's phone.",
+    "Pythia checks each truck's reported position against its corridor and drafts a corrected route for the driver's phone.",
   l_col_gate: "Landfill gate",
   l_col_gate_hi: "Every truck arrives at 09:00.",
   l_col_gate_b:
-    "Staggered dispatch waves spread arrivals. In simulation, the gate-stage wait drops from about 57 to about 6 minutes a truck.",
+    "Staggered dispatch waves spread arrivals. In simulation, the gate-stage wait drops from about 57 to about 6 minutes a truck: about 385,000 truck-hours a year back on the road.",
   l_col_fc: "Forecast",
   l_col_fc_hi: "Tomorrow's load is a guess.",
   l_col_fc_b: "Daily forecasts for 42 districts, with weather, holidays and events read in automatically.",

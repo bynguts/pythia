@@ -1,0 +1,66 @@
+{
+  "artifact": "queue_cost_per_year",
+  "classification": "MODEL OUTPUT: seeded simulation calibrated on real monthly ritase, not a field measurement",
+  "trips_per_day": 1228,
+  "days_per_year": 365,
+  "trips_per_year": 448220,
+  "planned_wait_minutes": 5.6,
+  "drivers_per_truck": 1.0,
+  "idle_fuel_l_per_h": 2.5,
+  "base": {
+    "wait_minutes_per_truck": 57.1,
+    "current_truck_hours": 426556.0,
+    "current_driver_hours": 426556.0,
+    "current_idle_litres": 1066390,
+    "planned_truck_hours": 41833.9,
+    "planned_driver_hours": 41833.9,
+    "planned_idle_litres": 104585,
+    "returned_truck_hours": 384722.2,
+    "returned_driver_hours": 384722.2,
+    "returned_idle_litres": 961805
+  },
+  "band": {
+    "low": {
+      "wait_minutes_per_truck": 35.2,
+      "current_truck_hours": 262955.7,
+      "current_driver_hours": 262955.7,
+      "current_idle_litres": 657389,
+      "planned_truck_hours": 41833.9,
+      "planned_driver_hours": 41833.9,
+      "planned_idle_litres": 104585,
+      "returned_truck_hours": 221121.9,
+      "returned_driver_hours": 221121.9,
+      "returned_idle_litres": 552805
+    },
+    "high": {
+      "wait_minutes_per_truck": 65.9,
+      "current_truck_hours": 492295.0,
+      "current_driver_hours": 492295.0,
+      "current_idle_litres": 1230737,
+      "planned_truck_hours": 41833.9,
+      "planned_driver_hours": 41833.9,
+      "planned_idle_litres": 104585,
+      "returned_truck_hours": 450461.1,
+      "returned_driver_hours": 450461.1,
+      "returned_idle_litres": 1126153
+    }
+  },
+  "idle_litres_at_fuel_range": {
+    "low_l_per_h": 1.5,
+    "high_l_per_h": 4.0,
+    "current_low": 639834,
+    "current_high": 1706224
+  },
+  "sources": {
+    "trips_per_day": "apps/api/data/models/queue_calibration.json (median of the latest 12 months)",
+    "waits": "apps/api/app/fleet/queue_simulation.py scenario_queue_metric()",
+    "model": "apps/api/app/fleet/value_model.py"
+  },
+  "assumptions": [
+    "365 days a year: the weighing data is per calendar day; no working-day count in the repo",
+    "every trip waits the mean simulated wait; the plan assumes every trip keeps its slot",
+    "one driver per truck (value_model drivers_per_truck); crew not counted",
+    "idle diesel burn 2.5 L/h (range 1.5-4.0) has NO source in the repo; a planning assumption",
+    "weighbridge stage only; unloading dwell not modelled; not rupiah"
+  ]
+}

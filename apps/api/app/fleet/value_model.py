@@ -372,3 +372,73 @@ def value_model_from_simulation() -> dict[str, Any] | None:
         "longest_with": longest[None],
     }
     return value_model({**metric, "over_alert": over_alert})
+
+
+QUEUE_COST_DAYS_PER_YEAR = 365  # the weighing data counts calendar days; no working-day count exists
+
+
+def queue_cost_per_year(model: dict[str, Any]) -> dict[str, Any]:
+    """Yearly cost of the gate queue and what the stagger returns, from a :func:`value_model` result. Pure.
+
+    Trips a day (the queue metric's median ritase) x 365, run through :func:`scenario_value`
+    with every trip in its slot (slot adherence 1, as the simulation assumes). ``band`` re-runs
+    the current-practice wait at the low/high departure spread; the planned wait stays at the
+    simulated mean. Idle diesel uses the value model's burn rate, an unsourced assumption.
+    """
+    params = {row["key"]: row for row in model["parameters"]}
+    trips_a_year = model["trucks_per_day"] * QUEUE_COST_DAYS_PER_YEAR
+    base = {key: row["base"] for key, row in params.items()}
+    base["slot_adherence"] = 1.0
+
+    def run(wait_without: float, fuel: float | None = None) -> dict[str, Any]:
+        p = {**base, "wait_without_min": wait_without}
+        if fuel is not None:
+            p["idle_fuel_l_per_h"] = fuel
+        return scenario_value(p, trucks=trips_a_year)
+
+    def digest(result: dict[str, Any]) -> dict[str, float]:
+        return {
+            "wait_minutes_per_truck": result["without"]["wait_minutes_per_truck"],
+            "current_truck_hours": result["without"]["queue_truck_hours"],
+            "current_driver_hours": result["without"]["driver_hours_waiting"],
+            "current_idle_litres": result["without"]["idle_fuel_litres"],
+            "planned_truck_hours": result["with"]["queue_truck_hours"],
+            "planned_driver_hours": result["with"]["driver_hours_waiting"],
+            "planned_idle_litres": result["with"]["idle_fuel_litres"],
+            "returned_truck_hours": result["queue_truck_hours_returned"],
+            "returned_driver_hours": result["driver_hours_returned"],
+            "returned_idle_litres": result["idle_fuel_litres_avoided"],
+        }
+
+    wait = params["wait_without_min"]
+    fuel = params["idle_fuel_l_per_h"]
+    return {
+        "artifact": "queue_cost_per_year",
+        "classification": "MODEL OUTPUT: seeded simulation calibrated on real monthly ritase, not a field measurement",
+        "trips_per_day": model["trucks_per_day"],
+        "days_per_year": QUEUE_COST_DAYS_PER_YEAR,
+        "trips_per_year": trips_a_year,
+        "planned_wait_minutes": base["wait_with_min"],
+        "drivers_per_truck": base["drivers_per_truck"],
+        "idle_fuel_l_per_h": base["idle_fuel_l_per_h"],
+        "base": digest(run(wait["base"])),
+        "band": {"low": digest(run(wait["low"])), "high": digest(run(wait["high"]))},
+        "idle_litres_at_fuel_range": {
+            "low_l_per_h": fuel["low"],
+            "high_l_per_h": fuel["high"],
+            "current_low": run(wait["base"], fuel["low"])["without"]["idle_fuel_litres"],
+            "current_high": run(wait["base"], fuel["high"])["without"]["idle_fuel_litres"],
+        },
+        "sources": {
+            "trips_per_day": "apps/api/data/models/queue_calibration.json (median of the latest 12 months)",
+            "waits": "apps/api/app/fleet/queue_simulation.py scenario_queue_metric()",
+            "model": "apps/api/app/fleet/value_model.py",
+        },
+        "assumptions": [
+            "365 days a year: the weighing data is per calendar day; no working-day count in the repo",
+            "every trip waits the mean simulated wait; the plan assumes every trip keeps its slot",
+            "one driver per truck (value_model drivers_per_truck); crew not counted",
+            "idle diesel burn 2.5 L/h (range 1.5-4.0) has NO source in the repo; a planning assumption",
+            "weighbridge stage only; unloading dwell not modelled; not rupiah",
+        ],
+    }
