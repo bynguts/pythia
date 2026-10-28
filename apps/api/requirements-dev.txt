@@ -2,4 +2,6 @@
 pytest==9.1.1
 # fastapi.testclient (tests/conftest.py)
 httpx==0.28.1
+# polygon checks in tests/forecast/test_district_outlines.py
+shapely==2.1.2
 ruff==0.16.10
