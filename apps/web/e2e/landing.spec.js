@@ -16,10 +16,10 @@ test("landing renders its story with one main landmark", async ({ page }) => {
   await expect(page.getByRole("main")).toHaveCount(1);
   await expect(page.getByRole("navigation", { name: "Main" })).not.toContainText(/Data honesty/);
   for (const id of ["product", "how", "honesty", "faq"]) await expect(page.locator(`#${id}`)).toHaveCount(1);
-  // The modelled citywide figure carries its provenance, never presented as measured.
-  const citywide = page.locator('#main [data-provenance="modelled"]').first();
-  await expect(citywide).toContainText("8,500");
-  await expect(citywide).toHaveAttribute("title", /modelled estimate/);
+  // The citywide figure is sourced (SIPSN) and says so in its tooltip.
+  const citywide = page.locator('#main [data-provenance="real"]').first();
+  await expect(citywide).toContainText("8,700");
+  await expect(citywide).toHaveAttribute("title", /SIPSN/);
   await expect(page.getByText("Live GPS tracking is coming soon.").first()).toBeAttached();
   // Claims stay within what the data shows: trips (not trucks), no daily error band, no deployment.
   const body = page.locator("body");

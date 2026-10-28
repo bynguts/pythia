@@ -1,13 +1,14 @@
 # Pythia
 
-**Waste operations, decided before dawn.** Pythia is operations software for city waste
+**Waste operations, decided before dawn.** Waste software optimises the curb; Pythia plans the
+landfill gate. Pythia is operations software for city waste
 fleets. It forecasts tomorrow's waste for every district, turns the forecast into a truck
 plan, gives each truck a landfill gate slot, and follows the day through to the
 weighbridge ticket. Dispatchers and supervisors work in one console; drivers work in a
 phone app built for budget Android handsets.
 
 - **Live demo:** [pythia.web.id](https://pythia.web.id) (demo accounts below).
-- **Proven on real data:** the monthly Bantargebang intake forecast is backtested on 66
+- **Validated on real data:** the monthly Bantargebang intake forecast is backtested on 66
   forecasts across 23 months of real weighbridge records, with 13.4 % less error than the
   strongest simple baseline, and 40.8 % less in the Ramadan and Lebaran months when the
   spikes hit.
@@ -50,9 +51,9 @@ moment: at the gate.
   were killed ([Katadata, Jun 2026](https://katadata.co.id/ekonomi-hijau/investasi-hijau/6a21b5bd1d019/bantargebang-dan-ujian-pengelolaan-sampah-jakarta)).
   One victim was reportedly a truck driver queueing to unload ([NU Online](https://nu.or.id/nasional/diduga-sopir-truk-1-korban-longsor-sampah-bantargebang-kembali-ditemukan-qU5V9);
   identity unconfirmed at the time; see also [Asia News Network](https://asianews.network/deadly-landfill-collapse-exposes-jakartas-decades-long-waste-mismanagement/)).
-- Jakarta produces roughly **7,400–8,700 tonnes of waste a day**, almost all of it
+- Jakarta produces about **7,200–9,200 tonnes of waste a day** (SIPSN 2021–2025), almost all of it
   trucked to that one site (SIPSN data via [RRI](https://rri.co.id/en/archipelago/2248964/jakarta-targets-rorotan-rdf-to-process-1000-tons-daily)).
-  On a median day about 1,228 trucks pass its weighbridge (Bantargebang weighing
+  On a median day about 1,228 trips pass its weighbridge (Bantargebang weighing
   records, latest 12 months; `ml/scripts/calibrate_queue.py`).
 - The pattern repeats across Southeast Asia. In December 2025 Ho Chi Minh City's
   Da Phuoc landfill moved to night-only intake, and backlogs followed
@@ -201,7 +202,7 @@ its origin.
 **Staggered gate slots** (`GET /api/tpa/queue-metric`, `app/fleet/queue_simulation.py`)
 cut the mean weighbridge wait on a normal day from 57.1 to 5.6 minutes per truck, a 90 %
 reduction, in Pythia's seeded gate-queue simulation driven by the real median of 1,228
-daily arrivals. Current practice spans 35.2–65.9 minutes across 10–60-minute departure
+daily trips. Current practice spans 35.2–65.9 minutes across 10–60-minute departure
 spreads.
 
 ---
@@ -377,7 +378,7 @@ pythia/
 │   │   ├── tests/      #   pytest, one folder per app area
 │   │   ├── knowledge/  #   Ana's knowledge base: ARCHITECTURE.md, PRODUCT.md, operator guides
 │   │   └── data/       #   models/ (Prophet + XGBoost), assets/ (road cache, YOLO weights)
-│   ├── web/            # React + Vite: landing, console (src/app, src/pages), driver app, e2e/
+│   ├── web/            # React + Vite: landing, console (src/app, features, surfaces, shared, styles), driver app, e2e/
 │   └── wa-gateway/     # WhatsApp gateway (Express + Baileys)
 ├── ml/                 # datasets + training scripts (see ml/README.md)
 │   ├── data/           # real/ raw/ processed/ sources/, provenance in real/manifest.json

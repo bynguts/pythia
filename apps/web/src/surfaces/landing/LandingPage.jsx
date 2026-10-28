@@ -310,7 +310,7 @@ export function LandingPage() {
             <div className="land-problem-top">
               <div className="land-problem-head">
                 <h2>
-                  <span title={t("l_problem_note")} data-provenance="modelled">
+                  <span title={t("l_problem_note")} data-provenance="real">
                     {t("l_problem_a")}
                   </span>
                   <span className="is-lime">{t("l_problem_b")}</span>

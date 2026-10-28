@@ -13,7 +13,7 @@ export const lId = {
   l_hero_h1_a: "Operasional sampah,",
   l_hero_h1_b: "diputuskan sebelum subuh.",
   l_hero_sub:
-    "Pythia memprakirakan sampah besok untuk setiap kecamatan, menyusun truk dan kru yang mengangkutnya, dan menangkap masalah rute selagi masih sempat diperbaiki.",
+    "Perangkat lunak sampah mengoptimalkan pinggir jalan; Pythia merencanakan gerbang TPA. Pythia memprakirakan sampah besok untuk setiap kecamatan, menyusun truk dan kru yang mengangkutnya, dan menangkap masalah rute selagi masih sempat diperbaiki.",
   l_hero_note: "Dibangun di atas 42 kecamatan Jakarta dan catatan ritasi Bantargebang.",
   l_shot_ops_alt: "Layar Operasi: panel butuh tindakan, ringkasan KPI, dan peta armada, dengan data contoh.",
   l_shot_tomorrow_alt: "Layar Besok: prakiraan, fakta lapangan, dan tabel alokasi, dengan data contoh.",
@@ -25,17 +25,17 @@ export const lId = {
   l_tab_orders: "Surat jalan",
   l_tab_open: "Buka konsol",
 
-  l_problem_a: "Sebuah kota menghasilkan 8.500 ton sampah per hari.",
+  l_problem_a: "Jakarta menghasilkan sekitar 8.700 ton sampah per hari.",
   l_problem_b: "Sebagian besar rencananya hanya tebakan.",
   l_problem_p:
     "Truk berangkat lewat rute kemarin, mengantre berjam-jam di gerbang TPA, dan tak ada yang melihat Rabu hujan datang. Pythia mengubah masing-masing menjadi keputusan yang bisa diambil sebelum pukul 06.00.",
-  l_problem_note: "8.500 t adalah estimasi model Pythia untuk Jakarta, bukan total hasil pengukuran.",
+  l_problem_note: "Sumber: SIPSN (KLHK), DKI Jakarta 2024, sekitar 8.700 t per hari.",
   l_sig_title: "Contoh yang diangkat Pythia",
   l_sig1_t: "Truk keluar dari koridornya",
   l_sig1_s: "Menyimpang dari rute · rute baru siap",
   l_sig1_n: "kini",
   l_sig2_t: "Antrean gerbang Bantargebang",
-  l_sig2_s: "Prediksi tunggu · model antrean",
+  l_sig2_s: "Tunggu gerbang terencana · model antrean",
   l_sig2_n: "2 mnt",
   l_sig3_t: "Hujan hari Rabu",
   l_sig3_s: "Prakiraan Open-Meteo",
@@ -111,8 +111,9 @@ export const lId = {
   l_f3_b: "Memodelkan gerbang Bantargebang dan mengatur kedatangan menjadi gelombang.",
   l_f4_t: "Prakiraan 42 kecamatan",
   l_f4_b: "Tonase harian dari Prophet plus XGBoost, lengkap dengan alasan setiap angka bergeser.",
-  l_f5_t: "Rencana mingguan",
-  l_f5_b: "CP-SAT mengalokasikan truk, kru, dan shift terhadap prakiraan.",
+  l_f5_t: "Rencana harian",
+  l_f5_b:
+    "CP-SAT mengalokasikan truk, kru, dan shift terhadap prakiraan, dengan proyeksi 7, 14, dan 30 hari.",
   l_f6_t: "Surat jalan digital",
   l_f6_b: "Surat jalan dengan persetujuan pengawas dan jejak audit.",
   l_f7_t: "Aplikasi sopir",
@@ -144,7 +145,7 @@ export const lId = {
   l_hon2_b: "galat 4,32% dibanding 4,98% untuk pembanding naif.",
   l_hon3_a: "Setiap rute ulang",
   l_hon3_hi: "dihitung di jalan nyata",
-  l_hon3_b: "dari OpenStreetMap, bukan garis lurus.",
+  l_hon3_b: "dari OpenStreetMap (OSRM). Jika layanan rute tak terjangkau, cadangan garis lurus diberi label.",
   l_q1_t: "Apakah ini langsung?",
   l_q1_b:
     "Cuaca dan peta jalan dibaca langsung. Pelacakan GPS langsung adalah langkah berikutnya, dan Pengaturan menyebut sumber setiap angka.",
@@ -175,7 +176,7 @@ export const lId = {
     "Tidak. Pythia bekerja dari cek-in perhentian terakhir tiap truk. Pelacakan GPS langsung segera hadir dan diberi label demikian.",
   l_faq4_q: "Seberapa akurat prakiraannya?",
   l_faq4_a:
-    "Pada total bulanan, galat 4,32% (MAPE) dalam uji balik pada timbangan nyata Bantargebang, dibanding 4,98% untuk pembanding naif. Prakiraan harian per kecamatan mengisi rencana yang disetujui pengawas sebelum sampai ke sopir.",
+    "Prakiraan masuk bulanan Bantargebang bergalat 4,32% (MAPE) dalam uji balik pada timbangan nyata, dibanding 4,98% untuk pembanding naif. Prakiraan harian per kecamatan dicocokkan dengan struk timbang saat tiba, dan mengisi rencana yang disetujui pengawas sebelum sampai ke sopir.",
   l_faq5_q: "Apakah aplikasi sopir berfungsi offline?",
   l_faq5_a:
     "Ya. Bukti perhentian, cek pra-jalan, dan tiket timbang antre di ponsel dan terkirim saat sinyal kembali.",

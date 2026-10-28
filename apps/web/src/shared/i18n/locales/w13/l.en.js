@@ -14,7 +14,7 @@ export const lEn = {
   l_hero_h1_a: "Waste operations,",
   l_hero_h1_b: "decided before dawn.",
   l_hero_sub:
-    "Pythia forecasts tomorrow's waste for every district, plans the trucks and crews to carry it, and catches route problems while there is still time to fix them.",
+    "Waste software optimises the curb; Pythia plans the landfill gate. It forecasts tomorrow's waste for every district, plans the trucks and crews to carry it, and catches route problems while there is still time to fix them.",
   l_hero_note: "Built on Jakarta's 42 districts and Bantargebang's trip records.",
   l_shot_ops_alt:
     "The Operations screen: needs-you panel, KPI strip and a fleet map, shown with example data.",
@@ -29,17 +29,17 @@ export const lEn = {
   l_tab_open: "Open the console",
 
   // Problem (dark)
-  l_problem_a: "A city makes 8,500 tonnes of waste a day.",
+  l_problem_a: "Jakarta makes about 8,700 tonnes of waste a day.",
   l_problem_b: "Most of the plan is a guess.",
   l_problem_p:
     "Trucks leave on yesterday's routes, queue for hours at the landfill gate, and nobody sees the rainy Wednesday coming. Pythia turns each of these into a decision someone can make before 06:00.",
-  l_problem_note: "8,500 t is Pythia's modelled estimate for Jakarta, not a measured total.",
+  l_problem_note: "Source: SIPSN (KLHK), DKI Jakarta 2024, about 8,700 t a day.",
   l_sig_title: "Examples of what Pythia raises",
   l_sig1_t: "A truck left its corridor",
   l_sig1_s: "Off the planned route · reroute ready",
   l_sig1_n: "now",
   l_sig2_t: "Gate queue at Bantargebang",
-  l_sig2_s: "Predicted wait · queue model",
+  l_sig2_s: "Modelled gate wait · queue model",
   l_sig2_n: "2m",
   l_sig3_t: "Rain on Wednesday",
   l_sig3_s: "Open-Meteo forecast",
@@ -108,7 +108,7 @@ export const lEn = {
   l_plat_cta1: "See tomorrow's plan",
   l_plat_cta2: "Read how the data works",
   l_plat_url: "pythia.web.id/app/tomorrow",
-  l_f1_t: "Live fleet map",
+  l_f1_t: "Fleet map",
   l_f1_b:
     "Every truck's last stop check-in, its corridor and its next stop. Live GPS tracking is coming soon.",
   l_f2_t: "Deviation and reroute",
@@ -117,8 +117,8 @@ export const lEn = {
   l_f3_b: "Models the Bantargebang gate and staggers arrivals into waves.",
   l_f4_t: "42-district forecast",
   l_f4_b: "Daily tonnes from Prophet plus XGBoost, with the reason each number moved.",
-  l_f5_t: "Weekly plan",
-  l_f5_b: "CP-SAT allocates trucks, crews and shifts against the forecast.",
+  l_f5_t: "Daily plan",
+  l_f5_b: "CP-SAT allocates trucks, crews and shifts against the forecast, with a 7, 14 and 30-day outlook.",
   l_f6_t: "Digital work orders",
   l_f6_b: "Work orders with supervisor approval and an audit trail.",
   l_f7_t: "Driver app",
@@ -151,7 +151,8 @@ export const lEn = {
   l_hon2_b: "4.32% error against 4.98% for a naive baseline.",
   l_hon3_a: "Every reroute is",
   l_hon3_hi: "computed on real roads",
-  l_hon3_b: "from OpenStreetMap, never straight lines.",
+  l_hon3_b:
+    "from OpenStreetMap (OSRM). If routing is unreachable, the straight-line fallback is labelled as such.",
   l_q1_t: "Is this live?",
   l_q1_b:
     "Weather and road maps are read live. Live GPS tracking is the next step, and Settings names the source of every figure.",
@@ -183,7 +184,7 @@ export const lEn = {
     "No. Pythia works from each truck's last stop check-in. Live GPS tracking is coming soon and is labelled as such.",
   l_faq4_q: "How accurate is the forecast?",
   l_faq4_a:
-    "On monthly totals, 4.32% error (MAPE) in backtests on real Bantargebang weighings, against 4.98% for a naive baseline. Daily district forecasts feed a plan that a supervisor approves before it reaches a driver.",
+    "The monthly Bantargebang intake forecast has 4.32% error (MAPE) in backtests on real weighings, against 4.98% for a naive baseline. Daily district forecasts are checked against weighbridge tickets as they arrive, and feed a plan that a supervisor approves before it reaches a driver.",
   l_faq5_q: "Does the driver app work offline?",
   l_faq5_a:
     "Yes. Stop proofs, pre-trip checks and weigh tickets queue on the phone and send when the signal returns.",

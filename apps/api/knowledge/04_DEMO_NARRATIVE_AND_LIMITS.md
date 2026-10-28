@@ -31,7 +31,7 @@ Dokumen ini menjelaskan alur demo yang direkomendasikan dan klasifikasi data juj
   historis, kalender libur Indonesia, batas admin Jakarta, OSRM public routing, event resmi.
 - **SIMULATED untuk demo**: fleet GPS positions, breadcrumbs, keramaian event,
   pengumpul ilegal, sebagian sampah seed. Setiap kali data ini ditampilkan, tandai sumbernya.
-- **Antrean TPA (SIMULATED)**: simulasi ber-seed (`queue_simulation`) dengan 1.228 truk/hari,
+- **Antrean TPA (SIMULATED)**: simulasi ber-seed (`queue_simulation`) dengan 1.228 ritase/hari,
   median 12 bulan terakhir data penimbangan Bantargebang (data.go.id); jalur dan durasi timbang
   adalah asumsi. Pada hari normal waktu antre turun dari 57,1 menjadi 5,6 menit per truk dengan
   keberangkatan bertahap: keluaran simulasi, bukan pengukuran lapangan.
