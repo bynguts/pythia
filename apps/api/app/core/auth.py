@@ -252,11 +252,32 @@ def _session_key(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def _credential(principal: dict) -> str | None:
+    """A fingerprint of what the session was granted on: the account's current password
+    (hash) and role. A changed password, role or truck binding, or a removed personal
+    account, no longer matches, so a stored session does not outlive it."""
+    if principal.get("shared_account", True):
+        material = f"shared|{principal['role']}|{_expected_password(principal['role'])}"
+    else:
+        user = load_users().get(str(principal.get("username") or "").lower())
+        if user is None:
+            return None
+        material = f"user|{user['role']}|{user['truck_code']}|{user['password_hash']}"
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
 def _persist(token: str, role: str, principal: dict) -> None:
     key = _session_key(token)
     try:
         _sessions().write(
-            key, {"key": key, "role": role, "principal": principal, "issued_epoch": time.time()}
+            key,
+            {
+                "key": key,
+                "role": role,
+                "principal": principal,
+                "credential": _credential(principal),
+                "issued_epoch": time.time(),
+            },
         )
     except Exception:  # noqa: BLE001 - see the note above _SESSIONS
         logger.warning("session not persisted; it ends at the next restart", exc_info=True)
@@ -289,13 +310,25 @@ def _restore(token: str) -> bool:
     if not record or record.get("role") not in ROLES:
         return False
     age = time.time() - float(record.get("issued_epoch") or 0)
-    if not 0 <= age <= _TOKEN_TTL_SECONDS:
+    principal = record.get("principal") or _shared_principal(record["role"])
+    # A wall clock set back a little reads as a fresh session, not a lost one.
+    stale = age > _TOKEN_TTL_SECONDS or age < -_PRUNE_INTERVAL_SECONDS
+    if stale or not record.get("credential") or record["credential"] != _credential(principal):
         _forget(token)
         return False
     with _TOKEN_LOCK:
-        _TOKEN_REGISTRY[token] = (record["role"], time.monotonic() - age)
-        _TOKEN_PRINCIPALS[token] = record.get("principal") or _shared_principal(record["role"])
+        _TOKEN_REGISTRY[token] = (record["role"], time.monotonic() - max(age, 0.0))
+        _TOKEN_PRINCIPALS[token] = principal
     return True
+
+
+def revoke(token: str) -> None:
+    """Sign a session out on the server, in memory and in the store."""
+    with _TOKEN_LOCK:
+        _TOKEN_REGISTRY.pop(token, None)
+        _TOKEN_PRINCIPALS.pop(token, None)
+    if token:
+        _forget(token)
 
 
 # Issued-token -> (role, issued-at). In-process registry with a 12 h expiry, backed by

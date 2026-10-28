@@ -56,8 +56,10 @@ def driver_session(principal: dict = Depends(require_any_principal(*ANY_SESSION)
 
 @router.post("/api/pretrip", status_code=201)
 def submit_pretrip(
-    body: PretripBody, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))
+    body: PretripBody,
+    principal: dict = Depends(require_any_principal("dispatch:confirm", "dispatch:create")),
 ) -> dict[str, Any]:
+    ensure_truck_access(principal, body.truck_code)
     try:
         rec = PRETRIP_STORE.submit(body.truck_code, body.driver_name, body.items, body.note)
     except ValueError as exc:
@@ -79,8 +81,9 @@ def pretrip_today(
 @router.post("/api/damage-reports", status_code=201)
 def create_damage_report(
     body: DamageReportBody,
-    _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create")),
+    principal: dict = Depends(require_any_principal("dispatch:confirm", "dispatch:create")),
 ) -> dict[str, Any]:
+    ensure_truck_access(principal, body.truck_code)
     try:
         rep = DAMAGE_STORE.create(
             body.truck_code,

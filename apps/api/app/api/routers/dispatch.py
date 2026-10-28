@@ -105,8 +105,11 @@ def dispatch_status(
 def confirm_dispatch(
     dispatch_id: str,
     payload: DispatchConfirmRequest,
-    _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create")),
+    principal: dict = Depends(require_any_principal("dispatch:confirm", "dispatch:create")),
 ) -> dict:
+    dispatch = history_store.get_dispatch(dispatch_id)
+    if dispatch is not None:
+        ensure_truck_access(principal, dispatch.get("truck_code"))
     # #44: operation_id replay detection. A confirmation carrying an
     # operation_id already recorded for this dispatch returns the stored
     # state without writing a second history event, so outbox flush retries

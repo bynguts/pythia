@@ -14,6 +14,7 @@ from app.core.auth import (
     authenticate,
     client_ip,
     login_throttle_key,
+    revoke,
     role_for_token,
     token_for,
 )
@@ -98,6 +99,14 @@ def auth_login(
         "permissions": sorted(ROLES[principal["role"]]),
         "token": token_for(principal),
     }
+
+
+@router.post("/api/auth/logout")
+def auth_logout(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    """Ends this session on the server too, so the token no longer works anywhere."""
+    if authorization and authorization.lower().startswith("bearer "):
+        revoke(authorization.split(" ", 1)[1].strip())
+    return {"signed_out": True}
 
 
 @router.get("/api/auth/session")

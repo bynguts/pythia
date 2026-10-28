@@ -108,5 +108,19 @@ def test_every_gateway_call_carries_the_api_key(monkeypatch):
     client.qr()
     client.groups()
     client.logout()
-    client.send_text("6281234567890@c.us", "hi")
+    client.send_text("6289900000001@c.us", "hi")
     assert seen == {key: "k-test" for key in ("health", "qr", "groups", "logout", "send-text")}
+
+
+def test_the_placeholder_number_and_group_are_never_messaged(monkeypatch):
+    # The repo's placeholder may be a stranger's number; an unset contact must not reach it.
+    from app.integrations import whatsapp
+
+    def fail(*_args, **_kwargs):
+        raise AssertionError("the gateway was called")
+
+    monkeypatch.setattr(whatsapp, "urlopen", fail)
+    client = OpenWAClient(base_url="http://127.0.0.1:2785/api", api_key="k-test", session_id="default")
+    for jid in (whatsapp.PLACEHOLDER_CHAT_ID, whatsapp.PLACEHOLDER_GROUP_ID, "6281234567890@s.whatsapp.net"):
+        result = client.send_text(jid, "hi")
+        assert result["sent"] is False and result["skipped"] == "placeholder"

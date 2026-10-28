@@ -140,3 +140,26 @@ def test_audit_trail_records_the_person_and_a_bound_driver_sees_only_its_truck(
 
     for spj in (mine, other):
         api_client.post(f"/api/spj/{spj['spj_id']}/cancel", headers=supervisor)
+
+
+def test_a_bound_driver_cannot_write_for_another_truck(api_client, users_file):
+    """Pre-trip, damage and instruction confirms are checked against the account's truck."""
+    driver = _login(api_client, "sopir.uji01", "rahasia-uji-1")
+    items = dict.fromkeys(("rem", "mesin", "ban", "bbm", "oli", "bak_compactor", "lampu"), True)
+    pretrip = {"driver_name": "Pengemudi Uji 01", "items": items, "note": ""}
+    other = api_client.post("/api/pretrip", json={**pretrip, "truck_code": "T-USR2"}, headers=driver)
+    assert other.status_code == 403
+    own = api_client.post("/api/pretrip", json={**pretrip, "truck_code": "T-USR1"}, headers=driver)
+    assert own.status_code == 201, own.text
+    damage = {"driver_name": "Pengemudi Uji 01", "component": "rem", "severity": "berat", "note": "x"}
+    other = api_client.post("/api/damage-reports", json={**damage, "truck_code": "T-USR2"}, headers=driver)
+    assert other.status_code == 403
+    supervisor = _login(api_client, "pengawas.uji", "rahasia-uji-2")
+    created = api_client.post(
+        "/api/dispatch", json={"truck_code": "T-USR2", "instruction": "Ke TPS lain"}, headers=supervisor
+    )
+    assert created.status_code in (200, 201), created.text
+    confirm = api_client.post(
+        f"/api/dispatch/{created.json()['id']}/confirm", json={"status": "READY"}, headers=driver
+    )
+    assert confirm.status_code == 403

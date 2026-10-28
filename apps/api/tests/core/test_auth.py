@@ -140,6 +140,27 @@ class RbacEnforcementTests(unittest.TestCase):
         self.assertIsNone(auth_module._sessions().get(key))
         self.assertIsNone(role_for_token("not-a-token"))
 
+    def test_a_stored_session_ends_with_a_new_password_or_a_logout(self):
+        """Redeploying with a changed password does not bring old sessions back; logout ends one."""
+        tok = self._token("dispatcher")
+        with (
+            patch.object(auth_module, "_TOKEN_REGISTRY", {}),
+            patch.object(auth_module, "_TOKEN_PRINCIPALS", {}),
+            patch.dict("os.environ", {"PYTHIA_PW_DISPATCHER": "a-new-password"}),
+        ):
+            self.assertIsNone(role_for_token(tok))
+        self.assertIsNone(auth_module._sessions().get(hashlib.sha256(tok.encode()).hexdigest()))
+
+        tok = self._token("dispatcher")
+        headers = {"Authorization": f"Bearer {tok}"}
+        self.assertEqual(self.client.post("/api/auth/logout", headers=headers).status_code, 200)
+        self.assertEqual(self.client.get("/api/whatsapp/status", headers=headers).status_code, 401)
+        with (
+            patch.object(auth_module, "_TOKEN_REGISTRY", {}),
+            patch.object(auth_module, "_TOKEN_PRINCIPALS", {}),
+        ):
+            self.assertIsNone(role_for_token(tok))
+
     def test_token_registry_is_capped_and_evicts_the_oldest(self):
         with (
             patch.object(auth_module, "_TOKEN_REGISTRY", {}),

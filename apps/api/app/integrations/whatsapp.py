@@ -17,6 +17,11 @@ PLACEHOLDER_CHAT_ID = "6281234567890@c.us"
 PLACEHOLDER_GROUP_ID = "6281234567890-1620000000@g.us"
 
 
+def is_placeholder(chat_id: str) -> bool:
+    user = str(chat_id or "").split("@", 1)[0]
+    return user in {PLACEHOLDER_CHAT_ID.split("@")[0], PLACEHOLDER_GROUP_ID.split("@")[0]}
+
+
 def default_chat_id() -> str:
     return getenv("WA_DEFAULT_CHAT_ID") or PLACEHOLDER_CHAT_ID
 
@@ -312,6 +317,14 @@ class OpenWAClient:
             }
         if not chat_id:
             return {"provider": "openwa", "sent": False, "message": "Missing WhatsApp chat_id."}
+        # The repo's placeholder number may belong to a stranger: never message it.
+        if is_placeholder(chat_id):
+            return {
+                "provider": "openwa",
+                "sent": False,
+                "skipped": "placeholder",
+                "message": "No real WhatsApp chat is set for this recipient.",
+            }
 
         url = f"{self.base_url}/sessions/{self.session_id}/messages/send-text"
         payload = {"chatId": chat_id, "text": text}
