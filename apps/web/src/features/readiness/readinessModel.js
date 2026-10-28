@@ -10,6 +10,8 @@ export const PRETRIP_ITEM_KEYS = {
   oli: "s2_item_oil",
   bak_compactor: "s2_item_compactor",
   lampu: "s2_item_lights",
+  // A problem the driver typed under "anything else" in the pre-trip check.
+  lainnya: "s2_item_other",
   // Components a driver's quick breakdown / accident report files (api routers/driver.py).
   mogok: "lx_item_breakdown",
   kecelakaan: "lx_item_accident",

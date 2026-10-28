@@ -46,6 +46,7 @@ export const s2Id = {
   s2_item_oil: "Oli",
   s2_item_compactor: "Kompaktor",
   s2_item_lights: "Lampu",
+  s2_item_other: "Lainnya",
   s2_pre_done: "Selesai {time}",
   s2_pre_not_started: "Belum mulai",
   s2_pre_failed: "{item}: TIDAK",

@@ -26,6 +26,7 @@ import {
   DriverTabBar,
   DriverTopBar,
   InstructionsScreen,
+  OTHER_COMPONENT,
   PRETRIP_ITEMS,
   PretripCheck,
   QueuePanel,
@@ -81,18 +82,25 @@ function Toast({ message }) {
 // ── Pre-trip check ────────────────────────────────────────────────────────────
 
 // Posts today's check (or queues it offline); every NO files a damage report
-// with its own note, brakes, engine and tyres as serious. A damage report that
+// with its own note, brakes, engine and tyres as serious, and so does a problem
+// typed under "anything else" (component "lainnya", minor). A damage report that
 // cannot reach the server queues behind the check, so dispatch is still told.
 // Returns "saved", "queued" or "partial" (check saved, a report failed).
-async function submitPretrip(driver, items, notes, t) {
+async function submitPretrip(driver, items, notes, other, t) {
+  const extra = (other || "").trim();
   const failures = PRETRIP_ITEMS.filter((key) => items[key] === false);
+  // The reports to file: every NO, then the typed extra problem.
+  const reports = extra ? [...failures, OTHER_COMPONENT] : failures;
+  const labelFor = (key) => t(key === OTHER_COMPONENT ? "d1_item_other" : `d1_item_${key}`);
   const noteFor = (key) =>
-    (notes[key] || "").trim() || t("drv_pretrip_no_reason").replace("{label}", t(`d1_item_${key}`));
+    key === OTHER_COMPONENT
+      ? extra
+      : (notes[key] || "").trim() || t("drv_pretrip_no_reason").replace("{label}", labelFor(key));
   const pretrip = {
     truck_code: driver.truck_code,
     driver_name: driver.driver_name,
     items,
-    note: failures.map((key) => `${t(`d1_item_${key}`)}: ${noteFor(key)}`).join("\n"),
+    note: reports.map((key) => `${labelFor(key)}: ${noteFor(key)}`).join("\n"),
   };
   const damage = (key) => ({
     truck_code: driver.truck_code,
@@ -111,9 +119,9 @@ async function submitPretrip(driver, items, notes, t) {
     queued = true;
   }
   let partial = false;
-  for (const key of failures) {
+  for (const key of reports) {
     const data = damage(key);
-    const label = `${t("d1_pretrip_title")} · ${t(`d1_item_${key}`)}`;
+    const label = `${t("d1_pretrip_title")} · ${labelFor(key)}`;
     if (queued) {
       await enqueueDriverOperation({ path: "/damage-reports", data, label });
       continue;
@@ -641,9 +649,9 @@ export default function DriverApp() {
     setRejected(readRejectedOperations());
   };
 
-  const sendPretrip = async (items, notes) => {
+  const sendPretrip = async (items, notes, other) => {
     try {
-      const outcome = await submitPretrip(driver, items, notes, t);
+      const outcome = await submitPretrip(driver, items, notes, other, t);
       const record = { items, created_at: new Date().toISOString() };
       rememberPretrip(driver.truck_code, record);
       setPretripRecord(record);

@@ -47,6 +47,7 @@ export const s2En = {
   s2_item_oil: "Oil",
   s2_item_compactor: "Compactor",
   s2_item_lights: "Lights",
+  s2_item_other: "Other",
   s2_pre_done: "Done {time}",
   s2_pre_not_started: "Not started",
   s2_pre_failed: "{item}: NO",

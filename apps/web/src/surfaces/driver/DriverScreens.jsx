@@ -480,14 +480,18 @@ export function SafetyNotice({ safety }) {
 
 export const PRETRIP_ITEMS = ["rem", "mesin", "ban", "bbm", "oli", "bak_compactor", "lampu"];
 export const BERAT_COMPONENTS = new Set(["rem", "mesin", "ban"]);
+// The damage component of a problem typed under "anything else".
+export const OTHER_COMPONENT = "lainnya";
 
 // EIqeR: seven OK/NO rows; a NO opens its own note and says what happens next
 // (brakes, engine and tyres are serious and keep the truck off the road).
-// `onSubmit(items, notes)` posts or queues; the parent owns the network.
+// A free-text "anything else" covers a problem outside the seven items.
+// `onSubmit(items, notes, other)` posts or queues; the parent owns the network.
 export function PretripCheck({ onSubmit }) {
   const { t } = useLanguage();
   const [items, setItems] = useState({});
   const [notes, setNotes] = useState({});
+  const [other, setOther] = useState("");
   const [busy, setBusy] = useState(false);
 
   const answered = PRETRIP_ITEMS.filter((key) => key in items).length;
@@ -507,7 +511,7 @@ export function PretripCheck({ onSubmit }) {
   const submit = async () => {
     setBusy(true);
     try {
-      await onSubmit(items, notes);
+      await onSubmit(items, notes, other);
     } finally {
       setBusy(false);
     }
@@ -583,6 +587,23 @@ export function PretripCheck({ onSubmit }) {
           );
         })}
       </ul>
+      <div className="drv-field">
+        <label className="drv-label" htmlFor="pretrip-other">
+          {t("d1_other_label")}
+        </label>
+        <input
+          id="pretrip-other"
+          className="drv-input is-plain"
+          data-testid="pretrip-other"
+          aria-describedby="pretrip-other-hint"
+          value={other}
+          onChange={(e) => setOther(e.target.value)}
+          placeholder={t("d1_other_placeholder")}
+        />
+        <p id="pretrip-other-hint" className="drv-small">
+          {t("d1_other_hint")}
+        </p>
+      </div>
       {answered === PRETRIP_ITEMS.length && notesMissing && (
         <p className="drv-small" role="status">
           {t("d1_note_needed")}

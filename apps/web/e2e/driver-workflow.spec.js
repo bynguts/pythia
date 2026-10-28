@@ -256,6 +256,36 @@ test("pretrip with a TIDAK item auto-creates a damage report", async ({ page, co
   expect(mine[0].severity).toBe("berat");
 });
 
+// #pretrip-other: a problem outside the seven items is typed under "Masalah lain" and reaches
+// dispatch as a minor damage report next to the check.
+test("pretrip carries a typed problem that is not on the list", async ({ page, context }) => {
+  const headers = await signIn(page);
+  const TRUCK = "T-222";
+  const pretrip = await (await page.request.get(`${API}/pretrip/today/${TRUCK}`, { headers })).json();
+  test.skip(Boolean(pretrip.done), "pretrip already submitted today for this truck");
+
+  await context.grantPermissions(["geolocation"]);
+  await page.goto("/driver");
+  await page.evaluate(() => localStorage.removeItem("pythia_driver"));
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByTestId("driver-truck-search").fill(TRUCK);
+  await page.locator(`[data-testid="pick-${TRUCK}"]`).click();
+  await page.getByTestId("driver-pick-start").click();
+
+  await page.getByTestId("driver-start-pretrip").click();
+  await page.getByTestId("pretrip-rest-ok").click();
+  const note = "Spion kiri patah e2e";
+  await page.getByLabel("Masalah lain? (opsional)").fill(note);
+  await page.getByTestId("pretrip-submit").click();
+  await expect(page.getByTestId("pretrip-done")).toBeVisible({ timeout: 10000 });
+
+  const today = await (await page.request.get(`${API}/pretrip/today/${TRUCK}`, { headers })).json();
+  expect(today.record.note).toBe(`Lainnya: ${note}`);
+  const reports = await (await page.request.get(`${API}/damage-reports?status=baru`, { headers })).json();
+  const mine = (reports.reports || []).filter((r) => r.truck_code === TRUCK && r.component === "lainnya");
+  expect(mine.map((r) => [r.severity, r.note, r.source])).toEqual([["ringan", note, "pretrip"]]);
+});
+
 test("admin sees damage report and resolves it", async ({ page }) => {
   const headers = await signIn(page);
   const note = `e2e admin panel note ${Date.now()}`;
