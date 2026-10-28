@@ -123,6 +123,14 @@ def test_a_deviation_whose_route_was_sent_leaves_the_feed(api_client, auth_heade
     )
     assert res.status_code == 200, res.text
     assert _mine(_feed(api_client, auth_headers), truck) == []
+    # Not for the whole day: a truck still off its corridor half an hour later comes back.
+    from datetime import timedelta
+
+    from app.field import needs_you as feed
+    from app.field import safety
+
+    later = safety._now() + timedelta(minutes=feed.DEVIATION_QUIET_MIN + 1)
+    assert [i["id"] for i in feed.needs_you(later)["items"] if i.get("truck_code") == truck] == [item["id"]]
 
 
 def test_accident_is_urgent_and_drops_out_once_resolved(api_client, auth_headers, truck):

@@ -57,6 +57,9 @@ URGENT_KINDS = ("accident", "truck_breakdown", "duty_blocked")
 FOLLOW_UP_SCAN = 2000
 # Unique per record: a follow-up on any day closes them.
 _UNIQUE_PREFIXES = ("driver-exception:", "damage:", "receipt-check:", "escalation:")
+# A sent route quiets a deviation for this long, not for the day: a truck still or again off its
+# corridor after that comes back.
+DEVIATION_QUIET_MIN = 30
 RECEIPT_CHECK_DAYS = 7
 
 
@@ -603,6 +606,17 @@ def _sort_key(item: dict[str, Any]) -> tuple:
     return (item["severity"] != "urgent", -(at.timestamp() if at else 0.0), item["id"])
 
 
+def _closed(item: dict[str, Any], follow_ups: dict[str, dict[str, Any]], now: datetime) -> bool:
+    follow_up = follow_ups.get(item["id"]) or {}
+    if follow_up.get("status") != "RESOLVED":
+        return False
+    if item["kind"] != "deviation":
+        return True
+    at = safety._parse(follow_up.get("at"))
+    now = now if now.tzinfo else now.replace(tzinfo=at.tzinfo if at else None)
+    return at is None or (now - at).total_seconds() < DEVIATION_QUIET_MIN * 60
+
+
 def needs_you(now: datetime | None = None) -> dict[str, Any]:
     now = now or safety._now()
     day = local_today().isoformat()
@@ -620,11 +634,7 @@ def needs_you(now: datetime | None = None) -> dict[str, Any]:
     )
     # An escalation closes only through its own store (a supervisor's Mark handled), never
     # through a generic alert follow-up.
-    items = [
-        i
-        for i in items
-        if i["kind"] == "escalation" or (follow_ups.get(i["id"]) or {}).get("status") != "RESOLVED"
-    ]
+    items = [i for i in items if i["kind"] == "escalation" or not _closed(i, follow_ups, now)]
     _suggest_backups(items, day)
     for item in items:
         item["next_step"], item["rule"] = _guidance(item)
