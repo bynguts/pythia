@@ -1,0 +1,614 @@
+{
+  "schema": "pythia.forecast_evaluation_ai/1",
+  "generated_by": "ml/scripts/backtest_ai_monthly.py",
+  "target": "Bantargebang landfill intake, t/day per month (total of all sources)",
+  "target_class": "real",
+  "unit": "t/day",
+  "period": "2022-12..2026-04",
+  "source_file": "bantargebang_hasil_penimbangan.csv",
+  "corrections_file": "bantargebang_corrections.json",
+  "same_design_as": "forecast_evaluation.json resolutions.landfill_month",
+  "design": "rolling origin; at each origin the calibrated-synthetic daily dataset is rebuilt from data before the origin only and the 42 Prophet+XGBoost hybrids are refitted; daily district forecasts summed to the city and averaged per month",
+  "leakage_controls": [
+    "monthly index from months before the origin only (shipped models use all months)",
+    "SIPSN yearly city totals for years before the origin year only",
+    "weather of the forecast days unknown: training climatology per calendar month",
+    "calendar, holidays and scheduled events used as known in advance"
+  ],
+  "not_applied": "serving-time monotone rain response and event overlay (engine.py)",
+  "rescale_months": 12,
+  "reference_model": {
+    "name": "ma12_calendar",
+    "mae": 310.63,
+    "mape_pct": 4.32
+  },
+  "variants": {
+    "prophet_xgb_raw": {
+      "model": "prophet_xgb_raw",
+      "strongest_naive": "ma12",
+      "origins": 23,
+      "first_origin": "2024-06",
+      "last_origin": "2026-04",
+      "horizons_months": [
+        1,
+        2,
+        3
+      ],
+      "n_forecasts": 66,
+      "n_target_months": 23,
+      "mae_model": 542.78,
+      "mae_naive": 358.51,
+      "mape_model_pct": 7.59,
+      "mape_naive_pct": 4.98,
+      "skill_pct": -51.4,
+      "skill_ci90_pct": [
+        -87.9,
+        -20.5
+      ],
+      "ci_method": "cluster bootstrap over target months, 3000 resamples, seed 7",
+      "by_horizon": [
+        {
+          "h": 1,
+          "n_forecasts": 23,
+          "mae_model": 540.71,
+          "mae_naive": 361.31,
+          "skill_pct": -49.7
+        },
+        {
+          "h": 2,
+          "n_forecasts": 22,
+          "mae_model": 543.82,
+          "mae_naive": 367.69,
+          "skill_pct": -47.9
+        },
+        {
+          "h": 3,
+          "n_forecasts": 21,
+          "mae_model": 543.94,
+          "mae_naive": 345.83,
+          "skill_pct": -57.3
+        }
+      ],
+      "calendar_months": {
+        "months": [
+          "2025-03",
+          "2025-04",
+          "2026-02",
+          "2026-03"
+        ],
+        "n_forecasts": 12,
+        "mae_model": 855.02,
+        "mae_naive": 634.37,
+        "skill_pct": -34.8
+      },
+      "normal_months": {
+        "n_forecasts": 54,
+        "mae_model": 473.39,
+        "mae_naive": 297.21,
+        "skill_pct": -59.3
+      },
+      "models": [
+        {
+          "name": "ma12_calendar",
+          "kind": "reference_model",
+          "mae": 310.63,
+          "mape_pct": 4.32,
+          "skill_vs_strongest_naive_pct": 13.4
+        },
+        {
+          "name": "prophet_xgb_rescaled",
+          "kind": "ai_variant",
+          "mae": 315.56,
+          "mape_pct": 4.37,
+          "skill_vs_strongest_naive_pct": 12.0
+        },
+        {
+          "name": "ma12",
+          "kind": "naive",
+          "mae": 358.51,
+          "mape_pct": 4.98,
+          "skill_vs_strongest_naive_pct": 0.0
+        },
+        {
+          "name": "expanding_mean",
+          "kind": "naive",
+          "mae": 363.58,
+          "mape_pct": 5.05,
+          "skill_vs_strongest_naive_pct": -1.4
+        },
+        {
+          "name": "ma6",
+          "kind": "naive",
+          "mae": 405.08,
+          "mape_pct": 5.58,
+          "skill_vs_strongest_naive_pct": -13.0
+        },
+        {
+          "name": "seasonal_naive_12",
+          "kind": "naive",
+          "mae": 408.63,
+          "mape_pct": 5.68,
+          "skill_vs_strongest_naive_pct": -14.0
+        },
+        {
+          "name": "ma3",
+          "kind": "naive",
+          "mae": 444.8,
+          "mape_pct": 6.12,
+          "skill_vs_strongest_naive_pct": -24.1
+        },
+        {
+          "name": "naive_last",
+          "kind": "naive",
+          "mae": 496.87,
+          "mape_pct": 6.85,
+          "skill_vs_strongest_naive_pct": -38.6
+        },
+        {
+          "name": "prophet_xgb_raw",
+          "kind": "model",
+          "mae": 542.78,
+          "mape_pct": 7.59,
+          "skill_vs_strongest_naive_pct": -51.4
+        }
+      ],
+      "one_month_ahead": [
+        {
+          "month": "2024-06",
+          "actual": 7748.2,
+          "model": 8014.9,
+          "naive": 7457.7,
+          "lebaran": false
+        },
+        {
+          "month": "2024-07",
+          "actual": 8281.6,
+          "model": 7946.0,
+          "naive": 7492.8,
+          "lebaran": false
+        },
+        {
+          "month": "2024-08",
+          "actual": 7027.0,
+          "model": 8017.7,
+          "naive": 7577.4,
+          "lebaran": false
+        },
+        {
+          "month": "2024-09",
+          "actual": 7571.3,
+          "model": 7824.0,
+          "naive": 7580.1,
+          "lebaran": false
+        },
+        {
+          "month": "2024-10",
+          "actual": 7200.4,
+          "model": 7914.3,
+          "naive": 7629.8,
+          "lebaran": false
+        },
+        {
+          "month": "2024-11",
+          "actual": 7187.5,
+          "model": 7987.8,
+          "naive": 7649.0,
+          "lebaran": false
+        },
+        {
+          "month": "2024-12",
+          "actual": 7901.6,
+          "model": 7782.6,
+          "naive": 7602.3,
+          "lebaran": false
+        },
+        {
+          "month": "2025-01",
+          "actual": 7738.1,
+          "model": 8137.3,
+          "naive": 7611.0,
+          "lebaran": false
+        },
+        {
+          "month": "2025-02",
+          "actual": 7703.7,
+          "model": 8589.7,
+          "naive": 7602.1,
+          "lebaran": false
+        },
+        {
+          "month": "2025-03",
+          "actual": 7988.5,
+          "model": 8053.4,
+          "naive": 7588.1,
+          "lebaran": true
+        },
+        {
+          "month": "2025-04",
+          "actual": 6857.0,
+          "model": 7589.0,
+          "naive": 7572.6,
+          "lebaran": true
+        },
+        {
+          "month": "2025-05",
+          "actual": 7516.3,
+          "model": 7540.5,
+          "naive": 7543.0,
+          "lebaran": false
+        },
+        {
+          "month": "2025-06",
+          "actual": 7214.8,
+          "model": 7777.5,
+          "naive": 7560.1,
+          "lebaran": false
+        },
+        {
+          "month": "2025-07",
+          "actual": 7393.5,
+          "model": 7700.4,
+          "naive": 7515.7,
+          "lebaran": false
+        },
+        {
+          "month": "2025-08",
+          "actual": 7180.6,
+          "model": 7312.7,
+          "naive": 7441.7,
+          "lebaran": false
+        },
+        {
+          "month": "2025-09",
+          "actual": 6918.4,
+          "model": 7467.0,
+          "naive": 7454.5,
+          "lebaran": false
+        },
+        {
+          "month": "2025-10",
+          "actual": 6705.9,
+          "model": 7330.3,
+          "naive": 7400.0,
+          "lebaran": false
+        },
+        {
+          "month": "2025-11",
+          "actual": 7587.1,
+          "model": 7483.7,
+          "naive": 7358.8,
+          "lebaran": false
+        },
+        {
+          "month": "2025-12",
+          "actual": 7452.8,
+          "model": 7713.1,
+          "naive": 7392.1,
+          "lebaran": false
+        },
+        {
+          "month": "2026-01",
+          "actual": 7668.4,
+          "model": 8720.5,
+          "naive": 7354.7,
+          "lebaran": false
+        },
+        {
+          "month": "2026-02",
+          "actual": 7870.9,
+          "model": 8746.0,
+          "naive": 7348.9,
+          "lebaran": true
+        },
+        {
+          "month": "2026-03",
+          "actual": 6442.5,
+          "model": 8393.9,
+          "naive": 7362.9,
+          "lebaran": true
+        },
+        {
+          "month": "2026-04",
+          "actual": 7127.8,
+          "model": 7562.2,
+          "naive": 7234.0,
+          "lebaran": false
+        }
+      ]
+    },
+    "prophet_xgb_rescaled": {
+      "model": "prophet_xgb_rescaled",
+      "strongest_naive": "ma12",
+      "origins": 23,
+      "first_origin": "2024-06",
+      "last_origin": "2026-04",
+      "horizons_months": [
+        1,
+        2,
+        3
+      ],
+      "n_forecasts": 66,
+      "n_target_months": 23,
+      "mae_model": 315.56,
+      "mae_naive": 358.51,
+      "mape_model_pct": 4.37,
+      "mape_naive_pct": 4.98,
+      "skill_pct": 12.0,
+      "skill_ci90_pct": [
+        -11.0,
+        31.9
+      ],
+      "ci_method": "cluster bootstrap over target months, 3000 resamples, seed 7",
+      "by_horizon": [
+        {
+          "h": 1,
+          "n_forecasts": 23,
+          "mae_model": 329.04,
+          "mae_naive": 361.31,
+          "skill_pct": 8.9
+        },
+        {
+          "h": 2,
+          "n_forecasts": 22,
+          "mae_model": 315.29,
+          "mae_naive": 367.69,
+          "skill_pct": 14.3
+        },
+        {
+          "h": 3,
+          "n_forecasts": 21,
+          "mae_model": 301.07,
+          "mae_naive": 345.83,
+          "skill_pct": 12.9
+        }
+      ],
+      "calendar_months": {
+        "months": [
+          "2025-03",
+          "2025-04",
+          "2026-02",
+          "2026-03"
+        ],
+        "n_forecasts": 12,
+        "mae_model": 452.31,
+        "mae_naive": 634.37,
+        "skill_pct": 28.7
+      },
+      "normal_months": {
+        "n_forecasts": 54,
+        "mae_model": 285.17,
+        "mae_naive": 297.21,
+        "skill_pct": 4.1
+      },
+      "models": [
+        {
+          "name": "ma12_calendar",
+          "kind": "reference_model",
+          "mae": 310.63,
+          "mape_pct": 4.32,
+          "skill_vs_strongest_naive_pct": 13.4
+        },
+        {
+          "name": "prophet_xgb_rescaled",
+          "kind": "model",
+          "mae": 315.56,
+          "mape_pct": 4.37,
+          "skill_vs_strongest_naive_pct": 12.0
+        },
+        {
+          "name": "ma12",
+          "kind": "naive",
+          "mae": 358.51,
+          "mape_pct": 4.98,
+          "skill_vs_strongest_naive_pct": 0.0
+        },
+        {
+          "name": "expanding_mean",
+          "kind": "naive",
+          "mae": 363.58,
+          "mape_pct": 5.05,
+          "skill_vs_strongest_naive_pct": -1.4
+        },
+        {
+          "name": "ma6",
+          "kind": "naive",
+          "mae": 405.08,
+          "mape_pct": 5.58,
+          "skill_vs_strongest_naive_pct": -13.0
+        },
+        {
+          "name": "seasonal_naive_12",
+          "kind": "naive",
+          "mae": 408.63,
+          "mape_pct": 5.68,
+          "skill_vs_strongest_naive_pct": -14.0
+        },
+        {
+          "name": "ma3",
+          "kind": "naive",
+          "mae": 444.8,
+          "mape_pct": 6.12,
+          "skill_vs_strongest_naive_pct": -24.1
+        },
+        {
+          "name": "naive_last",
+          "kind": "naive",
+          "mae": 496.87,
+          "mape_pct": 6.85,
+          "skill_vs_strongest_naive_pct": -38.6
+        },
+        {
+          "name": "prophet_xgb_raw",
+          "kind": "ai_variant",
+          "mae": 542.78,
+          "mape_pct": 7.59,
+          "skill_vs_strongest_naive_pct": -51.4
+        }
+      ],
+      "one_month_ahead": [
+        {
+          "month": "2024-06",
+          "actual": 7748.2,
+          "model": 7683.5,
+          "naive": 7457.7,
+          "lebaran": false
+        },
+        {
+          "month": "2024-07",
+          "actual": 8281.6,
+          "model": 7626.9,
+          "naive": 7492.8,
+          "lebaran": false
+        },
+        {
+          "month": "2024-08",
+          "actual": 7027.0,
+          "model": 7731.9,
+          "naive": 7577.4,
+          "lebaran": false
+        },
+        {
+          "month": "2024-09",
+          "actual": 7571.3,
+          "model": 7531.7,
+          "naive": 7580.1,
+          "lebaran": false
+        },
+        {
+          "month": "2024-10",
+          "actual": 7200.4,
+          "model": 7608.9,
+          "naive": 7629.8,
+          "lebaran": false
+        },
+        {
+          "month": "2024-11",
+          "actual": 7187.5,
+          "model": 7666.0,
+          "naive": 7649.0,
+          "lebaran": false
+        },
+        {
+          "month": "2024-12",
+          "actual": 7901.6,
+          "model": 7447.4,
+          "naive": 7602.3,
+          "lebaran": false
+        },
+        {
+          "month": "2025-01",
+          "actual": 7738.1,
+          "model": 7740.7,
+          "naive": 7611.0,
+          "lebaran": false
+        },
+        {
+          "month": "2025-02",
+          "actual": 7703.7,
+          "model": 8180.8,
+          "naive": 7602.1,
+          "lebaran": false
+        },
+        {
+          "month": "2025-03",
+          "actual": 7988.5,
+          "model": 7679.7,
+          "naive": 7588.1,
+          "lebaran": true
+        },
+        {
+          "month": "2025-04",
+          "actual": 6857.0,
+          "model": 7239.7,
+          "naive": 7572.6,
+          "lebaran": true
+        },
+        {
+          "month": "2025-05",
+          "actual": 7516.3,
+          "model": 7176.1,
+          "naive": 7543.0,
+          "lebaran": false
+        },
+        {
+          "month": "2025-06",
+          "actual": 7214.8,
+          "model": 7403.1,
+          "naive": 7560.1,
+          "lebaran": false
+        },
+        {
+          "month": "2025-07",
+          "actual": 7393.5,
+          "model": 7320.3,
+          "naive": 7515.7,
+          "lebaran": false
+        },
+        {
+          "month": "2025-08",
+          "actual": 7180.6,
+          "model": 6924.9,
+          "naive": 7441.7,
+          "lebaran": false
+        },
+        {
+          "month": "2025-09",
+          "actual": 6918.4,
+          "model": 7056.6,
+          "naive": 7454.5,
+          "lebaran": false
+        },
+        {
+          "month": "2025-10",
+          "actual": 6705.9,
+          "model": 6909.0,
+          "naive": 7400.0,
+          "lebaran": false
+        },
+        {
+          "month": "2025-11",
+          "actual": 7587.1,
+          "model": 7023.3,
+          "naive": 7358.8,
+          "lebaran": false
+        },
+        {
+          "month": "2025-12",
+          "actual": 7452.8,
+          "model": 7261.7,
+          "naive": 7392.1,
+          "lebaran": false
+        },
+        {
+          "month": "2026-01",
+          "actual": 7668.4,
+          "model": 7829.4,
+          "naive": 7354.7,
+          "lebaran": false
+        },
+        {
+          "month": "2026-02",
+          "actual": 7870.9,
+          "model": 7846.0,
+          "naive": 7348.9,
+          "lebaran": true
+        },
+        {
+          "month": "2026-03",
+          "actual": 6442.5,
+          "model": 7519.9,
+          "naive": 7362.9,
+          "lebaran": true
+        },
+        {
+          "month": "2026-04",
+          "actual": 7127.8,
+          "model": 6753.1,
+          "naive": 7234.0,
+          "lebaran": false
+        }
+      ]
+    }
+  },
+  "runtime_s": 949
+}
