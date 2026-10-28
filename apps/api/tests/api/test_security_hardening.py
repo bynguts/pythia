@@ -89,6 +89,16 @@ def test_client_ip_trusts_x_real_ip_and_the_outer_proxy_entry():
     assert client_ip("172.18.0.3", "8.8.4.4", "1.2.3.4") == "8.8.4.4"
     # nginx behind a proxy on the host: the last X-Forwarded-For entry is the client.
     assert client_ip("172.18.0.3", "127.0.0.1", "1.2.3.4, 8.8.8.8") == "8.8.8.8"
+
+
+def test_client_ip_behind_cloudflare_is_the_visitor_never_a_claimed_address():
+    # Host proxy appended a Cloudflare edge: the visitor is CF-Connecting-IP.
+    assert client_ip("172.18.0.3", "127.0.0.1", "203.0.113.9, 172.70.1.2", "198.51.100.7") == "198.51.100.7"
+    assert client_ip("172.18.0.3", "127.0.0.1", "2606:4700:10::1", "2001:db8::5") == "2001:db8::5"
+    # A direct caller (not a Cloudflare edge) cannot choose its address with the header.
+    assert client_ip("172.18.0.3", "127.0.0.1", "8.8.8.8", "198.51.100.7") == "8.8.8.8"
+    # A garbage header behind Cloudflare falls back to the edge address.
+    assert client_ip("172.18.0.3", "127.0.0.1", "172.70.1.2", "not-an-ip") == "172.70.1.2"
     assert client_ip("172.18.0.3", "172.18.0.1", None) == "172.18.0.1"
 
 

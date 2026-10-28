@@ -77,10 +77,11 @@ def auth_login(
     request: Request,
     x_real_ip: str | None = Header(default=None),
     x_forwarded_for: str | None = Header(default=None),
+    cf_connecting_ip: str | None = Header(default=None),
 ) -> dict[str, Any]:
     """Backend role-aware login; replaces the frontend-only admin gate."""
     peer = request.client.host if request.client else None
-    key = login_throttle_key(client_ip(peer, x_real_ip, x_forwarded_for), payload.username)
+    key = login_throttle_key(client_ip(peer, x_real_ip, x_forwarded_for, cf_connecting_ip), payload.username)
     wait = LOGIN_FAILURES.retry_after(key)
     if wait:
         raise HTTPException(

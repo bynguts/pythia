@@ -165,13 +165,43 @@ def login_throttle_key(client_ip: str, username: str) -> str:
     return f"{client_ip}|{username.strip().lower()}"
 
 
-def client_ip(peer: str | None, real_ip: str | None, forwarded_for: str | None) -> str:
+# Cloudflare's published edge ranges (https://www.cloudflare.com/ips/). A request that
+# reaches the host from one of them carries the visitor's address in CF-Connecting-IP.
+CLOUDFLARE_NETWORKS = tuple(
+    ipaddress.ip_network(cidr)
+    for cidr in (
+        "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22",
+        "141.101.64.0/18", "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20",
+        "197.234.240.0/22", "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
+        "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+        "2400:cb00::/32", "2606:4700::/32", "2803:f800::/32", "2405:b500::/32",
+        "2405:8100::/32", "2a06:98c0::/29", "2c0f:f248::/32",
+    )
+)  # fmt: skip
+
+
+def _from_cloudflare(address: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return False
+    return any(ip in network for network in CLOUDFLARE_NETWORKS)
+
+
+def client_ip(
+    peer: str | None,
+    real_ip: str | None,
+    forwarded_for: str | None,
+    cf_connecting_ip: str | None = None,
+) -> str:
     """The caller's address as the deploy's nginx reports it.
 
     nginx (deploy/frontend/nginx*.conf) sets X-Real-IP to the address it saw. When that
     is a loopback or private address, nginx itself sits behind another proxy on the
     host, and the last X-Forwarded-For entry (the one that proxy appended) is the
-    client. Without nginx (local dev) the socket peer is used.
+    client. When that client is a Cloudflare edge, the visitor is CF-Connecting-IP
+    (trusted only then, so a direct caller cannot pick its own address). Without
+    nginx (local dev) the socket peer is used.
     """
     real = (real_ip or "").strip()
     if not real:
@@ -184,7 +214,13 @@ def client_ip(peer: str | None, real_ip: str | None, forwarded_for: str | None) 
     if internal and forwarded_for:
         last = forwarded_for.split(",")[-1].strip()
         if last:
-            return last
+            real = last
+    visitor = (cf_connecting_ip or "").strip()
+    if visitor and _from_cloudflare(real) and not _from_cloudflare(visitor):
+        try:
+            return str(ipaddress.ip_address(visitor))
+        except ValueError:
+            pass
     return real
 
 
