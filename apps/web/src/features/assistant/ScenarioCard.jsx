@@ -1,10 +1,10 @@
 import { Link } from "react-router-dom";
-import { Box, ClipboardCheck, Glasses } from "lucide-react";
+import { ClipboardCheck, Glasses } from "lucide-react";
 import { localeFor, localizeRecorded, useLanguage } from "../../shared/i18n/index.jsx";
-import { findTwinVenue, twinHref } from "../twin/twinLinks.js";
 
 // gsc-2026 P1-9: what Ana ran for a what-if — numbers, plan, data sources and
-// provenance — plus deep links that open the same scenario in the Twin or XR.
+// provenance. In the console it links nowhere: /twin and /xr are legacy routes,
+// so only the legacy Twin rail (`inTwin`) keeps its approval and XR links.
 const PLAN_STEPS = [
   "parse_scenario",
   "district_forecast",
@@ -58,21 +58,6 @@ function sourceText(source, t, lang) {
   return s;
 }
 
-function scenarioTwinHref(scenario) {
-  // The backend already mapped the crowd to the nearest twin event preset.
-  // Older payloads name the venue only in the scenario ("GBK"); map it to the twin's venue id.
-  const query = new URLSearchParams(scenario.links.twin.split("?")[1] || "");
-  const city = query.get("city");
-  return twinHref({
-    city,
-    rain: query.get("rain"),
-    event: query.get("event"),
-    venue: findTwinVenue(city, query.get("venue") || scenario.scenario?.venue).id,
-    day: query.get("day"),
-    present: true,
-  });
-}
-
 /** What a trace step ran on, in one short line (inputs, model scope, output). */
 function traceDetail(step, t, number) {
   const d = step.detail || {};
@@ -108,8 +93,9 @@ export function providerLabel(provider, model, t, { mode, providerName, fallback
   return `LLM: ${providerName || provider}${model ? ` · ${model}` : ""}`;
 }
 
-// `inTwin`: the card sits in the Twin's rail, which already shows the scenario,
-// so it links on to approval and XR instead of back into the Twin.
+// `inTwin`: the card sits in the legacy Twin's rail, which links on to approval and XR.
+// In the console, who answered (provider, model) is not shown on the card: it rides
+// `data-provenance` (the audit trail records the provider). The legacy Twin rail keeps its badge.
 export function ScenarioCard({ scenario, provider, model, source, inTwin = false }) {
   const { t, lang } = useLanguage();
   const number = new Intl.NumberFormat(localeFor(lang), { maximumFractionDigits: 1 });
@@ -138,6 +124,8 @@ export function ScenarioCard({ scenario, provider, model, source, inTwin = false
       queue.baseline_band.every(Number.isFinite)
         ? queue.baseline_band
         : null;
+    // The simulated day with a staggered departure schedule: not today's approved plan
+    // (Reports reads that one). Said in the tooltip and data-provenance, not as a badge.
     metrics.push([
       "asst_scn_queue",
       `${number.format(queue.baseline_mean)}${
@@ -150,6 +138,7 @@ export function ScenarioCard({ scenario, provider, model, source, inTwin = false
           .replace("{high}", number.format(band[1])),
         testId: "assistant-scenario-queue-band",
       },
+      { title: t("asst_scn_queue_title"), provenance: "SIMULATED staggered-plan queue metric" },
     ]);
   }
   // gsc m9: Ana runs what the Twin/XR links can show; say when the asked values were snapped.
@@ -158,7 +147,7 @@ export function ScenarioCard({ scenario, provider, model, source, inTwin = false
     ? t("asst_scn_assumed_crowd").replace("{n}", number.format(scenario.scenario.event_attendance))
     : null;
   const trace = Array.isArray(scenario.trace) ? scenario.trace : null;
-  const providerText = providerLabel(provider, model, t, source);
+  const providerText = inTwin ? providerLabel(provider, model, t, source) : null;
   // gsc #8: a rain word ("heavy rain") ran at its BMKG category's stated value.
   const rainCategory = scenario.scenario?.rain_category;
   const rainCategoryNote = rainCategory
@@ -179,7 +168,11 @@ export function ScenarioCard({ scenario, provider, model, source, inTwin = false
     : null;
 
   return (
-    <section className="assistant-scenario" data-testid="assistant-scenario-card">
+    <section
+      className="assistant-scenario"
+      data-testid="assistant-scenario-card"
+      data-provenance={[provider, model].filter(Boolean).join(" · ") || undefined}
+    >
       <div className="assistant-scenario-head">
         <h3>{t("asst_scn_title")}</h3>
         <span className="assistant-scenario-badge" data-testid="assistant-scenario-badge">
@@ -202,8 +195,8 @@ export function ScenarioCard({ scenario, provider, model, source, inTwin = false
         </p>
       )}
       <dl className="assistant-scenario-metrics">
-        {metrics.map(([key, value, className, note]) => (
-          <div key={key} className={className}>
+        {metrics.map(([key, value, className, note, meta]) => (
+          <div key={key} className={className} title={meta?.title} data-provenance={meta?.provenance}>
             <dt>{t(key)}</dt>
             <dd>{value}</dd>
             {note && (
@@ -270,23 +263,20 @@ export function ScenarioCard({ scenario, provider, model, source, inTwin = false
         </p>
       )}
       <p className="assistant-scenario-note">{t("asst_scn_note")}</p>
-      <div className="assistant-scenario-actions">
-        {inTwin ? (
+      {inTwin && (
+        <div className="assistant-scenario-actions">
           <Link to="/app/tomorrow" data-testid="assistant-review-plan">
             <ClipboardCheck size={16} aria-hidden="true" />
             {t("asst_scn_review_plan")}
           </Link>
-        ) : (
-          <a href={scenarioTwinHref(scenario)} data-testid="assistant-open-twin">
-            <Box size={16} aria-hidden="true" />
-            {t("asst_scn_open_twin")}
-          </a>
-        )}
-        <a href={scenario.links.xr} data-testid="assistant-open-xr">
-          <Glasses size={16} aria-hidden="true" />
-          {t("asst_scn_open_xr")}
-        </a>
-      </div>
+          {scenario.links?.xr && (
+            <a href={scenario.links.xr} data-testid="assistant-open-xr">
+              <Glasses size={16} aria-hidden="true" />
+              {t("asst_scn_open_xr")}
+            </a>
+          )}
+        </div>
+      )}
     </section>
   );
 }

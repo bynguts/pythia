@@ -1,4 +1,5 @@
-"""What-if scenarios for Ana: parse a question, run the twin forecast, link to Twin/XR.
+"""What-if scenarios for Ana: parse a question, run the twin forecast (the console shows no
+Twin/XR links; `links` stays in the payload for the legacy /twin and /xr surfaces).
 
 The forecast itself is the one behind `/api/twin/scene` (imported, not copied),
 and the scenario is snapped to the twin's presets (rain in 5 mm steps up to
@@ -197,6 +198,26 @@ def parse_scenario_question(question: str) -> dict[str, Any] | None:
     return parsed
 
 
+# A crowd named in the question ("the GBK concert", "50 ribu penonton").
+_CROWD_WORDS = re.compile(
+    r"\b(concert|konser|festival|match|pertandingan|acara|event|crowd|keramaian|pengunjung|penonton|attendees)\b"
+)
+
+
+def is_what_if_question(question: str) -> bool:
+    """Whether a question asks for a what-if (a what-if phrase, rain, or a crowd), so the
+    scenario card shows only for those; "how many trucks tomorrow?" gets no card."""
+    q = question.lower()
+    return bool(
+        parse_scenario_question(question)
+        or _WHAT_IF.search(q)
+        or _RAIN.search(q)
+        or _BARE_RAIN.search(q)
+        or any(p.search(q) for _, p in _RAIN_WORDS)
+        or _CROWD_WORDS.search(q)
+    )
+
+
 def rain_category_info(category: Any, phrase: str | None = None) -> dict[str, Any] | None:
     """The BMKG category a rain word was read as, with its stated value (None if unknown)."""
     key = category.get("key") if isinstance(category, dict) else category
@@ -367,6 +388,12 @@ def run_scenario(args: dict[str, Any]) -> dict[str, Any]:
     total = sum(r["tons"] for r in rows)
     normal_total = sum(r["normal_tons"] for r in rows)
     resources = resource_requirements(total, baseline_tons=normal_total)
+    # Trucks as the Tomorrow page counts them (forecast/baseline.build_outlook): a truck does not
+    # split across kecamatan, so each kecamatan's truckloads are rounded up and summed.
+    trucks_required = sum(
+        resource_requirements(d["series"][day]["predicted_tons"])["trucks_required"]
+        for d in scene["districts"]
+    )
     top = sorted((r for r in rows if r["extra_tons"] > 0), key=lambda r: -r["extra_tons"])[:5]
     provenance = scene["provenance"]
     queue = _queue_metric(scene)
@@ -402,7 +429,7 @@ def run_scenario(args: dict[str, Any]) -> dict[str, Any]:
             "step": "resource_rule",
             "class": "PLANNING_RULE",
             "source": resource_basis(),
-            "detail": {"trucks_required": resources["trucks_required"]},
+            "detail": {"trucks_required": trucks_required},
         },
     ]
     if queue:
@@ -442,7 +469,8 @@ def run_scenario(args: dict[str, Any]) -> dict[str, Any]:
             "normal_tons": round(normal_total, 1),
             "extra_tons": round(total - normal_total, 1),
             "districts_at_risk": sum(r["risk"] in ("high", "critical") for r in rows),
-            "trucks_required": resources["trucks_required"],
+            "trucks_required": trucks_required,
+            "trucks_basis": "each kecamatan's tonnes / truck capacity, rounded up and summed",
             "extra_trucks": resources["recommended_extra_trucks"],
             "extra_crews": resources["recommended_extra_crews"],
             "extra_workers": resources["recommended_extra_workers"],
@@ -566,7 +594,7 @@ def scenario_answer(result: dict[str, Any], language: str) -> str:
                 f"- TPA queue (simulated, {scope}): {queue['baseline_mean']:g} min/truck unstaggered, "
                 f"{queue['staggered_mean']:g} min/truck with staggered dispatch."
             )
-        lines.append("Ana only recommends — open the scenario in the Twin or XR to review it with the team.")
+        lines.append("Ana only recommends — review the plan in Tomorrow; the operator decides.")
     else:
         lines = [
             f"**Skenario ({label}, bukan pengamatan):** {what}, {city}, {when}.",
@@ -614,5 +642,5 @@ def scenario_answer(result: dict[str, Any], language: str) -> str:
                 f"- Antrean TPA (simulasi, {scope}): {queue['baseline_mean']:g} menit/truk tanpa penjadwalan, "
                 f"{queue['staggered_mean']:g} menit/truk dengan staggered dispatch."
             )
-        lines.append("Ana hanya merekomendasikan — buka skenario di Twin atau XR untuk ditinjau bersama tim.")
+        lines.append("Ana hanya merekomendasikan — tinjau rencana di Besok; operator yang memutuskan.")
     return "\n".join(lines)

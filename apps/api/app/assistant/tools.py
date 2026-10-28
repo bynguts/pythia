@@ -17,6 +17,7 @@ from typing import Any
 from app.assistant.proposals import PROPOSE_ACTION_SCHEMA, propose_action_tool
 from app.assistant.scenario import run_scenario
 from app.core.env import local_today
+from app.core.units import TRUCK_CAPACITY_TONS, resource_requirements
 from app.field.readiness import readiness_payload
 from app.field.recap import daily_recap
 from app.fleet.astar_routing import (
@@ -32,6 +33,7 @@ from app.fleet.data import (
     unlicensed_collectors_payload,
 )
 from app.fleet.gps_feed import latest_breadcrumbs
+from app.forecast.baseline import build_outlook
 from app.forecast.engine import (
     list_hybrid_models,
     predict_waste_hybrid,
@@ -474,6 +476,7 @@ def _outlook_tool(days: int = OUTLOOK_DAYS) -> dict[str, Any]:
         raise ValueError("days must be 7, 14 or 30")
     outlook = outlook_payload(days)
     week = outlook["week"]
+    trucks = _trucks_per_day(days)
     intake = outlook["monthly_intake"]
     backtest = intake.get("backtest")
     return {
@@ -487,6 +490,7 @@ def _outlook_tool(days: int = OUTLOOK_DAYS) -> dict[str, Any]:
             "days": [
                 {
                     **{k: v for k, v in day.items() if k != "drivers"},
+                    "trucks_needed": trucks.get(day["date"]),
                     "drivers": [
                         {"kind": d["kind"], "detail": d["detail"], "effect_tons": d["effect_tons"]}
                         for d in day["drivers"]
@@ -494,13 +498,33 @@ def _outlook_tool(days: int = OUTLOOK_DAYS) -> dict[str, Any]:
                 }
                 if days <= OUTLOOK_DAYS
                 else {
-                    k: day[k]
-                    for k in ("date", "total_tons", "corrected_tons", "beyond_weather_forecast")
-                    if k in day
+                    **{
+                        k: day[k]
+                        for k in ("date", "total_tons", "corrected_tons", "beyond_weather_forecast")
+                        if k in day
+                    },
+                    "trucks_needed": trucks.get(day["date"]),
                 }
                 for day in week["days"]
             ],
+            "trucks_basis": (
+                f"trucks_needed per day: each kecamatan's tonnes / {TRUCK_CAPACITY_TONS:g} t per truck per "
+                "shift, rounded up and summed (the Tomorrow page's count); not city tonnes / truck capacity"
+            ),
         },
+    }
+
+
+def _trucks_per_day(days: int) -> dict[str, int]:
+    """Trucks per forecast day as the Tomorrow page counts them (forecast/baseline.build_outlook):
+    per-kecamatan truckloads summed, so a city breakdown always adds up to the total."""
+    base = build_outlook(days=days)
+    return {
+        iso: sum(
+            resource_requirements(row["series"][i]["predicted_tons"])["trucks_required"]
+            for row in base["kecamatan"]
+        )
+        for i, iso in enumerate(base["horizon"]["dates"])
     }
 
 

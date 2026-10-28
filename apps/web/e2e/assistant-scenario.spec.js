@@ -1,4 +1,7 @@
-// gsc-2026 P1-9 + C2: Ana runs a what-if into the Twin/XR (plan + sources card, deep links with the venue) and takes voice input.
+// gsc-2026 P1-9 + C2: Ana runs a what-if (plan + sources card) and takes voice input.
+// Judge review 2026-10-28: the console card links to no legacy /twin or /xr route and shows no
+// model badge (who answered rides data-provenance); the queue line says it is a simulated
+// staggered plan in its tooltip; a pending answer says Ana is on it.
 import { expect, test } from "@playwright/test";
 
 const API = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001/api";
@@ -80,15 +83,17 @@ async function openAssistant(page) {
   await expect(page.getByTestId("ana-drawer")).toBeVisible();
 }
 
-test("what-if answer shows plan, sources, provenance and opens the twin with the scenario", async ({
+test("what-if answer shows plan, sources and provenance, with no legacy links or model badge", async ({
   page,
 }) => {
   await signIn(page, "en");
   await page.route("**/api/assistant/query", (route) =>
     route.fulfill({
       json: {
-        provider: "local",
-        mode: "local",
+        provider: "openai",
+        provider_name: "LLM",
+        model: "fake-model-served",
+        mode: "llm",
         answer: "**Scenario (MODEL OUTPUT, not an observation):** 80 mm rain + 50,000-person event at GBK.",
         tools_used: ["run_scenario"],
         scenario: SCENARIO,
@@ -118,30 +123,35 @@ test("what-if answer shows plan, sources, provenance and opens the twin with the
   );
   await expect(page.getByTestId("assistant-scenario-crew-rule")).toHaveText("1 crew per truck (4 workers)");
   await expect(page.getByTestId("assistant-scenario-snapped")).toHaveCount(0);
-  await expect(page.getByTestId("assistant-open-xr")).toHaveAttribute("href", SCENARIO.links.xr);
-  const twin = page.getByTestId("assistant-open-twin");
-  await expect(twin).toHaveText("Open in Twin");
-  const box = await twin.boundingBox();
-  expect(box.height).toBeGreaterThanOrEqual(44);
-
-  await twin.click();
-  await page.waitForURL(/\/twin\?/);
-  const url = new URL(page.url());
-  expect(url.pathname).toBe("/twin");
-  expect(Object.fromEntries(url.searchParams)).toMatchObject({
-    city: "jakarta",
-    rain: "80",
-    event: "50k",
-    day: "1",
-    present: "1",
-  });
-  // GBK is Jakarta's default venue, so the link stays short.
-  expect(url.searchParams.has("venue")).toBe(false);
+  await expect(card.locator(".is-queue")).toHaveAttribute("title", /staggered plan \(simulated\)/);
+  // /twin and /xr are legacy: no link to them, and no "LLM · model" badge on the card.
+  await expect(page.getByTestId("assistant-open-twin")).toHaveCount(0);
+  await expect(page.getByTestId("assistant-open-xr")).toHaveCount(0);
+  await expect(card.locator('a[href^="/twin"], a[href^="/xr"]')).toHaveCount(0);
+  await expect(page.getByTestId("assistant-provider-badge")).toHaveCount(0);
+  await expect(card).not.toContainText("LLM");
+  await expect(card).toHaveAttribute("data-provenance", "openai · fake-model-served");
 });
 
-test("a what-if at another venue opens the twin on that venue", async ({ page }) => {
+test("a pending answer says Ana is working on it", async ({ page }) => {
   await signIn(page, "en");
-  // Older payloads name the venue only in the scenario; the card maps it to the twin's venue id.
+  let release;
+  const held = new Promise((resolve) => (release = resolve));
+  await page.route("**/api/assistant/query", async (route) => {
+    await held;
+    await route.fulfill({
+      json: { provider: "local", mode: "local", answer: "Tomorrow: 8,378 t.", tools_used: [] },
+    });
+  });
+  await openAssistant(page);
+  await page.getByTestId("assistant-prompt").first().click();
+  await expect(page.getByTestId("assistant-pending")).toContainText("Ana is working on it");
+  release();
+  await expect(page.getByTestId("assistant-pending")).toHaveCount(0);
+});
+
+test("a snapped what-if says what was asked", async ({ page }) => {
+  await signIn(page, "en");
   const atJis = {
     ...SCENARIO,
     // gsc-2026 m9: Ana ran the twin's presets; the card says what was asked.
@@ -170,10 +180,7 @@ test("a what-if at another venue opens the twin on that venue", async ({ page })
   await openAssistant(page);
   await page.getByTestId("assistant-prompt-scenario").click();
   await expect(page.getByTestId("assistant-scenario-card")).toBeVisible();
-  const href = await page.getByTestId("assistant-open-twin").getAttribute("href");
-  const query = new URL(href, "http://localhost").searchParams;
-  expect(Object.fromEntries(query)).toMatchObject({ city: "jakarta", event: "50k", venue: "jis" });
-  await expect(page.getByTestId("assistant-open-xr")).toHaveAttribute("href", atJis.links.xr);
+  await expect(page.getByTestId("assistant-open-twin")).toHaveCount(0);
   await expect(page.getByTestId("assistant-scenario-snapped")).toHaveText(
     "Adjusted to the twin's presets (asked: 83 mm, 60,000 people).",
   );
@@ -188,14 +195,8 @@ test("the real backend answers an Indonesian what-if with a labelled scenario", 
   const card = page.getByTestId("assistant-scenario-card");
   await expect(card).toBeVisible({ timeout: 90_000 });
   await expect(page.getByTestId("assistant-scenario-badge")).toHaveText("MODEL OUTPUT");
-  await expect(page.getByTestId("assistant-open-twin")).toHaveText("Buka di Twin");
-  const href = await page.getByTestId("assistant-open-twin").getAttribute("href");
-  expect(href).toContain("rain=80");
-  expect(href).toContain("event=50k");
-  expect(href).toContain("day=1");
-  expect(await page.getByTestId("assistant-open-xr").getAttribute("href")).toContain(
-    "event_attendance=50000",
-  );
+  await expect(page.getByTestId("assistant-open-twin")).toHaveCount(0);
+  await expect(page.getByTestId("assistant-open-xr")).toHaveCount(0);
 });
 
 test("mic button is hidden when the browser has no speech recognition", async ({ page }) => {

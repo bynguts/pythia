@@ -15,7 +15,8 @@ const PROMPTS = ["asst_prompt1_q", "asst_prompt2_q", "asst_prompt3_q"];
 // wire so the answer language is requested explicitly and preserved for
 // the conversation.
 // Design fgZyf: rendered inside the console's Ask Ana drawer, which owns the header.
-// An answer names the tools it ran and who produced it; nothing here invents options.
+// An answer names the tools it ran; who produced it (provider, model) stays in data-provenance
+// and the audit trail, not on screen. Nothing here invents options.
 export function AssistantPanel() {
   const { t, lang } = useLanguage();
   const [question, setQuestion] = useState("");
@@ -110,10 +111,10 @@ export function AssistantPanel() {
           text: data.answer || t("asst_no_answer"),
           provider: data.provider || "unknown",
           model: data.model || "",
-          source: { mode: data.mode, providerName: data.provider_name, fallbackReason: data.fallback_reason },
           // A draft shows as its own card, not as a tool chip.
           toolsUsed: (data.tools_used || []).filter((id) => id !== "propose_action"),
-          scenario: data.scenario?.links ? data.scenario : null,
+          // The API attaches a scenario only to a what-if; the card shows what Ana ran.
+          scenario: data.scenario?.summary ? data.scenario : null,
           // Ana's drafts: nothing is sent until the operator presses Send on one.
           proposals: Array.isArray(data.proposed_actions) ? data.proposed_actions : [],
         },
@@ -169,6 +170,11 @@ export function AssistantPanel() {
               className={`ana-msg ${isUser ? "is-user" : "is-ana"}${message.provider === "error" ? " is-error" : ""}`}
               data-testid="assistant-message"
               data-role={message.role}
+              data-provenance={
+                answered
+                  ? [message.provider, message.model].filter(Boolean).join(" · ") || undefined
+                  : undefined
+              }
               key={`${message.role}-${index}`}
             >
               {isUser ? (
@@ -184,7 +190,6 @@ export function AssistantPanel() {
                       scenario={message.scenario}
                       provider={message.provider}
                       model={message.model}
-                      source={message.source}
                     />
                   )}
                   {message.proposals?.map((proposal) => (
@@ -212,12 +217,16 @@ export function AssistantPanel() {
           );
         })}
         {loading && (
-          <article className="ana-msg is-ana" aria-label={t("s5_ana_thinking")}>
-            <div className="ana-thinking" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </div>
+          <article className="ana-msg is-ana" data-testid="assistant-pending">
+            {/* A tool-backed answer can take a while: say Ana is on it, not bare dots. */}
+            <p className="ana-pending">
+              <span className="ana-thinking" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+              {t("s5_ana_thinking")}…
+            </p>
           </article>
         )}
       </div>
