@@ -213,11 +213,14 @@ def token_for(principal: dict[str, str]) -> str:
                 if now - issued_at > _TOKEN_TTL_SECONDS:
                     _TOKEN_REGISTRY.pop(tok, None)
                     _TOKEN_PRINCIPALS.pop(tok, None)
+                    _forget(tok)
+            _prune_sessions()
         # Dicts keep insertion order and tokens are never re-inserted: first = oldest.
         while len(_TOKEN_REGISTRY) >= _MAX_TOKENS:
             oldest = next(iter(_TOKEN_REGISTRY))
             _TOKEN_REGISTRY.pop(oldest)
             _TOKEN_PRINCIPALS.pop(oldest, None)
+            _forget(oldest)
         tok = secrets.token_urlsafe(32)
         _TOKEN_REGISTRY[tok] = (principal["role"], now)
         _TOKEN_PRINCIPALS[tok] = {
@@ -225,12 +228,79 @@ def token_for(principal: dict[str, str]) -> str:
             **{k: principal[k] for k in ("username", "truck_code", "display_name") if principal.get(k)},
             "shared_account": bool(principal.get("shared_account", True)),
         }
+        _persist(tok, principal["role"], _TOKEN_PRINCIPALS[tok])
     return tok
 
 
-# Issued-token -> (role, issued-at). In-process registry with a 12 h expiry: one
-# uvicorn worker only (tokens are not shared across workers and are lost on
-# restart); a real deployment uses signed JWTs.
+# Sessions survive a restart or a redeploy: each token's SHA-256 (never the token
+# itself) maps to its principal and wall-clock issue time in SQLite. Memory stays the
+# hot path; a token missing there is looked up once and restored with its age.
+# A storage failure only costs the restart survival, never a login.
+_SESSIONS = None
+
+
+def _sessions():
+    global _SESSIONS
+    if _SESSIONS is None:
+        from app.core.storage import RecordStore
+
+        _SESSIONS = RecordStore("pythia_sessions")
+    return _SESSIONS
+
+
+def _session_key(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _persist(token: str, role: str, principal: dict) -> None:
+    key = _session_key(token)
+    try:
+        _sessions().write(
+            key, {"key": key, "role": role, "principal": principal, "issued_epoch": time.time()}
+        )
+    except Exception:  # noqa: BLE001 - see the note above _SESSIONS
+        logger.warning("session not persisted; it ends at the next restart", exc_info=True)
+
+
+def _forget(token: str) -> None:
+    try:
+        _sessions().delete(_session_key(token))
+    except Exception:  # noqa: BLE001
+        logger.warning("session record not removed", exc_info=True)
+
+
+def _prune_sessions() -> None:
+    """Drop stored sessions past the TTL, including ones never used since a restart."""
+    try:
+        store = _sessions()
+        for record in store.all():
+            if time.time() - float(record.get("issued_epoch") or 0) > _TOKEN_TTL_SECONDS:
+                store.delete(record["key"])
+    except Exception:  # noqa: BLE001
+        logger.warning("stored sessions not pruned", exc_info=True)
+
+
+def _restore(token: str) -> bool:
+    """Bring a token issued before a restart back into memory, keeping its age."""
+    try:
+        record = _sessions().get(_session_key(token))
+    except Exception:  # noqa: BLE001
+        return False
+    if not record or record.get("role") not in ROLES:
+        return False
+    age = time.time() - float(record.get("issued_epoch") or 0)
+    if not 0 <= age <= _TOKEN_TTL_SECONDS:
+        _forget(token)
+        return False
+    with _TOKEN_LOCK:
+        _TOKEN_REGISTRY[token] = (record["role"], time.monotonic() - age)
+        _TOKEN_PRINCIPALS[token] = record.get("principal") or _shared_principal(record["role"])
+    return True
+
+
+# Issued-token -> (role, issued-at). In-process registry with a 12 h expiry, backed by
+# the SQLite session store above so a restart keeps everyone signed in; a real
+# deployment uses signed JWTs.
 _TOKEN_REGISTRY: dict[str, tuple[str, float]] = {}
 # Issued-token -> the principal behind it (username, truck binding), kept beside
 # the (role, issued-at) entry so expiry stays decided in one place.
@@ -244,12 +314,15 @@ _last_prune = float("-inf")
 
 def role_for_token(token: str) -> str | None:
     entry = _TOKEN_REGISTRY.get(token)
+    if entry is None and token and _restore(token):
+        entry = _TOKEN_REGISTRY.get(token)
     if entry is None:
         return None
     role, issued_at = entry
     if time.monotonic() - issued_at > _TOKEN_TTL_SECONDS:
         _TOKEN_REGISTRY.pop(token, None)
         _TOKEN_PRINCIPALS.pop(token, None)
+        _forget(token)
         return None
     return role
 

@@ -114,6 +114,32 @@ class RbacEnforcementTests(unittest.TestCase):
         self.assertNotIn(stale, auth_module._TOKEN_REGISTRY)
         self.assertEqual(role_for_token(fresh), "dispatcher")
 
+    def test_a_session_survives_a_restart_until_it_expires(self):
+        """A redeploy empties memory; the stored session signs the user straight back in."""
+        tok = self._token("dispatcher")
+        with (
+            patch.object(auth_module, "_TOKEN_REGISTRY", {}),
+            patch.object(auth_module, "_TOKEN_PRINCIPALS", {}),
+        ):
+            res = self.client.get("/api/whatsapp/status", headers={"Authorization": f"Bearer {tok}"})
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(auth_module.principal_for_token(tok)["username"], "dispatcher")
+        # The store holds a hash, never the bearer token itself.
+        key = hashlib.sha256(tok.encode()).hexdigest()
+        stored = auth_module._sessions().get(key)
+        self.assertNotIn(tok, str(stored))
+        # A stored session past its TTL is not restored and is removed.
+        auth_module._sessions().write(
+            key, {**stored, "issued_epoch": time.time() - auth_module._TOKEN_TTL_SECONDS - 1}
+        )
+        with (
+            patch.object(auth_module, "_TOKEN_REGISTRY", {}),
+            patch.object(auth_module, "_TOKEN_PRINCIPALS", {}),
+        ):
+            self.assertIsNone(role_for_token(tok))
+        self.assertIsNone(auth_module._sessions().get(key))
+        self.assertIsNone(role_for_token("not-a-token"))
+
     def test_token_registry_is_capped_and_evicts_the_oldest(self):
         with (
             patch.object(auth_module, "_TOKEN_REGISTRY", {}),

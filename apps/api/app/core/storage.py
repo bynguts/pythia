@@ -165,6 +165,14 @@ class RecordStore:
         except sqlite3.Error as exc:
             raise StorageError(f"{self.table}: cannot persist {record_id}: {exc}") from exc
 
+    def delete(self, record_id: str) -> None:
+        """Remove one record if present. Commits before returning."""
+        try:
+            with self._transaction(None) as connection:
+                connection.execute(f"DELETE FROM {self.table} WHERE record_id=?", (record_id,))
+        except sqlite3.Error as exc:
+            raise StorageError(f"{self.table}: cannot delete {record_id}: {exc}") from exc
+
     def get(self, record_id: str, connection: sqlite3.Connection | None = None) -> dict[str, Any] | None:
         try:
             if connection is not None:
