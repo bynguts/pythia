@@ -120,38 +120,45 @@ export function ReadinessScreen() {
   const say = (tone, text) => setNotice({ tone, text });
   const time = (iso) => clockTime(iso);
 
-  async function sendReminder(truck) {
-    const wl = await whatsappLanguage();
-    const body = reminderText(truck, (key) => translate(wl, key));
-    const result = await apiPost("/whatsapp/alert", { truck_code: truck.truck_code, ...body });
-    return Boolean(result?.sent);
+  // A reminder is a private message to one truck's driver: the driver app inbox, plus a
+  // private WhatsApp when the driver's number is on file (POST /api/driver/messages).
+  async function sendReminder(truck, wl) {
+    const { issue, recommendation } = reminderText(truck, (key) => translate(wl, key));
+    await apiPost("/driver/messages", {
+      truck_code: truck.truck_code,
+      text: `${issue}. ${recommendation}.`,
+      kind: "message",
+      source: "console",
+    });
   }
 
-  // One message to the alert group for every truck, not one per truck (POST /api/whatsapp/summary).
+  // Each driver gets their own reminder; the alert group gets one list of every truck
+  // (POST /api/whatsapp/summary) when an alert group is chosen.
   async function remindAll() {
     setBusy("remind");
-    let sent = false;
+    const wl = await whatsappLanguage();
+    let done = 0;
+    for (let i = 0; i < remindable.length; i += 6) {
+      const batch = remindable.slice(i, i + 6).map((truck) => sendReminder(truck, wl));
+      done += (await Promise.allSettled(batch)).filter((r) => r.status === "fulfilled").length;
+    }
+    let group = "s2_msg_group_sent";
     try {
-      const wl = await whatsappLanguage();
       const text = reminderSummary(remindable, (key) => translate(wl, key));
-      const result = await apiPost("/whatsapp/summary", { text, lang: wl });
-      sent = Boolean(result?.sent);
-    } catch {
-      // reported as not sent
+      await apiPost("/whatsapp/summary", { text, lang: wl });
+    } catch (error) {
+      group = error?.status === 409 ? "s2_msg_group_none" : "s2_msg_group_failed";
     }
     setBusy(null);
-    if (!sent) say("danger", t("s2_msg_none"));
-    else say("ok", fill(t("s2_msg_sent"), { n: remindable.length, m: remindable.length }));
+    if (!done) say("danger", t("s2_msg_none"));
+    else say("ok", `${fill(t("s2_msg_sent"), { n: done, m: remindable.length })} ${t(group)}`);
   }
 
   async function messageOne(truck) {
     setBusy(`msg:${truck.truck_code}`);
     try {
-      const sent = await sendReminder(truck);
-      say(
-        sent ? "ok" : "danger",
-        sent ? fill(t("s2_msg_one"), { truck: truck.truck_code }) : t("s2_msg_none"),
-      );
+      await sendReminder(truck, await whatsappLanguage());
+      say("ok", fill(t("s2_msg_one"), { truck: truck.truck_code }));
     } catch (error) {
       say("danger", reasonOf(lang, error, t("s2_msg_none")));
     }
@@ -355,7 +362,7 @@ export function ReadinessScreen() {
           onClick={() => messageOne(truck)}
           data-testid="readiness-whatsapp"
         >
-          {t("s2_act_whatsapp")}
+          {t("s2_act_remind")}
         </Button>
       );
     return (

@@ -108,6 +108,7 @@ async function stub(page, posts) {
     "safety/override",
     "whatsapp/alert",
     "whatsapp/summary",
+    "driver/messages",
     "spj/*/activate",
   ]) {
     await page.route(`**/api/${path}`, async (route) => {
@@ -197,9 +198,14 @@ test("remind and activate act on the right trucks and say what was sent", async 
   await page.goto("/app/readiness");
   await expect(page.getByTestId("readiness-remind")).toHaveText("Remind 1 driver");
   await page.getByTestId("readiness-remind").click();
-  await expect(page.getByTestId("readiness-notice")).toContainText("WhatsApp sent for 1 of 1 trucks.");
-  // One message to the alert group for all reminded trucks, never one per truck.
+  // #readiness-remind: each driver gets a private reminder in the app; the group gets one list.
+  await expect(page.getByTestId("readiness-notice")).toContainText(
+    "Reminder sent to 1 of 1 drivers in the driver app. The WhatsApp group got the list.",
+  );
   expect(posts.filter((p) => p.path === "whatsapp/alert")).toEqual([]);
+  const reminders = posts.filter((p) => p.path === "driver/messages");
+  expect(reminders.map((p) => p.body.truck_code)).toEqual(["T-031"]);
+  expect(reminders[0].body).toMatchObject({ kind: "message", source: "console" });
   const summaries = posts.filter((p) => p.path === "whatsapp/summary");
   expect(summaries).toHaveLength(1);
   expect(summaries[0].body.text).toContain("T-031");
