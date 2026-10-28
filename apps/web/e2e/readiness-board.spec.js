@@ -141,6 +141,22 @@ test("the board lists every truck of the API, blockers first", async ({ page }) 
   );
 });
 
+// A truck that needs action says why in plain words in its row and marks the failing item.
+test("a not-ready row names its blockers and marks the failing cell", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await signIn(page);
+  await stub(page, []);
+  await page.goto("/app/readiness");
+  const row = page.getByTestId("readiness-list").locator("tbody tr", { hasText: "T-031" }).first();
+  await expect(row.getByTestId("readiness-why")).toHaveText(
+    "Pre-trip check missing · Instruction not acknowledged",
+    { timeout: 30000 },
+  );
+  await expect(row.getByTestId("readiness-fail")).toHaveCount(2);
+  const ready = page.getByTestId("readiness-list").locator("tbody tr", { hasText: "T-047" }).first();
+  await expect(ready.getByTestId("readiness-why")).toHaveCount(0);
+});
+
 test("swap to backup shows the backup card and posts the reassign", async ({ page }) => {
   const posts = [];
   await page.setViewportSize({ width: 1440, height: 960 });

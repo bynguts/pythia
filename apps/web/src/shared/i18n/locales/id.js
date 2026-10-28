@@ -18,7 +18,7 @@ export const id = {
   drv11_tpa_wait_title: "Belum ke TPA",
   drv11_tpa_wait_desc:
     "Selesaikan {n} titik lagi. Panduan gerbang, antrean timbang, dan foto struk muncul di sini.",
-  login_session_expired: "Sesi berakhir karena server dimulai ulang. Silakan masuk lagi.",
+  login_session_expired: "Sesi Anda telah berakhir. Silakan masuk lagi.",
   // The decision room's staggered answer and its three steps.
   w11twin_row_queue_staggered: "Dengan keberangkatan bertahap (mnt/truk)",
   w11twin_steps_label: "Langkah keputusan",
@@ -497,7 +497,7 @@ export const id = {
   drv10_exc_intro: "Satu tekan. Foto boleh. Laporan tetap tersimpan saat tanpa sinyal.",
   drv10_exc_tps_empty: "TPS kosong / sampah tidak keluar",
   drv10_exc_road_closed: "Jalan tertutup",
-  drv10_exc_driver_message: "Pesan ke dispatch",
+  drv10_exc_driver_message: "Pesan ke dispatcher",
   drv10_exc_truck_breakdown: "Truk rusak",
   drv10_exc_accident: "Kecelakaan",
   drv10_exc_call_112: "Ada korban? Telepon 112",
@@ -1027,6 +1027,8 @@ export const id = {
   // Landfill beacon: the modelled peak hour and the day average of one simulated day.
   twin_queue_peak_hour: "Jam puncak {hour} (model)",
   asst_scn_queue_band: "Rentang {low}–{high}: tunggu tanpa penjadwalan pada berbagai sebaran keberangkatan",
+  asst_scn_queue_title:
+    "Hari simulasi untuk skenario ini, dengan rencana bertahap (simulasi): bukan rencana hari ini yang disetujui, yang tampil di Laporan",
   units_crew_per_truck: "1 kru per truk ({n} petugas)",
   twin_queue_none: "Tidak ada data jembatan timbang",
   twin_queue_class: "Data antrean: {class}",
@@ -1120,7 +1122,7 @@ export const id = {
   tab_queue: "Antrean TPA & Optimasi",
   tab_evidence: "Bukti Rute OSRM",
   tab_impact: "Jejak Karbon",
-  tab_spj: "Surat Perintah Jalan",
+  tab_spj: "Surat jalan",
   tab_damage: "Laporan Kerusakan",
   // Fleet KPIs
   kpi_active_trucks: "Armada Aktif",

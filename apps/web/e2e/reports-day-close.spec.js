@@ -12,7 +12,12 @@ function recap(date, isToday) {
   return {
     date,
     forecast: { planned_tons: isToday ? 8557 : 7000, planned_trips: isToday ? 156 : null },
-    actual: { receipt_tons: isToday ? 8466 : null, ritasi: isToday ? 152 : 0, receipts: 1 },
+    actual: {
+      receipt_tons: isToday ? 8466 : null,
+      ritasi: isToday ? 152 : 0,
+      receipts: 1,
+      spj: { draft: 0, aktif: 0, selesai: isToday ? 3 : 0, batal: 0 },
+    },
     delta: { tons: -91, pct: -1.1, delta_basis: null },
     gate_wait: { observed_n: 40, median_min: 14, mean_min: 16, max_min: 47 },
     incidents: { exceptions: {}, damage_reports: 0 },
@@ -20,7 +25,7 @@ function recap(date, isToday) {
     summary: { en: "x", id: "x" },
     summary_lines: {
       en: ["152 of 156 trips done.", "Average gate wait 16 min."],
-      id: ["152 dari 156 ritase."],
+      id: ["152 dari 156 ritase.", "3 SPJ selesai, SPJ-000001 ditutup."],
     },
   };
 }
@@ -134,6 +139,8 @@ test("Reports shows the closed day with its provenance and honest limits", async
   );
   await open(page, "/app/reports");
   await expect(page.getByTestId("reports-page")).toHaveAttribute("data-date", today(), { timeout: 30000 });
+  // The title follows the state: every work order finished, so the day reads closed.
+  await expect(page.getByTestId("reports-title")).toHaveText("Today, closed");
   await expect(page.getByTestId("recap-trips")).toContainText("152 of 156");
   await expect(page.getByTestId("recap-trips")).toContainText("97% of plan");
   await expect(page.getByTestId("recap-actual")).toContainText("8,466 t");
@@ -172,6 +179,41 @@ test("Reports shows the closed day with its provenance and honest limits", async
   // language the console shows.
   expect(decodeURIComponent(opened[0])).toContain("152 dari 156 ritase.");
   expect(decodeURIComponent(opened[0])).not.toContain("trips done");
+});
+
+// The title says "so far" while a work order is still open, and the empty chart says why in a sentence.
+test("Reports names an open day 'so far' and shows an empty state instead of a blank chart", async ({
+  page,
+}) => {
+  await page.route(/\/api\/recap\/daily/, (route) => {
+    const date = new URL(route.request().url()).searchParams.get("date");
+    const day = recap(date, false);
+    day.forecast = { planned_tons: null, planned_trips: null };
+    day.actual = { ...day.actual, receipt_tons: null, spj: { draft: 1, aktif: 1, selesai: 2, batal: 0 } };
+    return route.fulfill({ json: day });
+  });
+  await page.route(/\/api\/driver\/exceptions/, (route) => route.fulfill({ json: { exceptions: [] } }));
+  await page.route(/\/api\/damage-reports$/, (route) => route.fulfill({ json: { reports: [] } }));
+  await open(page, "/app/reports");
+  await expect(page.getByTestId("reports-title")).toHaveText("Today so far", { timeout: 30000 });
+  await expect(page.getByTestId("reports-title")).toHaveAttribute("data-day", "open");
+  await expect(page.getByTestId("reports-chart-empty")).toHaveText(
+    "No planned or weighed tonnes for the last 7 days yet.",
+  );
+  await expect(page.locator(".rp-bars")).toHaveCount(0);
+});
+
+// The bare word SPJ is "surat jalan" in Indonesian prose; ids like SPJ-000001 stay.
+test("Reports writes surat jalan, not SPJ, in the Indonesian summary", async ({ page }) => {
+  await page.route(/\/api\/recap\/daily/, (route) => {
+    const date = new URL(route.request().url()).searchParams.get("date");
+    return route.fulfill({ json: recap(date, date === today()) });
+  });
+  await page.route(/\/api\/driver\/exceptions/, (route) => route.fulfill({ json: { exceptions: [] } }));
+  await page.route(/\/api\/damage-reports$/, (route) => route.fulfill({ json: { reports: [] } }));
+  await open(page, "/app/reports", "id");
+  await expect(page.getByTestId("reports-title")).toHaveText("Hari ini, selesai", { timeout: 30000 });
+  await expect(page.getByTestId("recap-summary")).toContainText("3 surat jalan selesai, SPJ-000001 ditutup.");
 });
 
 test("Reports reads — for a day with no records, never 0", async ({ page }) => {

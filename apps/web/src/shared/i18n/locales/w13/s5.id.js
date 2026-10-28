@@ -2,6 +2,11 @@
 export const s5Id = {
   // Reports (y3BicK)
   s5_rp_title: "Hari ini, selesai",
+  s5_rp_title_open: "Hari ini sejauh ini",
+  s5_rp_crumb_open: "Hari ini sejauh ini · {date}",
+  s5_rp_chart_empty: "Belum ada ton rencana atau timbangan dalam 7 hari terakhir.",
+  s5_vm_row_truck_h_same:
+    "Jam-truk antrean yang kembali (satu sopir per truk, jadi sama dengan jam dinas sopir)",
   s5_rp_sub: "Yang kami rencanakan, yang terjadi, dan artinya untuk besok.",
   s5_rp_crumb: "Tutup hari · {date}",
   s5_rp_send: "Kirim ringkasan",
@@ -99,7 +104,7 @@ export const s5Id = {
   s5_set_int_title: "Integrasi",
   s5_set_int_sub: "Pythia membaca ini sendiri. Tidak ada yang mengetik prakiraan, cuaca, atau hari libur.",
   s5_set_wa_name: "WhatsApp",
-  s5_set_wa_desc: "Instruksi dan peringatan ke pengemudi dan grup depo",
+  s5_set_wa_desc: "Instruksi dan peringatan ke sopir dan grup depo",
   s5_set_wa_connected: "Terhubung · grup peringatan belum dipilih",
   s5_set_wa_connected_group: "Terhubung · grup peringatan ditetapkan",
   s5_set_wa_not_connected: "Tidak terhubung",
@@ -227,7 +232,7 @@ export const s5Id = {
   // Model nilai: nilai per 1.000 ritase gerbang, SIMULASI x ASUMSI.
   s5_vm_title: "Nilai per 1.000 ritase gerbang",
   s5_vm_sub:
-    "Jam-truk antrean yang dikembalikan stagger ke armada, per 1.000 kedatangan truk di Bantargebang.",
+    "Jam-truk antrean yang dikembalikan penjadwalan bertahap ke armada, per 1.000 kedatangan truk di Bantargebang.",
   s5_vm_tag: "Model · Simulasi × asumsi",
   s5_vm_tag_hint:
     "Dihitung dari model antrean gerbang dan parameter di bawah; pilot mengukurnya di lapangan.",
@@ -238,11 +243,11 @@ export const s5Id = {
   s5_vm_low_sub: "jam-truk kembali · paling tidak menguntungkan",
   s5_vm_base_sub: "jam-truk kembali · skenario tengah",
   s5_vm_high_sub: "jam-truk kembali · paling menguntungkan",
-  s5_vm_table_title: "Tanpa vs dengan stagger, rendah · dasar · tinggi",
+  s5_vm_table_title: "Tanpa vs dengan penjadwalan bertahap, rendah · dasar · tinggi",
   s5_vm_table_aside: "Per 1.000 ritase",
   s5_vm_col_measure: "Ukuran",
-  s5_vm_row_wait_without: "Tunggu gerbang tanpa stagger (rata-rata, menit)",
-  s5_vm_row_wait_with: "Tunggu gerbang dengan stagger (rata-rata, menit)",
+  s5_vm_row_wait_without: "Tunggu gerbang tanpa penjadwalan bertahap (rata-rata, menit)",
+  s5_vm_row_wait_with: "Tunggu gerbang dengan penjadwalan bertahap (rata-rata, menit)",
   s5_vm_row_truck_h: "Jam-truk antrean yang kembali",
   s5_vm_row_driver_h: "Jam dinas sopir yang kembali",
   s5_vm_row_fuel: "Solar idle yang dihemat (L)",

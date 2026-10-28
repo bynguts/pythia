@@ -40,7 +40,8 @@ function exceptionRows(today, exceptions, damage, events) {
   const rows = [];
   for (const record of exceptions?.exceptions || []) {
     const at = record.reported_at || record.created_at;
-    if (localDay(at) !== today) continue;
+    // A driver's message to dispatch is conversation, not an exception of the day.
+    if (localDay(at) !== today || record.kind === "driver_message") continue;
     if (record.damage_report_id) linked.add(record.damage_report_id);
     const followUp = latest.get(`driver-exception:${record.exception_id}`);
     const status = followUp?.status || null;

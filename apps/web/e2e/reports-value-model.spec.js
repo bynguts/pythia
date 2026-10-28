@@ -40,7 +40,14 @@ test("Reports shows the value per 1,000 gate trips with its model label", async 
   // Low sits next to base and high in the table too, never base alone.
   const table = page.getByTestId("value-model-table");
   await expect(table.locator("thead th")).toHaveText(["Measure", "Low", "Base", "High"]);
-  await expect(table.locator("tbody tr")).toHaveCount(6);
+  // Driver hours equal truck-hours while one driver waits in each truck: one row says both, never two
+  // identical rows.
+  const sameHours = ["low", "base", "high"].every(
+    (level) =>
+      model.scenarios[level].driver_hours_returned === model.scenarios[level].queue_truck_hours_returned,
+  );
+  await expect(table.locator("tbody tr")).toHaveCount(sameHours ? 5 : 6);
+  if (sameHours) await expect(table).not.toContainText("Driver duty hours returned");
   const lowCell = table.locator("tbody tr").nth(2).locator("td").nth(1);
   await expect(lowCell).toHaveText(
     Math.round(model.scenarios.low.queue_truck_hours_returned).toLocaleString("en-US"),

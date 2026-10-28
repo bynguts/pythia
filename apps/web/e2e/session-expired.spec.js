@@ -32,9 +32,7 @@ test("a token the backend no longer knows shows the session-ended modal and keep
   expect(await page.evaluate(commandSession)).toEqual([null, null, null]);
 
   await modal.getByRole("button", { name: "Masuk lagi" }).click();
-  await expect(page.getByTestId("login-notice")).toHaveText(
-    "Sesi berakhir karena server dimulai ulang. Silakan masuk lagi.",
-  );
+  await expect(page.getByTestId("login-notice")).toHaveText("Sesi Anda telah berakhir. Silakan masuk lagi.");
   await expect(page).toHaveURL(/\/app\/tomorrow$/);
 
   await page.locator('input[autocomplete="username"]').fill("dispatcher");

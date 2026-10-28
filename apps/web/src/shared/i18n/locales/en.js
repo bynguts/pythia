@@ -17,8 +17,8 @@ export const en = {
   drv11_stop_of: "Stop {n} of {total}",
   drv11_tpa_wait_title: "Not at the landfill yet",
   drv11_tpa_wait_desc:
-    "Finish {n} more stops. Gate guidance, the weighbridge queue and the receipt photo appear here.",
-  login_session_expired: "Your session ended because the server restarted. Sign in again.",
+    "Stops left before the landfill: {n}. Gate guidance, the weighbridge queue and the receipt photo appear here.",
+  login_session_expired: "Your session has ended. Sign in again.",
   // The decision room's staggered answer and its three steps.
   w11twin_row_queue_staggered: "With staggered departures (min/truck)",
   w11twin_steps_label: "Decision steps",
@@ -1021,6 +1021,8 @@ export const en = {
   // Landfill beacon: the modelled peak hour and the day average of one simulated day.
   twin_queue_peak_hour: "Peak hour {hour} (modelled)",
   asst_scn_queue_band: "Range {low}–{high}: unstaggered wait across departure spreads",
+  asst_scn_queue_title:
+    "Simulated day for this scenario, with a staggered plan (simulated): not today's approved plan, which Reports shows",
   units_crew_per_truck: "1 crew per truck ({n} workers)",
   twin_queue_none: "No weighbridge feed",
   twin_queue_class: "Queue data: {class}",

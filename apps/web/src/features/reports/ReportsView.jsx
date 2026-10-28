@@ -23,6 +23,16 @@ function fill(template, values) {
   return Object.entries(values).reduce((text, [key, v]) => text.replaceAll(`{${key}}`, v), template);
 }
 
+// The server's Indonesian summary says "SPJ" as a word; the console calls it "surat jalan".
+// Ids such as SPJ-000001 stay as they are.
+const plainSpj = (line, lang) => (lang === "id" ? line.replace(/\bSPJ\b(?![-\w])/g, "surat jalan") : line);
+
+// The day is closed once it has finished work orders and none is still open (draft or active).
+function isDayClosed(recap) {
+  const spj = recap?.actual?.spj;
+  return Boolean(spj) && spj.selesai > 0 && !spj.aktif && !spj.draft;
+}
+
 // Reports (y3BicK): the day's close. Every figure is a record on this server or a
 // stored plan; a figure the day has not produced reads "—", never zero.
 export function ReportsView() {
@@ -51,11 +61,12 @@ export function ReportsView() {
   }, [load]);
 
   const today = data?.today;
+  const closed = isDayClosed(data?.recap);
   const shortDate = (iso, options) => new Date(`${iso}T12:00:00+07:00`).toLocaleDateString(locale, options);
   useEffect(() => {
     if (!today) return undefined;
     setSubtitle(
-      fill(t("s5_rp_crumb"), {
+      fill(t(closed ? "s5_rp_crumb" : "s5_rp_crumb_open"), {
         date: new Date(`${today}T12:00:00+07:00`).toLocaleDateString(locale, {
           weekday: "short",
           day: "numeric",
@@ -64,14 +75,14 @@ export function ReportsView() {
       }),
     );
     return () => setSubtitle(null);
-  }, [today, lang, locale, t, setSubtitle]);
+  }, [today, closed, lang, locale, t, setSubtitle]);
 
   if (!data) {
     return (
       <div className="rp" data-testid="reports-page">
         <header className="rp-title">
           <div>
-            <h1>{t("s5_rp_title")}</h1>
+            <h1>{t("s5_rp_title_open")}</h1>
             <p>{t("s5_rp_sub")}</p>
           </div>
         </header>
@@ -99,7 +110,9 @@ export function ReportsView() {
   const gate = recap.gate_wait;
   const handled = exceptions.filter((row) => row.state === "handled").length;
   const open = exceptions.length - handled;
-  const lines = recap.summary_lines?.[lang] || recap.summary_lines?.en || [];
+  const lines = (recap.summary_lines?.[lang] || recap.summary_lines?.en || []).map((line) =>
+    plainSpj(line, lang),
+  );
   const tomorrowPlan = carried.plan;
   const tomorrowName = shortDate(data.tomorrow, { weekday: "short" });
   const tomorrowLine = tomorrowPlan
@@ -133,7 +146,9 @@ export function ReportsView() {
           time: clockTime(tomorrowPlan.approved_at) || "—",
         })
       : wt("s5_rp_sum_tomorrow_pending");
-    const wLines = recap.summary_lines?.[wl] || recap.summary_lines?.en || [];
+    const wLines = (recap.summary_lines?.[wl] || recap.summary_lines?.en || []).map((line) =>
+      plainSpj(line, wl),
+    );
     return [
       fill(wt("s5_rp_share_head"), { date: wDate }),
       ...[...wLines, wTomorrow].map((line) => `- ${line}`),
@@ -191,6 +206,7 @@ export function ReportsView() {
     1,
     ...days.flatMap(({ recap: day }) => [day?.forecast.planned_tons || 0, day?.actual.receipt_tons || 0]),
   );
+  const chartEmpty = days.every(({ recap: day }) => !day?.forecast.planned_tons && !day?.actual.receipt_tons);
   const barHeight = (value) => (value ? `${Math.max(2, Math.round((value / peak) * 100))}%` : "0");
   const plannedToday = recap.forecast.planned_tons;
   const weighedToday = recap.actual.receipt_tons;
@@ -255,18 +271,34 @@ export function ReportsView() {
     ["fuel", (s) => number(s.idle_fuel_litres_avoided)],
     ["alert", (s) => `${number(s.without.trips_over_alert, 1)} → ${number(s.with.trips_over_alert, 1)}`],
   ];
+  // Driver hours are truck-hours x drivers per truck; with one driver per truck (the fixed
+  // assumption) the two rows are the same number, so they read as one row.
+  const driverHoursSame =
+    vm &&
+    VM_LEVELS.every(
+      (level) => vm.scenarios[level].driver_hours_returned === vm.scenarios[level].queue_truck_hours_returned,
+    );
   const vmRows = vm
-    ? vmMeasures.map(([key, cell]) => ({
-        key,
-        ...Object.fromEntries(VM_LEVELS.map((level) => [level, cell(vm.scenarios[level])])),
-      }))
+    ? vmMeasures
+        .filter(([key]) => !(driverHoursSame && key === "driver_h"))
+        .map(([key, cell]) => ({
+          key,
+          ...Object.fromEntries(VM_LEVELS.map((level) => [level, cell(vm.scenarios[level])])),
+        }))
     : [];
   const vmColumns = [
     {
       key: "measure",
       label: t("s5_vm_col_measure"),
       render: (row) => (
-        <span className="rp-strong">{fill(t(`s5_vm_row_${row.key}`), { m: vm?.gate_alert_minutes })}</span>
+        <span className="rp-strong">
+          {fill(
+            t(row.key === "truck_h" && driverHoursSame ? "s5_vm_row_truck_h_same" : `s5_vm_row_${row.key}`),
+            {
+              m: vm?.gate_alert_minutes,
+            },
+          )}
+        </span>
       ),
     },
     ...VM_LEVELS.map((level) => ({ key: level, label: t(`s5_vm_${level}`), align: "right" })),
@@ -282,7 +314,9 @@ export function ReportsView() {
       )}
       <header className="rp-title">
         <div>
-          <h1>{t("s5_rp_title")}</h1>
+          <h1 data-testid="reports-title" data-day={closed ? "closed" : "open"}>
+            {t(closed ? "s5_rp_title" : "s5_rp_title_open")}
+          </h1>
           <p>{t("s5_rp_sub")}</p>
         </div>
         <div className="rp-title-actions">
@@ -372,32 +406,40 @@ export function ReportsView() {
                 {t("s5_rp_chart_weighed")}
               </span>
             </header>
-            <div className="rp-bars" role="img" aria-label={t("s5_rp_chart_label")}>
-              {days.map(({ date, recap: day }, index) => {
-                const planned = day?.forecast.planned_tons;
-                const weighed = day?.actual.receipt_tons;
-                return (
-                  <div className="rp-bar-day" key={date} title={`${tons(planned)} / ${tons(weighed)}`}>
-                    <div className="rp-bar-pair">
-                      <span
-                        className="rp-bar is-planned"
-                        data-provenance="model"
-                        style={{ height: barHeight(planned) }}
-                      />
-                      <span
-                        className="rp-bar is-weighed"
-                        data-provenance="field"
-                        style={{ height: barHeight(weighed) }}
-                      />
-                    </div>
-                    <span className={`rp-bar-name${index === days.length - 1 ? " is-today" : ""}`}>
-                      {shortDate(date, { weekday: "short" })}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="rp-note">{chartNote}</p>
+            {chartEmpty ? (
+              <p className="rp-empty" data-testid="reports-chart-empty">
+                {t("s5_rp_chart_empty")}
+              </p>
+            ) : (
+              <>
+                <div className="rp-bars" role="img" aria-label={t("s5_rp_chart_label")}>
+                  {days.map(({ date, recap: day }, index) => {
+                    const planned = day?.forecast.planned_tons;
+                    const weighed = day?.actual.receipt_tons;
+                    return (
+                      <div className="rp-bar-day" key={date} title={`${tons(planned)} / ${tons(weighed)}`}>
+                        <div className="rp-bar-pair">
+                          <span
+                            className="rp-bar is-planned"
+                            data-provenance="model"
+                            style={{ height: barHeight(planned) }}
+                          />
+                          <span
+                            className="rp-bar is-weighed"
+                            data-provenance="field"
+                            style={{ height: barHeight(weighed) }}
+                          />
+                        </div>
+                        <span className={`rp-bar-name${index === days.length - 1 ? " is-today" : ""}`}>
+                          {shortDate(date, { weekday: "short" })}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="rp-note">{chartNote}</p>
+              </>
+            )}
           </section>
 
           <Card

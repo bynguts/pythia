@@ -238,7 +238,19 @@ export function ReadinessScreen() {
 
   const listFormat = new Intl.ListFormat(localeFor(lang), { type: "conjunction" });
 
-  function pretripCell(truck) {
+  // A cell whose item is among the truck's blockers is marked, so the reason is visible in the row.
+  const flagged = (truck, prefix, node) =>
+    truck.blockers.some((blocker) => blocker.startsWith(prefix)) ? (
+      <span className="rdy-fail" data-testid="readiness-fail">
+        {node}
+      </span>
+    ) : (
+      node
+    );
+
+  const pretripCell = (truck) => flagged(truck, "pretrip", pretripCellRaw(truck));
+
+  function pretripCellRaw(truck) {
     const failedItems = truck.pretrip.failed_items || [];
     if (failedItems.length) {
       const first = PRETRIP_ITEM_KEYS[failedItems[0]] ? t(PRETRIP_ITEM_KEYS[failedItems[0]]) : failedItems[0];
@@ -260,7 +272,9 @@ export function ReadinessScreen() {
     return <StatusDot tone="warn">{t("s2_pre_not_started")}</StatusDot>;
   }
 
-  function dutyCell(truck) {
+  const dutyCell = (truck) => flagged(truck, "duty", dutyCellRaw(truck));
+
+  function dutyCellRaw(truck) {
     const { minutes, state, override, source } = truck.duty;
     if (minutes == null) return <span className="rdy-muted">—</span>;
     const text = formatDuty(minutes, t("lx_unit_h"));
@@ -278,7 +292,9 @@ export function ReadinessScreen() {
     );
   }
 
-  function instructionCell(truck) {
+  const instructionCell = (truck) => flagged(truck, "instruction", instructionCellRaw(truck));
+
+  function instructionCellRaw(truck) {
     const { status, updated_at: at } = truck.instruction;
     const stamp = time(at);
     if (status === "acknowledged")
@@ -294,7 +310,9 @@ export function ReadinessScreen() {
     return <StatusDot tone="idle">{t("s2_ins_none")}</StatusDot>;
   }
 
-  function spjCell(truck) {
+  const spjCell = (truck) => flagged(truck, "spj", spjCellRaw(truck));
+
+  function spjCellRaw(truck) {
     const { status, spj_number: number } = truck.spj;
     const map = {
       draft: ["idle", "s2_spj_draft"],
@@ -309,7 +327,9 @@ export function ReadinessScreen() {
     );
   }
 
-  function vehicleCell(truck) {
+  const vehicleCell = (truck) => flagged(truck, "damage", vehicleCellRaw(truck));
+
+  function vehicleCellRaw(truck) {
     const tone = truck.damage?.heavy ? "danger" : truck.damage?.open ? "warn" : "ok";
     const key = truck.damage?.heavy ? "s2_veh_major" : truck.damage?.open ? "s2_veh_minor" : "s2_veh_ok";
     return (
@@ -491,6 +511,11 @@ export function ReadinessScreen() {
               title={truck.zone_classification === "SIMULATED" ? t("s2_prov_zone") : undefined}
             >
               {truck.zone}
+            </small>
+          )}
+          {!truck.ready && truck.blockers.length > 0 && (
+            <small className="rdy-why" data-testid="readiness-why">
+              {truck.blockers.map((blocker) => t(`w12_blocker_${blocker}`)).join(" · ")}
             </small>
           )}
         </span>

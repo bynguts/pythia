@@ -2,6 +2,10 @@
 export const s5En = {
   // Reports (y3BicK)
   s5_rp_title: "Today, closed",
+  s5_rp_title_open: "Today so far",
+  s5_rp_crumb_open: "Today so far · {date}",
+  s5_rp_chart_empty: "No planned or weighed tonnes for the last 7 days yet.",
+  s5_vm_row_truck_h_same: "Queue truck-hours returned (one driver per truck, so the same as driver hours)",
   s5_rp_sub: "What we planned, what happened, and what it means for tomorrow.",
   s5_rp_crumb: "Day close · {date}",
   s5_rp_send: "Send summary",

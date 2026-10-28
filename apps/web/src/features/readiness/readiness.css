@@ -108,6 +108,19 @@
   color: var(--f-muted);
   font-size: 12px;
 }
+.rdy-truck small.rdy-why {
+  color: var(--f-red-ink);
+  font-weight: 500;
+  white-space: normal;
+}
+.rdy-fail .ui-status-label {
+  color: var(--f-red-ink);
+  font-weight: 600;
+}
+.rdy-fail .ui-status-dot {
+  outline: 2px solid var(--f-red-ink);
+  outline-offset: 1px;
+}
 .rdy-driver {
   display: inline-flex;
   align-items: center;

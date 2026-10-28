@@ -17,6 +17,7 @@ import { enqueueDriverOperation, markDriverSynced, OutboxStorageFullError } from
 import { announceSessionExpired } from "./DriverPanels.jsx";
 import { clockTime } from "./driverHelpers.js";
 import { formatBytes, shrinkPhoto } from "./photo.js";
+import { useBackCloses } from "./useBackCloses.js";
 import "./driver-trip.css";
 
 export const EXCEPTION_PATH = "/driver/exceptions";
@@ -359,6 +360,7 @@ export function ExceptionPanel({ driver, spj, stopIndex, outboxItems, say }) {
     setKind(null);
     setTimeout(() => openerRef.current?.focus(), 0);
   };
+  useBackCloses("report-sheet", Boolean(kind), close);
 
   return (
     <section className="drt-screen" data-testid="driver-exceptions" aria-labelledby="drt-exc-title">

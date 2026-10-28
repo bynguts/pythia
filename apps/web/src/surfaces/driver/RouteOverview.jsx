@@ -463,8 +463,9 @@ export function RouteScreen({
   };
 
   // An AR capture enters the stop proof with the arrival photo and its fix.
+  // AR closes in the same render the proof opens, so the overlay (and its back entry) never
+  // blinks shut in between.
   const captureFromAr = async (file, fix) => {
-    setAr(null);
     try {
       const photo = await readPhoto(file);
       const gps =
@@ -472,8 +473,10 @@ export function RouteScreen({
           ? { lat: fix.lat, lng: fix.lng, accuracy_m: fix.accuracy_m }
           : null;
       setProof({ initialArrival: { photo: { ...photo, fix }, fix: gps } });
+      setAr(null);
       say(t("drv_ar_captured"));
     } catch (err) {
+      setAr(null);
       say(err.message);
     }
   };
