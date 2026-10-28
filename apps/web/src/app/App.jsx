@@ -178,6 +178,8 @@ export function App() {
     localStorage.removeItem("pythia_role");
   }
   function logout() {
+    // Ends the session on the server too; signing out locally never waits on it.
+    apiFetch("/auth/logout", { method: "POST" }).catch(() => {});
     clearSession();
     setAuthenticated(false);
   }

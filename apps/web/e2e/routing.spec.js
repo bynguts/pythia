@@ -104,7 +104,9 @@ test("logout clears the stored session and keeps the page URL for the next sign-
   await storeSession(page);
   await page.goto("/app/tomorrow");
   await expect(navLink(page, "tomorrow")).toHaveAttribute("aria-current", "page");
+  const token = await page.evaluate(() => localStorage.getItem("pythia_token"));
 
+  const signedOut = page.waitForResponse((res) => res.url().endsWith("/auth/logout"));
   await page.getByTestId("profile-button").click();
   await page.getByTestId("profile-logout").click();
   await expect(page.locator('input[type="password"]')).toBeVisible();
@@ -113,6 +115,12 @@ test("logout clears the stored session and keeps the page URL for the next sign-
     ["pythia_auth", "pythia_token", "pythia_role"].map((key) => localStorage.getItem(key)),
   );
   expect(stored).toEqual([null, null, null]);
+  // #logout: the session ends on the server too, so the old token no longer works.
+  expect((await signedOut).ok()).toBeTruthy();
+  const session = await page.request.get(`${API}/auth/session`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(session.status()).toBe(401);
 });
 
 test("offline navigation to a deep link falls back to the cached app shell", async ({ page, context }) => {
