@@ -196,6 +196,8 @@ def test_auto_reroute_event_carries_the_eta_source(monkeypatch):
     astar_routing.set_traffic_jam_active(False)
     feed = EventFeed(maxlen=10)
     rerouter = AutoRerouter(detector=SpeedAnomalyDetector(), feed=feed)
+    # An earlier test's manual jam toggle holds the rerouter off for 90 s; not this one's concern.
+    monkeypatch.setattr("app.ai.actions.auto_reroute.manual_override_active", lambda: False)
     monkeypatch.setattr(
         "app.ai.actions.auto_reroute.route_from_truck",
         lambda position: {
